@@ -1,0 +1,38 @@
+# Dependencies and builds
+node_modules/
+.pnpm-store/
+dist/
+build/
+.next/
+.taro/
+.expo/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+
+# Local configuration
+.env
+.env.*
+!.env.example
+*.local
+
+# Test and tooling output
+coverage/
+playwright-report/
+test-results/
+*.log
+
+# Editors and operating systems
+.idea/
+.vscode/*
+!.vscode/extensions.json
+.DS_Store
+Thumbs.db
+
+# User media and local databases
+uploads/
+*.sqlite
+*.sqlite3

@@ -1,0 +1,88 @@
+# Architecture baseline
+
+Status: accepted for initial implementation; changes require an ADR.
+
+## System shape
+
+```mermaid
+flowchart TB
+  C["Taro client<br/>Mini Program + H5"] --> G["Business API<br/>NestJS modular monolith"]
+  A["Admin<br/>Next.js"] --> G
+  M["Native App<br/>phase two"] --> G
+  G --> P[("PostgreSQL")]
+  G --> R[("Redis / jobs")]
+  G --> O[("Private object storage")]
+  G --> W["AI worker boundary<br/>FastAPI"]
+  W --> V["Model gateway"]
+  W --> K["Versioned knowledge and validators"]
+  V --> E["Approved model providers"]
+```
+
+## Repository boundaries
+
+| Path | Responsibility | Must not own |
+| --- | --- | --- |
+| `apps/client` | End-user Mini Program/H5 rendering and interaction | Health formulas, model prompts, server authorization |
+| `apps/admin` | Support, content, audit and operational workflows | Direct database mutation from the browser |
+| `apps/api` | Authentication, authorization, record lifecycle, plans, jobs | Provider-specific AI code in controllers |
+| `apps/mobile` | Native UI and platform health/device adapters | Independent business schema |
+| `services/ai` | Model gateway, image pipeline, prompt/evaluation versions | Final authority to persist confirmed user facts |
+| `packages/contracts` | API schemas, enums, serialization | Database clients or UI styling |
+| `packages/domain` | Units, metrics, plan and deterministic safety rules | Network or framework dependencies |
+| `packages/design-tokens` | Cross-client visual primitives | Product data or business logic |
+
+## Delivery architecture
+
+Start as a pnpm monorepo and modular monolith. A single API deployable keeps transactions, authorization, migrations, and local development clear. AI work runs behind a queue/worker boundary because it has different runtimes, latency, cost, retry, and observability needs. Extract more services only after a measured scaling or ownership constraint.
+
+## Data rules
+
+All health-domain events store:
+
+- Stable user and record identifiers.
+- Numeric value and canonical/display unit.
+- Source: manual, device, imported, or AI estimate.
+- Confidence and candidate alternatives for estimates.
+- Occurrence time, timezone, creation time, update time, and revision actor.
+- Consent/purpose reference when the source requires sensitive-data permission.
+
+AI output is a proposal. Only an explicit user action or deterministic system process with a documented contract can create a confirmed record.
+
+## API and event conventions
+
+- HTTP JSON contracts are defined in `packages/contracts` and exposed as OpenAPI.
+- Client-generated idempotency keys protect record creation and photo confirmation.
+- Mutations use optimistic concurrency or revision numbers where edits can conflict.
+- Background jobs carry opaque media IDs, never public object URLs.
+- Logs exclude raw health payloads, images, access tokens, full prompts, and direct identifiers.
+- Domain events use past tense and versioned payloads, for example `workout.recorded.v1`.
+
+## AI execution path
+
+1. API verifies purpose-specific consent and creates a job.
+2. Worker fetches the minimum required, short-lived input.
+3. Deterministic preprocessing computes facts and removes disallowed metadata.
+4. Provider returns structured candidates through the model gateway.
+5. Schema and safety validators reject or repair output within a bounded policy.
+6. API exposes an estimated proposal with model/prompt/validator versions.
+7. User confirms or edits; only then is the formal record or plan version stored.
+
+Provider outages fall back to manual recording and deterministic summaries; core records never depend on an available model.
+
+## Security and privacy baseline
+
+- TLS in transit; managed key encryption at rest; field-level or envelope encryption for selected sensitive values.
+- Private object storage with short-lived signed access and isolated retention policies.
+- Purpose-specific consent versions and revocation state.
+- Tenant/user authorization enforced in the API, never inferred from client filters.
+- Admin RBAC, just-in-time access for sensitive support actions, and immutable audit events.
+- Export, correction, deletion, retention expiry, backup handling, and provider deletion are explicit workflows.
+- China-region deployment is the default for China-user health data; any cross-border provider use requires a separate architecture and legal decision.
+
+## Initial local and production targets
+
+- Local: Node LTS, pnpm, Docker Compose, PostgreSQL, Redis, mock object storage, fixture AI provider.
+- CI: install lockfile, format check, lint, typecheck, unit/integration tests, H5 build, Mini Program build, dependency audit, artifact upload.
+- Production candidate: managed container/runtime, managed PostgreSQL and Redis, private object storage, KMS/secrets manager, CDN only for public static assets, centralized metrics and alerts.
+
+Specific cloud vendor selection is deferred until expected China-region traffic, company entity, budget, filing owner, and operations capability are known.
