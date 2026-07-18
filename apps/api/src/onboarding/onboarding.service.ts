@@ -163,8 +163,11 @@ export class OnboardingService {
         await client.query(
           `
             INSERT INTO consent_events (id, user_id, purpose, version)
-            VALUES ($1, $2, $3, $4)
-            ON CONFLICT (user_id, purpose, version) DO NOTHING
+            SELECT $1, $2, $3, $4
+            WHERE NOT EXISTS (
+              SELECT 1 FROM consent_events
+              WHERE user_id = $2 AND purpose = $3 AND version = $4 AND revoked_at IS NULL
+            )
           `,
           [randomUUID(), userId, purpose, version],
         )
@@ -190,12 +193,12 @@ export class OnboardingService {
 
     const consentResult = await this.database.query<ConsentRow>(
       `
-        SELECT purpose, version, accepted_at
+        SELECT DISTINCT ON (purpose) purpose, version, accepted_at
         FROM consent_events
         WHERE user_id = $1
           AND revoked_at IS NULL
           AND purpose IN ('terms', 'privacy', 'health_data')
-        ORDER BY CASE purpose WHEN 'terms' THEN 1 WHEN 'privacy' THEN 2 ELSE 3 END
+        ORDER BY purpose, accepted_at DESC
       `,
       [userId],
     )

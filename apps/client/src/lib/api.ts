@@ -20,6 +20,11 @@ import type {
   OnboardingRequest,
   OnboardingResponse,
   PlanDecision,
+  PrivacyOverview,
+  RevocableConsentPurpose,
+  ConsentRevocationResult,
+  AccountDeletionRequest,
+  AccountDeletionResult,
   UpdateHealthRecord,
   UpdateMeal,
   UpdateWorkout,
@@ -300,6 +305,58 @@ export const getAiExplanationHistory = async (planId: string) =>
       'GET',
     )
   ).items
+
+export const getPrivacyOverview = () => authenticatedRequest<PrivacyOverview>('/me/privacy', 'GET')
+
+export const revokeOptionalConsent = (purpose: RevocableConsentPurpose) =>
+  authenticatedRequest<ConsentRevocationResult>(`/me/privacy/consents/${purpose}/revoke`, 'POST', {
+    confirmed: true,
+  })
+
+export const downloadPrivacyExport = async (
+  retry = true,
+): Promise<{ fileName: string; filePath: string; byteLength: number | null }> => {
+  const token = await getAccessToken()
+  const response = await Taro.downloadFile({
+    url: `${API_BASE_URL}/me/privacy/export`,
+    header: { authorization: `Bearer ${token}` },
+    withCredentials: true,
+  })
+  if (response.statusCode === 401 && retry) {
+    Taro.removeStorageSync(TOKEN_KEY)
+    return downloadPrivacyExport(false)
+  }
+  if (response.statusCode < 200 || response.statusCode >= 300) {
+    throw new ApiError(response.statusCode, { message: '数据导出生成失败' })
+  }
+
+  const fileName = `myfitness-export-${new Date().toISOString().slice(0, 10)}.json`
+  if (process.env.TARO_ENV === 'h5' && typeof document !== 'undefined') {
+    const anchor = document.createElement('a')
+    anchor.href = response.tempFilePath
+    anchor.download = fileName
+    anchor.style.display = 'none'
+    document.body.appendChild(anchor)
+    anchor.click()
+    anchor.remove()
+    return { fileName, filePath: response.tempFilePath, byteLength: response.dataLength ?? null }
+  }
+
+  const saved = await Taro.saveFile({ tempFilePath: response.tempFilePath })
+  const filePath = 'savedFilePath' in saved ? saved.savedFilePath : response.tempFilePath
+  return { fileName, filePath, byteLength: response.dataLength ?? null }
+}
+
+export const deletePrivacyAccount = async (payload: AccountDeletionRequest) => {
+  const result = await authenticatedRequest<AccountDeletionResult>(
+    '/me/privacy/account',
+    'DELETE',
+    payload,
+  )
+  Taro.removeStorageSync(TOKEN_KEY)
+  Taro.removeStorageSync(SUBJECT_KEY)
+  return result
+}
 
 export const apiBaseUrl = API_BASE_URL
 export const privatePhotoUrl = privateApiUrl

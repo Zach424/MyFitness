@@ -5322,6 +5322,278 @@
         "tags": ["plans"]
       }
     },
+    "/v1/me/privacy": {
+      "get": {
+        "operationId": "PrivacyController_overview",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "generatedAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "accountCreatedAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "totalRecordCount": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "activePhotoCount": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "inventory": {
+                      "minItems": 8,
+                      "maxItems": 8,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "category": {
+                            "type": "string",
+                            "enum": [
+                              "profile",
+                              "health_records",
+                              "workouts",
+                              "nutrition",
+                              "plans",
+                              "ai_outputs",
+                              "photo_analyses",
+                              "consent_receipts"
+                            ]
+                          },
+                          "recordCount": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "includesHistory": { "type": "boolean" },
+                          "lastUpdatedAt": {
+                            "nullable": true,
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                          }
+                        },
+                        "required": ["category", "recordCount", "includesHistory", "lastUpdatedAt"],
+                        "additionalProperties": false
+                      }
+                    },
+                    "consents": {
+                      "minItems": 5,
+                      "maxItems": 5,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "purpose": {
+                            "type": "string",
+                            "enum": [
+                              "terms",
+                              "privacy",
+                              "health_data",
+                              "ai_plan_explanation",
+                              "food_photo_analysis"
+                            ]
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": ["never_granted", "active", "revoked"]
+                          },
+                          "requiredForService": { "type": "boolean" },
+                          "revocable": { "type": "boolean" },
+                          "version": {
+                            "nullable": true,
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 40
+                          },
+                          "acceptedAt": {
+                            "nullable": true,
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                          },
+                          "revokedAt": {
+                            "nullable": true,
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                          }
+                        },
+                        "required": [
+                          "purpose",
+                          "status",
+                          "requiredForService",
+                          "revocable",
+                          "version",
+                          "acceptedAt",
+                          "revokedAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "portableExport": {
+                      "type": "object",
+                      "properties": {
+                        "schemaVersion": {
+                          "type": "string",
+                          "enum": ["myfitness-portable-export-v1"]
+                        },
+                        "contentType": { "type": "string", "enum": ["application/json"] },
+                        "includesHistory": { "type": "boolean", "enum": [true] },
+                        "includesActiveSanitizedPhotos": { "type": "boolean", "enum": [true] }
+                      },
+                      "required": [
+                        "schemaVersion",
+                        "contentType",
+                        "includesHistory",
+                        "includesActiveSanitizedPhotos"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "deletion": {
+                      "type": "object",
+                      "properties": {
+                        "confirmationPhrase": { "type": "string", "enum": ["删除我的衡迹账户"] },
+                        "permanent": { "type": "boolean", "enum": [true] }
+                      },
+                      "required": ["confirmationPhrase", "permanent"],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "generatedAt",
+                    "accountCreatedAt",
+                    "totalRecordCount",
+                    "activePhotoCount",
+                    "inventory",
+                    "consents",
+                    "portableExport",
+                    "deletion"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": { "description": "Bearer token is missing, invalid, expired or revoked." }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Inspect the authenticated account data inventory and consent state",
+        "tags": ["privacy"]
+      }
+    },
+    "/v1/me/privacy/export": {
+      "get": {
+        "operationId": "PrivacyController_portableExport",
+        "parameters": [],
+        "responses": {
+          "200": { "description": "Versioned JSON attachment containing account-owned data." },
+          "401": { "description": "Bearer token is missing, invalid, expired or revoked." }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Download a versioned portable JSON export without session secrets",
+        "tags": ["privacy"]
+      }
+    },
+    "/v1/me/privacy/consents/{purpose}/revoke": {
+      "post": {
+        "operationId": "PrivacyController_revoke",
+        "parameters": [
+          { "name": "purpose", "required": true, "in": "path", "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "purpose": {
+                      "type": "string",
+                      "enum": ["ai_plan_explanation", "food_photo_analysis"]
+                    },
+                    "status": { "type": "string", "enum": ["revoked"] },
+                    "revokedAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "removedPhotoAnalyses": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": ["purpose", "status", "revokedAt", "removedPhotoAnalyses"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": { "description": "Only optional consent purposes can be revoked." },
+          "401": { "description": "Bearer token is missing, invalid, expired or revoked." },
+          "404": { "description": "The optional consent has never been granted." }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Revoke an optional AI or food-photo consent and stop pending work",
+        "tags": ["privacy"]
+      }
+    },
+    "/v1/me/privacy/account": {
+      "delete": {
+        "operationId": "PrivacyController_deleteAccount",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "receiptId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "deleted": { "type": "boolean", "enum": [true] },
+                    "scopeVersion": { "type": "string", "enum": ["primary-store-v1"] },
+                    "deletedAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    }
+                  },
+                  "required": ["receiptId", "deleted", "scopeVersion", "deletedAt"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": { "description": "The exact deletion phrase and acknowledgement are required." },
+          "401": { "description": "Bearer token is missing, invalid, expired or revoked." },
+          "409": { "description": "The account is not active or deletion state changed." }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Permanently erase the authenticated account and private photo media",
+        "tags": ["privacy"]
+      }
+    },
     "/v1/workouts": {
       "post": {
         "operationId": "WorkoutsController_create",

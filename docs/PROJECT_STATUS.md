@@ -2,7 +2,7 @@
 
 Last reviewed: 2026-07-19
 
-Stage: revocable food-photo candidates complete locally; privacy and operations next
+Stage: user privacy ownership complete locally; admin and operations next
 
 Primary release target: WeChat Mini Program + responsive H5
 
@@ -12,20 +12,20 @@ MyFitness / 衡迹 turns body, training, nutrition, and recovery records into sa
 
 ## Module status
 
-| Module                  | Status                        | Current evidence                                    | Next gate                                    |
-| ----------------------- | ----------------------------- | --------------------------------------------------- | -------------------------------------------- |
-| Product scope           | Done for MVP baseline         | `docs/product/PRODUCT_BRIEF.md`                     | Validate with target-user interviews         |
-| Delivery roadmap        | Done for planning baseline    | `docs/product/ROADMAP.md`                           | Execute iteration 11                         |
-| Design language         | Partial, nine flows validated | Core flows + 18 reviewed screenshots                | Large text, keyboard and remaining states    |
-| Client: Mini Program/H5 | Partial                       | Record/plan loop + AI note + photo proof            | Add privacy ownership workflows              |
-| Admin console           | Pending                       | Architecture only                                   | Content and support requirements frozen      |
-| Business API            | Partial                       | Records, plans, AI runs and private photo lifecycle | Add export/deletion/revocation               |
-| Domain rules            | Partial                       | Plan + explanation + catalog-bound image validators | Add privacy erasure rules                    |
-| AI service              | Partial                       | Text/vision fixture/OpenAI adapters + 15 eval cases | Approved real-provider canary                |
-| Native App/devices      | Deferred                      | Phase-two decision                                  | MVP retention gate reached                   |
-| Privacy/compliance      | Partial                       | Consent provenance + private expiring photo path    | Revocation, export, erasure and legal review |
-| Testing/observability   | Partial                       | 74 unit + 22 integration + 7 worker + 17 E2E        | Add lint, CI, metrics and trace correlation  |
-| Deployment              | Partial, local only           | PostgreSQL + FastAPI Compose health                 | Create repeatable shared test environment    |
+| Module                  | Status                       | Current evidence                                    | Next gate                                   |
+| ----------------------- | ---------------------------- | --------------------------------------------------- | ------------------------------------------- |
+| Product scope           | Done for MVP baseline        | `docs/product/PRODUCT_BRIEF.md`                     | Validate with target-user interviews        |
+| Delivery roadmap        | Done for planning baseline   | `docs/product/ROADMAP.md`                           | Execute iteration 12                        |
+| Design language         | Partial, ten flows validated | Core flows + 20 reviewed screenshots                | Large text, keyboard and remaining states   |
+| Client: Mini Program/H5 | Partial                      | Record/plan loop + AI/photo + privacy custody       | Add production identity and operations      |
+| Admin console           | Pending                      | Architecture only                                   | Content and support requirements frozen     |
+| Business API            | Partial                      | Records, plans, AI plus export/revoke/erasure       | Add admin/audit and durable jobs            |
+| Domain rules            | Partial                      | Safety validators + strict privacy action contracts | Add release policy enforcement              |
+| AI service              | Partial                      | Text/vision fixture/OpenAI adapters + 15 eval cases | Approved real-provider canary               |
+| Native App/devices      | Deferred                     | Phase-two decision                                  | MVP retention gate reached                  |
+| Privacy/compliance      | Partial, primary store done  | Inventory/export/revocation/erasure exercised       | Backups/providers, policy and legal review  |
+| Testing/observability   | Partial                      | 81 unit + 25 integration + 7 worker + 19 E2E        | Add lint, CI, metrics and trace correlation |
+| Deployment              | Partial, local only          | PostgreSQL + FastAPI Compose health                 | Create repeatable shared test environment   |
 
 Status vocabulary: `Done` means validated for the present stage, `Partial` means usable but missing a named gate, `Pending` means not implemented, and `Deferred` means intentionally outside the current release.
 
@@ -48,33 +48,34 @@ Status vocabulary: `Done` means validated for the present stage, `Partial` means
 - FastAPI worker with authenticated fixture/OpenAI provider adapters, strict structured output, bounded retry and health check.
 - Review-only AI runs with explicit versioned consent, minimized context, prompt/model/validator provenance, owner-scoped idempotency, deterministic validation/fallback and exact plan-revision binding.
 - Revocable food-photo proposals with per-request consent, signed upload/preview, Sharp metadata stripping, 24-hour expiry, catalog-bound validation, immediate deletion paths and confirmation into an unsaved draft only.
+- User-owned privacy custody with inventory counts, repeatable-read no-store JSON export, append-oriented consent cycles, optional AI/photo withdrawal, user-scoped media purge, cascaded account erasure and an unlinkable `primary-store-v1` receipt.
 - Shared contracts, domain rules, and design tokens in a pnpm monorepo.
 
 ## Current risks
 
-| Risk                                                               | Level  | Mitigation / next evidence                                                                 |
-| ------------------------------------------------------------------ | ------ | ------------------------------------------------------------------------------------------ |
-| GitHub Git transport is unavailable in the current environment     | High   | Keep local commits; later fetch authenticated remote and replay commits without force-push |
-| Scope may expand before the recording loop is proven               | High   | Enforce MVP exclusions and one-scope iteration archives                                    |
-| Food-photo portion estimates can be misleading                     | High   | Catalog-bound ranges/confidence, user edit, no auto-write; broaden real-image evaluation   |
-| AI may generate unsafe training or diet changes                    | High   | Deterministic constraints and validators precede model output                              |
-| Production AI retention/region/cost/quality are unverified         | High   | Keep fixture default; require legal/operations review and approved real-provider canary    |
-| Pending AI runs can outlive a crashed orchestration request        | Medium | Add expiry and reconciliation before shared beta                                           |
-| Fifteen AI eval cases do not establish broad safety                | High   | Add expert-reviewed real/obfuscated/injection image and text cases with thresholds         |
-| Local private photo disk cannot support horizontal production      | High   | Replace with encrypted private object storage, lifecycle policy and durable reconciliation |
-| Domestic Android health data is fragmented                         | Medium | Defer device sync; start HealthKit/Health Connect/Huawei feasibility after retention gate  |
-| Brand name “衡迹” is unverified                                    | Medium | Treat as working name; perform trademark/domain review before public launch                |
-| H5 entry is 305 KiB/largest chunk 581 KiB; WeApp vendor is 417 KiB | Medium | Set budgets and split route/provider code before beta                                      |
-| Taro emits non-blocking webpack cache serialization warnings       | Low    | Track upstream/package compatibility; clean builds and artifacts currently pass            |
-| Development session issuer is not production authentication        | High   | Production mode disables it; add verified WeChat/phone adapters before shared deployment   |
-| Consent can be recorded but not yet revoked or exported            | High   | Implement privacy workflows, policy review and audit evidence before beta                  |
-| API has no production rate limiting or observability yet           | Medium | Add request IDs, metrics, abuse limits and alerting before shared deployment               |
-| Workout status can diverge from set completion in non-client use   | Medium | Make server derivation authoritative before exposing imports                               |
-| Starter exercise catalog lacks custom/equipment semantics          | Medium | Model additions only after the manual workout loop informs actual needs                    |
-| Starter food values are demonstration data, not release catalog    | High   | Select licensed/localized versioned provider and attribution before beta                   |
-| Energy/macro UI can be harmful for eating-disorder risk            | High   | Maintain scope exclusion; add screening/content review before adaptive nutrition planning  |
-| Deterministic-v1 is explainable but not clinically validated       | High   | Keep general-guidance claims; add offline evaluation and expert/content review             |
-| A changed plan may look current until the next server action       | Medium | Server blocks stale accept/modify; add proactive client stale-state refresh                |
+| Risk                                                                | Level  | Mitigation / next evidence                                                                 |
+| ------------------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------ |
+| GitHub Git transport is unavailable in the current environment      | High   | Keep local commits; later fetch authenticated remote and replay commits without force-push |
+| Scope may expand before the recording loop is proven                | High   | Enforce MVP exclusions and one-scope iteration archives                                    |
+| Food-photo portion estimates can be misleading                      | High   | Catalog-bound ranges/confidence, user edit, no auto-write; broaden real-image evaluation   |
+| AI may generate unsafe training or diet changes                     | High   | Deterministic constraints and validators precede model output                              |
+| Production AI retention/region/cost/quality are unverified          | High   | Keep fixture default; require legal/operations review and approved real-provider canary    |
+| Pending AI runs can outlive a crashed orchestration request         | Medium | Add expiry and reconciliation before shared beta                                           |
+| Fifteen AI eval cases do not establish broad safety                 | High   | Add expert-reviewed real/obfuscated/injection image and text cases with thresholds         |
+| Local private photo disk cannot support horizontal production       | High   | Replace with encrypted private object storage, lifecycle policy and durable reconciliation |
+| Domestic Android health data is fragmented                          | Medium | Defer device sync; start HealthKit/Health Connect/Huawei feasibility after retention gate  |
+| Brand name “衡迹” is unverified                                     | Medium | Treat as working name; perform trademark/domain review before public launch                |
+| H5 entry is 305 KiB/largest chunk 589 KiB; WeApp vendor is 417 KiB  | Medium | Set budgets and split route/provider code before beta                                      |
+| Taro emits non-blocking webpack cache serialization warnings        | Low    | Track upstream/package compatibility; clean builds and artifacts currently pass            |
+| Development session issuer is not production authentication         | High   | Production mode disables it; add verified WeChat/phone adapters before shared deployment   |
+| Primary-store privacy works but backups/providers are not exercised | High   | Freeze retention map and run backup/provider deletion evidence before beta                 |
+| API has no production rate limiting or observability yet            | Medium | Add request IDs, metrics, abuse limits and alerting before shared deployment               |
+| Workout status can diverge from set completion in non-client use    | Medium | Make server derivation authoritative before exposing imports                               |
+| Starter exercise catalog lacks custom/equipment semantics           | Medium | Model additions only after the manual workout loop informs actual needs                    |
+| Starter food values are demonstration data, not release catalog     | High   | Select licensed/localized versioned provider and attribution before beta                   |
+| Energy/macro UI can be harmful for eating-disorder risk             | High   | Maintain scope exclusion; add screening/content review before adaptive nutrition planning  |
+| Deterministic-v1 is explainable but not clinically validated        | High   | Keep general-guidance claims; add offline evaluation and expert/content review             |
+| A changed plan may look current until the next server action        | Medium | Server blocks stale accept/modify; add proactive client stale-state refresh                |
 
 ## Quality gates
 
@@ -88,4 +89,4 @@ The MVP cannot enter public beta until all of the following are reproducible:
 
 ## Primary next step
 
-Iteration 11: implement the user privacy ownership path—data inventory/export/account erasure and consent revocation—then freeze admin RBAC, audit/support and retention/incident runbooks.
+Iteration 12: implement administration and operations—request correlation, rate limits, RBAC/audit/support boundaries, durable reconciliation, retention/backup/provider-deletion evidence and incident rollback—before a shared test deployment.

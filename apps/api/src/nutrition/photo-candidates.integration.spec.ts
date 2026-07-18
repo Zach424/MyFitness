@@ -90,7 +90,7 @@ describe('private food-photo candidates with PostgreSQL and fixture worker', () 
       upload.body.content.candidates.map((item: { catalogKey: string }) => item.catalogKey),
     ).toEqual(['rice_cooked', 'chicken_breast_cooked'])
 
-    const storedPath = path.join(config.photoStorageRoot, `${photoId}.jpg`)
+    const storedPath = path.join(config.photoStorageRoot, userId, `${photoId}.jpg`)
     const sanitized = await readFile(storedPath)
     const metadata = await sharp(sanitized).metadata()
     expect(sanitized.includes(Buffer.from('Exif'))).toBe(false)
@@ -197,7 +197,7 @@ describe('private food-photo candidates with PostgreSQL and fixture worker', () 
       .set('Authorization', `Bearer ${token}`)
       .attach('file', image, { filename: 'meal.webp', contentType: 'image/webp' })
       .expect(201)
-    const storedPath = path.join(config.photoStorageRoot, `${photoId}.jpg`)
+    const storedPath = path.join(config.photoStorageRoot, userId, `${photoId}.jpg`)
     await pool.query(
       "UPDATE nutrition_photo_candidates SET expires_at = NOW() - INTERVAL '1 minute' WHERE id = $1",
       [photoId],

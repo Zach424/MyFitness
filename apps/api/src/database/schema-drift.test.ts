@@ -76,6 +76,14 @@ const foodPhotoMigrationPath = path.resolve(
   __dirname,
   '../../../../infra/postgres/migrations/0008_food_photo_candidates.sql',
 )
+const privacyMigrationPath = path.resolve(
+  __dirname,
+  '../../../../infra/postgres/migrations/0010_privacy_ownership.sql',
+)
+const erasureReceiptMigrationPath = path.resolve(
+  __dirname,
+  '../../../../infra/postgres/migrations/0011_erasure_receipts.sql',
+)
 
 describe('health-record migration drift', () => {
   it('contains every contract metric, unit and source kind', async () => {
@@ -178,5 +186,19 @@ describe('health-record migration drift', () => {
     ]) {
       expect(migration, `${value} is missing from the food-photo migration`).toContain(`'${value}'`)
     }
+  })
+
+  it('allows append-only consent cycles and user-scoped private photo keys', async () => {
+    const migration = await readFile(privacyMigrationPath, 'utf8')
+    expect(migration).toContain('DROP CONSTRAINT consent_events_user_id_purpose_version_key')
+    expect(migration).toContain('consent_events_revocation_after_acceptance_check')
+    expect(migration).toContain("storage_key ~ '^[0-9a-f-]{36}/[0-9a-f-]{36}\\.jpg$'")
+  })
+
+  it('persists only an unlinkable primary-store erasure receipt', async () => {
+    const migration = await readFile(erasureReceiptMigrationPath, 'utf8')
+    expect(migration).toContain('CREATE TABLE privacy_erasure_receipts')
+    expect(migration).toContain("scope_version = 'primary-store-v1'")
+    expect(migration).not.toContain('user_id')
   })
 })

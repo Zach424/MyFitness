@@ -216,6 +216,19 @@ Reviewed evidence:
 
 The browser review found that Taro H5 does not expose its custom `disabled` attribute as native disabled semantics, so the upload action now also emits `aria-disabled`. It also exposed Taro's credentialed multipart CORS behavior and a corrupt test-image fixture; both were fixed at the implementation/test boundary. Mobile and wide scenarios complete with zero captured page/console errors. Open items remain real-device camera/permission copy, large text, 320 px, screen readers, offline upload recovery and production-provider latency/refusal states.
 
+## Implementation review — iteration 011
+
+The privacy center treats sensitive-data ownership as a **Custody Ledger / 保管链台账**, not a generic settings list. A faint red ledger margin and numbered inventory rows connect it to the existing logbook, while counts, history flags and timestamps make structure do real explanatory work. Mobile preserves the order `清单 → 导出 → 授权 → 离开`; wide H5 fixes the ledger at left and keeps actions at right.
+
+The one expressive risk is a perforated **PERMANENT EXIT** tear line before the account-erasure receipt. Brick red appears only below that boundary. Export stays mineral blue, active ownership stays juniper, and withdrawn optional consent uses amber; none of these states depends on color alone. Deletion requires an export choice, checkbox semantics, an exact typed phrase and an `aria-disabled` action before it becomes visually live.
+
+Reviewed evidence:
+
+- [390 × 844 mobile custody ledger](../../output/playwright/iteration-011-privacy-mobile.png)
+- [1440 × 1000 wide ledger/action split](../../output/playwright/iteration-011-privacy-wide.png)
+
+The first browser run found two test-accessibility mismatches: repeated visible labels require region-scoped assertions, and Taro H5 did not expose its custom input through the expected textbox role even with an aria label. The flow now uses stable semantic regions for buttons and verifies the input through its user-visible placeholder. The wide screenshot also exposed an orphaned final title character, corrected by widening the intentional hero line. Open design gates remain system large text, complete keyboard traversal, real WeChat screen-reader behavior and the full error/retry surface for large exports.
+
 ## Screenshot review checklist
 
 - The Rhythm Rail remains understandable without color.

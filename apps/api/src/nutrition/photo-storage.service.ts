@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rm, unlink, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 
 import { BadRequestException, Injectable } from '@nestjs/common'
@@ -31,17 +31,36 @@ export type StoredPhoto = {
 @Injectable()
 export class PhotoStorageService {
   private readonly root = getRuntimeConfig().photoStorageRoot
+  private readonly uuidPattern =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
 
-  private resolveKey(id: string) {
-    const key = `${id}.jpg`
-    const target = path.resolve(this.root, key)
-    if (path.dirname(target) !== this.root || path.basename(target) !== key) {
+  private resolveKey(key: string) {
+    const validLegacy = /^[0-9a-f-]{36}\.jpg$/.test(key)
+    const validScoped = /^[0-9a-f-]{36}\/[0-9a-f-]{36}\.jpg$/.test(key)
+    const segments = key.split('/')
+    const target = path.resolve(this.root, ...segments)
+    const relative = path.relative(this.root, target)
+    if (
+      (!validLegacy && !validScoped) ||
+      relative.startsWith('..') ||
+      path.isAbsolute(relative) ||
+      relative.split(path.sep).join('/') !== key
+    ) {
       throw new BadRequestException('invalid private photo key')
     }
-    return { key, target }
+    return target
   }
 
-  async sanitizeAndStore(id: string, upload: UploadedPhoto): Promise<StoredPhoto> {
+  private userDirectory(userId: string) {
+    if (!this.uuidPattern.test(userId)) throw new BadRequestException('invalid private photo owner')
+    const target = path.resolve(this.root, userId)
+    if (path.dirname(target) !== this.root) {
+      throw new BadRequestException('invalid private photo owner')
+    }
+    return target
+  }
+
+  async sanitizeAndStore(userId: string, id: string, upload: UploadedPhoto): Promise<StoredPhoto> {
     if (
       !foodPhotoContentTypes.includes(upload.mimetype as (typeof foodPhotoContentTypes)[number])
     ) {
@@ -91,8 +110,10 @@ export class PhotoStorageService {
       throw new BadRequestException('sanitized photo is still too large')
     }
 
-    const { key, target } = this.resolveKey(id)
-    await mkdir(this.root, { recursive: true })
+    if (!this.uuidPattern.test(id)) throw new BadRequestException('invalid private photo id')
+    const key = `${userId}/${id}.jpg`
+    const target = this.resolveKey(key)
+    await mkdir(path.dirname(target), { recursive: true })
     await writeFile(target, output.data, { flag: 'wx', mode: 0o600 })
     return {
       storageKey: key,
@@ -104,15 +125,19 @@ export class PhotoStorageService {
     }
   }
 
-  async read(id: string) {
-    return readFile(this.resolveKey(id).target)
+  async read(storageKey: string) {
+    return readFile(this.resolveKey(storageKey))
   }
 
-  async remove(id: string) {
+  async remove(storageKey: string) {
     try {
-      await unlink(this.resolveKey(id).target)
+      await unlink(this.resolveKey(storageKey))
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
     }
+  }
+
+  async removeUserDirectory(userId: string) {
+    await rm(this.userDirectory(userId), { recursive: true, force: true })
   }
 }

@@ -6,6 +6,7 @@ export default defineAppConfig({
     'pages/workouts/index',
     'pages/nutrition/index',
     'pages/plans/index',
+    'pages/privacy/index',
   ],
   window: {
     backgroundColor: '#F2F6F5',

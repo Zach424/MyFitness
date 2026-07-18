@@ -44,6 +44,7 @@ type PhotoRow = QueryResultRow & {
   id: string
   user_id: string
   status: PhotoStatus
+  storage_key: string | null
   source: 'model' | 'fixture' | null
   provider: 'fixture' | 'openai' | null
   model: string | null
@@ -171,22 +172,35 @@ export class PhotoCandidatesService implements OnModuleInit, OnModuleDestroy {
       .update(JSON.stringify({ consent: foodPhotoConsentVersion }))
       .digest('hex')
     return this.database.withTransaction(async (client) => {
+      await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [
+        `food-photo:${userId}:${idempotencyKey}`,
+      ])
+      const existing = await client.query<PhotoRow>(
+        'SELECT * FROM nutrition_photo_candidates WHERE user_id = $1 AND idempotency_key = $2',
+        [userId, idempotencyKey],
+      )
+      const row = existing.rows[0]
+      if (!row || row.input_fingerprint !== fingerprint) {
+        if (row) throw new ConflictException('idempotency key was already used for another request')
+      } else {
+        if (row.status !== 'reserved' || row.expires_at.getTime() <= Date.now()) {
+          throw new ConflictException('photo reservation is no longer uploadable')
+        }
+        return this.ticket(row)
+      }
+
+      const activeUser = await client.query<{ id: string }>(
+        "SELECT id FROM users WHERE id = $1 AND status = 'active' FOR UPDATE",
+        [userId],
+      )
+      if (!activeUser.rows[0]) throw new ConflictException('account is not active')
+
       const consentId = randomUUID()
       await client.query(
-        `
-          INSERT INTO consent_events (id, user_id, purpose, version)
-          VALUES ($1, $2, $3, $4)
-          ON CONFLICT (user_id, purpose, version) DO NOTHING
-        `,
+        `INSERT INTO consent_events (id, user_id, purpose, version)
+         VALUES ($1, $2, $3, $4)`,
         [consentId, userId, foodPhotoConsentPurpose, foodPhotoConsentVersion],
       )
-      const consent = await client.query<{ id: string }>(
-        `SELECT id FROM consent_events
-         WHERE user_id = $1 AND purpose = $2 AND version = $3 AND revoked_at IS NULL`,
-        [userId, foodPhotoConsentPurpose, foodPhotoConsentVersion],
-      )
-      if (!consent.rows[0]) throw new ConflictException('food photo consent is unavailable')
-
       const id = randomUUID()
       const inserted = await client.query<PhotoRow>(
         `
@@ -195,7 +209,6 @@ export class PhotoCandidatesService implements OnModuleInit, OnModuleDestroy {
             input_fingerprint, idempotency_key, consent_event_id, expires_at
           ) VALUES ($1, $2, 'reserved', $3, $4, $5, $6, $7,
                     NOW() + ($8 * INTERVAL '1 hour'))
-          ON CONFLICT (user_id, idempotency_key) DO NOTHING
           RETURNING *
         `,
         [
@@ -205,24 +218,13 @@ export class PhotoCandidatesService implements OnModuleInit, OnModuleDestroy {
           foodPhotoValidatorVersion,
           fingerprint,
           idempotencyKey,
-          consent.rows[0].id,
+          consentId,
           foodPhotoRetentionHours,
         ],
       )
-      if (inserted.rows[0]) return this.ticket(inserted.rows[0])
-
-      const existing = await client.query<PhotoRow>(
-        'SELECT * FROM nutrition_photo_candidates WHERE user_id = $1 AND idempotency_key = $2',
-        [userId, idempotencyKey],
-      )
-      const row = existing.rows[0]
-      if (!row || row.input_fingerprint !== fingerprint) {
-        throw new ConflictException('idempotency key was already used for another request')
-      }
-      if (row.status !== 'reserved' || row.expires_at.getTime() <= Date.now()) {
-        throw new ConflictException('photo reservation is no longer uploadable')
-      }
-      return this.ticket(row)
+      const created = inserted.rows[0]
+      if (!created) throw new ConflictException('photo reservation could not be created')
+      return this.ticket(created)
     })
   }
 
@@ -263,7 +265,8 @@ export class PhotoCandidatesService implements OnModuleInit, OnModuleDestroy {
           UPDATE nutrition_photo_candidates
           SET status = 'processing', storage_key = $3, content_type = 'image/jpeg',
               byte_size = $4, width = $5, height = $6, media_sha256 = $7
-          WHERE id = $1 AND user_id = $2 AND status = 'reserved' AND expires_at > NOW()
+           WHERE id = $1 AND user_id = $2 AND status = 'reserved' AND expires_at > NOW()
+             AND EXISTS (SELECT 1 FROM users WHERE id = $2 AND status = 'active')
           RETURNING *
         `,
         [
@@ -277,11 +280,11 @@ export class PhotoCandidatesService implements OnModuleInit, OnModuleDestroy {
         ],
       )
     } catch (error) {
-      await this.storage.remove(id)
+      await this.storage.remove(stored.storageKey)
       throw error
     }
     if (!result.rows[0]) {
-      await this.storage.remove(id)
+      await this.storage.remove(stored.storageKey)
       throw new ConflictException('photo reservation is no longer uploadable')
     }
   }
@@ -291,7 +294,11 @@ export class PhotoCandidatesService implements OnModuleInit, OnModuleDestroy {
     worker: FoodPhotoWorkerResponse | null,
     failureCode: NonNullable<FoodPhotoWorkerResponse['failureCode']>,
   ) {
-    await this.storage.remove(id)
+    const current = await this.database.query<{ storage_key: string | null }>(
+      "SELECT storage_key FROM nutrition_photo_candidates WHERE id = $1 AND status = 'processing'",
+      [id],
+    )
+    if (current.rows[0]?.storage_key) await this.storage.remove(current.rows[0].storage_key)
     const result = await this.database.query<PhotoRow>(
       `
         UPDATE nutrition_photo_candidates
@@ -322,7 +329,7 @@ export class PhotoCandidatesService implements OnModuleInit, OnModuleDestroy {
   async upload(userId: string, id: string, token: string, upload: UploadedPhoto) {
     this.verify(token, id, userId, 'upload')
     await this.expireOld()
-    const stored = await this.storage.sanitizeAndStore(id, upload)
+    const stored = await this.storage.sanitizeAndStore(userId, id, upload)
     await this.markProcessing(userId, id, stored)
 
     const worker = await this.worker(id, stored.buffer)
@@ -333,7 +340,7 @@ export class PhotoCandidatesService implements OnModuleInit, OnModuleDestroy {
     if (!validation.valid) return this.fail(id, worker, 'safety_validation_failed')
 
     const rejected = validation.content.safetyStatus === 'rejected'
-    if (rejected) await this.storage.remove(id)
+    if (rejected) await this.storage.remove(stored.storageKey)
     const result = await this.database.query<PhotoRow>(
       `
         UPDATE nutrition_photo_candidates
@@ -364,7 +371,7 @@ export class PhotoCandidatesService implements OnModuleInit, OnModuleDestroy {
       ],
     )
     if (!result.rows[0]) {
-      await this.storage.remove(id)
+      await this.storage.remove(stored.storageKey)
       throw new ConflictException('photo analysis state changed')
     }
     return this.analysis(result.rows[0])
@@ -390,7 +397,8 @@ export class PhotoCandidatesService implements OnModuleInit, OnModuleDestroy {
     const row = result.rows[0]
     if (!row) throw new NotFoundException('private photo is unavailable')
     this.verify(token, id, row.user_id, 'preview')
-    return this.storage.read(id)
+    if (!row.storage_key) throw new NotFoundException('private photo is unavailable')
+    return this.storage.read(row.storage_key)
   }
 
   async confirm(userId: string, id: string, input: ConfirmFoodPhotoCandidate) {
@@ -406,7 +414,8 @@ export class PhotoCandidatesService implements OnModuleInit, OnModuleDestroy {
       throw new UnprocessableEntityException('selection must use displayed candidates and ranges')
     }
 
-    await this.storage.remove(id)
+    if (!row.storage_key) throw new NotFoundException('private photo is unavailable')
+    await this.storage.remove(row.storage_key)
     const updated = await this.database.query<PhotoRow>(
       `
         UPDATE nutrition_photo_candidates
@@ -429,14 +438,14 @@ export class PhotoCandidatesService implements OnModuleInit, OnModuleDestroy {
   }
 
   async remove(userId: string, id: string) {
-    const owned = await this.database.query<{ id: string }>(
-      `SELECT id FROM nutrition_photo_candidates
+    const owned = await this.database.query<{ id: string; storage_key: string | null }>(
+      `SELECT id, storage_key FROM nutrition_photo_candidates
        WHERE id = $1 AND user_id = $2
          AND status IN ('reserved', 'processing', 'ready', 'failed', 'rejected')`,
       [id, userId],
     )
     if (!owned.rows[0]) throw new NotFoundException('photo candidate is unavailable')
-    await this.storage.remove(id)
+    if (owned.rows[0].storage_key) await this.storage.remove(owned.rows[0].storage_key)
     const result = await this.database.query<PhotoRow>(
       `
         UPDATE nutrition_photo_candidates
@@ -452,11 +461,15 @@ export class PhotoCandidatesService implements OnModuleInit, OnModuleDestroy {
   }
 
   async expireOld() {
-    const expired = await this.database.query<{ id: string }>(
-      `SELECT id FROM nutrition_photo_candidates
+    const expired = await this.database.query<{ id: string; storage_key: string | null }>(
+      `SELECT id, storage_key FROM nutrition_photo_candidates
        WHERE status IN ('reserved', 'processing', 'ready') AND expires_at <= NOW()`,
     )
-    await Promise.all(expired.rows.map((row) => this.storage.remove(row.id)))
+    await Promise.all(
+      expired.rows.map((row) =>
+        row.storage_key ? this.storage.remove(row.storage_key) : Promise.resolve(),
+      ),
+    )
     if (!expired.rows.length) return
     await this.database.query(
       `
@@ -468,5 +481,23 @@ export class PhotoCandidatesService implements OnModuleInit, OnModuleDestroy {
       `,
       [expired.rows.map((row) => row.id)],
     )
+  }
+
+  async purgeForUser(userId: string) {
+    const owned = await this.database.query<{ storage_key: string | null }>(
+      'SELECT storage_key FROM nutrition_photo_candidates WHERE user_id = $1',
+      [userId],
+    )
+    await Promise.all(
+      owned.rows.map((row) =>
+        row.storage_key ? this.storage.remove(row.storage_key) : Promise.resolve(),
+      ),
+    )
+    await this.storage.removeUserDirectory(userId)
+    const deleted = await this.database.query(
+      'DELETE FROM nutrition_photo_candidates WHERE user_id = $1',
+      [userId],
+    )
+    return deleted.rowCount ?? 0
   }
 }

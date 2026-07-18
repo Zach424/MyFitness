@@ -50,9 +50,7 @@ test.afterAll(async () => database.end())
 
 const openOnboarding = async (page: Page) => {
   await page.goto('/')
-  const profileEntry = page.getByRole('button', { name: '建立或更新个人资料' })
-  if (await profileEntry.isVisible()) await profileEntry.click()
-  else await page.getByRole('button', { name: '我的' }).click()
+  await page.getByRole('button', { name: '建立或更新个人资料' }).click()
   await expect(page.getByText('先认识你')).toBeVisible()
 }
 

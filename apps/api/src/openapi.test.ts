@@ -49,6 +49,10 @@ describe('OpenAPI document', () => {
     expect(document.paths['/v1/auth/dev/session']?.post).toBeDefined()
     expect(document.paths['/v1/me/onboarding']?.put).toBeDefined()
     expect(document.paths['/v1/me/onboarding']?.get).toBeDefined()
+    expect(document.paths['/v1/me/privacy']?.get).toBeDefined()
+    expect(document.paths['/v1/me/privacy/export']?.get).toBeDefined()
+    expect(document.paths['/v1/me/privacy/consents/{purpose}/revoke']?.post).toBeDefined()
+    expect(document.paths['/v1/me/privacy/account']?.delete).toBeDefined()
     expect(document.components?.securitySchemes?.bearer).toBeDefined()
   })
 

@@ -2,7 +2,7 @@
 
 面向普通健身人群的多端记录与 AI 规划产品。产品把身体、训练、饮食和恢复数据整理为可解释、可调整、可持续执行的个人计划。
 
-> 当前阶段：Revocable food-photo candidates / 第 10 轮已完成。用户逐次同意后可上传餐食照片，服务端去元数据并生成可撤销候选；确认只带入未保存草稿，照片立即删除，AI 不会直接创建餐次。下一轮进入隐私导出、删除、撤回同意与运营治理。
+> 当前阶段：User privacy ownership / 第 11 轮已完成。用户可以核对数据清单、下载含历史与在保留期净化照片的 JSON 副本、撤回可选 AI/照片授权，并通过三段确认永久清除主数据库账户图和私有媒体。下一轮进入管理、审计与运营治理。
 
 ## 产品边界
 
@@ -15,8 +15,8 @@
 
 ```text
 apps/
-  client/          Taro + React：微信小程序与 H5
-  api/             NestJS：身份、记录、洞察、计划、AI 编排 API、OpenAPI 与迁移入口
+  client/          Taro + React：微信小程序与 H5、记录/计划/隐私所有权流程
+  api/             NestJS：身份、记录、洞察、计划、AI/隐私编排、OpenAPI 与迁移入口
 services/
   ai/              FastAPI：本地 fixture、OpenAI 适配、严格结构化输出与提供方失败处理
 packages/
@@ -29,7 +29,7 @@ output/evals/      可重复的 AI 离线安全评测报告
 output/playwright/ 浏览器视觉验收证据
 ```
 
-后续迭代会按路线图逐步增加隐私所有权流程、管理后台和发布基础设施，避免在没有实现的情况下制造空壳。
+后续迭代会按路线图逐步增加管理后台、可观测性和发布基础设施，避免在没有实现的情况下制造空壳。
 
 ## 本地运行
 
@@ -62,7 +62,7 @@ pnpm dev:api
 
 AI worker 健康地址是 `http://127.0.0.1:8001/health`。本地默认使用无费用的 `fixture`，不会读取 `OPENAI_API_KEY`；切换 `AI_PROVIDER=openai` 前必须完成隐私、地域、费用、限额和质量审批。计划解释只使用精简计划摘要。照片路径只向 worker 提供服务端重编码 JPEG 和食物目录允许清单；`store:false` 不等于零留存协议。
 
-本地照片存储默认是仓库忽略的 `uploads/private`。生产环境必须配置 `PHOTO_STORAGE_ROOT` 和至少 32 字符的 `PHOTO_UPLOAD_SIGNING_SECRET`，并在共享部署前把本地磁盘适配器替换为加密私有对象存储与生命周期规则。真实照片模型仍默认关闭。
+本地照片存储默认是仓库忽略的 `uploads/private/<user UUID>/<photo UUID>.jpg`。生产环境必须配置 `PHOTO_STORAGE_ROOT` 和至少 32 字符的 `PHOTO_UPLOAD_SIGNING_SECRET`，并在共享部署前把本地磁盘适配器替换为加密私有对象存储与生命周期规则。真实照片模型仍默认关闭。
 
 生产构建的浏览器端到端验收需要数据库已迁移，执行：
 
@@ -104,6 +104,7 @@ Playwright 会复用或启动 API 与 H5 预览服务。`pnpm db:down` 会停止
 - [架构决策 0008](docs/architecture/decisions/0008-deterministic-plan-before-ai.md)
 - [架构决策 0009](docs/architecture/decisions/0009-review-only-ai-explanations.md)
 - [架构决策 0010](docs/architecture/decisions/0010-revocable-food-photo-candidates.md)
+- [架构决策 0011](docs/architecture/decisions/0011-user-owned-export-and-erasure.md)
 - [健康记录数据模型](docs/architecture/HEALTH_RECORD_MODEL.md)
 - [训练记录数据模型](docs/architecture/WORKOUT_MODEL.md)
 - [饮食记录数据模型](docs/architecture/NUTRITION_MODEL.md)
@@ -111,6 +112,7 @@ Playwright 会复用或启动 API 与 H5 预览服务。`pnpm db:down` 会停止
 - [周计划数据模型](docs/architecture/PLAN_MODEL.md)
 - [AI 计划解释模型](docs/architecture/AI_EXPLANATION_MODEL.md)
 - [餐食照片候选模型](docs/architecture/FOOD_PHOTO_MODEL.md)
+- [隐私所有权模型](docs/architecture/PRIVACY_OWNERSHIP_MODEL.md)
 - [API 契约与 OpenAPI](docs/api/README.md)
 - [第 0 轮档案](docs/iterations/000-foundation.md)
 - [第 1 轮档案](docs/iterations/001-client-foundation.md)
@@ -123,6 +125,7 @@ Playwright 会复用或启动 API 与 H5 预览服务。`pnpm db:down` 会停止
 - [第 8 轮档案](docs/iterations/008-deterministic-weekly-plans.md)
 - [第 9 轮档案](docs/iterations/009-ai-explanation-orchestration.md)
 - [第 10 轮档案](docs/iterations/010-food-photo-candidates.md)
+- [第 11 轮档案](docs/iterations/011-privacy-ownership.md)
 - [移动端视觉证据](output/playwright/iteration-001-mobile.png)
 - [宽屏视觉证据](output/playwright/iteration-001-wide.png)
 - [建档移动端证据](output/playwright/iteration-003-onboarding-mobile.png)
@@ -141,6 +144,8 @@ Playwright 会复用或启动 API 与 H5 预览服务。`pnpm db:down` 会停止
 - [AI 边注宽屏证据](output/playwright/iteration-009-ai-wide.png)
 - [餐食照片候选移动端证据](output/playwright/iteration-010-food-photo-mobile.png)
 - [餐食照片候选宽屏证据](output/playwright/iteration-010-food-photo-wide.png)
+- [隐私台账移动端证据](output/playwright/iteration-011-privacy-mobile.png)
+- [隐私台账宽屏证据](output/playwright/iteration-011-privacy-wide.png)
 
 ## 仓库同步说明
 

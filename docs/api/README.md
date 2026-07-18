@@ -13,6 +13,10 @@ Local routes after `pnpm db:up`, `pnpm db:migrate`, and `pnpm dev:api`:
 - API readiness: `GET http://127.0.0.1:3100/v1/health`
 - Local-only session: `POST http://127.0.0.1:3100/v1/auth/dev/session`
 - Current onboarding: `GET/PUT http://127.0.0.1:3100/v1/me/onboarding`
+- Privacy inventory: `GET http://127.0.0.1:3100/v1/me/privacy`
+- Portable data export: `GET http://127.0.0.1:3100/v1/me/privacy/export`
+- Optional consent withdrawal: `POST http://127.0.0.1:3100/v1/me/privacy/consents/:purpose/revoke`
+- Permanent account erasure: `DELETE http://127.0.0.1:3100/v1/me/privacy/account`
 - Measurements: `GET/POST http://127.0.0.1:3100/v1/health-records`
 - Measurement lifecycle: `PUT/DELETE http://127.0.0.1:3100/v1/health-records/:recordId`
 - Measurement history: `GET http://127.0.0.1:3100/v1/health-records/:recordId/history`
@@ -50,3 +54,5 @@ Weekly-plan generation requires `x-idempotency-key` and a Monday `weekStart`. An
 AI explanation generation also requires `x-idempotency-key`, the exact `expectedPlanRevision`, and affirmative purpose/version consent. It re-checks ownership, current onboarding and risk eligibility, then sends only a minimized structured plan summary to the internal worker. The response always identifies `model`, `fixture`, or `fallback` source plus prompt/validator/model provenance; it never mutates the weekly plan. Local Compose defaults to `AI_PROVIDER=fixture`. Enabling `openai` additionally requires `OPENAI_API_KEY` and release approval for provider privacy, region, cost, latency and quality gates.
 
 Food-photo reservation requires `x-idempotency-key` and current affirmative purpose/version consent. The signed upload accepts one bounded JPEG/PNG/still WebP multipart `file`; the API re-encodes it before private storage or worker access. Candidates expose ranges and provenance, never create a meal, and confirmation accepts only displayed catalog keys/grams before deleting media and returning unsaved draft inputs. The signed preview is short-lived and is not a public asset URL.
+
+The privacy inventory reports stable user-facing categories and current consent state. Its versioned JSON export runs from a repeatable-read snapshot, includes revision history and retained sanitized photo bytes, and responds as a no-store attachment; session tokens, hashes, idempotency keys and private storage keys are excluded. Only AI-plan and food-photo purposes can be withdrawn independently. Account erasure requires the exact shared-contract phrase, an export choice and permanent acknowledgement; success deletes the user cascade and private-media directory, invalidates every session and returns an unlinkable `primary-store-v1` receipt.

@@ -105,36 +105,45 @@ export class AiService {
     requestHash: string,
   ): Promise<{ id: string; existing?: AiExplanation }> {
     return this.database.withTransaction(async (client) => {
+      await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [
+        `ai-explanation:${userId}:${idempotencyKey}`,
+      ])
+      const existing = await client.query<RunRow>(
+        'SELECT * FROM ai_explanation_runs WHERE user_id = $1 AND idempotency_key = $2',
+        [userId, idempotencyKey],
+      )
+      const row = existing.rows[0]
+      if (row && row.input_fingerprint !== requestHash) {
+        throw new ConflictException('idempotency key was already used for another request')
+      }
+      if (row?.status === 'pending') {
+        throw new ConflictException({
+          code: 'ai_explanation_in_progress',
+          message: '解释仍在生成，请稍后读取历史记录。',
+        })
+      }
+      if (row) return { id: row.id, existing: mapRun(row) }
+
+      const activeUser = await client.query<{ id: string }>(
+        "SELECT id FROM users WHERE id = $1 AND status = 'active' FOR UPDATE",
+        [userId],
+      )
+      if (!activeUser.rows[0]) throw new ConflictException('account is not active')
+
       const consentId = randomUUID()
       await client.query(
-        `
-          INSERT INTO consent_events (id, user_id, purpose, version)
-          VALUES ($1, $2, 'ai_plan_explanation', $3)
-          ON CONFLICT (user_id, purpose, version) DO NOTHING
-        `,
+        `INSERT INTO consent_events (id, user_id, purpose, version)
+         VALUES ($1, $2, 'ai_plan_explanation', $3)`,
         [consentId, userId, aiPlanConsentVersion],
       )
-      const consent = await client.query<{ id: string }>(
-        `
-          SELECT id FROM consent_events
-          WHERE user_id = $1 AND purpose = 'ai_plan_explanation'
-            AND version = $2 AND revoked_at IS NULL
-        `,
-        [userId, aiPlanConsentVersion],
-      )
-      const activeConsentId = consent.rows[0]?.id
-      if (!activeConsentId) throw new ConflictException('AI explanation consent is unavailable')
-
       const id = randomUUID()
-      const inserted = await client.query<{ id: string }>(
+      await client.query(
         `
           INSERT INTO ai_explanation_runs (
             id, user_id, plan_id, plan_revision, status,
             prompt_version, validator_version, input_fingerprint,
             idempotency_key, consent_event_id
           ) VALUES ($1, $2, $3, $4, 'pending', $5, $6, $7, $8, $9)
-          ON CONFLICT (user_id, idempotency_key) DO NOTHING
-          RETURNING id
         `,
         [
           id,
@@ -145,26 +154,10 @@ export class AiService {
           aiPlanValidatorVersion,
           requestHash,
           idempotencyKey,
-          activeConsentId,
+          consentId,
         ],
       )
-      if (inserted.rows[0]) return { id }
-
-      const existing = await client.query<RunRow>(
-        'SELECT * FROM ai_explanation_runs WHERE user_id = $1 AND idempotency_key = $2',
-        [userId, idempotencyKey],
-      )
-      const row = existing.rows[0]
-      if (!row || row.input_fingerprint !== requestHash) {
-        throw new ConflictException('idempotency key was already used for another request')
-      }
-      if (row.status === 'pending') {
-        throw new ConflictException({
-          code: 'ai_explanation_in_progress',
-          message: '解释仍在生成，请稍后读取历史记录。',
-        })
-      }
-      return { id: row.id, existing: mapRun(row) }
+      return { id }
     })
   }
 

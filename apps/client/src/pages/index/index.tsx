@@ -278,7 +278,7 @@ const IndexPage = () => {
             aria-current={item.key === 'today' ? 'page' : undefined}
             onClick={() => {
               if (item.key === 'me') {
-                void Taro.navigateTo({ url: '/pages/onboarding/index' })
+                void Taro.navigateTo({ url: '/pages/privacy/index' })
               } else if (item.key === 'record') {
                 openRecords()
               } else if (item.key === 'plan') {

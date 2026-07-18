@@ -20,6 +20,8 @@ import { OnboardingController } from './onboarding/onboarding.controller'
 import { OnboardingService } from './onboarding/onboarding.service'
 import { PlansController } from './plans/plans.controller'
 import { PlansService } from './plans/plans.service'
+import { PrivacyController } from './privacy/privacy.controller'
+import { PrivacyService } from './privacy/privacy.service'
 import { WorkoutsController } from './workouts/workouts.controller'
 import { WorkoutsService } from './workouts/workouts.service'
 
@@ -34,6 +36,7 @@ import { WorkoutsService } from './workouts/workouts.service'
     PhotoCandidatesController,
     OnboardingController,
     PlansController,
+    PrivacyController,
     WorkoutsController,
   ],
   providers: [
@@ -47,6 +50,7 @@ import { WorkoutsService } from './workouts/workouts.service'
     PhotoStorageService,
     OnboardingService,
     PlansService,
+    PrivacyService,
     SessionAuthGuard,
     WorkoutsService,
   ],
