@@ -212,6 +212,30 @@ export class PlansService {
     return { items: result.rows.map(mapPlan) }
   }
 
+  async getActionableForAi(userId: string, planId: string, expectedRevision: number) {
+    const result = await this.database.query<PlanRow>(
+      'SELECT * FROM weekly_plans WHERE id = $1 AND user_id = $2',
+      [planId, userId],
+    )
+    const row = result.rows[0]
+    if (!row) throw new NotFoundException('weekly plan not found')
+    if (row.revision !== expectedRevision) {
+      throw new ConflictException(`plan revision changed; current revision is ${row.revision}`)
+    }
+    if (row.status === 'skipped') {
+      throw new UnprocessableEntityException({
+        code: 'plan_not_actionable',
+        message: '本周计划已跳过；如需解释，请先重新生成当前版本。',
+      })
+    }
+
+    const profile = await this.loadEligibleProfile(userId)
+    if (profile.revision !== row.payload.evidence.onboardingRevision) {
+      throw new ConflictException('planning constraints changed; generate a new plan version')
+    }
+    return mapPlan(row)
+  }
+
   async decide(userId: string, planId: string, input: PlanDecision) {
     return this.database.withTransaction(async (client) => {
       const current = await client.query<PlanRow>(

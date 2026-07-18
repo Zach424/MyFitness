@@ -1,13 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Button, ScrollView, Text, View } from '@tarojs/components'
+import { Button, Checkbox, ScrollView, Text, View } from '@tarojs/components'
 import Taro from '@tarojs/taro'
-import type { WeeklyPlan, WeeklyPlanHistoryItem } from '@myfitness/contracts'
+import {
+  aiPlanConsentVersion,
+  type AiExplanation,
+  type WeeklyPlan,
+  type WeeklyPlanHistoryItem,
+} from '@myfitness/contracts'
 
-import { buttonA11yProps } from '../../lib/accessibility'
+import { buttonA11yProps, checkboxA11yProps } from '../../lib/accessibility'
 import {
   ApiError,
   decideWeeklyPlan,
+  generateAiExplanation,
   generateWeeklyPlan,
+  getAiExplanationHistory,
   getWeeklyPlanHistory,
   listWeeklyPlans,
 } from '../../lib/api'
@@ -51,8 +58,27 @@ const equipmentLabels: Record<string, string> = {
   cardio: '心肺器械',
 }
 
+const evidenceLabels: Record<string, string> = {
+  plan_schedule: '可用时间',
+  plan_experience: '训练经验',
+  plan_recovery: '恢复依据',
+  recent_activity: '近期活动',
+  recent_workouts: '训练记录',
+  recent_meals: '饮食记录',
+  nutrition_focus: '饮食关注点',
+}
+
+const aiSourceLabels: Record<AiExplanation['source'], string> = {
+  model: 'AI 解释',
+  fixture: '本地演示解释',
+  fallback: '确定性安全说明',
+}
+
 const requestKey = () =>
   `weekly-plan-${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`}`
+
+const aiRequestKey = () =>
+  `ai-explanation-${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`}`
 
 const messageOf = (error: unknown) =>
   error instanceof ApiError || error instanceof Error ? error.message : '操作失败，请稍后重试'
@@ -127,11 +153,15 @@ const PlansPage = () => {
   const [savedPlan, setSavedPlan] = useState<WeeklyPlan>()
   const [draftPlan, setDraftPlan] = useState<WeeklyPlan>()
   const [history, setHistory] = useState<WeeklyPlanHistoryItem[]>([])
+  const [aiHistory, setAiHistory] = useState<AiExplanation[]>([])
+  const [aiConsent, setAiConsent] = useState(false)
+  const [aiLoading, setAiLoading] = useState(false)
   const [selectedDate, setSelectedDate] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [feedback, setFeedback] = useState('')
   const pendingKey = useRef('')
+  const pendingAiKey = useRef('')
 
   const setCurrentPlan = (plan: WeeklyPlan) => {
     setSavedPlan(plan)
@@ -143,8 +173,13 @@ const PlansPage = () => {
     )
   }
 
-  const refreshHistory = async (plan: WeeklyPlan) => {
-    setHistory(await getWeeklyPlanHistory(plan.id))
+  const refreshPlanHistory = async (plan: WeeklyPlan) => {
+    const [planHistory, explanationHistory] = await Promise.all([
+      getWeeklyPlanHistory(plan.id),
+      getAiExplanationHistory(plan.id),
+    ])
+    setHistory(planHistory)
+    setAiHistory(explanationHistory)
   }
 
   useEffect(() => {
@@ -154,7 +189,7 @@ const PlansPage = () => {
         const latest = plans.items[0]
         if (latest) {
           setCurrentPlan(latest)
-          await refreshHistory(latest)
+          await refreshPlanHistory(latest)
         }
       } catch (error) {
         setFeedback(messageOf(error))
@@ -182,7 +217,7 @@ const PlansPage = () => {
       )
       pendingKey.current = ''
       setCurrentPlan(plan)
-      await refreshHistory(plan)
+      await refreshPlanHistory(plan)
       setFeedback('周计划初稿已生成。先看依据和替代动作，再决定是否采用。')
     } catch (error) {
       setFeedback(messageOf(error))
@@ -208,7 +243,7 @@ const PlansPage = () => {
               : '用户确认采用当前计划',
       })
       setCurrentPlan(plan)
-      await refreshHistory(plan)
+      await refreshPlanHistory(plan)
       setFeedback(
         decision === 'modified'
           ? '替代动作已保存，新版本已进入历史。'
@@ -229,6 +264,46 @@ const PlansPage = () => {
     )
     setFeedback('')
   }
+
+  const generateExplanation = async () => {
+    if (!savedPlan || !aiConsent) return
+    setAiLoading(true)
+    setFeedback('')
+    if (!pendingAiKey.current) pendingAiKey.current = aiRequestKey()
+    try {
+      const explanation = await generateAiExplanation(
+        savedPlan.id,
+        {
+          expectedPlanRevision: savedPlan.revision,
+          consent: {
+            purpose: 'ai_plan_explanation',
+            version: aiPlanConsentVersion,
+            accepted: true,
+          },
+        },
+        pendingAiKey.current,
+      )
+      pendingAiKey.current = ''
+      setAiHistory((current) => [
+        explanation,
+        ...current.filter((item) => item.id !== explanation.id),
+      ])
+      setAiConsent(false)
+      setFeedback(
+        explanation.source === 'model'
+          ? 'AI 边注已生成；它只解释当前版本，没有修改计划。'
+          : explanation.source === 'fixture'
+            ? '本地演示边注已生成；接入生产模型后来源会明确标注。'
+            : '模型结果不可用，已显示通过安全规则的确定性说明。',
+      )
+    } catch (error) {
+      setFeedback(messageOf(error))
+    } finally {
+      setAiLoading(false)
+    }
+  }
+
+  const currentExplanation = aiHistory.find((item) => item.planRevision === draftPlan?.revision)
 
   return (
     <View className="plans-page">
@@ -464,6 +539,94 @@ const PlansPage = () => {
                         </View>
                       ))}
                     </View>
+                  </View>
+
+                  <View className="plan-aside-card ai-margin-card">
+                    <View className="ai-margin-card__heading">
+                      <View>
+                        <Text className="plans-eyebrow">AI MARGIN NOTE</Text>
+                        <Text className="plan-aside-card__title">计划边注</Text>
+                      </View>
+                      {currentExplanation ? (
+                        <Text className={`ai-source ai-source--${currentExplanation.source}`}>
+                          {aiSourceLabels[currentExplanation.source]}
+                        </Text>
+                      ) : null}
+                    </View>
+
+                    {currentExplanation ? (
+                      <View className="ai-note">
+                        <Text className="ai-note__headline">
+                          {currentExplanation.content.headline}
+                        </Text>
+                        <Text className="ai-note__overview">
+                          {currentExplanation.content.overview}
+                        </Text>
+                        <View className="ai-note__highlights">
+                          {currentExplanation.content.highlights.map((highlight, index) => (
+                            <View
+                              className="ai-note__highlight"
+                              key={`${highlight.title}-${index}`}
+                            >
+                              <Text className="ai-note__highlight-title">{highlight.title}</Text>
+                              <Text className="ai-note__highlight-detail">{highlight.detail}</Text>
+                              <View className="ai-evidence-tags" aria-label="这条边注使用的依据">
+                                {highlight.evidenceKeys.map((key) => (
+                                  <Text className="ai-evidence-tag" key={key}>
+                                    {evidenceLabels[key] ?? key}
+                                  </Text>
+                                ))}
+                              </View>
+                            </View>
+                          ))}
+                        </View>
+                        <View className="ai-note__next">
+                          <Text className="plans-eyebrow">NEXT REVIEW</Text>
+                          <Text>{currentExplanation.content.nextStep}</Text>
+                        </View>
+                        <Text className="ai-note__safety">{currentExplanation.safetyNote}</Text>
+                        <Text className="ai-note__trace metric">
+                          PLAN V{currentExplanation.planRevision} ·{' '}
+                          {currentExplanation.promptVersion.toUpperCase()}
+                        </Text>
+                      </View>
+                    ) : (
+                      <View className="ai-note-empty">
+                        {aiHistory.length ? (
+                          <Text className="ai-note-empty__stale">
+                            计划版本已变化，旧边注不会继续显示为当前解释。
+                          </Text>
+                        ) : null}
+                        <Text className="plan-aside-card__lead">
+                          只发送当前计划的精简摘要，不含姓名、用户编号或未选动作。AI
+                          只做解释，不能改动计划。
+                        </Text>
+                        <View
+                          {...checkboxA11yProps}
+                          className={`ai-consent ${aiConsent ? 'ai-consent--checked' : ''}`}
+                          aria-checked={aiConsent}
+                          aria-label="同意本次 AI 计划解释数据处理"
+                          onClick={() => setAiConsent((value) => !value)}
+                        >
+                          <Checkbox checked={aiConsent} value="ai-plan-explanation" aria-hidden />
+                          <Text>
+                            我同意本次将精简计划摘要发送给配置的 AI 服务，并记录本次授权版本。
+                          </Text>
+                        </View>
+                        <Button
+                          {...buttonA11yProps}
+                          className="ai-generate"
+                          disabled={!aiConsent || aiLoading || draftPlan.status === 'skipped'}
+                          aria-disabled={!aiConsent || aiLoading || draftPlan.status === 'skipped'}
+                          onClick={() => void generateExplanation()}
+                        >
+                          {aiLoading ? '正在生成边注…' : '生成解释边注'}
+                        </Button>
+                        <Text className="ai-note-empty__hint">
+                          本地默认使用演示 provider；生产模型、失败回退和版本来源会分别标注。
+                        </Text>
+                      </View>
+                    )}
                   </View>
 
                   <View className="plan-aside-card history-card">

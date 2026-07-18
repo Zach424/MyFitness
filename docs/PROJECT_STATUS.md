@@ -2,7 +2,7 @@
 
 Last reviewed: 2026-07-19
 
-Stage: deterministic weekly planning complete; AI explanation/orchestration next
+Stage: review-only AI plan explanations complete locally; food-photo assistance next
 
 Primary release target: WeChat Mini Program + responsive H5
 
@@ -12,20 +12,20 @@ MyFitness / 衡迹 turns body, training, nutrition, and recovery records into sa
 
 ## Module status
 
-| Module                  | Status                       | Current evidence                                 | Next gate                                      |
-| ----------------------- | ---------------------------- | ------------------------------------------------ | ---------------------------------------------- |
-| Product scope           | Done for MVP baseline        | `docs/product/PRODUCT_BRIEF.md`                  | Validate with target-user interviews           |
-| Delivery roadmap        | Done for planning baseline   | `docs/product/ROADMAP.md`                        | Execute iteration 9                            |
-| Design language         | Partial, six flows validated | Core flows + 12 reviewed screenshots             | Large text, keyboard and remaining states      |
-| Client: Mini Program/H5 | Partial                      | Record loops + Today/trends + weekly plan review | Add AI explanation proposal flow               |
-| Admin console           | Pending                      | Architecture only                                | Content and support requirements frozen        |
-| Business API            | Partial                      | Records, insights and versioned weekly plans     | Add model orchestration boundary               |
-| Domain rules            | Partial                      | Record aggregation + deterministic-v1 plan rules | Add AI output validators/evaluation fixtures   |
-| AI service              | Pending                      | Safety boundary listed                           | Offline fixture pipeline and validators        |
-| Native App/devices      | Deferred                     | Phase-two decision                               | MVP retention gate reached                     |
-| Privacy/compliance      | Partial                      | Purpose/version consent events + AI rules        | Revocation, inventory, retention, legal review |
-| Testing/observability   | Partial                      | 60 unit + 15 integration + 13 browser E2E        | Add lint, CI, metrics and trace correlation    |
-| Deployment              | Partial, local only          | PostgreSQL Compose + runtime health              | Create repeatable shared test environment      |
+| Module                  | Status                         | Current evidence                                 | Next gate                                      |
+| ----------------------- | ------------------------------ | ------------------------------------------------ | ---------------------------------------------- |
+| Product scope           | Done for MVP baseline          | `docs/product/PRODUCT_BRIEF.md`                  | Validate with target-user interviews           |
+| Delivery roadmap        | Done for planning baseline     | `docs/product/ROADMAP.md`                        | Execute iteration 10                           |
+| Design language         | Partial, seven flows validated | Core flows + 14 reviewed screenshots             | Large text, keyboard and remaining states      |
+| Client: Mini Program/H5 | Partial                        | Full record/plan loop + AI margin note           | Add photo candidate review                     |
+| Admin console           | Pending                        | Architecture only                                | Content and support requirements frozen        |
+| Business API            | Partial                        | Records, plans and versioned AI explanation runs | Add private photo lifecycle                    |
+| Domain rules            | Partial                        | Plan rules + AI minimization/validators/fallback | Extend validators to image candidates          |
+| AI service              | Partial                        | Fixture/OpenAI adapters + 7-case offline eval    | Approved real-provider canary and image path   |
+| Native App/devices      | Deferred                       | Phase-two decision                               | MVP retention gate reached                     |
+| Privacy/compliance      | Partial                        | Purpose/version consent events + AI rules        | Revocation, inventory, retention, legal review |
+| Testing/observability   | Partial                        | 66 unit + 18 integration + 5 worker + 15 E2E     | Add lint, CI, metrics and trace correlation    |
+| Deployment              | Partial, local only            | PostgreSQL + FastAPI Compose health              | Create repeatable shared test environment      |
 
 Status vocabulary: `Done` means validated for the present stage, `Partial` means usable but missing a named gate, `Pending` means not implemented, and `Deferred` means intentionally outside the current release.
 
@@ -45,7 +45,8 @@ Status vocabulary: `Done` means validated for the present stage, `Partial` means
 - Parameterized `pg` access to PostgreSQL 18.4 with transactional, checksum-protected SQL migrations.
 - React Native for the later native App rather than forcing device integrations into the first client.
 - NestJS modular monolith + PostgreSQL + Redis for business services.
-- FastAPI worker boundary for model/vision orchestration when AI implementation begins.
+- FastAPI worker with authenticated fixture/OpenAI provider adapters, strict structured output, bounded retry and health check.
+- Review-only AI runs with explicit versioned consent, minimized context, prompt/model/validator provenance, owner-scoped idempotency, deterministic validation/fallback and exact plan-revision binding.
 - Shared contracts, domain rules, and design tokens in a pnpm monorepo.
 
 ## Current risks
@@ -56,9 +57,12 @@ Status vocabulary: `Done` means validated for the present stage, `Partial` means
 | Scope may expand before the recording loop is proven             | High   | Enforce MVP exclusions and one-scope iteration archives                                    |
 | Food-photo portion estimates can be misleading                   | High   | Display ranges and uncertainty; require confirmation before persistence                    |
 | AI may generate unsafe training or diet changes                  | High   | Deterministic constraints and validators precede model output                              |
+| Production AI retention/region/cost/quality are unverified       | High   | Keep fixture default; require legal/operations review and approved real-provider canary    |
+| Pending AI runs can outlive a crashed orchestration request      | Medium | Add expiry and reconciliation before shared beta                                           |
+| Seven AI eval cases do not establish broad safety                | High   | Add expert-reviewed, obfuscated and injection cases with regression thresholds             |
 | Domestic Android health data is fragmented                       | Medium | Defer device sync; start HealthKit/Health Connect/Huawei feasibility after retention gate  |
 | Brand name “衡迹” is unverified                                  | Medium | Treat as working name; perform trademark/domain review before public launch                |
-| H5 entrypoint is 300 KiB, above webpack's 244 KiB recommendation | Medium | Set a measured budget and split routes/vendor code as feature pages are added              |
+| H5 entry is 303 KiB and WeApp plan page is 458 KiB               | Medium | Set measured platform budgets and split route/provider code before beta                    |
 | Taro emits non-blocking webpack cache serialization warnings     | Low    | Track upstream/package compatibility; clean builds and artifacts currently pass            |
 | Development session issuer is not production authentication      | High   | Production mode disables it; add verified WeChat/phone adapters before shared deployment   |
 | Consent can be recorded but not yet revoked or exported          | High   | Implement privacy workflows, policy review and audit evidence before beta                  |
@@ -82,4 +86,4 @@ The MVP cannot enter public beta until all of the following are reproducible:
 
 ## Primary next step
 
-Iteration 9: add provider-neutral AI explanation and plan orchestration behind the structured plan contract, with versioned prompts/models/validators, offline fixtures, adversarial evaluation and deterministic fallback.
+Iteration 10: add food-photo assistance as an explicitly confirmed candidate workflow, including private upload, EXIF stripping, retention deletion, uncertainty, alternatives and no automatic record writes.

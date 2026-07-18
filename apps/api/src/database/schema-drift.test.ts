@@ -2,6 +2,11 @@ import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 
 import {
+  aiExplanationProviders,
+  aiExplanationSources,
+  aiPlanPromptVersion,
+  aiPlanValidatorVersion,
+  aiWorkerFailureCodes,
   ageBands,
   dietaryPreferenceOptions,
   equipmentOptions,
@@ -56,6 +61,10 @@ const nutritionMigrationPath = path.resolve(
 const planMigrationPath = path.resolve(
   __dirname,
   '../../../../infra/postgres/migrations/0006_weekly_plans.sql',
+)
+const aiMigrationPath = path.resolve(
+  __dirname,
+  '../../../../infra/postgres/migrations/0007_ai_explanations.sql',
 )
 
 describe('health-record migration drift', () => {
@@ -131,6 +140,19 @@ describe('health-record migration drift', () => {
     const migration = await readFile(planMigrationPath, 'utf8')
     for (const value of [...planStatuses, ...planRevisionActions, planEngineVersion]) {
       expect(migration, `${value} is missing from the plan migration`).toContain(`'${value}'`)
+    }
+  })
+
+  it('contains every AI explanation provenance and failure enum', async () => {
+    const migration = await readFile(aiMigrationPath, 'utf8')
+    for (const value of [
+      ...aiExplanationSources,
+      ...aiExplanationProviders,
+      ...aiWorkerFailureCodes,
+      aiPlanPromptVersion,
+      aiPlanValidatorVersion,
+    ]) {
+      expect(migration, `${value} is missing from the AI migration`).toContain(`'${value}'`)
     }
   })
 })

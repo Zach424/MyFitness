@@ -21,6 +21,8 @@
     "format:check": "prettier --check .",
     "preview:h5": "node scripts/serve-h5.mjs",
     "test": "vitest run",
+    "test:ai": "python -m pytest services/ai/tests -q",
+    "eval:ai": "pnpm --filter @myfitness/contracts build && pnpm --filter @myfitness/domain build && node scripts/run-ai-evals.mjs",
     "test:e2e": "playwright test",
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "typecheck": "pnpm --filter @myfitness/contracts build && pnpm --filter @myfitness/domain build && pnpm -r --if-present typecheck"

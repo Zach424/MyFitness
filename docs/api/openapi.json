@@ -1,6 +1,341 @@
 {
   "openapi": "3.0.0",
   "paths": {
+    "/v1/plans/weekly/{planId}/explanation": {
+      "post": {
+        "operationId": "AiController_generate",
+        "parameters": [
+          {
+            "name": "planId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "x-idempotency-key",
+            "in": "header",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "expectedPlanRevision": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "exclusiveMinimum": true,
+                    "maximum": 9007199254740991
+                  },
+                  "consent": {
+                    "type": "object",
+                    "properties": {
+                      "purpose": { "type": "string", "enum": ["ai_plan_explanation"] },
+                      "version": {
+                        "type": "string",
+                        "enum": ["ai-plan-explanation-2026-07-19.v1"]
+                      },
+                      "accepted": { "type": "boolean", "enum": [true] }
+                    },
+                    "required": ["purpose", "version", "accepted"],
+                    "additionalProperties": false
+                  }
+                },
+                "required": ["expectedPlanRevision", "consent"],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "planId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "planRevision": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "exclusiveMinimum": true,
+                      "maximum": 9007199254740991
+                    },
+                    "source": { "type": "string", "enum": ["model", "fixture", "fallback"] },
+                    "provider": { "type": "string", "enum": ["fixture", "openai", "unavailable"] },
+                    "model": { "type": "string", "minLength": 1, "maxLength": 120 },
+                    "promptVersion": { "type": "string", "enum": ["plan-explanation-v1"] },
+                    "validatorVersion": {
+                      "type": "string",
+                      "enum": ["plan-explanation-safety-v1"]
+                    },
+                    "failureCode": {
+                      "nullable": true,
+                      "type": "string",
+                      "enum": [
+                        "provider_unavailable",
+                        "provider_timeout",
+                        "provider_refusal",
+                        "provider_error",
+                        "invalid_output",
+                        "safety_validation_failed"
+                      ]
+                    },
+                    "content": {
+                      "type": "object",
+                      "properties": {
+                        "headline": { "type": "string", "minLength": 1, "maxLength": 60 },
+                        "overview": { "type": "string", "minLength": 1, "maxLength": 240 },
+                        "highlights": {
+                          "minItems": 2,
+                          "maxItems": 4,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "title": { "type": "string", "minLength": 1, "maxLength": 60 },
+                              "detail": { "type": "string", "minLength": 1, "maxLength": 220 },
+                              "evidenceKeys": {
+                                "minItems": 1,
+                                "maxItems": 3,
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "enum": [
+                                    "plan_schedule",
+                                    "plan_experience",
+                                    "plan_recovery",
+                                    "recent_activity",
+                                    "recent_workouts",
+                                    "recent_meals",
+                                    "nutrition_focus"
+                                  ]
+                                }
+                              }
+                            },
+                            "required": ["title", "detail", "evidenceKeys"],
+                            "additionalProperties": false
+                          }
+                        },
+                        "nextStep": { "type": "string", "minLength": 1, "maxLength": 160 }
+                      },
+                      "required": ["headline", "overview", "highlights", "nextStep"],
+                      "additionalProperties": false
+                    },
+                    "safetyNote": {
+                      "type": "string",
+                      "enum": [
+                        "这是对既有计划的辅助解释，不是医疗诊断或处方；计划内容没有被 AI 自动修改。"
+                      ]
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "planId",
+                    "planRevision",
+                    "source",
+                    "provider",
+                    "model",
+                    "promptVersion",
+                    "validatorVersion",
+                    "failureCode",
+                    "content",
+                    "safetyNote",
+                    "createdAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": { "description": "Consent, revision or idempotency key is invalid." },
+          "401": { "description": "Bearer token is missing, invalid, expired or revoked." },
+          "404": { "description": "Plan does not exist for this user." },
+          "409": { "description": "Plan changed or the same request is still in progress." },
+          "422": { "description": "Current risk/profile state blocks explanation." }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Generate a review-only explanation for the current plan revision",
+        "tags": ["ai explanations"]
+      }
+    },
+    "/v1/plans/weekly/{planId}/explanations": {
+      "get": {
+        "operationId": "AiController_history",
+        "parameters": [
+          {
+            "name": "planId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "planId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "items": {
+                      "maxItems": 20,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "planId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "planRevision": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "exclusiveMinimum": true,
+                            "maximum": 9007199254740991
+                          },
+                          "source": { "type": "string", "enum": ["model", "fixture", "fallback"] },
+                          "provider": {
+                            "type": "string",
+                            "enum": ["fixture", "openai", "unavailable"]
+                          },
+                          "model": { "type": "string", "minLength": 1, "maxLength": 120 },
+                          "promptVersion": { "type": "string", "enum": ["plan-explanation-v1"] },
+                          "validatorVersion": {
+                            "type": "string",
+                            "enum": ["plan-explanation-safety-v1"]
+                          },
+                          "failureCode": {
+                            "nullable": true,
+                            "type": "string",
+                            "enum": [
+                              "provider_unavailable",
+                              "provider_timeout",
+                              "provider_refusal",
+                              "provider_error",
+                              "invalid_output",
+                              "safety_validation_failed"
+                            ]
+                          },
+                          "content": {
+                            "type": "object",
+                            "properties": {
+                              "headline": { "type": "string", "minLength": 1, "maxLength": 60 },
+                              "overview": { "type": "string", "minLength": 1, "maxLength": 240 },
+                              "highlights": {
+                                "minItems": 2,
+                                "maxItems": 4,
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "title": { "type": "string", "minLength": 1, "maxLength": 60 },
+                                    "detail": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 220
+                                    },
+                                    "evidenceKeys": {
+                                      "minItems": 1,
+                                      "maxItems": 3,
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string",
+                                        "enum": [
+                                          "plan_schedule",
+                                          "plan_experience",
+                                          "plan_recovery",
+                                          "recent_activity",
+                                          "recent_workouts",
+                                          "recent_meals",
+                                          "nutrition_focus"
+                                        ]
+                                      }
+                                    }
+                                  },
+                                  "required": ["title", "detail", "evidenceKeys"],
+                                  "additionalProperties": false
+                                }
+                              },
+                              "nextStep": { "type": "string", "minLength": 1, "maxLength": 160 }
+                            },
+                            "required": ["headline", "overview", "highlights", "nextStep"],
+                            "additionalProperties": false
+                          },
+                          "safetyNote": {
+                            "type": "string",
+                            "enum": [
+                              "这是对既有计划的辅助解释，不是医疗诊断或处方；计划内容没有被 AI 自动修改。"
+                            ]
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "planId",
+                          "planRevision",
+                          "source",
+                          "provider",
+                          "model",
+                          "promptVersion",
+                          "validatorVersion",
+                          "failureCode",
+                          "content",
+                          "safetyNote",
+                          "createdAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": ["planId", "items"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": { "description": "Bearer token is missing, invalid, expired or revoked." },
+          "404": { "description": "Plan does not exist for this user." }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "List immutable explanation runs for one owned weekly plan",
+        "tags": ["ai explanations"]
+      }
+    },
     "/v1/auth/dev/session": {
       "post": {
         "description": "Disabled when NODE_ENV=production. Replace with WeChat/phone verification.",

@@ -1,3 +1,4 @@
+export * from './ai'
 export * from './measurements'
 export * from './nutrition'
 export * from './plan'

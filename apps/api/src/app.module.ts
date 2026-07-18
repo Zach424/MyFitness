@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common'
 
+import { AiController } from './ai/ai.controller'
+import { AiService } from './ai/ai.service'
 import { AuthController } from './auth/auth.controller'
 import { AuthService } from './auth/auth.service'
 import { SessionAuthGuard } from './auth/session-auth.guard'
@@ -20,6 +22,7 @@ import { WorkoutsService } from './workouts/workouts.service'
 
 @Module({
   controllers: [
+    AiController,
     AuthController,
     HealthController,
     HealthRecordsController,
@@ -30,6 +33,7 @@ import { WorkoutsService } from './workouts/workouts.service'
     WorkoutsController,
   ],
   providers: [
+    AiService,
     AuthService,
     DatabaseService,
     HealthRecordsService,

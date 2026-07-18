@@ -1,0 +1,1 @@
+"""MyFitness AI worker."""

@@ -149,6 +149,53 @@ test('weekly fold keeps plan evidence and nutrition focus legible at wide viewpo
   expect(errors).toEqual([])
 })
 
+test('AI margin note requires consent, preserves provenance and becomes stale with the plan', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  const errors = collectBrowserErrors(page)
+  await seedProfileAndOpenPlans(page)
+  await page.getByRole('button', { name: /生成 .* 初稿/ }).click()
+  await expect(page.getByText('计划边注')).toBeVisible()
+
+  const generateButton = page.getByRole('button', { name: '生成解释边注' })
+  await expect(generateButton).toHaveAttribute('aria-disabled', 'true')
+  await page.getByRole('checkbox', { name: '同意本次 AI 计划解释数据处理' }).click()
+  await expect(generateButton).toHaveAttribute('aria-disabled', 'false')
+
+  const explanationPromise = page.waitForResponse(
+    (response) => response.url().endsWith('/explanation') && response.request().method() === 'POST',
+  )
+  await generateButton.click()
+  expect((await explanationPromise).status()).toBe(201)
+  await expect(page.getByText('本地演示解释')).toBeVisible()
+  await expect(page.getByText('这周先把节奏做稳')).toBeVisible()
+  await expect(page.getByText('可用时间', { exact: true })).toBeVisible()
+  await expect(page.getByText(/PLAN V1 · PLAN-EXPLANATION-V1/)).toBeVisible()
+  await expect(page.getByText(/没有被 AI 自动修改/)).toBeVisible()
+  await page.locator('.ai-margin-card').scrollIntoViewIfNeeded()
+  await page.screenshot({ path: 'output/playwright/iteration-009-ai-mobile.png' })
+
+  await page.getByRole('button', { name: '高脚杯深蹲' }).click()
+  await page.getByRole('button', { name: '保存替代动作' }).click()
+  await expect(page.getByText('计划版本已变化，旧边注不会继续显示为当前解释。')).toBeVisible()
+  await expect(page.getByText('这周先把节奏做稳')).not.toBeVisible()
+  expect(errors).toEqual([])
+})
+
+test('AI margin note remains a secondary evidence layer at wide viewport', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1100 })
+  const errors = collectBrowserErrors(page)
+  await seedProfileAndOpenPlans(page)
+  await page.getByRole('button', { name: /生成 .* 初稿/ }).click()
+  await page.getByRole('checkbox', { name: '同意本次 AI 计划解释数据处理' }).click()
+  await page.getByRole('button', { name: '生成解释边注' }).click()
+  await expect(page.getByText('本地演示解释')).toBeVisible()
+  await page.locator('.ai-margin-card').scrollIntoViewIfNeeded()
+  await page.screenshot({ path: 'output/playwright/iteration-009-ai-wide.png' })
+  expect(errors).toEqual([])
+})
+
 test('plan generation visibly fails closed for professional-clearance risk', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   const errors = collectBrowserErrors(

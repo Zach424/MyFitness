@@ -1,4 +1,5 @@
 import type {
+  AiExplanation,
   CreateHealthRecord,
   CreateMeal,
   CreateWorkout,
@@ -7,6 +8,7 @@ import type {
   FavoriteFood,
   FavoriteFoodInput,
   GenerateWeeklyPlan,
+  GenerateAiExplanation,
   HealthRecord,
   HealthRecordHistoryItem,
   Meal,
@@ -217,6 +219,23 @@ export const getWeeklyPlanHistory = async (planId: string) =>
   (
     await authenticatedRequest<{ items: WeeklyPlanHistoryItem[] }>(
       `/plans/weekly/${planId}/history`,
+      'GET',
+    )
+  ).items
+
+export const generateAiExplanation = (
+  planId: string,
+  payload: GenerateAiExplanation,
+  idempotencyKey: string,
+) =>
+  authenticatedRequest<AiExplanation>(`/plans/weekly/${planId}/explanation`, 'POST', payload, {
+    'x-idempotency-key': idempotencyKey,
+  })
+
+export const getAiExplanationHistory = async (planId: string) =>
+  (
+    await authenticatedRequest<{ items: AiExplanation[] }>(
+      `/plans/weekly/${planId}/explanations`,
       'GET',
     )
   ).items

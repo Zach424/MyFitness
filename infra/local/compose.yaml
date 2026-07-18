@@ -18,5 +18,26 @@ services:
       retries: 30
       start_period: 5s
 
+  ai:
+    build:
+      context: ../../services/ai
+    environment:
+      AI_PROVIDER: fixture
+      AI_SERVICE_TOKEN: myfitness-ai-local
+    ports:
+      - '127.0.0.1:8001:8001'
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'python',
+          '-c',
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=2)",
+        ]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+
 volumes:
   myfitness_postgres_data:

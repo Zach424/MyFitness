@@ -1,6 +1,6 @@
 # Design system baseline
 
-Status: implemented and visually validated through iteration-008 deterministic weekly plans
+Status: implemented and visually validated through iteration-009 review-only AI plan explanations
 
 Working brand: 衡迹 / MyFitness
 
@@ -189,6 +189,19 @@ Reviewed evidence:
 - [1440 × 1000 wide weekly-review capture](../../output/playwright/iteration-008-plans-wide.png)
 
 The browser review changed the mobile capture to reset the plan scroll container before taking evidence, preventing a technically correct but contextless mid-page screenshot. Both layouts keep keyboard-visible focus and reduced-motion rules; the responsive CSS includes 320 px handling. Still open: large-text system testing, offline/stale-plan proactive messaging, plan-versus-completed-record reconciliation and a full keyboard traversal audit.
+
+## Implementation review — iteration 009
+
+The **AI Margin Note / 计划边注** is deliberately a pencil-like annotation inside the Week Fold rather than a chatbot, coach avatar, or competing plan card. A fine diagonal paper pattern, narrow mineral rule and “NEXT REVIEW” footer distinguish explanatory prose from authoritative plan content. Model, fixture and fallback sources use explicit text badges; evidence appears as compact labeled tags, and the safety note says the plan was not automatically modified.
+
+Before generation, the empty state explains the minimized data boundary and requires a purpose-specific checkbox. There is no “apply” action. After a plan revision changes, the old explanation is hidden as current and replaced with a stale-version notice. Wide H5 keeps the note in the right evidence rail; mobile reads it after the concrete session content.
+
+Reviewed evidence:
+
+- [390 × 844 mobile AI margin-note capture](../../output/playwright/iteration-009-ai-mobile.png)
+- [1440 × 1100 wide secondary-evidence capture](../../output/playwright/iteration-009-ai-wide.png)
+
+The production-browser review exposed Taro custom-element semantics: a rendered `disabled` attribute was not recognized as native disabled state, and the visual checkbox had no accessible checkbox role. The page now emits explicit checkbox and `aria-disabled` states through the shared compatibility helper. Both new AI scenarios pass without captured script/console errors. Still open: keyboard activation for all custom roles across WeApp/H5, system large text, 320 px, offline/provider-latency states and screen-reader testing on real devices.
 
 ## Screenshot review checklist
 

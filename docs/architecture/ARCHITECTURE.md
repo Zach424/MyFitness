@@ -1,6 +1,6 @@
 # Architecture baseline
 
-Status: accepted and implemented through the iteration-008 deterministic weekly-plan loop; changes require an ADR.
+Status: accepted and implemented through the iteration-009 review-only AI explanation loop; changes require an ADR.
 
 ## System shape
 
@@ -48,6 +48,8 @@ Implemented foundation:
 - Nutrition meal/item rows snapshot food composition and display/canonical portions. Server-side rules calculate nutrient totals; owner favorites are independent snapshots and each meal revision retains the full accepted aggregate.
 - A read-only insights projection queries confirmed source rows for the requested timezone and produces Today evidence, nullable three-day readiness and 7/30/90-day totals without persisted duplicate state.
 - A deterministic weekly-plan aggregate snapshots onboarding revision and evidence, stores the current JSONB plan plus immutable revisions, and re-checks current eligibility before an accept/modify transition.
+- A FastAPI worker exposes an authenticated provider-neutral explanation endpoint. Local fixture and OpenAI Responses adapters share a strict schema; the business API owns consent, authorization, idempotency, validation, fallback and persistence.
+- AI explanation runs are minimized, fingerprinted and bound to the exact plan revision plus prompt/model/validator/consent provenance. Raw prompts and input payloads are not persisted.
 
 ## Data rules
 
@@ -73,6 +75,8 @@ The workout aggregate, derived-value rules and safe repeat semantics are documen
 The meal snapshot, canonical-gram, catalog/favorite and photo-candidate boundaries are documented in [NUTRITION_MODEL.md](NUTRITION_MODEL.md). ADR-0006 records why mutable catalogs cannot be historical truth.
 
 The deterministic weekly-plan rules, evidence provenance, revision lifecycle and limitations are documented in [PLAN_MODEL.md](PLAN_MODEL.md). ADR-0008 records why the structured rule path precedes model orchestration.
+
+The review-only AI boundary, minimization, provider contract, validation and fallback are documented in [AI_EXPLANATION_MODEL.md](AI_EXPLANATION_MODEL.md). ADR-0009 records why explanations cannot mutate plans or confirmed records.
 
 ## API and event conventions
 

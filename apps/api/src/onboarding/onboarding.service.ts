@@ -192,7 +192,9 @@ export class OnboardingService {
       `
         SELECT purpose, version, accepted_at
         FROM consent_events
-        WHERE user_id = $1 AND revoked_at IS NULL
+        WHERE user_id = $1
+          AND revoked_at IS NULL
+          AND purpose IN ('terms', 'privacy', 'health_data')
         ORDER BY CASE purpose WHEN 'terms' THEN 1 WHEN 'privacy' THEN 2 ELSE 3 END
       `,
       [userId],

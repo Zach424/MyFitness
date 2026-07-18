@@ -2,7 +2,7 @@
 
 面向普通健身人群的多端记录与 AI 规划产品。产品把身体、训练、饮食和恢复数据整理为可解释、可调整、可持续执行的个人计划。
 
-> 当前阶段：Deterministic weekly plans / 第 8 轮已完成。用户可基于当前建档约束和已确认记录生成、替换动作、修改、采用或跳过一周计划，并查看不可变版本历史；生成与采用时都会重新检查风险资格。下一轮进入 AI 解释与编排边界。
+> 当前阶段：Review-only AI plan explanations / 第 9 轮已完成。用户可在逐次授权后，为当前周计划生成来源明确、带证据与版本的解释边注；AI 不能修改计划，失败时会回退到确定性说明。下一轮进入饮食照片候选识别。
 
 ## 产品边界
 
@@ -16,17 +16,20 @@
 ```text
 apps/
   client/          Taro + React：微信小程序与 H5
-  api/             NestJS：身份、记录、洞察、周计划生命周期 API、OpenAPI 与迁移入口
+  api/             NestJS：身份、记录、洞察、计划、AI 编排 API、OpenAPI 与迁移入口
+services/
+  ai/              FastAPI：本地 fixture、OpenAI 适配、严格结构化输出与提供方失败处理
 packages/
   contracts/       Zod：跨端请求、响应、来源与版本契约
   domain/          单位归一化、记录汇总、周计划与确定性安全规则
   design-tokens/   颜色、字体、间距、动效和图表变量
 docs/              产品、设计、架构和每轮迭代档案
 infra/             PostgreSQL 迁移与本地 Docker Compose
+output/evals/      可重复的 AI 离线安全评测报告
 output/playwright/ 浏览器视觉验收证据
 ```
 
-后续迭代会按路线图逐步增加 `services/ai`、管理后台和发布基础设施，避免在没有实现的情况下制造空壳。
+后续迭代会按路线图逐步增加照片候选流、管理后台和发布基础设施，避免在没有实现的情况下制造空壳。
 
 ## 本地运行
 
@@ -38,12 +41,14 @@ pnpm dev:h5
 pnpm build:h5
 pnpm build:weapp
 pnpm test
+pnpm test:ai
+pnpm eval:ai
 pnpm typecheck
 ```
 
 H5 和微信小程序产物分别生成到 `apps/client/dist-h5` 与 `apps/client/dist-weapp`，两次构建不会互相清理。
 
-启动本地 API 与 PostgreSQL：
+启动本地 API、PostgreSQL 与 AI worker：
 
 ```bash
 pnpm db:up
@@ -53,6 +58,8 @@ pnpm dev:api
 ```
 
 随后可访问 `http://127.0.0.1:3100/v1/health` 与 `http://127.0.0.1:3100/docs`。开发身份通过 `POST /v1/auth/dev/session` 获取不透明 Bearer 令牌；该签发器在 `NODE_ENV=production` 时关闭，数据库只保存 SHA-256 哈希。生产身份提供商仍需在发布前接入。
+
+AI worker 健康地址是 `http://127.0.0.1:8001/health`。本地默认使用无费用的 `fixture`，不会读取 `OPENAI_API_KEY`；切换 `AI_PROVIDER=openai` 前必须完成隐私、地域、费用、限额和质量审批。应用只把精简计划摘要用于本次解释，并记录同意、计划、提示词、模型与验证器版本。
 
 生产构建的浏览器端到端验收需要数据库已迁移，执行：
 
@@ -91,11 +98,13 @@ Playwright 会复用或启动 API 与 H5 预览服务。`pnpm db:down` 会停止
 - [架构决策 0006](docs/architecture/decisions/0006-nutrition-snapshot-aggregate.md)
 - [架构决策 0007](docs/architecture/decisions/0007-server-dashboard-aggregation.md)
 - [架构决策 0008](docs/architecture/decisions/0008-deterministic-plan-before-ai.md)
+- [架构决策 0009](docs/architecture/decisions/0009-review-only-ai-explanations.md)
 - [健康记录数据模型](docs/architecture/HEALTH_RECORD_MODEL.md)
 - [训练记录数据模型](docs/architecture/WORKOUT_MODEL.md)
 - [饮食记录数据模型](docs/architecture/NUTRITION_MODEL.md)
 - [身份与建档数据模型](docs/architecture/IDENTITY_PROFILE_MODEL.md)
 - [周计划数据模型](docs/architecture/PLAN_MODEL.md)
+- [AI 计划解释模型](docs/architecture/AI_EXPLANATION_MODEL.md)
 - [API 契约与 OpenAPI](docs/api/README.md)
 - [第 0 轮档案](docs/iterations/000-foundation.md)
 - [第 1 轮档案](docs/iterations/001-client-foundation.md)
@@ -106,6 +115,7 @@ Playwright 会复用或启动 API 与 H5 预览服务。`pnpm db:down` 会停止
 - [第 6 轮档案](docs/iterations/006-nutrition-recording.md)
 - [第 7 轮档案](docs/iterations/007-real-today-trends.md)
 - [第 8 轮档案](docs/iterations/008-deterministic-weekly-plans.md)
+- [第 9 轮档案](docs/iterations/009-ai-explanation-orchestration.md)
 - [移动端视觉证据](output/playwright/iteration-001-mobile.png)
 - [宽屏视觉证据](output/playwright/iteration-001-wide.png)
 - [建档移动端证据](output/playwright/iteration-003-onboarding-mobile.png)
@@ -120,6 +130,8 @@ Playwright 会复用或启动 API 与 H5 预览服务。`pnpm db:down` 会停止
 - [真实 Today 宽屏证据](output/playwright/iteration-007-today-wide.png)
 - [周计划移动端证据](output/playwright/iteration-008-plans-mobile.png)
 - [周计划宽屏证据](output/playwright/iteration-008-plans-wide.png)
+- [AI 边注移动端证据](output/playwright/iteration-009-ai-mobile.png)
+- [AI 边注宽屏证据](output/playwright/iteration-009-ai-wide.png)
 
 ## 仓库同步说明
 
