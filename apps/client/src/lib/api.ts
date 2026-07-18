@@ -1,6 +1,7 @@
 import type {
   CreateHealthRecord,
   CreateMeal,
+  Dashboard,
   DevSession,
   HealthRecord,
   HealthRecordHistoryItem,
@@ -190,5 +191,11 @@ export const saveFavoriteFood = (payload: FavoriteFoodInput) =>
 
 export const deleteFavoriteFood = (foodKey: string) =>
   authenticatedRequest<void>(`/nutrition/favorites/${encodeURIComponent(foodKey)}`, 'DELETE')
+
+export const getDashboard = (timezone: string) =>
+  authenticatedRequest<Dashboard>(
+    `/insights/dashboard?timezone=${encodeURIComponent(timezone)}`,
+    'GET',
+  )
 
 export const apiBaseUrl = API_BASE_URL

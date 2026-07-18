@@ -141,6 +141,16 @@ describe('nutrition API with PostgreSQL', () => {
       .expect(200)
     expect(list.body.items).toHaveLength(1)
 
+    const dashboard = await request(app.getHttpServer())
+      .get('/v1/insights/dashboard')
+      .query({ timezone: 'Asia/Shanghai', at: '2026-07-18T13:00:00.000Z' })
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200)
+    expect(dashboard.body.today.items).toEqual([
+      expect.objectContaining({ kind: 'nutrition', title: '训练日午餐', value: '393 kcal' }),
+    ])
+    expect(dashboard.body.trends[0]).toMatchObject({ mealCount: 1, energyKcal: 393 })
+
     const update = {
       ...meal,
       items: [chicken, { ...rice, serving: { amount: 200, unit: 'g', grams: 200 } }],

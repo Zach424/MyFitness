@@ -56,13 +56,33 @@ const openOnboarding = async (page: Page) => {
   await expect(page.getByText('先认识你')).toBeVisible()
 }
 
+const collectBrowserErrors = (page: Page) => {
+  const errors: string[] = []
+  page.on('console', (message) => {
+    if (message.type() !== 'error') return
+    // Chromium logs a generic duplicate for failed HTTP responses; the response
+    // listener below keeps the URL and permits only the expected empty profile.
+    if (message.text().startsWith('Failed to load resource:')) return
+    errors.push(message.text())
+  })
+  page.on('pageerror', (error) => errors.push(error.message))
+  page.on('requestfailed', (request) => {
+    errors.push(`Request failed: ${request.method()} ${request.url()}`)
+  })
+  page.on('response', (response) => {
+    if (response.status() < 400) return
+    const expectedEmptyProfile =
+      response.status() === 404 && response.url().endsWith('/v1/me/onboarding')
+    if (!expectedEmptyProfile) {
+      errors.push(`HTTP ${response.status()}: ${response.request().method()} ${response.url()}`)
+    }
+  })
+  return errors
+}
+
 test('adult onboarding persists a professional-clearance risk state', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
-  const browserErrors: string[] = []
-  page.on('console', (message) => {
-    if (message.type() === 'error') browserErrors.push(message.text())
-  })
-  page.on('pageerror', (error) => browserErrors.push(error.message))
+  const browserErrors = collectBrowserErrors(page)
 
   await openOnboarding(page)
   await page.getByRole('textbox', { name: '例如：小陈' }).fill('端到端测试')
@@ -114,11 +134,7 @@ test('adult onboarding persists a professional-clearance risk state', async ({ p
 
 test('onboarding layout remains legible at wide viewport', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 })
-  const browserErrors: string[] = []
-  page.on('console', (message) => {
-    if (message.type() === 'error') browserErrors.push(message.text())
-  })
-  page.on('pageerror', (error) => browserErrors.push(error.message))
+  const browserErrors = collectBrowserErrors(page)
 
   await openOnboarding(page)
   await expect(page.getByText('每一项数据，都说明用途。')).toBeVisible()

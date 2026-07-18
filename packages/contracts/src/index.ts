@@ -1,4 +1,5 @@
 export * from './health-record'
+export * from './insights'
 export * from './nutrition'
 export * from './onboarding'
 export * from './workout'

@@ -2,7 +2,7 @@
 
 The roadmap is organized as controlled iterations. A round may take several working sessions, but it ends only after implementation, validation, archive update, and a commit.
 
-Progress snapshot (2026-07-18): iterations 0–6 are complete locally; iteration 7 is the active next scope. Authenticated users can create, revise, audit and remove body/recovery measurements, structured workouts and portion-based meals through the shared H5/WeApp client. Favorites and repeat actions reuse structure without rewriting history.
+Progress snapshot (2026-07-18): iterations 0–7 are complete locally; iteration 8 is next. Authenticated records now feed a timezone-aware Today rail, deterministic recovery evidence and 7/30/90-day windows on H5/WeApp.
 
 | Iteration | Primary scope                                       | Exit evidence                                                                              |
 | --------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------ |

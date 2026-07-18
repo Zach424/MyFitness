@@ -2,7 +2,7 @@
 
 Last reviewed: 2026-07-18
 
-Stage: manual nutrition recording complete; real Today aggregation next
+Stage: real Today aggregation complete; deterministic plan engine next
 
 Primary release target: WeChat Mini Program + responsive H5
 
@@ -15,16 +15,16 @@ MyFitness / 衡迹 turns body, training, nutrition, and recovery records into sa
 | Module                  | Status                        | Current evidence                                   | Next gate                                      |
 | ----------------------- | ----------------------------- | -------------------------------------------------- | ---------------------------------------------- |
 | Product scope           | Done for MVP baseline         | `docs/product/PRODUCT_BRIEF.md`                    | Validate with target-user interviews           |
-| Delivery roadmap        | Done for planning baseline    | `docs/product/ROADMAP.md`                          | Execute iteration 7                            |
+| Delivery roadmap        | Done for planning baseline    | `docs/product/ROADMAP.md`                          | Execute iteration 8                            |
 | Design language         | Partial, five flows validated | Today/onboarding/records/workouts/meals + 10 shots | Validate remaining states and 320 px viewport  |
-| Client: Mini Program/H5 | Partial                       | Builds + three authenticated record lifecycles     | Replace Today fixtures with real aggregation   |
+| Client: Mini Program/H5 | Partial                       | Three record loops + real Today/trends             | Implement plan review flows                    |
 | Admin console           | Pending                       | Architecture only                                  | Content and support requirements frozen        |
-| Business API            | Partial                       | Auth/profile + measurement/workout/meal loops      | Add Today aggregation endpoints                |
-| Domain rules            | Partial                       | Measurement, workout and nutrition calculations    | Add trend and Today aggregation rules          |
+| Business API            | Partial                       | Record loops + read-only insights projection       | Add versioned plans                            |
+| Domain rules            | Partial                       | Record, recovery and 7/30/90-day calculations      | Add plan constraints and validators            |
 | AI service              | Pending                       | Safety boundary listed                             | Offline fixture pipeline and validators        |
 | Native App/devices      | Deferred                      | Phase-two decision                                 | MVP retention gate reached                     |
 | Privacy/compliance      | Partial                       | Purpose/version consent events + AI rules          | Revocation, inventory, retention, legal review |
-| Testing/observability   | Partial                       | 52 unit + 12 integration + 8 browser E2E           | Add lint, CI, metrics and trace correlation    |
+| Testing/observability   | Partial                       | 51 unit + 12 integration + 10 browser E2E          | Add lint, CI, metrics and trace correlation    |
 | Deployment              | Partial, local only           | PostgreSQL Compose + runtime health                | Create repeatable shared test environment      |
 
 Status vocabulary: `Done` means validated for the present stage, `Partial` means usable but missing a named gate, `Pending` means not implemented, and `Deferred` means intentionally outside the current release.
@@ -40,6 +40,7 @@ Status vocabulary: `Done` means validated for the present stage, `Partial` means
 - Transactional measurement create/replace/soft-delete with owner-only append-only snapshots, expected revisions and idempotent creation.
 - Transactional relational workout aggregates with ordered exercises/sets, completed-only deterministic summaries, expected revisions, idempotent creation and immutable JSON snapshots.
 - Transactional nutrition aggregates with food/serving snapshots, canonical grams, deterministic kcal/P/C/F/fiber totals, owner favorites and immutable JSON revisions.
+- Timezone-aware read-only Today projection with confirmed evidence, nullable recovery summary and 7/30/90-day totals.
 - Parameterized `pg` access to PostgreSQL 18.4 with transactional, checksum-protected SQL migrations.
 - React Native for the later native App rather than forcing device integrations into the first client.
 - NestJS modular monolith + PostgreSQL + Redis for business services.
@@ -78,4 +79,4 @@ The MVP cannot enter public beta until all of the following are reproducible:
 
 ## Primary next step
 
-Iteration 7: replace Today fixtures with authenticated aggregation. Combine confirmed records into plan-versus-actual state, implement 7/30/90-day deterministic trends and cover loading, empty, error and offline behavior before plan generation.
+Iteration 8: implement deterministic versioned weekly plans with substitutions, safety constraints, professional-clearance blocking and accept/modify/skip history.

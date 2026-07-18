@@ -2,7 +2,7 @@
 
 面向普通健身人群的多端记录与 AI 规划产品。产品把身体、训练、饮食和恢复数据整理为可解释、可调整、可持续执行的个人计划。
 
-> 当前阶段：Nutrition records / 第 6 轮已完成。仓库已提供 Taro 今日页、成人建档，以及身体/恢复、结构化训练、饮食三个真实记录簿；NestJS API 支持服务端身份、版本化同意、三类记录的增删改查、收藏、不可变历史、幂等创建与乐观锁，PostgreSQL 和生产浏览器闭环均已验收。今日节律仍使用夹具，下一轮接入真实聚合与趋势。
+> 当前阶段：Real Today & trends / 第 7 轮已完成。身体/恢复、训练、饮食三个记录域会按用户时区汇入真实今日节律与 7/30/90 天确定性趋势；恢复依据缺失时不会编造分数。下一轮进入版本化计划引擎。
 
 ## 产品边界
 
@@ -89,6 +89,7 @@ Playwright 会复用或启动 API 与 H5 预览服务。`pnpm db:down` 会停止
 - [架构决策 0004](docs/architecture/decisions/0004-health-record-revision-lifecycle.md)
 - [架构决策 0005](docs/architecture/decisions/0005-structured-workout-aggregate.md)
 - [架构决策 0006](docs/architecture/decisions/0006-nutrition-snapshot-aggregate.md)
+- [架构决策 0007](docs/architecture/decisions/0007-server-dashboard-aggregation.md)
 - [健康记录数据模型](docs/architecture/HEALTH_RECORD_MODEL.md)
 - [训练记录数据模型](docs/architecture/WORKOUT_MODEL.md)
 - [饮食记录数据模型](docs/architecture/NUTRITION_MODEL.md)
@@ -101,6 +102,7 @@ Playwright 会复用或启动 API 与 H5 预览服务。`pnpm db:down` 会停止
 - [第 4 轮档案](docs/iterations/004-body-recovery-records.md)
 - [第 5 轮档案](docs/iterations/005-workout-recording.md)
 - [第 6 轮档案](docs/iterations/006-nutrition-recording.md)
+- [第 7 轮档案](docs/iterations/007-real-today-trends.md)
 - [移动端视觉证据](output/playwright/iteration-001-mobile.png)
 - [宽屏视觉证据](output/playwright/iteration-001-wide.png)
 - [建档移动端证据](output/playwright/iteration-003-onboarding-mobile.png)
@@ -111,6 +113,8 @@ Playwright 会复用或启动 API 与 H5 预览服务。`pnpm db:down` 会停止
 - [训练宽屏证据](output/playwright/iteration-005-workouts-wide.png)
 - [饮食移动端证据](output/playwright/iteration-006-nutrition-mobile.png)
 - [饮食宽屏证据](output/playwright/iteration-006-nutrition-wide.png)
+- [真实 Today 移动端证据](output/playwright/iteration-007-today-mobile.png)
+- [真实 Today 宽屏证据](output/playwright/iteration-007-today-wide.png)
 
 ## 仓库同步说明
 

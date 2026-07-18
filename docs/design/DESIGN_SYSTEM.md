@@ -1,6 +1,6 @@
 # Design system baseline
 
-Status: implemented and visually validated for Today, onboarding, body/recovery, workouts and iteration-006 nutrition
+Status: implemented and visually validated through iteration-007 real Today and trends
 
 Working brand: 衡迹 / MyFitness
 
@@ -165,6 +165,17 @@ Reviewed evidence:
 - [1440 × 1000 wide onboarding capture](../../output/playwright/iteration-003-onboarding-wide.png)
 
 The review found and corrected a browser-only build-time environment failure, restored a desktop entry through “我的”, and removed a Taro DOM reconciliation error caused by changing the submit button/loading structure during persistence. The final production-browser run completes a real PostgreSQL-backed submission with zero page-script/console errors. Runtime constants were also split from Zod contracts, reducing the onboarding H5 chunk from about 452 KiB to 78.5 KiB.
+
+## Implementation review — iteration 007
+
+Today now behaves as a quiet evidence surface instead of a fixture-driven recommendation screen. Confirmed facts are ordered on the Rhythm Rail; recovery uses an em dash when evidence is absent, and 7/30/90-day tabs are explicitly called observation windows rather than goals. The empty state gives one recording action while retaining the same two-column hierarchy on wide H5.
+
+Reviewed evidence:
+
+- [390 × 844 mobile confirmed-evidence capture](../../output/playwright/iteration-007-today-mobile.png)
+- [1440 × 1000 wide empty-state capture](../../output/playwright/iteration-007-today-wide.png)
+
+The production-browser review caught two presentation leaks that functional assertions alone missed: the internal `score_1_5` unit was visible to users, and the first wide screenshot was taken while the recovery card was still loading. The final state renders `/5`, waits for the dashboard response, and says that no score is generated without recovery evidence. Open items remain manual refresh/retry, offline cache, 320 px and large-text review, keyboard focus and plan-versus-actual design after a real plan exists.
 
 ## Screenshot review checklist
 

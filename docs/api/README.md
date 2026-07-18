@@ -24,6 +24,7 @@ Local routes after `pnpm db:up`, `pnpm db:migrate`, and `pnpm dev:api`:
 - Meal history: `GET http://127.0.0.1:3100/v1/nutrition/meals/:mealId/history`
 - Favorite foods: `GET http://127.0.0.1:3100/v1/nutrition/favorites`
 - Favorite lifecycle: `PUT/DELETE http://127.0.0.1:3100/v1/nutrition/favorites/:foodKey`
+- Today and trends: `GET http://127.0.0.1:3100/v1/insights/dashboard?timezone=Asia%2FShanghai`
 - Swagger UI: `http://127.0.0.1:3100/docs`
 - OpenAPI JSON: `http://127.0.0.1:3100/docs/openapi.json`
 
