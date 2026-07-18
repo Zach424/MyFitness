@@ -2,7 +2,7 @@
 
 Last reviewed: 2026-07-18
 
-Stage: structured workout recording complete; nutrition recording next
+Stage: manual nutrition recording complete; real Today aggregation next
 
 Primary release target: WeChat Mini Program + responsive H5
 
@@ -12,20 +12,20 @@ MyFitness / 衡迹 turns body, training, nutrition, and recovery records into sa
 
 ## Module status
 
-| Module                  | Status                        | Current evidence                               | Next gate                                      |
-| ----------------------- | ----------------------------- | ---------------------------------------------- | ---------------------------------------------- |
-| Product scope           | Done for MVP baseline         | `docs/product/PRODUCT_BRIEF.md`                | Validate with target-user interviews           |
-| Delivery roadmap        | Done for planning baseline    | `docs/product/ROADMAP.md`                      | Execute iteration 6                            |
-| Design language         | Partial, four flows validated | Today/onboarding/records/workouts + 8 captures | Validate remaining states and 320 px viewport  |
-| Client: Mini Program/H5 | Partial                       | Builds + two authenticated record lifecycles   | Implement nutrition record flows               |
-| Admin console           | Pending                       | Architecture only                              | Content and support requirements frozen        |
-| Business API            | Partial                       | Auth/profile + measurement/workout lifecycles  | Add nutrition record lifecycle                 |
-| Domain rules            | Partial                       | Measurements, workout summaries, eligibility   | Add nutrition domain                           |
-| AI service              | Pending                       | Safety boundary listed                         | Offline fixture pipeline and validators        |
-| Native App/devices      | Deferred                      | Phase-two decision                             | MVP retention gate reached                     |
-| Privacy/compliance      | Partial                       | Purpose/version consent events + AI rules      | Revocation, inventory, retention, legal review |
-| Testing/observability   | Partial                       | 43 unit + 10 integration + 6 browser E2E       | Add lint, CI, metrics and trace correlation    |
-| Deployment              | Partial, local only           | PostgreSQL Compose + runtime health            | Create repeatable shared test environment      |
+| Module                  | Status                        | Current evidence                                   | Next gate                                      |
+| ----------------------- | ----------------------------- | -------------------------------------------------- | ---------------------------------------------- |
+| Product scope           | Done for MVP baseline         | `docs/product/PRODUCT_BRIEF.md`                    | Validate with target-user interviews           |
+| Delivery roadmap        | Done for planning baseline    | `docs/product/ROADMAP.md`                          | Execute iteration 7                            |
+| Design language         | Partial, five flows validated | Today/onboarding/records/workouts/meals + 10 shots | Validate remaining states and 320 px viewport  |
+| Client: Mini Program/H5 | Partial                       | Builds + three authenticated record lifecycles     | Replace Today fixtures with real aggregation   |
+| Admin console           | Pending                       | Architecture only                                  | Content and support requirements frozen        |
+| Business API            | Partial                       | Auth/profile + measurement/workout/meal loops      | Add Today aggregation endpoints                |
+| Domain rules            | Partial                       | Measurement, workout and nutrition calculations    | Add trend and Today aggregation rules          |
+| AI service              | Pending                       | Safety boundary listed                             | Offline fixture pipeline and validators        |
+| Native App/devices      | Deferred                      | Phase-two decision                                 | MVP retention gate reached                     |
+| Privacy/compliance      | Partial                       | Purpose/version consent events + AI rules          | Revocation, inventory, retention, legal review |
+| Testing/observability   | Partial                       | 52 unit + 12 integration + 8 browser E2E           | Add lint, CI, metrics and trace correlation    |
+| Deployment              | Partial, local only           | PostgreSQL Compose + runtime health                | Create repeatable shared test environment      |
 
 Status vocabulary: `Done` means validated for the present stage, `Partial` means usable but missing a named gate, `Pending` means not implemented, and `Deferred` means intentionally outside the current release.
 
@@ -39,6 +39,7 @@ Status vocabulary: `Done` means validated for the present stage, `Partial` means
 - Transactional adult profile, goals, risk eligibility and immutable versioned consent events with optimistic revisions.
 - Transactional measurement create/replace/soft-delete with owner-only append-only snapshots, expected revisions and idempotent creation.
 - Transactional relational workout aggregates with ordered exercises/sets, completed-only deterministic summaries, expected revisions, idempotent creation and immutable JSON snapshots.
+- Transactional nutrition aggregates with food/serving snapshots, canonical grams, deterministic kcal/P/C/F/fiber totals, owner favorites and immutable JSON revisions.
 - Parameterized `pg` access to PostgreSQL 18.4 with transactional, checksum-protected SQL migrations.
 - React Native for the later native App rather than forcing device integrations into the first client.
 - NestJS modular monolith + PostgreSQL + Redis for business services.
@@ -62,6 +63,8 @@ Status vocabulary: `Done` means validated for the present stage, `Partial` means
 | API has no production rate limiting or observability yet         | Medium | Add request IDs, metrics, abuse limits and alerting before shared deployment               |
 | Workout status can diverge from set completion in non-client use | Medium | Make server derivation authoritative before exposing imports                               |
 | Starter exercise catalog lacks custom/equipment semantics        | Medium | Model additions only after the manual workout loop informs actual needs                    |
+| Starter food values are demonstration data, not release catalog  | High   | Select licensed/localized versioned provider and attribution before beta                   |
+| Energy/macro UI can be harmful for eating-disorder risk          | High   | Maintain scope exclusion; add screening/content review before adaptive nutrition planning  |
 
 ## Quality gates
 
@@ -75,4 +78,4 @@ The MVP cannot enter public beta until all of the following are reproducible:
 
 ## Primary next step
 
-Iteration 6: implement nutrition recording. Add versioned foods/servings/meal items, manual/search/favorite entry, deterministic energy and macronutrient totals, correction/history rules and mobile/wide E2E coverage.
+Iteration 7: replace Today fixtures with authenticated aggregation. Combine confirmed records into plan-versus-actual state, implement 7/30/90-day deterministic trends and cover loading, empty, error and offline behavior before plan generation.

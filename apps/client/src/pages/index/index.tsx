@@ -29,6 +29,7 @@ const navItems = [
 
 const openRecords = () => void Taro.navigateTo({ url: '/pages/records/index' })
 const openWorkouts = () => void Taro.navigateTo({ url: '/pages/workouts/index' })
+const openNutrition = () => void Taro.navigateTo({ url: '/pages/nutrition/index' })
 
 const RailEntry = ({ item, onAction }: { item: RailItem; onAction: (item: RailItem) => void }) => (
   <View className={`rail-entry rail-entry--${item.status}`}>
@@ -65,7 +66,7 @@ const IndexPage = () => {
       openWorkouts()
       return
     }
-    setFeedback('午餐仍是估计值；记录表单接入后，需要确认食物和份量。')
+    openNutrition()
   }
 
   return (
@@ -177,7 +178,7 @@ const IndexPage = () => {
                       onClick={() => {
                         if (action.key === 'body' || action.key === 'recovery') openRecords()
                         else if (action.key === 'workout') openWorkouts()
-                        else setFeedback(`${action.label}记录将在后续迭代接入。`)
+                        else if (action.key === 'meal') openNutrition()
                       }}
                     >
                       <Text className="quick-action__glyph" aria-hidden="true">

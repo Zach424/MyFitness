@@ -7,6 +7,8 @@ import { DatabaseService } from './database/database.service'
 import { HealthRecordsController } from './health-records/health-records.controller'
 import { HealthRecordsService } from './health-records/health-records.service'
 import { HealthController } from './health/health.controller'
+import { NutritionController } from './nutrition/nutrition.controller'
+import { NutritionService } from './nutrition/nutrition.service'
 import { OnboardingController } from './onboarding/onboarding.controller'
 import { OnboardingService } from './onboarding/onboarding.service'
 import { WorkoutsController } from './workouts/workouts.controller'
@@ -17,6 +19,7 @@ import { WorkoutsService } from './workouts/workouts.service'
     AuthController,
     HealthController,
     HealthRecordsController,
+    NutritionController,
     OnboardingController,
     WorkoutsController,
   ],
@@ -24,6 +27,7 @@ import { WorkoutsService } from './workouts/workouts.service'
     AuthService,
     DatabaseService,
     HealthRecordsService,
+    NutritionService,
     OnboardingService,
     SessionAuthGuard,
     WorkoutsService,

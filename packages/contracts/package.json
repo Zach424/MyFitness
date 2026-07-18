@@ -17,6 +17,10 @@
       "types": "./dist/health-record.constants.d.ts",
       "default": "./dist/health-record.constants.js"
     },
+    "./nutrition.constants": {
+      "types": "./dist/nutrition.constants.d.ts",
+      "default": "./dist/nutrition.constants.js"
+    },
     "./workout.constants": {
       "types": "./dist/workout.constants.d.ts",
       "default": "./dist/workout.constants.js"

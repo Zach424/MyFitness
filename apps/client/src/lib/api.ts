@@ -1,11 +1,17 @@
 import type {
   CreateHealthRecord,
+  CreateMeal,
   DevSession,
   HealthRecord,
   HealthRecordHistoryItem,
+  FavoriteFood,
+  FavoriteFoodInput,
+  Meal,
+  MealHistoryItem,
   OnboardingRequest,
   OnboardingResponse,
   UpdateHealthRecord,
+  UpdateMeal,
   UpdateWorkout,
   Workout,
   WorkoutHistoryItem,
@@ -150,5 +156,39 @@ export const getWorkoutHistory = (workoutId: string) =>
     `/workouts/${workoutId}/history`,
     'GET',
   )
+
+export const listMeals = () => authenticatedRequest<{ items: Meal[] }>('/nutrition/meals', 'GET')
+
+export const createMeal = (payload: CreateMeal, idempotencyKey: string) =>
+  authenticatedRequest<Meal>('/nutrition/meals', 'POST', payload, {
+    'x-idempotency-key': idempotencyKey,
+  })
+
+export const updateMeal = (mealId: string, payload: UpdateMeal) =>
+  authenticatedRequest<Meal>(`/nutrition/meals/${mealId}`, 'PUT', payload)
+
+export const deleteMeal = (mealId: string, expectedRevision: number) =>
+  authenticatedRequest<void>(`/nutrition/meals/${mealId}`, 'DELETE', undefined, {
+    'x-expected-revision': String(expectedRevision),
+  })
+
+export const getMealHistory = (mealId: string) =>
+  authenticatedRequest<{ mealId: string; items: MealHistoryItem[] }>(
+    `/nutrition/meals/${mealId}/history`,
+    'GET',
+  )
+
+export const listFavoriteFoods = () =>
+  authenticatedRequest<{ items: FavoriteFood[] }>('/nutrition/favorites', 'GET')
+
+export const saveFavoriteFood = (payload: FavoriteFoodInput) =>
+  authenticatedRequest<FavoriteFood>(
+    `/nutrition/favorites/${encodeURIComponent(payload.food.foodKey)}`,
+    'PUT',
+    payload,
+  )
+
+export const deleteFavoriteFood = (foodKey: string) =>
+  authenticatedRequest<void>(`/nutrition/favorites/${encodeURIComponent(foodKey)}`, 'DELETE')
 
 export const apiBaseUrl = API_BASE_URL

@@ -2,7 +2,7 @@
 
 面向普通健身人群的多端记录与 AI 规划产品。产品把身体、训练、饮食和恢复数据整理为可解释、可调整、可持续执行的个人计划。
 
-> 当前阶段：Structured workout records / 第 5 轮已完成。仓库已提供 Taro 今日页、成人建档、真实身体/恢复记录簿和结构化训练记录簿；NestJS API 支持服务端身份、版本化同意、测量与训练的增删改查、不可变历史、幂等创建与乐观锁，PostgreSQL 和生产浏览器闭环均已验收。今日节律仍使用夹具，下一轮进入饮食记录。
+> 当前阶段：Nutrition records / 第 6 轮已完成。仓库已提供 Taro 今日页、成人建档，以及身体/恢复、结构化训练、饮食三个真实记录簿；NestJS API 支持服务端身份、版本化同意、三类记录的增删改查、收藏、不可变历史、幂等创建与乐观锁，PostgreSQL 和生产浏览器闭环均已验收。今日节律仍使用夹具，下一轮接入真实聚合与趋势。
 
 ## 产品边界
 
@@ -16,10 +16,10 @@
 ```text
 apps/
   client/          Taro + React：微信小程序与 H5
-  api/             NestJS：身份、建档、测量/训练生命周期 API、OpenAPI 与迁移入口
+  api/             NestJS：身份、建档、测量/训练/饮食生命周期 API、OpenAPI 与迁移入口
 packages/
   contracts/       Zod：跨端请求、响应、来源与版本契约
-  domain/          单位归一化、指标范围、训练汇总和确定性规则
+  domain/          单位归一化、指标范围、训练/营养汇总和确定性规则
   design-tokens/   颜色、字体、间距、动效和图表变量
 docs/              产品、设计、架构和每轮迭代档案
 infra/             PostgreSQL 迁移与本地 Docker Compose
@@ -88,8 +88,10 @@ Playwright 会复用或启动 API 与 H5 预览服务。`pnpm db:down` 会停止
 - [架构决策 0003](docs/architecture/decisions/0003-identity-onboarding-boundary.md)
 - [架构决策 0004](docs/architecture/decisions/0004-health-record-revision-lifecycle.md)
 - [架构决策 0005](docs/architecture/decisions/0005-structured-workout-aggregate.md)
+- [架构决策 0006](docs/architecture/decisions/0006-nutrition-snapshot-aggregate.md)
 - [健康记录数据模型](docs/architecture/HEALTH_RECORD_MODEL.md)
 - [训练记录数据模型](docs/architecture/WORKOUT_MODEL.md)
+- [饮食记录数据模型](docs/architecture/NUTRITION_MODEL.md)
 - [身份与建档数据模型](docs/architecture/IDENTITY_PROFILE_MODEL.md)
 - [API 契约与 OpenAPI](docs/api/README.md)
 - [第 0 轮档案](docs/iterations/000-foundation.md)
@@ -98,6 +100,7 @@ Playwright 会复用或启动 API 与 H5 预览服务。`pnpm db:down` 会停止
 - [第 3 轮档案](docs/iterations/003-onboarding.md)
 - [第 4 轮档案](docs/iterations/004-body-recovery-records.md)
 - [第 5 轮档案](docs/iterations/005-workout-recording.md)
+- [第 6 轮档案](docs/iterations/006-nutrition-recording.md)
 - [移动端视觉证据](output/playwright/iteration-001-mobile.png)
 - [宽屏视觉证据](output/playwright/iteration-001-wide.png)
 - [建档移动端证据](output/playwright/iteration-003-onboarding-mobile.png)
@@ -106,6 +109,8 @@ Playwright 会复用或启动 API 与 H5 预览服务。`pnpm db:down` 会停止
 - [记录宽屏证据](output/playwright/iteration-004-records-wide.png)
 - [训练移动端证据](output/playwright/iteration-005-workouts-mobile.png)
 - [训练宽屏证据](output/playwright/iteration-005-workouts-wide.png)
+- [饮食移动端证据](output/playwright/iteration-006-nutrition-mobile.png)
+- [饮食宽屏证据](output/playwright/iteration-006-nutrition-wide.png)
 
 ## 仓库同步说明
 

@@ -6,9 +6,14 @@ import {
   dietaryPreferenceOptions,
   equipmentOptions,
   exerciseCategories,
+  foodCategories,
+  foodPortionUnits,
   loadUnits,
   experienceLevels,
   metricCodes,
+  mealRevisionActions,
+  mealTypes,
+  nutritionSourceKinds,
   primaryGoals,
   recordStatuses,
   revisionActions,
@@ -40,6 +45,10 @@ const lifecycleMigrationPath = path.resolve(
 const workoutMigrationPath = path.resolve(
   __dirname,
   '../../../../infra/postgres/migrations/0004_workout_sessions.sql',
+)
+const nutritionMigrationPath = path.resolve(
+  __dirname,
+  '../../../../infra/postgres/migrations/0005_nutrition_meals.sql',
 )
 
 describe('health-record migration drift', () => {
@@ -95,6 +104,19 @@ describe('health-record migration drift', () => {
       ...workoutRevisionActions,
     ]) {
       expect(migration, `${value} is missing from the workout migration`).toContain(`'${value}'`)
+    }
+  })
+
+  it('contains every nutrition lifecycle enum at the snapshot boundary', async () => {
+    const migration = await readFile(nutritionMigrationPath, 'utf8')
+    for (const value of [
+      ...mealTypes,
+      ...foodCategories,
+      ...foodPortionUnits,
+      ...nutritionSourceKinds,
+      ...mealRevisionActions,
+    ]) {
+      expect(migration, `${value} is missing from the nutrition migration`).toContain(`'${value}'`)
     }
   })
 })

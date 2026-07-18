@@ -1,6 +1,6 @@
 # Design system baseline
 
-Status: implemented and visually validated for Today, onboarding, body/recovery records and iteration-005 workouts
+Status: implemented and visually validated for Today, onboarding, body/recovery, workouts and iteration-006 nutrition
 
 Working brand: 衡迹 / MyFitness
 
@@ -139,6 +139,19 @@ Reviewed evidence:
 - [1440 × 1000 wide editor/empty-ledger capture](../../output/playwright/iteration-005-workouts-wide.png)
 
 The production-browser flow saved the default `3/3 · 360 kg`, repeated it as `0/3`, explicitly completed the new sets, revised the first set to reach `384 kg · v2`, inspected both snapshots and deleted only the new record. Mobile and wide runs reported no page-script or console errors. Open items remain 320 px/large-text review, keyboard focus, offline/stale recovery, exact timestamp entry and denser set models such as supersets or rest intervals.
+
+## Implementation review — iteration 006
+
+The nutrition page uses a faint preparation grid and restrained amber accents to distinguish food context without introducing “good/bad” colors. Meal type, catalog source, search and custom entry follow the same paper-sheet hierarchy. Before adding, each food card exposes its default portion and reference kcal; after adding, actual amount, household unit, approximate grams and P/C/F stay together.
+
+The summary uses one larger kcal figure and three equal macro fields, with copy that says values vary by brand, cut and cooking. Favorites use a star plus an accessible pressed label; recent foods are real record projections. Repeat copy explicitly asks for today's correction. History retains action text and full revision totals rather than presenting a chart as dietary advice.
+
+Reviewed evidence:
+
+- [390 × 844 mobile meal-history capture](../../output/playwright/iteration-006-nutrition-mobile.png)
+- [1440 × 1000 wide editor/empty-ledger capture](../../output/playwright/iteration-006-nutrition-wide.png)
+
+The production-browser flow favorited rice, saved `393 kcal · P 41.25g`, repeated it, changed rice to 200g for `458 kcal · P 42.6g · v2`, inspected both snapshots and deleted the repeated record. Mobile and wide runs reported no script/console errors. Open items remain provider-backed branded search, editable household-unit gram conversions, AI candidate review, eating-disorder content review, 320 px/large-text, keyboard and offline/stale recovery.
 
 ## Implementation review — iteration 003
 
