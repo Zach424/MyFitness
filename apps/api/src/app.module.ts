@@ -9,15 +9,24 @@ import { HealthRecordsService } from './health-records/health-records.service'
 import { HealthController } from './health/health.controller'
 import { OnboardingController } from './onboarding/onboarding.controller'
 import { OnboardingService } from './onboarding/onboarding.service'
+import { WorkoutsController } from './workouts/workouts.controller'
+import { WorkoutsService } from './workouts/workouts.service'
 
 @Module({
-  controllers: [AuthController, HealthController, HealthRecordsController, OnboardingController],
+  controllers: [
+    AuthController,
+    HealthController,
+    HealthRecordsController,
+    OnboardingController,
+    WorkoutsController,
+  ],
   providers: [
     AuthService,
     DatabaseService,
     HealthRecordsService,
     OnboardingService,
     SessionAuthGuard,
+    WorkoutsService,
   ],
 })
 export class AppModule {}

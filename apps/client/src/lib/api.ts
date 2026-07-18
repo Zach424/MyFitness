@@ -6,6 +6,10 @@ import type {
   OnboardingRequest,
   OnboardingResponse,
   UpdateHealthRecord,
+  UpdateWorkout,
+  Workout,
+  WorkoutHistoryItem,
+  CreateWorkout,
 } from '@myfitness/contracts'
 import Taro from '@tarojs/taro'
 
@@ -123,6 +127,27 @@ export const deleteHealthRecord = (recordId: string, expectedRevision: number) =
 export const getHealthRecordHistory = async (recordId: string) =>
   authenticatedRequest<{ recordId: string; items: HealthRecordHistoryItem[] }>(
     `/health-records/${recordId}/history`,
+    'GET',
+  )
+
+export const listWorkouts = () => authenticatedRequest<{ items: Workout[] }>('/workouts', 'GET')
+
+export const createWorkout = (payload: CreateWorkout, idempotencyKey: string) =>
+  authenticatedRequest<Workout>('/workouts', 'POST', payload, {
+    'x-idempotency-key': idempotencyKey,
+  })
+
+export const updateWorkout = (workoutId: string, payload: UpdateWorkout) =>
+  authenticatedRequest<Workout>(`/workouts/${workoutId}`, 'PUT', payload)
+
+export const deleteWorkout = (workoutId: string, expectedRevision: number) =>
+  authenticatedRequest<void>(`/workouts/${workoutId}`, 'DELETE', undefined, {
+    'x-expected-revision': String(expectedRevision),
+  })
+
+export const getWorkoutHistory = (workoutId: string) =>
+  authenticatedRequest<{ workoutId: string; items: WorkoutHistoryItem[] }>(
+    `/workouts/${workoutId}/history`,
     'GET',
   )
 

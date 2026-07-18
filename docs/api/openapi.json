@@ -1508,6 +1508,1146 @@
         "summary": "Get the authenticated user profile, goals and consent receipts",
         "tags": ["onboarding"]
       }
+    },
+    "/v1/workouts": {
+      "post": {
+        "operationId": "WorkoutsController_create",
+        "parameters": [
+          {
+            "name": "x-idempotency-key",
+            "in": "header",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": { "type": "string", "minLength": 1, "maxLength": 100 },
+                  "status": { "type": "string", "enum": ["completed", "partial"] },
+                  "source": {
+                    "type": "object",
+                    "properties": {
+                      "kind": { "type": "string", "enum": ["manual", "imported"] },
+                      "metadata": {
+                        "type": "object",
+                        "properties": {
+                          "provider": { "type": "string", "minLength": 1, "maxLength": 80 },
+                          "externalId": { "type": "string", "minLength": 1, "maxLength": 160 }
+                        },
+                        "additionalProperties": false
+                      }
+                    },
+                    "required": ["kind"],
+                    "additionalProperties": false
+                  },
+                  "exercises": {
+                    "minItems": 1,
+                    "maxItems": 30,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "position": { "type": "integer", "minimum": 1, "maximum": 50 },
+                        "exerciseKey": { "type": "string", "pattern": "^[a-z0-9_]{2,80}$" },
+                        "name": { "type": "string", "minLength": 1, "maxLength": 80 },
+                        "category": {
+                          "type": "string",
+                          "enum": ["strength", "cardio", "mobility"]
+                        },
+                        "notes": { "type": "string", "maxLength": 300 },
+                        "sets": {
+                          "minItems": 1,
+                          "maxItems": 50,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "position": { "type": "integer", "minimum": 1, "maximum": 100 },
+                              "kind": {
+                                "type": "string",
+                                "enum": ["warmup", "working", "cooldown"]
+                              },
+                              "reps": { "type": "integer", "minimum": 1, "maximum": 1000 },
+                              "load": { "type": "number", "minimum": 0, "maximum": 1000 },
+                              "loadUnit": { "type": "string", "enum": ["kg", "lb"] },
+                              "durationSeconds": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 86400
+                              },
+                              "distanceMeters": {
+                                "type": "number",
+                                "minimum": 1,
+                                "maximum": 500000
+                              },
+                              "rpe": { "type": "number", "minimum": 1, "maximum": 10 },
+                              "completed": { "type": "boolean" }
+                            },
+                            "required": ["position", "kind", "completed"],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": ["position", "exerciseKey", "name", "category", "sets"],
+                      "additionalProperties": false
+                    }
+                  },
+                  "startedAt": {
+                    "type": "string",
+                    "format": "date-time",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                  },
+                  "endedAt": {
+                    "type": "string",
+                    "format": "date-time",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                  },
+                  "timezone": { "type": "string", "minLength": 1, "maxLength": 64 },
+                  "painLevel": { "type": "integer", "minimum": 0, "maximum": 10 },
+                  "fatigue": { "type": "integer", "minimum": 1, "maximum": 5 },
+                  "note": { "type": "string", "maxLength": 500 }
+                },
+                "required": [
+                  "title",
+                  "status",
+                  "source",
+                  "exercises",
+                  "startedAt",
+                  "endedAt",
+                  "timezone",
+                  "painLevel",
+                  "fatigue"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "userId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "title": { "type": "string" },
+                    "status": { "type": "string", "enum": ["completed", "partial"] },
+                    "source": {
+                      "type": "object",
+                      "properties": {
+                        "kind": { "type": "string", "enum": ["manual", "imported"] },
+                        "metadata": {
+                          "type": "object",
+                          "properties": {
+                            "provider": { "type": "string", "minLength": 1, "maxLength": 80 },
+                            "externalId": { "type": "string", "minLength": 1, "maxLength": 160 }
+                          },
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": ["kind"],
+                      "additionalProperties": false
+                    },
+                    "exercises": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "position": { "type": "integer", "minimum": 1, "maximum": 50 },
+                          "exerciseKey": { "type": "string", "pattern": "^[a-z0-9_]{2,80}$" },
+                          "name": { "type": "string", "minLength": 1, "maxLength": 80 },
+                          "category": {
+                            "type": "string",
+                            "enum": ["strength", "cardio", "mobility"]
+                          },
+                          "notes": { "type": "string", "maxLength": 300 },
+                          "sets": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "position": { "type": "integer", "minimum": 1, "maximum": 100 },
+                                "kind": {
+                                  "type": "string",
+                                  "enum": ["warmup", "working", "cooldown"]
+                                },
+                                "reps": { "type": "integer", "minimum": 1, "maximum": 1000 },
+                                "load": { "type": "number", "minimum": 0, "maximum": 1000 },
+                                "loadUnit": { "type": "string", "enum": ["kg", "lb"] },
+                                "durationSeconds": {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 86400
+                                },
+                                "distanceMeters": {
+                                  "type": "number",
+                                  "minimum": 1,
+                                  "maximum": 500000
+                                },
+                                "rpe": { "type": "number", "minimum": 1, "maximum": 10 },
+                                "completed": { "type": "boolean" },
+                                "id": {
+                                  "type": "string",
+                                  "format": "uuid",
+                                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                },
+                                "canonicalLoadKg": {
+                                  "nullable": true,
+                                  "type": "number",
+                                  "minimum": 0
+                                }
+                              },
+                              "required": [
+                                "position",
+                                "kind",
+                                "completed",
+                                "id",
+                                "canonicalLoadKg"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          }
+                        },
+                        "required": ["position", "exerciseKey", "name", "category", "sets", "id"],
+                        "additionalProperties": false
+                      }
+                    },
+                    "summary": {
+                      "type": "object",
+                      "properties": {
+                        "completedSets": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "totalSets": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "exclusiveMinimum": true,
+                          "maximum": 9007199254740991
+                        },
+                        "volumeKg": { "type": "number", "minimum": 0 },
+                        "distanceMeters": { "type": "number", "minimum": 0 },
+                        "activeSeconds": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "completedSets",
+                        "totalSets",
+                        "volumeKg",
+                        "distanceMeters",
+                        "activeSeconds"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "startedAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "endedAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "timezone": { "type": "string" },
+                    "painLevel": { "type": "integer", "minimum": 0, "maximum": 10 },
+                    "fatigue": { "type": "integer", "minimum": 1, "maximum": 5 },
+                    "note": { "nullable": true, "type": "string" },
+                    "revision": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "exclusiveMinimum": true,
+                      "maximum": 9007199254740991
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "updatedAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "userId",
+                    "title",
+                    "status",
+                    "source",
+                    "exercises",
+                    "summary",
+                    "startedAt",
+                    "endedAt",
+                    "timezone",
+                    "painLevel",
+                    "fatigue",
+                    "note",
+                    "revision",
+                    "createdAt",
+                    "updatedAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": { "description": "Workout structure, time or feedback is invalid." },
+          "401": { "description": "Bearer token is missing, invalid, expired or revoked." },
+          "409": { "description": "Idempotency key was reused with different content." }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Create an idempotent structured workout session",
+        "tags": ["workouts"]
+      },
+      "get": {
+        "operationId": "WorkoutsController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "userId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "title": { "type": "string" },
+                          "status": { "type": "string", "enum": ["completed", "partial"] },
+                          "source": {
+                            "type": "object",
+                            "properties": {
+                              "kind": { "type": "string", "enum": ["manual", "imported"] },
+                              "metadata": {
+                                "type": "object",
+                                "properties": {
+                                  "provider": { "type": "string", "minLength": 1, "maxLength": 80 },
+                                  "externalId": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 160
+                                  }
+                                },
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": ["kind"],
+                            "additionalProperties": false
+                          },
+                          "exercises": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "position": { "type": "integer", "minimum": 1, "maximum": 50 },
+                                "exerciseKey": { "type": "string", "pattern": "^[a-z0-9_]{2,80}$" },
+                                "name": { "type": "string", "minLength": 1, "maxLength": 80 },
+                                "category": {
+                                  "type": "string",
+                                  "enum": ["strength", "cardio", "mobility"]
+                                },
+                                "notes": { "type": "string", "maxLength": 300 },
+                                "sets": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "position": {
+                                        "type": "integer",
+                                        "minimum": 1,
+                                        "maximum": 100
+                                      },
+                                      "kind": {
+                                        "type": "string",
+                                        "enum": ["warmup", "working", "cooldown"]
+                                      },
+                                      "reps": { "type": "integer", "minimum": 1, "maximum": 1000 },
+                                      "load": { "type": "number", "minimum": 0, "maximum": 1000 },
+                                      "loadUnit": { "type": "string", "enum": ["kg", "lb"] },
+                                      "durationSeconds": {
+                                        "type": "integer",
+                                        "minimum": 1,
+                                        "maximum": 86400
+                                      },
+                                      "distanceMeters": {
+                                        "type": "number",
+                                        "minimum": 1,
+                                        "maximum": 500000
+                                      },
+                                      "rpe": { "type": "number", "minimum": 1, "maximum": 10 },
+                                      "completed": { "type": "boolean" },
+                                      "id": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                      },
+                                      "canonicalLoadKg": {
+                                        "nullable": true,
+                                        "type": "number",
+                                        "minimum": 0
+                                      }
+                                    },
+                                    "required": [
+                                      "position",
+                                      "kind",
+                                      "completed",
+                                      "id",
+                                      "canonicalLoadKg"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                },
+                                "id": {
+                                  "type": "string",
+                                  "format": "uuid",
+                                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                }
+                              },
+                              "required": [
+                                "position",
+                                "exerciseKey",
+                                "name",
+                                "category",
+                                "sets",
+                                "id"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "summary": {
+                            "type": "object",
+                            "properties": {
+                              "completedSets": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "totalSets": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "exclusiveMinimum": true,
+                                "maximum": 9007199254740991
+                              },
+                              "volumeKg": { "type": "number", "minimum": 0 },
+                              "distanceMeters": { "type": "number", "minimum": 0 },
+                              "activeSeconds": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              }
+                            },
+                            "required": [
+                              "completedSets",
+                              "totalSets",
+                              "volumeKg",
+                              "distanceMeters",
+                              "activeSeconds"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "startedAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                          },
+                          "endedAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                          },
+                          "timezone": { "type": "string" },
+                          "painLevel": { "type": "integer", "minimum": 0, "maximum": 10 },
+                          "fatigue": { "type": "integer", "minimum": 1, "maximum": 5 },
+                          "note": { "nullable": true, "type": "string" },
+                          "revision": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "exclusiveMinimum": true,
+                            "maximum": 9007199254740991
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                          },
+                          "updatedAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "userId",
+                          "title",
+                          "status",
+                          "source",
+                          "exercises",
+                          "summary",
+                          "startedAt",
+                          "endedAt",
+                          "timezone",
+                          "painLevel",
+                          "fatigue",
+                          "note",
+                          "revision",
+                          "createdAt",
+                          "updatedAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": ["items"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": { "description": "Bearer token is missing, invalid, expired or revoked." }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "List the latest 50 workout sessions",
+        "tags": ["workouts"]
+      }
+    },
+    "/v1/workouts/{workoutId}": {
+      "put": {
+        "operationId": "WorkoutsController_update",
+        "parameters": [
+          {
+            "name": "workoutId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": { "type": "string", "minLength": 1, "maxLength": 100 },
+                  "status": { "type": "string", "enum": ["completed", "partial"] },
+                  "source": {
+                    "type": "object",
+                    "properties": {
+                      "kind": { "type": "string", "enum": ["manual", "imported"] },
+                      "metadata": {
+                        "type": "object",
+                        "properties": {
+                          "provider": { "type": "string", "minLength": 1, "maxLength": 80 },
+                          "externalId": { "type": "string", "minLength": 1, "maxLength": 160 }
+                        },
+                        "additionalProperties": false
+                      }
+                    },
+                    "required": ["kind"],
+                    "additionalProperties": false
+                  },
+                  "exercises": {
+                    "minItems": 1,
+                    "maxItems": 30,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "position": { "type": "integer", "minimum": 1, "maximum": 50 },
+                        "exerciseKey": { "type": "string", "pattern": "^[a-z0-9_]{2,80}$" },
+                        "name": { "type": "string", "minLength": 1, "maxLength": 80 },
+                        "category": {
+                          "type": "string",
+                          "enum": ["strength", "cardio", "mobility"]
+                        },
+                        "notes": { "type": "string", "maxLength": 300 },
+                        "sets": {
+                          "minItems": 1,
+                          "maxItems": 50,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "position": { "type": "integer", "minimum": 1, "maximum": 100 },
+                              "kind": {
+                                "type": "string",
+                                "enum": ["warmup", "working", "cooldown"]
+                              },
+                              "reps": { "type": "integer", "minimum": 1, "maximum": 1000 },
+                              "load": { "type": "number", "minimum": 0, "maximum": 1000 },
+                              "loadUnit": { "type": "string", "enum": ["kg", "lb"] },
+                              "durationSeconds": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 86400
+                              },
+                              "distanceMeters": {
+                                "type": "number",
+                                "minimum": 1,
+                                "maximum": 500000
+                              },
+                              "rpe": { "type": "number", "minimum": 1, "maximum": 10 },
+                              "completed": { "type": "boolean" }
+                            },
+                            "required": ["position", "kind", "completed"],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": ["position", "exerciseKey", "name", "category", "sets"],
+                      "additionalProperties": false
+                    }
+                  },
+                  "startedAt": {
+                    "type": "string",
+                    "format": "date-time",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                  },
+                  "endedAt": {
+                    "type": "string",
+                    "format": "date-time",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                  },
+                  "timezone": { "type": "string", "minLength": 1, "maxLength": 64 },
+                  "painLevel": { "type": "integer", "minimum": 0, "maximum": 10 },
+                  "fatigue": { "type": "integer", "minimum": 1, "maximum": 5 },
+                  "note": { "type": "string", "maxLength": 500 },
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "exclusiveMinimum": true,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "title",
+                  "status",
+                  "source",
+                  "exercises",
+                  "startedAt",
+                  "endedAt",
+                  "timezone",
+                  "painLevel",
+                  "fatigue",
+                  "expectedRevision"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "userId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "title": { "type": "string" },
+                    "status": { "type": "string", "enum": ["completed", "partial"] },
+                    "source": {
+                      "type": "object",
+                      "properties": {
+                        "kind": { "type": "string", "enum": ["manual", "imported"] },
+                        "metadata": {
+                          "type": "object",
+                          "properties": {
+                            "provider": { "type": "string", "minLength": 1, "maxLength": 80 },
+                            "externalId": { "type": "string", "minLength": 1, "maxLength": 160 }
+                          },
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": ["kind"],
+                      "additionalProperties": false
+                    },
+                    "exercises": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "position": { "type": "integer", "minimum": 1, "maximum": 50 },
+                          "exerciseKey": { "type": "string", "pattern": "^[a-z0-9_]{2,80}$" },
+                          "name": { "type": "string", "minLength": 1, "maxLength": 80 },
+                          "category": {
+                            "type": "string",
+                            "enum": ["strength", "cardio", "mobility"]
+                          },
+                          "notes": { "type": "string", "maxLength": 300 },
+                          "sets": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "position": { "type": "integer", "minimum": 1, "maximum": 100 },
+                                "kind": {
+                                  "type": "string",
+                                  "enum": ["warmup", "working", "cooldown"]
+                                },
+                                "reps": { "type": "integer", "minimum": 1, "maximum": 1000 },
+                                "load": { "type": "number", "minimum": 0, "maximum": 1000 },
+                                "loadUnit": { "type": "string", "enum": ["kg", "lb"] },
+                                "durationSeconds": {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 86400
+                                },
+                                "distanceMeters": {
+                                  "type": "number",
+                                  "minimum": 1,
+                                  "maximum": 500000
+                                },
+                                "rpe": { "type": "number", "minimum": 1, "maximum": 10 },
+                                "completed": { "type": "boolean" },
+                                "id": {
+                                  "type": "string",
+                                  "format": "uuid",
+                                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                },
+                                "canonicalLoadKg": {
+                                  "nullable": true,
+                                  "type": "number",
+                                  "minimum": 0
+                                }
+                              },
+                              "required": [
+                                "position",
+                                "kind",
+                                "completed",
+                                "id",
+                                "canonicalLoadKg"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          }
+                        },
+                        "required": ["position", "exerciseKey", "name", "category", "sets", "id"],
+                        "additionalProperties": false
+                      }
+                    },
+                    "summary": {
+                      "type": "object",
+                      "properties": {
+                        "completedSets": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "totalSets": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "exclusiveMinimum": true,
+                          "maximum": 9007199254740991
+                        },
+                        "volumeKg": { "type": "number", "minimum": 0 },
+                        "distanceMeters": { "type": "number", "minimum": 0 },
+                        "activeSeconds": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "completedSets",
+                        "totalSets",
+                        "volumeKg",
+                        "distanceMeters",
+                        "activeSeconds"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "startedAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "endedAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "timezone": { "type": "string" },
+                    "painLevel": { "type": "integer", "minimum": 0, "maximum": 10 },
+                    "fatigue": { "type": "integer", "minimum": 1, "maximum": 5 },
+                    "note": { "nullable": true, "type": "string" },
+                    "revision": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "exclusiveMinimum": true,
+                      "maximum": 9007199254740991
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "updatedAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "userId",
+                    "title",
+                    "status",
+                    "source",
+                    "exercises",
+                    "summary",
+                    "startedAt",
+                    "endedAt",
+                    "timezone",
+                    "painLevel",
+                    "fatigue",
+                    "note",
+                    "revision",
+                    "createdAt",
+                    "updatedAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": { "description": "Bearer token is missing, invalid, expired or revoked." },
+          "404": { "description": "Workout does not exist for this user." },
+          "409": { "description": "expectedRevision does not match." }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Replace a workout using optimistic revision control",
+        "tags": ["workouts"]
+      },
+      "delete": {
+        "operationId": "WorkoutsController_remove",
+        "parameters": [
+          {
+            "name": "workoutId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "x-expected-revision",
+            "in": "header",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "204": { "description": "Workout was removed from routine lists." },
+          "401": { "description": "Bearer token is missing, invalid, expired or revoked." },
+          "404": { "description": "Workout does not exist for this user." },
+          "409": { "description": "Expected revision does not match." }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Soft-delete a workout using optimistic revision control",
+        "tags": ["workouts"]
+      }
+    },
+    "/v1/workouts/{workoutId}/history": {
+      "get": {
+        "operationId": "WorkoutsController_history",
+        "parameters": [
+          {
+            "name": "workoutId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "workoutId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "userId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "title": { "type": "string" },
+                          "status": { "type": "string", "enum": ["completed", "partial"] },
+                          "source": {
+                            "type": "object",
+                            "properties": {
+                              "kind": { "type": "string", "enum": ["manual", "imported"] },
+                              "metadata": {
+                                "type": "object",
+                                "properties": {
+                                  "provider": { "type": "string", "minLength": 1, "maxLength": 80 },
+                                  "externalId": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 160
+                                  }
+                                },
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": ["kind"],
+                            "additionalProperties": false
+                          },
+                          "exercises": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "position": { "type": "integer", "minimum": 1, "maximum": 50 },
+                                "exerciseKey": { "type": "string", "pattern": "^[a-z0-9_]{2,80}$" },
+                                "name": { "type": "string", "minLength": 1, "maxLength": 80 },
+                                "category": {
+                                  "type": "string",
+                                  "enum": ["strength", "cardio", "mobility"]
+                                },
+                                "notes": { "type": "string", "maxLength": 300 },
+                                "sets": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "position": {
+                                        "type": "integer",
+                                        "minimum": 1,
+                                        "maximum": 100
+                                      },
+                                      "kind": {
+                                        "type": "string",
+                                        "enum": ["warmup", "working", "cooldown"]
+                                      },
+                                      "reps": { "type": "integer", "minimum": 1, "maximum": 1000 },
+                                      "load": { "type": "number", "minimum": 0, "maximum": 1000 },
+                                      "loadUnit": { "type": "string", "enum": ["kg", "lb"] },
+                                      "durationSeconds": {
+                                        "type": "integer",
+                                        "minimum": 1,
+                                        "maximum": 86400
+                                      },
+                                      "distanceMeters": {
+                                        "type": "number",
+                                        "minimum": 1,
+                                        "maximum": 500000
+                                      },
+                                      "rpe": { "type": "number", "minimum": 1, "maximum": 10 },
+                                      "completed": { "type": "boolean" },
+                                      "id": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                      },
+                                      "canonicalLoadKg": {
+                                        "nullable": true,
+                                        "type": "number",
+                                        "minimum": 0
+                                      }
+                                    },
+                                    "required": [
+                                      "position",
+                                      "kind",
+                                      "completed",
+                                      "id",
+                                      "canonicalLoadKg"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                },
+                                "id": {
+                                  "type": "string",
+                                  "format": "uuid",
+                                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                }
+                              },
+                              "required": [
+                                "position",
+                                "exerciseKey",
+                                "name",
+                                "category",
+                                "sets",
+                                "id"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "summary": {
+                            "type": "object",
+                            "properties": {
+                              "completedSets": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "totalSets": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "exclusiveMinimum": true,
+                                "maximum": 9007199254740991
+                              },
+                              "volumeKg": { "type": "number", "minimum": 0 },
+                              "distanceMeters": { "type": "number", "minimum": 0 },
+                              "activeSeconds": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              }
+                            },
+                            "required": [
+                              "completedSets",
+                              "totalSets",
+                              "volumeKg",
+                              "distanceMeters",
+                              "activeSeconds"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "startedAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                          },
+                          "endedAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                          },
+                          "timezone": { "type": "string" },
+                          "painLevel": { "type": "integer", "minimum": 0, "maximum": 10 },
+                          "fatigue": { "type": "integer", "minimum": 1, "maximum": 5 },
+                          "note": { "nullable": true, "type": "string" },
+                          "revision": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "exclusiveMinimum": true,
+                            "maximum": 9007199254740991
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                          },
+                          "updatedAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                          },
+                          "action": { "type": "string", "enum": ["created", "updated", "deleted"] },
+                          "changedAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "userId",
+                          "title",
+                          "status",
+                          "source",
+                          "exercises",
+                          "summary",
+                          "startedAt",
+                          "endedAt",
+                          "timezone",
+                          "painLevel",
+                          "fatigue",
+                          "note",
+                          "revision",
+                          "createdAt",
+                          "updatedAt",
+                          "action",
+                          "changedAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": ["workoutId", "items"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": { "description": "Bearer token is missing, invalid, expired or revoked." },
+          "404": { "description": "Workout does not exist for this user." }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Get immutable workout revisions",
+        "tags": ["workouts"]
+      }
     }
   },
   "info": {

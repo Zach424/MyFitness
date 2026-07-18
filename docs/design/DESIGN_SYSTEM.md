@@ -1,6 +1,6 @@
 # Design system baseline
 
-Status: implemented and visually validated for Today, onboarding and iteration-004 body/recovery records
+Status: implemented and visually validated for Today, onboarding, body/recovery records and iteration-005 workouts
 
 Working brand: 衡迹 / MyFitness
 
@@ -126,6 +126,19 @@ Reviewed evidence:
 - [1440 × 1000 wide empty-ledger capture](../../output/playwright/iteration-004-records-wide.png)
 
 The production-browser review exercised create, update, history and delete through PostgreSQL. It caught a CORS preflight omission for the delete revision header that direct API integration tests could not reveal. After correction, mobile and wide runs reported no page-script or console errors. Open items remain offline/retry visualization, stale-revision recovery UI, 320 px/large-text review and a confirmed-versus-AI-candidate screen once photo/import proposals exist.
+
+## Implementation review — iteration 005
+
+The workout page turns the logbook into a set-level evidence sheet. A restrained starter catalog adds movements without opening a modal; the active exercise uses an ordered table with explicit completion, reps or minutes, load or distance, RPE and removal. Monospaced values support quick comparison, while the completed state uses both a filled square and check mark. A live three-part summary distinguishes completed sets, completed-only volume and active minutes.
+
+Repeat-last appears only when a real prior record exists and explains that old completion will not be copied. Editing announces that a new version will be created. Pain at 6+ produces a plain-language stop/escalation message, and header copy says volume is an observation—not a quality score or a number to maximize. History uses a focused mobile sheet with readable action labels and complete revision totals.
+
+Reviewed evidence:
+
+- [390 × 844 mobile workout-history capture](../../output/playwright/iteration-005-workouts-mobile.png)
+- [1440 × 1000 wide editor/empty-ledger capture](../../output/playwright/iteration-005-workouts-wide.png)
+
+The production-browser flow saved the default `3/3 · 360 kg`, repeated it as `0/3`, explicitly completed the new sets, revised the first set to reach `384 kg · v2`, inspected both snapshots and deleted only the new record. Mobile and wide runs reported no page-script or console errors. Open items remain 320 px/large-text review, keyboard focus, offline/stale recovery, exact timestamp entry and denser set models such as supersets or rest intervals.
 
 ## Implementation review — iteration 003
 

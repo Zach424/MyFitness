@@ -5,6 +5,8 @@ import {
   ageBands,
   dietaryPreferenceOptions,
   equipmentOptions,
+  exerciseCategories,
+  loadUnits,
   experienceLevels,
   metricCodes,
   primaryGoals,
@@ -16,6 +18,10 @@ import {
   unitCodes,
   unitSystems,
   weekdays,
+  workoutRevisionActions,
+  workoutSetKinds,
+  workoutSourceKinds,
+  workoutStatuses,
 } from '@myfitness/contracts'
 import { describe, expect, it } from 'vitest'
 
@@ -30,6 +36,10 @@ const onboardingMigrationPath = path.resolve(
 const lifecycleMigrationPath = path.resolve(
   __dirname,
   '../../../../infra/postgres/migrations/0003_health_record_lifecycle.sql',
+)
+const workoutMigrationPath = path.resolve(
+  __dirname,
+  '../../../../infra/postgres/migrations/0004_workout_sessions.sql',
 )
 
 describe('health-record migration drift', () => {
@@ -71,6 +81,20 @@ describe('health-record migration drift', () => {
       ...revisionActions,
     ]) {
       expect(migration, `${value} is missing from the lifecycle migration`).toContain(`'${value}'`)
+    }
+  })
+
+  it('contains every workout lifecycle enum at the relational boundary', async () => {
+    const migration = await readFile(workoutMigrationPath, 'utf8')
+    for (const value of [
+      ...workoutStatuses,
+      ...exerciseCategories,
+      ...workoutSetKinds,
+      ...loadUnits,
+      ...workoutSourceKinds,
+      ...workoutRevisionActions,
+    ]) {
+      expect(migration, `${value} is missing from the workout migration`).toContain(`'${value}'`)
     }
   })
 })

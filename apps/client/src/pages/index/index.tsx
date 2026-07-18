@@ -28,6 +28,7 @@ const navItems = [
 ] as const
 
 const openRecords = () => void Taro.navigateTo({ url: '/pages/records/index' })
+const openWorkouts = () => void Taro.navigateTo({ url: '/pages/workouts/index' })
 
 const RailEntry = ({ item, onAction }: { item: RailItem; onAction: (item: RailItem) => void }) => (
   <View className={`rail-entry rail-entry--${item.status}`}>
@@ -60,11 +61,11 @@ const IndexPage = () => {
   const { readiness, completion, rail, rationale } = todayFixture
 
   const handleRailAction = (item: RailItem) => {
-    setFeedback(
-      item.status === 'estimated'
-        ? '午餐仍是估计值；记录表单接入后，需要确认食物和份量。'
-        : '训练已准备好；计时与动作记录将在训练模块接入。',
-    )
+    if (item.status !== 'estimated') {
+      openWorkouts()
+      return
+    }
+    setFeedback('午餐仍是估计值；记录表单接入后，需要确认食物和份量。')
   }
 
   return (
@@ -175,6 +176,7 @@ const IndexPage = () => {
                       key={action.key}
                       onClick={() => {
                         if (action.key === 'body' || action.key === 'recovery') openRecords()
+                        else if (action.key === 'workout') openWorkouts()
                         else setFeedback(`${action.label}记录将在后续迭代接入。`)
                       }}
                     >

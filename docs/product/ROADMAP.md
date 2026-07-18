@@ -2,7 +2,7 @@
 
 The roadmap is organized as controlled iterations. A round may take several working sessions, but it ends only after implementation, validation, archive update, and a commit.
 
-Progress snapshot (2026-07-18): iterations 0–4 are complete locally; iteration 5 is the active next scope. Authenticated users can now create, revise, audit, trend and remove body/recovery records through the shared H5/WeApp client.
+Progress snapshot (2026-07-18): iterations 0–5 are complete locally; iteration 6 is the active next scope. Authenticated users can create, revise, audit and remove body/recovery measurements and structured workouts through the shared H5/WeApp client. Workout repetition copies structure while resetting old completion and symptoms.
 
 | Iteration | Primary scope                                       | Exit evidence                                                                              |
 | --------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------ |
