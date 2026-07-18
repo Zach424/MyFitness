@@ -1,22 +1,26 @@
 import type {
   CreateHealthRecord,
   CreateMeal,
+  CreateWorkout,
   Dashboard,
   DevSession,
-  HealthRecord,
-  HealthRecordHistoryItem,
   FavoriteFood,
   FavoriteFoodInput,
+  GenerateWeeklyPlan,
+  HealthRecord,
+  HealthRecordHistoryItem,
   Meal,
   MealHistoryItem,
   OnboardingRequest,
   OnboardingResponse,
+  PlanDecision,
   UpdateHealthRecord,
   UpdateMeal,
   UpdateWorkout,
+  WeeklyPlan,
+  WeeklyPlanHistoryItem,
   Workout,
   WorkoutHistoryItem,
-  CreateWorkout,
 } from '@myfitness/contracts'
 import Taro from '@tarojs/taro'
 
@@ -197,5 +201,24 @@ export const getDashboard = (timezone: string) =>
     `/insights/dashboard?timezone=${encodeURIComponent(timezone)}`,
     'GET',
   )
+
+export const listWeeklyPlans = () =>
+  authenticatedRequest<{ items: WeeklyPlan[] }>('/plans/weekly', 'GET')
+
+export const generateWeeklyPlan = (payload: GenerateWeeklyPlan, idempotencyKey: string) =>
+  authenticatedRequest<WeeklyPlan>('/plans/weekly', 'POST', payload, {
+    'x-idempotency-key': idempotencyKey,
+  })
+
+export const decideWeeklyPlan = (planId: string, payload: PlanDecision) =>
+  authenticatedRequest<WeeklyPlan>(`/plans/weekly/${planId}/decision`, 'PUT', payload)
+
+export const getWeeklyPlanHistory = async (planId: string) =>
+  (
+    await authenticatedRequest<{ items: WeeklyPlanHistoryItem[] }>(
+      `/plans/weekly/${planId}/history`,
+      'GET',
+    )
+  ).items
 
 export const apiBaseUrl = API_BASE_URL

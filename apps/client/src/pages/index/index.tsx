@@ -32,6 +32,7 @@ const categoryLabels: Record<TodayEvidence['kind'], string> = {
 const openRecords = () => void Taro.navigateTo({ url: '/pages/records/index' })
 const openWorkouts = () => void Taro.navigateTo({ url: '/pages/workouts/index' })
 const openNutrition = () => void Taro.navigateTo({ url: '/pages/nutrition/index' })
+const openPlans = () => void Taro.navigateTo({ url: '/pages/plans/index' })
 
 const timezone = () => {
   try {
@@ -280,6 +281,8 @@ const IndexPage = () => {
                 void Taro.navigateTo({ url: '/pages/onboarding/index' })
               } else if (item.key === 'record') {
                 openRecords()
+              } else if (item.key === 'plan') {
+                openPlans()
               } else if (item.key !== 'today') {
                 setFeedback(`${item.label}模块将在后续迭代接入。`)
               }

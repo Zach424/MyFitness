@@ -1,6 +1,6 @@
 # Design system baseline
 
-Status: implemented and visually validated through iteration-007 real Today and trends
+Status: implemented and visually validated through iteration-008 deterministic weekly plans
 
 Working brand: 衡迹 / MyFitness
 
@@ -176,6 +176,19 @@ Reviewed evidence:
 - [1440 × 1000 wide empty-state capture](../../output/playwright/iteration-007-today-wide.png)
 
 The production-browser review caught two presentation leaks that functional assertions alone missed: the internal `score_1_5` unit was visible to users, and the first wide screenshot was taken while the recovery card was still loading. The final state renders `/5`, waits for the dashboard response, and says that no score is generated without recovery evidence. Open items remain manual refresh/retry, offline cache, 320 px and large-text review, keyboard focus and plan-versus-actual design after a real plan exists.
+
+## Implementation review — iteration 008
+
+The Plan page extends the logbook with a **Week Fold / 周折页**: seven day tabs read like folded notebook leaves, and the active day expands into a concrete session with role, time, intensity and substitutions. The interaction has one job—review the evidence and then accept, change or skip—rather than turning the week into a pressure heatmap. Wide H5 keeps the selected session at left and reasons, confirmed evidence and qualitative nutrition focuses at right; mobile preserves the same reading order in one column.
+
+Alternatives are direct pressed controls, current status includes text and version, and the saved history distinguishes generated, modified, accepted and skipped snapshots. Recovery absence reduces the schedule without inventing confidence. Nutrition copy remains about regularity, variety, hydration and preference-compatible protein; it does not introduce energy budgets or “good/bad” food scoring.
+
+Reviewed evidence:
+
+- [390 × 844 mobile accepted-plan capture](../../output/playwright/iteration-008-plans-mobile.png)
+- [1440 × 1000 wide weekly-review capture](../../output/playwright/iteration-008-plans-wide.png)
+
+The browser review changed the mobile capture to reset the plan scroll container before taking evidence, preventing a technically correct but contextless mid-page screenshot. Both layouts keep keyboard-visible focus and reduced-motion rules; the responsive CSS includes 320 px handling. Still open: large-text system testing, offline/stale-plan proactive messaging, plan-versus-completed-record reconciliation and a full keyboard traversal audit.
 
 ## Screenshot review checklist
 

@@ -14,6 +14,9 @@ import {
   mealRevisionActions,
   mealTypes,
   nutritionSourceKinds,
+  planEngineVersion,
+  planRevisionActions,
+  planStatuses,
   primaryGoals,
   recordStatuses,
   revisionActions,
@@ -49,6 +52,10 @@ const workoutMigrationPath = path.resolve(
 const nutritionMigrationPath = path.resolve(
   __dirname,
   '../../../../infra/postgres/migrations/0005_nutrition_meals.sql',
+)
+const planMigrationPath = path.resolve(
+  __dirname,
+  '../../../../infra/postgres/migrations/0006_weekly_plans.sql',
 )
 
 describe('health-record migration drift', () => {
@@ -117,6 +124,13 @@ describe('health-record migration drift', () => {
       ...mealRevisionActions,
     ]) {
       expect(migration, `${value} is missing from the nutrition migration`).toContain(`'${value}'`)
+    }
+  })
+
+  it('contains every weekly plan lifecycle enum and engine version', async () => {
+    const migration = await readFile(planMigrationPath, 'utf8')
+    for (const value of [...planStatuses, ...planRevisionActions, planEngineVersion]) {
+      expect(migration, `${value} is missing from the plan migration`).toContain(`'${value}'`)
     }
   })
 })

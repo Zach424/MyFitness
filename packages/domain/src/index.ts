@@ -1,4 +1,5 @@
 export * from './measurements'
 export * from './nutrition'
+export * from './plan'
 export * from './profile'
 export * from './workout'

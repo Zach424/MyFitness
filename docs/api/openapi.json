@@ -3098,6 +3098,1337 @@
         "tags": ["onboarding"]
       }
     },
+    "/v1/plans/weekly": {
+      "post": {
+        "operationId": "PlansController_generate",
+        "parameters": [
+          {
+            "name": "x-idempotency-key",
+            "in": "header",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "weekStart": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" }
+                },
+                "required": ["weekStart"],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "days": {
+                      "minItems": 7,
+                      "maxItems": 7,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "weekday": {
+                            "type": "string",
+                            "enum": ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+                          },
+                          "date": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+                          "available": { "type": "boolean" },
+                          "session": {
+                            "nullable": true,
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "enum": ["strength", "cardio", "recovery"]
+                              },
+                              "title": { "type": "string", "minLength": 1, "maxLength": 80 },
+                              "plannedMinutes": { "type": "integer", "minimum": 10, "maximum": 90 },
+                              "intensity": { "type": "string", "enum": ["easy", "moderate"] },
+                              "activities": {
+                                "minItems": 1,
+                                "maxItems": 8,
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "id": {
+                                      "type": "string",
+                                      "minLength": 2,
+                                      "maxLength": 80,
+                                      "pattern": "^[a-z0-9_]+$"
+                                    },
+                                    "role": {
+                                      "type": "string",
+                                      "enum": [
+                                        "warmup",
+                                        "squat",
+                                        "hinge",
+                                        "push",
+                                        "pull",
+                                        "core",
+                                        "cardio",
+                                        "mobility"
+                                      ]
+                                    },
+                                    "selectedOptionId": {
+                                      "type": "string",
+                                      "minLength": 2,
+                                      "maxLength": 80,
+                                      "pattern": "^[a-z0-9_]+$"
+                                    },
+                                    "options": {
+                                      "minItems": 1,
+                                      "maxItems": 6,
+                                      "type": "array",
+                                      "items": {
+                                        "type": "object",
+                                        "properties": {
+                                          "id": {
+                                            "type": "string",
+                                            "minLength": 2,
+                                            "maxLength": 80,
+                                            "pattern": "^[a-z0-9_]+$"
+                                          },
+                                          "title": {
+                                            "type": "string",
+                                            "minLength": 1,
+                                            "maxLength": 80
+                                          },
+                                          "dose": {
+                                            "type": "string",
+                                            "minLength": 1,
+                                            "maxLength": 120
+                                          },
+                                          "equipment": {
+                                            "maxItems": 3,
+                                            "type": "array",
+                                            "items": {
+                                              "type": "string",
+                                              "enum": [
+                                                "bodyweight",
+                                                "dumbbells",
+                                                "barbell",
+                                                "machines",
+                                                "bands",
+                                                "cardio"
+                                              ]
+                                            }
+                                          },
+                                          "note": {
+                                            "type": "string",
+                                            "minLength": 1,
+                                            "maxLength": 180
+                                          }
+                                        },
+                                        "required": ["id", "title", "dose", "equipment"],
+                                        "additionalProperties": false
+                                      }
+                                    },
+                                    "safetyNote": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 180
+                                    }
+                                  },
+                                  "required": ["id", "role", "selectedOptionId", "options"],
+                                  "additionalProperties": false
+                                }
+                              },
+                              "note": { "type": "string", "minLength": 1, "maxLength": 240 }
+                            },
+                            "required": [
+                              "kind",
+                              "title",
+                              "plannedMinutes",
+                              "intensity",
+                              "activities",
+                              "note"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "required": ["weekday", "date", "available", "session"],
+                        "additionalProperties": false
+                      }
+                    },
+                    "nutritionFocuses": {
+                      "minItems": 3,
+                      "maxItems": 4,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "key": {
+                            "type": "string",
+                            "enum": ["regular_meals", "food_variety", "protein_source", "hydration"]
+                          },
+                          "title": { "type": "string", "minLength": 1, "maxLength": 60 },
+                          "action": { "type": "string", "minLength": 1, "maxLength": 180 },
+                          "reason": { "type": "string", "minLength": 1, "maxLength": 240 },
+                          "alternatives": {
+                            "minItems": 1,
+                            "maxItems": 4,
+                            "type": "array",
+                            "items": { "type": "string", "minLength": 1, "maxLength": 120 }
+                          }
+                        },
+                        "required": ["key", "title", "action", "reason", "alternatives"],
+                        "additionalProperties": false
+                      }
+                    },
+                    "reasons": {
+                      "minItems": 1,
+                      "maxItems": 8,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string",
+                            "minLength": 2,
+                            "maxLength": 80,
+                            "pattern": "^[a-z0-9_]+$"
+                          },
+                          "label": { "type": "string", "minLength": 1, "maxLength": 60 },
+                          "detail": { "type": "string", "minLength": 1, "maxLength": 240 }
+                        },
+                        "required": ["code", "label", "detail"],
+                        "additionalProperties": false
+                      }
+                    },
+                    "evidence": {
+                      "type": "object",
+                      "properties": {
+                        "onboardingRevision": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "exclusiveMinimum": true,
+                          "maximum": 9007199254740991
+                        },
+                        "dashboardGeneratedAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                        },
+                        "readinessScore": {
+                          "nullable": true,
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 100
+                        },
+                        "recentActiveDays": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "recentWorkoutCount": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "recentActiveMinutes": { "type": "number", "minimum": 0 },
+                        "recentMealCount": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "onboardingRevision",
+                        "dashboardGeneratedAt",
+                        "readinessScore",
+                        "recentActiveDays",
+                        "recentWorkoutCount",
+                        "recentActiveMinutes",
+                        "recentMealCount"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "userId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "weekStart": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+                    "timezone": { "type": "string", "minLength": 1, "maxLength": 64 },
+                    "engineVersion": { "type": "string", "enum": ["deterministic-v1"] },
+                    "status": {
+                      "type": "string",
+                      "enum": ["draft", "accepted", "modified", "skipped"]
+                    },
+                    "revision": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "exclusiveMinimum": true,
+                      "maximum": 9007199254740991
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "updatedAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    }
+                  },
+                  "required": [
+                    "days",
+                    "nutritionFocuses",
+                    "reasons",
+                    "evidence",
+                    "id",
+                    "userId",
+                    "weekStart",
+                    "timezone",
+                    "engineVersion",
+                    "status",
+                    "revision",
+                    "createdAt",
+                    "updatedAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": { "description": "Week start or idempotency key is invalid." },
+          "401": { "description": "Bearer token is missing, invalid, expired or revoked." },
+          "409": { "description": "Idempotency key conflicts with another request." },
+          "422": { "description": "Onboarding or professional clearance blocks plan generation." }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Generate one deterministic weekly plan from current constraints",
+        "tags": ["plans"]
+      },
+      "get": {
+        "operationId": "PlansController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "days": {
+                            "minItems": 7,
+                            "maxItems": 7,
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "weekday": {
+                                  "type": "string",
+                                  "enum": ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+                                },
+                                "date": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+                                "available": { "type": "boolean" },
+                                "session": {
+                                  "nullable": true,
+                                  "type": "object",
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "enum": ["strength", "cardio", "recovery"]
+                                    },
+                                    "title": { "type": "string", "minLength": 1, "maxLength": 80 },
+                                    "plannedMinutes": {
+                                      "type": "integer",
+                                      "minimum": 10,
+                                      "maximum": 90
+                                    },
+                                    "intensity": { "type": "string", "enum": ["easy", "moderate"] },
+                                    "activities": {
+                                      "minItems": 1,
+                                      "maxItems": 8,
+                                      "type": "array",
+                                      "items": {
+                                        "type": "object",
+                                        "properties": {
+                                          "id": {
+                                            "type": "string",
+                                            "minLength": 2,
+                                            "maxLength": 80,
+                                            "pattern": "^[a-z0-9_]+$"
+                                          },
+                                          "role": {
+                                            "type": "string",
+                                            "enum": [
+                                              "warmup",
+                                              "squat",
+                                              "hinge",
+                                              "push",
+                                              "pull",
+                                              "core",
+                                              "cardio",
+                                              "mobility"
+                                            ]
+                                          },
+                                          "selectedOptionId": {
+                                            "type": "string",
+                                            "minLength": 2,
+                                            "maxLength": 80,
+                                            "pattern": "^[a-z0-9_]+$"
+                                          },
+                                          "options": {
+                                            "minItems": 1,
+                                            "maxItems": 6,
+                                            "type": "array",
+                                            "items": {
+                                              "type": "object",
+                                              "properties": {
+                                                "id": {
+                                                  "type": "string",
+                                                  "minLength": 2,
+                                                  "maxLength": 80,
+                                                  "pattern": "^[a-z0-9_]+$"
+                                                },
+                                                "title": {
+                                                  "type": "string",
+                                                  "minLength": 1,
+                                                  "maxLength": 80
+                                                },
+                                                "dose": {
+                                                  "type": "string",
+                                                  "minLength": 1,
+                                                  "maxLength": 120
+                                                },
+                                                "equipment": {
+                                                  "maxItems": 3,
+                                                  "type": "array",
+                                                  "items": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                      "bodyweight",
+                                                      "dumbbells",
+                                                      "barbell",
+                                                      "machines",
+                                                      "bands",
+                                                      "cardio"
+                                                    ]
+                                                  }
+                                                },
+                                                "note": {
+                                                  "type": "string",
+                                                  "minLength": 1,
+                                                  "maxLength": 180
+                                                }
+                                              },
+                                              "required": ["id", "title", "dose", "equipment"],
+                                              "additionalProperties": false
+                                            }
+                                          },
+                                          "safetyNote": {
+                                            "type": "string",
+                                            "minLength": 1,
+                                            "maxLength": 180
+                                          }
+                                        },
+                                        "required": ["id", "role", "selectedOptionId", "options"],
+                                        "additionalProperties": false
+                                      }
+                                    },
+                                    "note": { "type": "string", "minLength": 1, "maxLength": 240 }
+                                  },
+                                  "required": [
+                                    "kind",
+                                    "title",
+                                    "plannedMinutes",
+                                    "intensity",
+                                    "activities",
+                                    "note"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              },
+                              "required": ["weekday", "date", "available", "session"],
+                              "additionalProperties": false
+                            }
+                          },
+                          "nutritionFocuses": {
+                            "minItems": 3,
+                            "maxItems": 4,
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "key": {
+                                  "type": "string",
+                                  "enum": [
+                                    "regular_meals",
+                                    "food_variety",
+                                    "protein_source",
+                                    "hydration"
+                                  ]
+                                },
+                                "title": { "type": "string", "minLength": 1, "maxLength": 60 },
+                                "action": { "type": "string", "minLength": 1, "maxLength": 180 },
+                                "reason": { "type": "string", "minLength": 1, "maxLength": 240 },
+                                "alternatives": {
+                                  "minItems": 1,
+                                  "maxItems": 4,
+                                  "type": "array",
+                                  "items": { "type": "string", "minLength": 1, "maxLength": 120 }
+                                }
+                              },
+                              "required": ["key", "title", "action", "reason", "alternatives"],
+                              "additionalProperties": false
+                            }
+                          },
+                          "reasons": {
+                            "minItems": 1,
+                            "maxItems": 8,
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "code": {
+                                  "type": "string",
+                                  "minLength": 2,
+                                  "maxLength": 80,
+                                  "pattern": "^[a-z0-9_]+$"
+                                },
+                                "label": { "type": "string", "minLength": 1, "maxLength": 60 },
+                                "detail": { "type": "string", "minLength": 1, "maxLength": 240 }
+                              },
+                              "required": ["code", "label", "detail"],
+                              "additionalProperties": false
+                            }
+                          },
+                          "evidence": {
+                            "type": "object",
+                            "properties": {
+                              "onboardingRevision": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "exclusiveMinimum": true,
+                                "maximum": 9007199254740991
+                              },
+                              "dashboardGeneratedAt": {
+                                "type": "string",
+                                "format": "date-time",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                              },
+                              "readinessScore": {
+                                "nullable": true,
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 100
+                              },
+                              "recentActiveDays": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "recentWorkoutCount": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "recentActiveMinutes": { "type": "number", "minimum": 0 },
+                              "recentMealCount": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              }
+                            },
+                            "required": [
+                              "onboardingRevision",
+                              "dashboardGeneratedAt",
+                              "readinessScore",
+                              "recentActiveDays",
+                              "recentWorkoutCount",
+                              "recentActiveMinutes",
+                              "recentMealCount"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "userId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "weekStart": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+                          "timezone": { "type": "string", "minLength": 1, "maxLength": 64 },
+                          "engineVersion": { "type": "string", "enum": ["deterministic-v1"] },
+                          "status": {
+                            "type": "string",
+                            "enum": ["draft", "accepted", "modified", "skipped"]
+                          },
+                          "revision": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "exclusiveMinimum": true,
+                            "maximum": 9007199254740991
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                          },
+                          "updatedAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                          }
+                        },
+                        "required": [
+                          "days",
+                          "nutritionFocuses",
+                          "reasons",
+                          "evidence",
+                          "id",
+                          "userId",
+                          "weekStart",
+                          "timezone",
+                          "engineVersion",
+                          "status",
+                          "revision",
+                          "createdAt",
+                          "updatedAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": ["items"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": { "description": "Bearer token is missing, invalid, expired or revoked." }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "List the latest 12 weekly plans",
+        "tags": ["plans"]
+      }
+    },
+    "/v1/plans/weekly/{planId}/decision": {
+      "put": {
+        "operationId": "PlansController_decide",
+        "parameters": [
+          {
+            "name": "planId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "decision": { "type": "string", "enum": ["accepted", "modified", "skipped"] },
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "exclusiveMinimum": true,
+                    "maximum": 9007199254740991
+                  },
+                  "selections": {
+                    "default": [],
+                    "maxItems": 24,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "activityId": {
+                          "type": "string",
+                          "minLength": 2,
+                          "maxLength": 80,
+                          "pattern": "^[a-z0-9_]+$"
+                        },
+                        "optionId": {
+                          "type": "string",
+                          "minLength": 2,
+                          "maxLength": 80,
+                          "pattern": "^[a-z0-9_]+$"
+                        }
+                      },
+                      "required": ["activityId", "optionId"],
+                      "additionalProperties": false
+                    }
+                  },
+                  "note": { "type": "string", "minLength": 1, "maxLength": 300 }
+                },
+                "required": ["decision", "expectedRevision", "selections"],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "days": {
+                      "minItems": 7,
+                      "maxItems": 7,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "weekday": {
+                            "type": "string",
+                            "enum": ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+                          },
+                          "date": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+                          "available": { "type": "boolean" },
+                          "session": {
+                            "nullable": true,
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "enum": ["strength", "cardio", "recovery"]
+                              },
+                              "title": { "type": "string", "minLength": 1, "maxLength": 80 },
+                              "plannedMinutes": { "type": "integer", "minimum": 10, "maximum": 90 },
+                              "intensity": { "type": "string", "enum": ["easy", "moderate"] },
+                              "activities": {
+                                "minItems": 1,
+                                "maxItems": 8,
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "id": {
+                                      "type": "string",
+                                      "minLength": 2,
+                                      "maxLength": 80,
+                                      "pattern": "^[a-z0-9_]+$"
+                                    },
+                                    "role": {
+                                      "type": "string",
+                                      "enum": [
+                                        "warmup",
+                                        "squat",
+                                        "hinge",
+                                        "push",
+                                        "pull",
+                                        "core",
+                                        "cardio",
+                                        "mobility"
+                                      ]
+                                    },
+                                    "selectedOptionId": {
+                                      "type": "string",
+                                      "minLength": 2,
+                                      "maxLength": 80,
+                                      "pattern": "^[a-z0-9_]+$"
+                                    },
+                                    "options": {
+                                      "minItems": 1,
+                                      "maxItems": 6,
+                                      "type": "array",
+                                      "items": {
+                                        "type": "object",
+                                        "properties": {
+                                          "id": {
+                                            "type": "string",
+                                            "minLength": 2,
+                                            "maxLength": 80,
+                                            "pattern": "^[a-z0-9_]+$"
+                                          },
+                                          "title": {
+                                            "type": "string",
+                                            "minLength": 1,
+                                            "maxLength": 80
+                                          },
+                                          "dose": {
+                                            "type": "string",
+                                            "minLength": 1,
+                                            "maxLength": 120
+                                          },
+                                          "equipment": {
+                                            "maxItems": 3,
+                                            "type": "array",
+                                            "items": {
+                                              "type": "string",
+                                              "enum": [
+                                                "bodyweight",
+                                                "dumbbells",
+                                                "barbell",
+                                                "machines",
+                                                "bands",
+                                                "cardio"
+                                              ]
+                                            }
+                                          },
+                                          "note": {
+                                            "type": "string",
+                                            "minLength": 1,
+                                            "maxLength": 180
+                                          }
+                                        },
+                                        "required": ["id", "title", "dose", "equipment"],
+                                        "additionalProperties": false
+                                      }
+                                    },
+                                    "safetyNote": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 180
+                                    }
+                                  },
+                                  "required": ["id", "role", "selectedOptionId", "options"],
+                                  "additionalProperties": false
+                                }
+                              },
+                              "note": { "type": "string", "minLength": 1, "maxLength": 240 }
+                            },
+                            "required": [
+                              "kind",
+                              "title",
+                              "plannedMinutes",
+                              "intensity",
+                              "activities",
+                              "note"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "required": ["weekday", "date", "available", "session"],
+                        "additionalProperties": false
+                      }
+                    },
+                    "nutritionFocuses": {
+                      "minItems": 3,
+                      "maxItems": 4,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "key": {
+                            "type": "string",
+                            "enum": ["regular_meals", "food_variety", "protein_source", "hydration"]
+                          },
+                          "title": { "type": "string", "minLength": 1, "maxLength": 60 },
+                          "action": { "type": "string", "minLength": 1, "maxLength": 180 },
+                          "reason": { "type": "string", "minLength": 1, "maxLength": 240 },
+                          "alternatives": {
+                            "minItems": 1,
+                            "maxItems": 4,
+                            "type": "array",
+                            "items": { "type": "string", "minLength": 1, "maxLength": 120 }
+                          }
+                        },
+                        "required": ["key", "title", "action", "reason", "alternatives"],
+                        "additionalProperties": false
+                      }
+                    },
+                    "reasons": {
+                      "minItems": 1,
+                      "maxItems": 8,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string",
+                            "minLength": 2,
+                            "maxLength": 80,
+                            "pattern": "^[a-z0-9_]+$"
+                          },
+                          "label": { "type": "string", "minLength": 1, "maxLength": 60 },
+                          "detail": { "type": "string", "minLength": 1, "maxLength": 240 }
+                        },
+                        "required": ["code", "label", "detail"],
+                        "additionalProperties": false
+                      }
+                    },
+                    "evidence": {
+                      "type": "object",
+                      "properties": {
+                        "onboardingRevision": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "exclusiveMinimum": true,
+                          "maximum": 9007199254740991
+                        },
+                        "dashboardGeneratedAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                        },
+                        "readinessScore": {
+                          "nullable": true,
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 100
+                        },
+                        "recentActiveDays": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "recentWorkoutCount": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "recentActiveMinutes": { "type": "number", "minimum": 0 },
+                        "recentMealCount": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "onboardingRevision",
+                        "dashboardGeneratedAt",
+                        "readinessScore",
+                        "recentActiveDays",
+                        "recentWorkoutCount",
+                        "recentActiveMinutes",
+                        "recentMealCount"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "userId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "weekStart": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+                    "timezone": { "type": "string", "minLength": 1, "maxLength": 64 },
+                    "engineVersion": { "type": "string", "enum": ["deterministic-v1"] },
+                    "status": {
+                      "type": "string",
+                      "enum": ["draft", "accepted", "modified", "skipped"]
+                    },
+                    "revision": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "exclusiveMinimum": true,
+                      "maximum": 9007199254740991
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "updatedAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    }
+                  },
+                  "required": [
+                    "days",
+                    "nutritionFocuses",
+                    "reasons",
+                    "evidence",
+                    "id",
+                    "userId",
+                    "weekStart",
+                    "timezone",
+                    "engineVersion",
+                    "status",
+                    "revision",
+                    "createdAt",
+                    "updatedAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": { "description": "Decision or substitution is invalid." },
+          "401": { "description": "Bearer token is missing, invalid, expired or revoked." },
+          "404": { "description": "Plan does not exist for this user." },
+          "409": { "description": "expectedRevision does not match." }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Accept, modify or skip a plan with optimistic revision control",
+        "tags": ["plans"]
+      }
+    },
+    "/v1/plans/weekly/{planId}/history": {
+      "get": {
+        "operationId": "PlansController_history",
+        "parameters": [
+          {
+            "name": "planId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "planId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "days": {
+                            "minItems": 7,
+                            "maxItems": 7,
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "weekday": {
+                                  "type": "string",
+                                  "enum": ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+                                },
+                                "date": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+                                "available": { "type": "boolean" },
+                                "session": {
+                                  "nullable": true,
+                                  "type": "object",
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "enum": ["strength", "cardio", "recovery"]
+                                    },
+                                    "title": { "type": "string", "minLength": 1, "maxLength": 80 },
+                                    "plannedMinutes": {
+                                      "type": "integer",
+                                      "minimum": 10,
+                                      "maximum": 90
+                                    },
+                                    "intensity": { "type": "string", "enum": ["easy", "moderate"] },
+                                    "activities": {
+                                      "minItems": 1,
+                                      "maxItems": 8,
+                                      "type": "array",
+                                      "items": {
+                                        "type": "object",
+                                        "properties": {
+                                          "id": {
+                                            "type": "string",
+                                            "minLength": 2,
+                                            "maxLength": 80,
+                                            "pattern": "^[a-z0-9_]+$"
+                                          },
+                                          "role": {
+                                            "type": "string",
+                                            "enum": [
+                                              "warmup",
+                                              "squat",
+                                              "hinge",
+                                              "push",
+                                              "pull",
+                                              "core",
+                                              "cardio",
+                                              "mobility"
+                                            ]
+                                          },
+                                          "selectedOptionId": {
+                                            "type": "string",
+                                            "minLength": 2,
+                                            "maxLength": 80,
+                                            "pattern": "^[a-z0-9_]+$"
+                                          },
+                                          "options": {
+                                            "minItems": 1,
+                                            "maxItems": 6,
+                                            "type": "array",
+                                            "items": {
+                                              "type": "object",
+                                              "properties": {
+                                                "id": {
+                                                  "type": "string",
+                                                  "minLength": 2,
+                                                  "maxLength": 80,
+                                                  "pattern": "^[a-z0-9_]+$"
+                                                },
+                                                "title": {
+                                                  "type": "string",
+                                                  "minLength": 1,
+                                                  "maxLength": 80
+                                                },
+                                                "dose": {
+                                                  "type": "string",
+                                                  "minLength": 1,
+                                                  "maxLength": 120
+                                                },
+                                                "equipment": {
+                                                  "maxItems": 3,
+                                                  "type": "array",
+                                                  "items": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                      "bodyweight",
+                                                      "dumbbells",
+                                                      "barbell",
+                                                      "machines",
+                                                      "bands",
+                                                      "cardio"
+                                                    ]
+                                                  }
+                                                },
+                                                "note": {
+                                                  "type": "string",
+                                                  "minLength": 1,
+                                                  "maxLength": 180
+                                                }
+                                              },
+                                              "required": ["id", "title", "dose", "equipment"],
+                                              "additionalProperties": false
+                                            }
+                                          },
+                                          "safetyNote": {
+                                            "type": "string",
+                                            "minLength": 1,
+                                            "maxLength": 180
+                                          }
+                                        },
+                                        "required": ["id", "role", "selectedOptionId", "options"],
+                                        "additionalProperties": false
+                                      }
+                                    },
+                                    "note": { "type": "string", "minLength": 1, "maxLength": 240 }
+                                  },
+                                  "required": [
+                                    "kind",
+                                    "title",
+                                    "plannedMinutes",
+                                    "intensity",
+                                    "activities",
+                                    "note"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              },
+                              "required": ["weekday", "date", "available", "session"],
+                              "additionalProperties": false
+                            }
+                          },
+                          "nutritionFocuses": {
+                            "minItems": 3,
+                            "maxItems": 4,
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "key": {
+                                  "type": "string",
+                                  "enum": [
+                                    "regular_meals",
+                                    "food_variety",
+                                    "protein_source",
+                                    "hydration"
+                                  ]
+                                },
+                                "title": { "type": "string", "minLength": 1, "maxLength": 60 },
+                                "action": { "type": "string", "minLength": 1, "maxLength": 180 },
+                                "reason": { "type": "string", "minLength": 1, "maxLength": 240 },
+                                "alternatives": {
+                                  "minItems": 1,
+                                  "maxItems": 4,
+                                  "type": "array",
+                                  "items": { "type": "string", "minLength": 1, "maxLength": 120 }
+                                }
+                              },
+                              "required": ["key", "title", "action", "reason", "alternatives"],
+                              "additionalProperties": false
+                            }
+                          },
+                          "reasons": {
+                            "minItems": 1,
+                            "maxItems": 8,
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "code": {
+                                  "type": "string",
+                                  "minLength": 2,
+                                  "maxLength": 80,
+                                  "pattern": "^[a-z0-9_]+$"
+                                },
+                                "label": { "type": "string", "minLength": 1, "maxLength": 60 },
+                                "detail": { "type": "string", "minLength": 1, "maxLength": 240 }
+                              },
+                              "required": ["code", "label", "detail"],
+                              "additionalProperties": false
+                            }
+                          },
+                          "evidence": {
+                            "type": "object",
+                            "properties": {
+                              "onboardingRevision": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "exclusiveMinimum": true,
+                                "maximum": 9007199254740991
+                              },
+                              "dashboardGeneratedAt": {
+                                "type": "string",
+                                "format": "date-time",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                              },
+                              "readinessScore": {
+                                "nullable": true,
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 100
+                              },
+                              "recentActiveDays": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "recentWorkoutCount": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "recentActiveMinutes": { "type": "number", "minimum": 0 },
+                              "recentMealCount": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              }
+                            },
+                            "required": [
+                              "onboardingRevision",
+                              "dashboardGeneratedAt",
+                              "readinessScore",
+                              "recentActiveDays",
+                              "recentWorkoutCount",
+                              "recentActiveMinutes",
+                              "recentMealCount"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "userId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "weekStart": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+                          "timezone": { "type": "string", "minLength": 1, "maxLength": 64 },
+                          "engineVersion": { "type": "string", "enum": ["deterministic-v1"] },
+                          "status": {
+                            "type": "string",
+                            "enum": ["draft", "accepted", "modified", "skipped"]
+                          },
+                          "revision": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "exclusiveMinimum": true,
+                            "maximum": 9007199254740991
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                          },
+                          "updatedAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                          },
+                          "action": {
+                            "type": "string",
+                            "enum": ["generated", "accepted", "modified", "skipped"]
+                          },
+                          "changedAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                          },
+                          "decisionNote": { "nullable": true, "type": "string" }
+                        },
+                        "required": [
+                          "days",
+                          "nutritionFocuses",
+                          "reasons",
+                          "evidence",
+                          "id",
+                          "userId",
+                          "weekStart",
+                          "timezone",
+                          "engineVersion",
+                          "status",
+                          "revision",
+                          "createdAt",
+                          "updatedAt",
+                          "action",
+                          "changedAt",
+                          "decisionNote"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": ["planId", "items"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": { "description": "Bearer token is missing, invalid, expired or revoked." },
+          "404": { "description": "Plan does not exist for this user." }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Get immutable plan generation and decision history",
+        "tags": ["plans"]
+      }
+    },
     "/v1/workouts": {
       "post": {
         "operationId": "WorkoutsController_create",

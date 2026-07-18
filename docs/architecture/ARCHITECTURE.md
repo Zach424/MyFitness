@@ -1,6 +1,6 @@
 # Architecture baseline
 
-Status: accepted and implemented through the iteration-007 Today aggregation loop; changes require an ADR.
+Status: accepted and implemented through the iteration-008 deterministic weekly-plan loop; changes require an ADR.
 
 ## System shape
 
@@ -47,6 +47,7 @@ Implemented foundation:
 - Workout session, ordered exercise and ordered set rows form one bounded relational aggregate. Server-side domain rules normalize load and calculate completed-only summaries; each accepted aggregate state is also stored as an immutable JSON snapshot.
 - Nutrition meal/item rows snapshot food composition and display/canonical portions. Server-side rules calculate nutrient totals; owner favorites are independent snapshots and each meal revision retains the full accepted aggregate.
 - A read-only insights projection queries confirmed source rows for the requested timezone and produces Today evidence, nullable three-day readiness and 7/30/90-day totals without persisted duplicate state.
+- A deterministic weekly-plan aggregate snapshots onboarding revision and evidence, stores the current JSONB plan plus immutable revisions, and re-checks current eligibility before an accept/modify transition.
 
 ## Data rules
 
@@ -70,6 +71,8 @@ ADR-0004 records the health-record replacement, append-only snapshot, soft-delet
 The workout aggregate, derived-value rules and safe repeat semantics are documented in [WORKOUT_MODEL.md](WORKOUT_MODEL.md). ADR-0005 records the normalized current graph plus immutable-snapshot decision.
 
 The meal snapshot, canonical-gram, catalog/favorite and photo-candidate boundaries are documented in [NUTRITION_MODEL.md](NUTRITION_MODEL.md). ADR-0006 records why mutable catalogs cannot be historical truth.
+
+The deterministic weekly-plan rules, evidence provenance, revision lifecycle and limitations are documented in [PLAN_MODEL.md](PLAN_MODEL.md). ADR-0008 records why the structured rule path precedes model orchestration.
 
 ## API and event conventions
 

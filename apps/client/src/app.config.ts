@@ -5,6 +5,7 @@ export default defineAppConfig({
     'pages/records/index',
     'pages/workouts/index',
     'pages/nutrition/index',
+    'pages/plans/index',
   ],
   window: {
     backgroundColor: '#F2F6F5',

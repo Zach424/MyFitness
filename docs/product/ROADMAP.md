@@ -2,7 +2,7 @@
 
 The roadmap is organized as controlled iterations. A round may take several working sessions, but it ends only after implementation, validation, archive update, and a commit.
 
-Progress snapshot (2026-07-18): iterations 0–7 are complete locally; iteration 8 is next. Authenticated records now feed a timezone-aware Today rail, deterministic recovery evidence and 7/30/90-day windows on H5/WeApp.
+Progress snapshot (2026-07-19): iterations 0–8 are complete locally; iteration 9 is next. The full non-AI loop now covers authenticated onboarding, records, timezone-aware Today/trends and versioned weekly plan review on H5/WeApp.
 
 | Iteration | Primary scope                                       | Exit evidence                                                                              |
 | --------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------ |

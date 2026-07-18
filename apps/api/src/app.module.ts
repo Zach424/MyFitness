@@ -13,6 +13,8 @@ import { NutritionController } from './nutrition/nutrition.controller'
 import { NutritionService } from './nutrition/nutrition.service'
 import { OnboardingController } from './onboarding/onboarding.controller'
 import { OnboardingService } from './onboarding/onboarding.service'
+import { PlansController } from './plans/plans.controller'
+import { PlansService } from './plans/plans.service'
 import { WorkoutsController } from './workouts/workouts.controller'
 import { WorkoutsService } from './workouts/workouts.service'
 
@@ -24,6 +26,7 @@ import { WorkoutsService } from './workouts/workouts.service'
     InsightsController,
     NutritionController,
     OnboardingController,
+    PlansController,
     WorkoutsController,
   ],
   providers: [
@@ -33,6 +36,7 @@ import { WorkoutsService } from './workouts/workouts.service'
     InsightsService,
     NutritionService,
     OnboardingService,
+    PlansService,
     SessionAuthGuard,
     WorkoutsService,
   ],

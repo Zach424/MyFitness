@@ -1,8 +1,8 @@
 # Project status
 
-Last reviewed: 2026-07-18
+Last reviewed: 2026-07-19
 
-Stage: real Today aggregation complete; deterministic plan engine next
+Stage: deterministic weekly planning complete; AI explanation/orchestration next
 
 Primary release target: WeChat Mini Program + responsive H5
 
@@ -12,20 +12,20 @@ MyFitness / 衡迹 turns body, training, nutrition, and recovery records into sa
 
 ## Module status
 
-| Module                  | Status                        | Current evidence                                   | Next gate                                      |
-| ----------------------- | ----------------------------- | -------------------------------------------------- | ---------------------------------------------- |
-| Product scope           | Done for MVP baseline         | `docs/product/PRODUCT_BRIEF.md`                    | Validate with target-user interviews           |
-| Delivery roadmap        | Done for planning baseline    | `docs/product/ROADMAP.md`                          | Execute iteration 8                            |
-| Design language         | Partial, five flows validated | Today/onboarding/records/workouts/meals + 10 shots | Validate remaining states and 320 px viewport  |
-| Client: Mini Program/H5 | Partial                       | Three record loops + real Today/trends             | Implement plan review flows                    |
-| Admin console           | Pending                       | Architecture only                                  | Content and support requirements frozen        |
-| Business API            | Partial                       | Record loops + read-only insights projection       | Add versioned plans                            |
-| Domain rules            | Partial                       | Record, recovery and 7/30/90-day calculations      | Add plan constraints and validators            |
-| AI service              | Pending                       | Safety boundary listed                             | Offline fixture pipeline and validators        |
-| Native App/devices      | Deferred                      | Phase-two decision                                 | MVP retention gate reached                     |
-| Privacy/compliance      | Partial                       | Purpose/version consent events + AI rules          | Revocation, inventory, retention, legal review |
-| Testing/observability   | Partial                       | 51 unit + 12 integration + 10 browser E2E          | Add lint, CI, metrics and trace correlation    |
-| Deployment              | Partial, local only           | PostgreSQL Compose + runtime health                | Create repeatable shared test environment      |
+| Module                  | Status                       | Current evidence                                 | Next gate                                      |
+| ----------------------- | ---------------------------- | ------------------------------------------------ | ---------------------------------------------- |
+| Product scope           | Done for MVP baseline        | `docs/product/PRODUCT_BRIEF.md`                  | Validate with target-user interviews           |
+| Delivery roadmap        | Done for planning baseline   | `docs/product/ROADMAP.md`                        | Execute iteration 9                            |
+| Design language         | Partial, six flows validated | Core flows + 12 reviewed screenshots             | Large text, keyboard and remaining states      |
+| Client: Mini Program/H5 | Partial                      | Record loops + Today/trends + weekly plan review | Add AI explanation proposal flow               |
+| Admin console           | Pending                      | Architecture only                                | Content and support requirements frozen        |
+| Business API            | Partial                      | Records, insights and versioned weekly plans     | Add model orchestration boundary               |
+| Domain rules            | Partial                      | Record aggregation + deterministic-v1 plan rules | Add AI output validators/evaluation fixtures   |
+| AI service              | Pending                      | Safety boundary listed                           | Offline fixture pipeline and validators        |
+| Native App/devices      | Deferred                     | Phase-two decision                               | MVP retention gate reached                     |
+| Privacy/compliance      | Partial                      | Purpose/version consent events + AI rules        | Revocation, inventory, retention, legal review |
+| Testing/observability   | Partial                      | 60 unit + 15 integration + 13 browser E2E        | Add lint, CI, metrics and trace correlation    |
+| Deployment              | Partial, local only          | PostgreSQL Compose + runtime health              | Create repeatable shared test environment      |
 
 Status vocabulary: `Done` means validated for the present stage, `Partial` means usable but missing a named gate, `Pending` means not implemented, and `Deferred` means intentionally outside the current release.
 
@@ -41,6 +41,7 @@ Status vocabulary: `Done` means validated for the present stage, `Partial` means
 - Transactional relational workout aggregates with ordered exercises/sets, completed-only deterministic summaries, expected revisions, idempotent creation and immutable JSON snapshots.
 - Transactional nutrition aggregates with food/serving snapshots, canonical grams, deterministic kcal/P/C/F/fiber totals, owner favorites and immutable JSON revisions.
 - Timezone-aware read-only Today projection with confirmed evidence, nullable recovery summary and 7/30/90-day totals.
+- Versioned weekly plans with deterministic availability/load/equipment constraints, evidence snapshots, substitutions, optimistic decisions and immutable history.
 - Parameterized `pg` access to PostgreSQL 18.4 with transactional, checksum-protected SQL migrations.
 - React Native for the later native App rather than forcing device integrations into the first client.
 - NestJS modular monolith + PostgreSQL + Redis for business services.
@@ -66,6 +67,8 @@ Status vocabulary: `Done` means validated for the present stage, `Partial` means
 | Starter exercise catalog lacks custom/equipment semantics        | Medium | Model additions only after the manual workout loop informs actual needs                    |
 | Starter food values are demonstration data, not release catalog  | High   | Select licensed/localized versioned provider and attribution before beta                   |
 | Energy/macro UI can be harmful for eating-disorder risk          | High   | Maintain scope exclusion; add screening/content review before adaptive nutrition planning  |
+| Deterministic-v1 is explainable but not clinically validated     | High   | Keep general-guidance claims; add offline evaluation and expert/content review             |
+| A changed plan may look current until the next server action     | Medium | Server blocks stale accept/modify; add proactive client stale-state refresh                |
 
 ## Quality gates
 
@@ -79,4 +82,4 @@ The MVP cannot enter public beta until all of the following are reproducible:
 
 ## Primary next step
 
-Iteration 8: implement deterministic versioned weekly plans with substitutions, safety constraints, professional-clearance blocking and accept/modify/skip history.
+Iteration 9: add provider-neutral AI explanation and plan orchestration behind the structured plan contract, with versioned prompts/models/validators, offline fixtures, adversarial evaluation and deterministic fallback.
