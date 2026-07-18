@@ -2,7 +2,7 @@
 
 面向普通健身人群的多端记录与 AI 规划产品。产品把身体、训练、饮食和恢复数据整理为可解释、可调整、可持续执行的个人计划。
 
-> 当前阶段：Client foundation / 第 1 轮已完成。仓库已提供可运行的 Taro 今日页，能够分别构建微信小程序与响应式 H5；目前使用本地夹具数据，尚未接入账号、API 或真实持久化。
+> 当前阶段：API foundation / 第 2 轮已完成。仓库已提供 Taro 今日页、NestJS API、共享健康记录契约、PostgreSQL 迁移与本地 Compose 环境；客户端仍使用夹具数据，账号与建档流程将在下一轮接入。
 
 ## 产品边界
 
@@ -16,13 +16,17 @@
 ```text
 apps/
   client/          Taro + React：微信小程序与 H5
+  api/             NestJS：健康记录 API、OpenAPI 与迁移入口
 packages/
+  contracts/       Zod：跨端请求、响应和来源契约
+  domain/          单位归一化、指标范围和确定性规则
   design-tokens/   颜色、字体、间距、动效和图表变量
 docs/              产品、设计、架构和每轮迭代档案
+infra/             PostgreSQL 迁移与本地 Docker Compose
 output/playwright/ 浏览器视觉验收证据
 ```
 
-后续迭代会按路线图逐步增加 `apps/api`、`packages/contracts`、`packages/domain`、`services/ai`、管理后台和基础设施目录，避免在没有实现的情况下制造空壳。
+后续迭代会按路线图逐步增加 `services/ai`、管理后台和发布基础设施，避免在没有实现的情况下制造空壳。
 
 ## 本地运行
 
@@ -38,6 +42,17 @@ pnpm typecheck
 ```
 
 H5 和微信小程序产物分别生成到 `apps/client/dist-h5` 与 `apps/client/dist-weapp`，两次构建不会互相清理。
+
+启动本地 API 与 PostgreSQL：
+
+```bash
+pnpm db:up
+pnpm db:migrate
+pnpm test:integration
+pnpm dev:api
+```
+
+随后可访问 `http://127.0.0.1:3100/v1/health` 与 `http://127.0.0.1:3100/docs`。`x-demo-user-id` 仅用于本地开发边界，不代表已完成生产认证；`pnpm db:down` 会停止本地容器并保留数据卷。
 
 ## 开发方式
 
@@ -59,8 +74,12 @@ H5 和微信小程序产物分别生成到 `apps/client/dist-h5` 与 `apps/clien
 - [设计系统](docs/design/DESIGN_SYSTEM.md)
 - [技术架构](docs/architecture/ARCHITECTURE.md)
 - [架构决策 0001](docs/architecture/decisions/0001-platform-architecture.md)
+- [架构决策 0002](docs/architecture/decisions/0002-health-record-contract.md)
+- [健康记录数据模型](docs/architecture/HEALTH_RECORD_MODEL.md)
+- [API 契约与 OpenAPI](docs/api/README.md)
 - [第 0 轮档案](docs/iterations/000-foundation.md)
 - [第 1 轮档案](docs/iterations/001-client-foundation.md)
+- [第 2 轮档案](docs/iterations/002-api-foundation.md)
 - [移动端视觉证据](output/playwright/iteration-001-mobile.png)
 - [宽屏视觉证据](output/playwright/iteration-001-wide.png)
 

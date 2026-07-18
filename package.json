@@ -11,11 +11,17 @@
     "build": "pnpm -r --if-present build",
     "build:h5": "pnpm --filter @myfitness/client build:h5",
     "build:weapp": "pnpm --filter @myfitness/client build:weapp",
+    "build:api": "pnpm --filter @myfitness/api... build",
+    "db:up": "docker compose -f infra/local/compose.yaml up -d --wait",
+    "db:down": "docker compose -f infra/local/compose.yaml down",
+    "db:migrate": "pnpm --filter @myfitness/api db:migrate",
+    "dev:api": "pnpm --filter @myfitness/api start:dev",
     "dev:h5": "pnpm --filter @myfitness/client dev:h5",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
-    "typecheck": "pnpm -r --if-present typecheck"
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "typecheck": "pnpm --filter @myfitness/contracts build && pnpm --filter @myfitness/domain build && pnpm -r --if-present typecheck"
   },
   "devDependencies": {
     "prettier": "^3.6.2",

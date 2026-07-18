@@ -2,7 +2,7 @@
 
 The roadmap is organized as controlled iterations. A round may take several working sessions, but it ends only after implementation, validation, archive update, and a commit.
 
-Progress snapshot (2026-07-18): iterations 0 and 1 are complete locally; iteration 2 is the active next scope. Later iterations remain queued behind its contract and persistence gates.
+Progress snapshot (2026-07-18): iterations 0–2 are complete locally; iteration 3 is the active next scope. Later iterations remain queued behind its identity, profile and consent gates.
 
 | Iteration | Primary scope                                       | Exit evidence                                                                              |
 | --------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------ |

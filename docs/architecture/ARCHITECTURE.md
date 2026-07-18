@@ -1,6 +1,6 @@
 # Architecture baseline
 
-Status: accepted for initial implementation; changes require an ADR.
+Status: accepted and implemented through the iteration-002 client/API foundations; changes require an ADR.
 
 ## System shape
 
@@ -35,6 +35,14 @@ flowchart TB
 
 Start as a pnpm monorepo and modular monolith. A single API deployable keeps transactions, authorization, migrations, and local development clear. AI work runs behind a queue/worker boundary because it has different runtimes, latency, cost, retry, and observability needs. Extract more services only after a measured scaling or ownership constraint.
 
+Implemented foundation:
+
+- `apps/api` is a NestJS 11 process exposing readiness and health-record routes.
+- `packages/contracts` owns Zod request/response schemas and emits OpenAPI 3.0 JSON Schema.
+- `packages/domain` owns measurement units, canonical conversion, plausible ranges and integer score rules.
+- PostgreSQL 18.4 stores measurements through parameterized `pg`; ordered SQL migrations run transactionally and record a SHA-256 checksum to detect drift.
+- Local identity is an explicit `x-demo-user-id` header. It is deliberately documented as temporary and must be replaced before any shared environment.
+
 ## Data rules
 
 All health-domain events store:
@@ -47,6 +55,8 @@ All health-domain events store:
 - Consent/purpose reference when the source requires sensitive-data permission.
 
 AI output is a proposal. Only an explicit user action or deterministic system process with a documented contract can create a confirmed record.
+
+The implemented measurement subset and field-level invariants are documented in [HEALTH_RECORD_MODEL.md](HEALTH_RECORD_MODEL.md). ADR-0002 records why contract validation, deterministic normalization and database checks deliberately overlap.
 
 ## API and event conventions
 
@@ -81,7 +91,7 @@ Provider outages fall back to manual recording and deterministic summaries; core
 
 ## Initial local and production targets
 
-- Local: Node LTS, pnpm, Docker Compose, PostgreSQL, Redis, mock object storage, fixture AI provider.
+- Local: Node 24 runtime, pnpm 11, Docker Compose and PostgreSQL 18.4 today; Redis, mock object storage and fixture AI provider enter only with their consuming features.
 - CI: install lockfile, format check, lint, typecheck, unit/integration tests, H5 build, Mini Program build, dependency audit, artifact upload.
 - Production candidate: managed container/runtime, managed PostgreSQL and Redis, private object storage, KMS/secrets manager, CDN only for public static assets, centralized metrics and alerts.
 

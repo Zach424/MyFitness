@@ -1,0 +1,460 @@
+{
+  "openapi": "3.0.0",
+  "paths": {
+    "/v1/health": {
+      "get": {
+        "operationId": "HealthController_readiness",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["status", "service", "database", "timestamp"],
+                  "properties": {
+                    "status": { "type": "string", "enum": ["ok"] },
+                    "service": { "type": "string", "example": "myfitness-api" },
+                    "database": { "type": "string", "enum": ["up"] },
+                    "timestamp": { "type": "string", "format": "date-time" }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Check API and database readiness",
+        "tags": ["system"]
+      }
+    },
+    "/v1/health-records": {
+      "post": {
+        "operationId": "HealthRecordsController_create",
+        "parameters": [
+          {
+            "name": "x-demo-user-id",
+            "in": "header",
+            "description": "Temporary local identity boundary; replaced by authenticated user context later.",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "x-idempotency-key",
+            "in": "header",
+            "required": true,
+            "schema": { "type": "string", "minLength": 8 }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "metric": {
+                    "type": "string",
+                    "enum": [
+                      "body.weight",
+                      "body.waist",
+                      "body.body_fat",
+                      "body.resting_heart_rate",
+                      "recovery.sleep_duration",
+                      "recovery.sleep_quality",
+                      "recovery.soreness",
+                      "recovery.energy",
+                      "recovery.stress"
+                    ]
+                  },
+                  "value": { "type": "number" },
+                  "unit": {
+                    "type": "string",
+                    "enum": [
+                      "kg",
+                      "lb",
+                      "cm",
+                      "in",
+                      "percent",
+                      "bpm",
+                      "minute",
+                      "hour",
+                      "score_1_5"
+                    ]
+                  },
+                  "source": {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "enum": ["manual", "device", "imported", "ai_estimate"]
+                      },
+                      "metadata": {
+                        "type": "object",
+                        "properties": {
+                          "provider": { "type": "string", "minLength": 1, "maxLength": 80 },
+                          "externalId": { "type": "string", "minLength": 1, "maxLength": 160 },
+                          "deviceName": { "type": "string", "minLength": 1, "maxLength": 120 },
+                          "modelVersion": { "type": "string", "minLength": 1, "maxLength": 120 },
+                          "promptVersion": { "type": "string", "minLength": 1, "maxLength": 120 }
+                        },
+                        "additionalProperties": false
+                      }
+                    },
+                    "required": ["kind"],
+                    "additionalProperties": false
+                  },
+                  "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+                  "status": { "type": "string", "enum": ["candidate", "confirmed"] },
+                  "occurredAt": {
+                    "type": "string",
+                    "format": "date-time",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                  },
+                  "timezone": { "type": "string", "minLength": 1, "maxLength": 64 }
+                },
+                "required": [
+                  "metric",
+                  "value",
+                  "unit",
+                  "source",
+                  "status",
+                  "occurredAt",
+                  "timezone"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "userId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "metric": {
+                      "type": "string",
+                      "enum": [
+                        "body.weight",
+                        "body.waist",
+                        "body.body_fat",
+                        "body.resting_heart_rate",
+                        "recovery.sleep_duration",
+                        "recovery.sleep_quality",
+                        "recovery.soreness",
+                        "recovery.energy",
+                        "recovery.stress"
+                      ]
+                    },
+                    "canonicalValue": { "type": "number" },
+                    "canonicalUnit": {
+                      "type": "string",
+                      "enum": [
+                        "kg",
+                        "lb",
+                        "cm",
+                        "in",
+                        "percent",
+                        "bpm",
+                        "minute",
+                        "hour",
+                        "score_1_5"
+                      ]
+                    },
+                    "displayValue": { "type": "number" },
+                    "displayUnit": {
+                      "type": "string",
+                      "enum": [
+                        "kg",
+                        "lb",
+                        "cm",
+                        "in",
+                        "percent",
+                        "bpm",
+                        "minute",
+                        "hour",
+                        "score_1_5"
+                      ]
+                    },
+                    "source": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": ["manual", "device", "imported", "ai_estimate"]
+                        },
+                        "metadata": {
+                          "type": "object",
+                          "properties": {
+                            "provider": { "type": "string", "minLength": 1, "maxLength": 80 },
+                            "externalId": { "type": "string", "minLength": 1, "maxLength": 160 },
+                            "deviceName": { "type": "string", "minLength": 1, "maxLength": 120 },
+                            "modelVersion": { "type": "string", "minLength": 1, "maxLength": 120 },
+                            "promptVersion": { "type": "string", "minLength": 1, "maxLength": 120 }
+                          },
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": ["kind"],
+                      "additionalProperties": false
+                    },
+                    "confidence": {
+                      "nullable": true,
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "status": { "type": "string", "enum": ["candidate", "confirmed"] },
+                    "occurredAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "timezone": { "type": "string" },
+                    "revision": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "exclusiveMinimum": true,
+                      "maximum": 9007199254740991
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "updatedAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "userId",
+                    "metric",
+                    "canonicalValue",
+                    "canonicalUnit",
+                    "displayValue",
+                    "displayUnit",
+                    "source",
+                    "confidence",
+                    "status",
+                    "occurredAt",
+                    "timezone",
+                    "revision",
+                    "createdAt",
+                    "updatedAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": { "description": "Contract, provenance, timezone, unit or range is invalid." },
+          "409": { "description": "Idempotency key was reused with different content." }
+        },
+        "summary": "Create an idempotent body or recovery measurement",
+        "tags": ["health records"]
+      },
+      "get": {
+        "operationId": "HealthRecordsController_list",
+        "parameters": [
+          {
+            "name": "x-demo-user-id",
+            "in": "header",
+            "description": "Temporary local identity boundary; replaced by authenticated user context later.",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "userId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "metric": {
+                            "type": "string",
+                            "enum": [
+                              "body.weight",
+                              "body.waist",
+                              "body.body_fat",
+                              "body.resting_heart_rate",
+                              "recovery.sleep_duration",
+                              "recovery.sleep_quality",
+                              "recovery.soreness",
+                              "recovery.energy",
+                              "recovery.stress"
+                            ]
+                          },
+                          "canonicalValue": { "type": "number" },
+                          "canonicalUnit": {
+                            "type": "string",
+                            "enum": [
+                              "kg",
+                              "lb",
+                              "cm",
+                              "in",
+                              "percent",
+                              "bpm",
+                              "minute",
+                              "hour",
+                              "score_1_5"
+                            ]
+                          },
+                          "displayValue": { "type": "number" },
+                          "displayUnit": {
+                            "type": "string",
+                            "enum": [
+                              "kg",
+                              "lb",
+                              "cm",
+                              "in",
+                              "percent",
+                              "bpm",
+                              "minute",
+                              "hour",
+                              "score_1_5"
+                            ]
+                          },
+                          "source": {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "enum": ["manual", "device", "imported", "ai_estimate"]
+                              },
+                              "metadata": {
+                                "type": "object",
+                                "properties": {
+                                  "provider": { "type": "string", "minLength": 1, "maxLength": 80 },
+                                  "externalId": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 160
+                                  },
+                                  "deviceName": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 120
+                                  },
+                                  "modelVersion": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 120
+                                  },
+                                  "promptVersion": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 120
+                                  }
+                                },
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": ["kind"],
+                            "additionalProperties": false
+                          },
+                          "confidence": {
+                            "nullable": true,
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 1
+                          },
+                          "status": { "type": "string", "enum": ["candidate", "confirmed"] },
+                          "occurredAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                          },
+                          "timezone": { "type": "string" },
+                          "revision": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "exclusiveMinimum": true,
+                            "maximum": 9007199254740991
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                          },
+                          "updatedAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "userId",
+                          "metric",
+                          "canonicalValue",
+                          "canonicalUnit",
+                          "displayValue",
+                          "displayUnit",
+                          "source",
+                          "confidence",
+                          "status",
+                          "occurredAt",
+                          "timezone",
+                          "revision",
+                          "createdAt",
+                          "updatedAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": ["items"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "summary": "List the latest 100 measurements for the demo user",
+        "tags": ["health records"]
+      }
+    }
+  },
+  "info": {
+    "title": "MyFitness API",
+    "description": "Privacy-first record API. AI-derived values remain candidates until explicit confirmation.",
+    "version": "0.1.0",
+    "contact": {}
+  },
+  "tags": [],
+  "servers": [],
+  "components": { "schemas": {} }
+}

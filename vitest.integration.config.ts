@@ -14,10 +14,9 @@ export default defineConfig({
     },
   },
   test: {
-    coverage: {
-      reporter: ['text', 'html'],
-    },
-    exclude: ['**/*.integration.spec.ts', '**/node_modules/**', '**/dist/**'],
-    include: ['packages/**/*.test.ts', 'apps/**/*.test.ts'],
+    exclude: ['**/node_modules/**', '**/dist/**'],
+    fileParallelism: false,
+    include: ['apps/**/*.integration.spec.ts'],
+    testTimeout: 20_000,
   },
 })
