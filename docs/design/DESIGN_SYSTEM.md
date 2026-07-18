@@ -1,6 +1,6 @@
 # Design system baseline
 
-Status: implemented and visually validated through iteration-009 review-only AI plan explanations
+Status: implemented and visually validated through iteration-010 revocable food-photo candidates
 
 Working brand: 衡迹 / MyFitness
 
@@ -202,6 +202,19 @@ Reviewed evidence:
 - [1440 × 1100 wide secondary-evidence capture](../../output/playwright/iteration-009-ai-wide.png)
 
 The production-browser review exposed Taro custom-element semantics: a rendered `disabled` attribute was not recognized as native disabled state, and the visual checkbox had no accessible checkbox role. The page now emits explicit checkbox and `aria-disabled` states through the shared compatibility helper. Both new AI scenarios pass without captured script/console errors. Still open: keyboard activation for all custom roles across WeApp/H5, system large text, 320 px, offline/provider-latency states and screen-reader testing on real devices.
+
+## Implementation review — iteration 010
+
+The **Photo Proof / 食物校样条** extends the logbook's estimated-state grammar into a real sensitive-media workflow. A private preview carries one diagonal amber `未确认 / PROOF` stamp; numbered candidate slips show a confidence word, visual basis, broad gram band and editable confirmation field. It avoids chatbot/sparkle decoration and never colors foods as good or bad. Fixture mode is labeled “非真实识别”.
+
+Before selection, the sheet states purpose, metadata removal, 24-hour maximum retention and immediate deletion conditions, then requires a per-request consent control. After confirmation, the proof disappears and copy says the photo was deleted while the meal is still unsaved. Failure has a distinct `MEDIA DELETED` state and routes back to the manual catalog instead of displaying fabricated candidates.
+
+Reviewed evidence:
+
+- [390 × 844 mobile photo proof](../../output/playwright/iteration-010-food-photo-mobile.png)
+- [1440 × 1000 wide proof/candidate split](../../output/playwright/iteration-010-food-photo-wide.png)
+
+The browser review found that Taro H5 does not expose its custom `disabled` attribute as native disabled semantics, so the upload action now also emits `aria-disabled`. It also exposed Taro's credentialed multipart CORS behavior and a corrupt test-image fixture; both were fixed at the implementation/test boundary. Mobile and wide scenarios complete with zero captured page/console errors. Open items remain real-device camera/permission copy, large text, 320 px, screen readers, offline upload recovery and production-provider latency/refusal states.
 
 ## Screenshot review checklist
 

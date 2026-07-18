@@ -24,6 +24,10 @@ Local routes after `pnpm db:up`, `pnpm db:migrate`, and `pnpm dev:api`:
 - Meal history: `GET http://127.0.0.1:3100/v1/nutrition/meals/:mealId/history`
 - Favorite foods: `GET http://127.0.0.1:3100/v1/nutrition/favorites`
 - Favorite lifecycle: `PUT/DELETE http://127.0.0.1:3100/v1/nutrition/favorites/:foodKey`
+- Food-photo reservation/list: `POST/GET http://127.0.0.1:3100/v1/nutrition/photo-candidates`
+- Food-photo private upload: `POST http://127.0.0.1:3100/v1/nutrition/photo-candidates/:photoId/upload?token=...`
+- Food-photo signed preview: `GET http://127.0.0.1:3100/v1/nutrition/photo-candidates/:photoId/preview?token=...`
+- Food-photo confirm/delete: `POST .../:photoId/confirm` / `DELETE .../:photoId`
 - Today and trends: `GET http://127.0.0.1:3100/v1/insights/dashboard?timezone=Asia%2FShanghai`
 - Weekly-plan generation/list: `POST/GET http://127.0.0.1:3100/v1/plans/weekly`
 - Weekly-plan decision: `PUT http://127.0.0.1:3100/v1/plans/weekly/:planId/decision`
@@ -44,3 +48,5 @@ Meal creation follows the same lifecycle headers. Each item contains an immutabl
 Weekly-plan generation requires `x-idempotency-key` and a Monday `weekStart`. An unchanged profile/week returns the current aggregate; a changed onboarding revision regenerates that aggregate as a new draft revision. Decisions carry `expectedRevision`; `modify` may submit only contract-listed substitutions, while `accept`, `modify` and `skip` append immutable snapshots. Generation and actionable decisions re-check current professional-clearance eligibility. The deterministic plan contains general training and qualitative meal/hydration focuses, not medical or calorie prescriptions.
 
 AI explanation generation also requires `x-idempotency-key`, the exact `expectedPlanRevision`, and affirmative purpose/version consent. It re-checks ownership, current onboarding and risk eligibility, then sends only a minimized structured plan summary to the internal worker. The response always identifies `model`, `fixture`, or `fallback` source plus prompt/validator/model provenance; it never mutates the weekly plan. Local Compose defaults to `AI_PROVIDER=fixture`. Enabling `openai` additionally requires `OPENAI_API_KEY` and release approval for provider privacy, region, cost, latency and quality gates.
+
+Food-photo reservation requires `x-idempotency-key` and current affirmative purpose/version consent. The signed upload accepts one bounded JPEG/PNG/still WebP multipart `file`; the API re-encodes it before private storage or worker access. Candidates expose ranges and provenance, never create a meal, and confirmation accepts only displayed catalog keys/grams before deleting media and returning unsaved draft inputs. The signed preview is short-lived and is not a public asset URL.

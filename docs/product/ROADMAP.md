@@ -2,7 +2,7 @@
 
 The roadmap is organized as controlled iterations. A round may take several working sessions, but it ends only after implementation, validation, archive update, and a commit.
 
-Progress snapshot (2026-07-19): iterations 0–9 are complete locally; iteration 10 is next. The product now covers authenticated records, Today/trends, versioned deterministic plans, and consented review-only AI explanations on H5/WeApp. Production model/provider enablement remains gated.
+Progress snapshot (2026-07-19): iterations 0–10 are complete locally; iteration 11 is next. The product now covers authenticated records, Today/trends, versioned deterministic plans, consented review-only AI explanations, and revocable food-photo candidates on H5/WeApp. Production model/provider and shared deployment remain gated.
 
 | Iteration | Primary scope                                       | Exit evidence                                                                              |
 | --------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------ |

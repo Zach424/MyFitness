@@ -1,6 +1,6 @@
 # Architecture baseline
 
-Status: accepted and implemented through the iteration-009 review-only AI explanation loop; changes require an ADR.
+Status: accepted and implemented through the iteration-010 revocable food-photo proposal loop; changes require an ADR.
 
 ## System shape
 
@@ -50,6 +50,7 @@ Implemented foundation:
 - A deterministic weekly-plan aggregate snapshots onboarding revision and evidence, stores the current JSONB plan plus immutable revisions, and re-checks current eligibility before an accept/modify transition.
 - A FastAPI worker exposes an authenticated provider-neutral explanation endpoint. Local fixture and OpenAI Responses adapters share a strict schema; the business API owns consent, authorization, idempotency, validation, fallback and persistence.
 - AI explanation runs are minimized, fingerprinted and bound to the exact plan revision plus prompt/model/validator/consent provenance. Raw prompts and input payloads are not persisted.
+- Food-photo reservations keep the raw upload in memory, sanitize to a private expiring JPEG, send only that JPEG plus a catalog allow-list to the worker, validate candidates deterministically and delete media on confirm/failure/reject/delete/expiry.
 
 ## Data rules
 
@@ -78,10 +79,12 @@ The deterministic weekly-plan rules, evidence provenance, revision lifecycle and
 
 The review-only AI boundary, minimization, provider contract, validation and fallback are documented in [AI_EXPLANATION_MODEL.md](AI_EXPLANATION_MODEL.md). ADR-0009 records why explanations cannot mutate plans or confirmed records.
 
+The private media lifecycle, candidate contract, vision provider boundary and no-auto-write rule are documented in [FOOD_PHOTO_MODEL.md](FOOD_PHOTO_MODEL.md). ADR-0010 records why images and model output remain revocable proposals.
+
 ## API and event conventions
 
 - HTTP JSON contracts are defined in `packages/contracts` and exposed as OpenAPI.
-- Client-generated idempotency keys protect record creation and photo confirmation.
+- Client-generated idempotency keys protect record creation and photo reservation.
 - Mutations use optimistic concurrency or revision numbers where edits can conflict.
 - Background jobs carry opaque media IDs, never public object URLs.
 - Logs exclude raw health payloads, images, access tokens, full prompts, and direct identifiers.

@@ -6,14 +6,16 @@ import json
 import httpx
 
 from app.config import Settings
-from app.providers import OpenAIProvider, fixture_content
-from tests.fixtures import worker_request
+from app.providers import OpenAIProvider, fixture_content, fixture_food_photo_content
+from tests.fixtures import food_photo_worker_request, worker_request
 
 
 def settings() -> Settings:
     return Settings(
         provider="openai",
         model="gpt-5.6-terra",
+        vision_model="gpt-5.6-terra",
+        vision_detail="high",
         reasoning_effort="low",
         request_timeout_seconds=5,
         service_token="myfitness-ai-local",
@@ -95,3 +97,35 @@ def test_openai_provider_treats_refusal_as_typed_failure() -> None:
 
     assert result.status == "failed"
     assert result.failure_code == "provider_refusal"
+
+
+def test_food_photo_provider_uses_high_detail_strict_non_stored_vision_input() -> None:
+    captured: dict[str, object] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured.update(json.loads(request.content))
+        content = fixture_food_photo_content(food_photo_worker_request()).model_dump_json(by_alias=True)
+        return httpx.Response(
+            200,
+            json={
+                "id": "resp_photo",
+                "model": "gpt-5.6-terra",
+                "status": "completed",
+                "output": [
+                    {"type": "message", "content": [{"type": "output_text", "text": content}]}
+                ],
+                "usage": {"input_tokens": 200, "output_tokens": 90},
+            },
+        )
+
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            return await OpenAIProvider(settings(), client).generate_food_photo(food_photo_worker_request())
+
+    result = asyncio.run(run())
+    image_input = captured["input"][1]["content"][1]  # type: ignore[index]
+    assert result.status == "generated"
+    assert captured["store"] is False
+    assert captured["text"]["format"]["strict"] is True  # type: ignore[index]
+    assert image_input["type"] == "input_image"
+    assert image_input["detail"] == "high"

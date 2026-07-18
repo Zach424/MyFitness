@@ -7,8 +7,12 @@ import type {
   DevSession,
   FavoriteFood,
   FavoriteFoodInput,
+  FoodPhotoAnalysis,
+  FoodPhotoConfirmation,
+  FoodPhotoTicket,
   GenerateWeeklyPlan,
   GenerateAiExplanation,
+  ConfirmFoodPhotoCandidate,
   HealthRecord,
   HealthRecordHistoryItem,
   Meal,
@@ -24,6 +28,7 @@ import type {
   Workout,
   WorkoutHistoryItem,
 } from '@myfitness/contracts'
+import { foodPhotoConsentVersion } from '@myfitness/contracts'
 import Taro from '@tarojs/taro'
 
 const API_BASE_URL = __API_BASE_URL__.replace(/\/$/, '')
@@ -79,6 +84,8 @@ const getAccessToken = async () => {
   if (stored) return stored
   return (await requestDevSession()).accessToken
 }
+
+const privateApiUrl = (path: string) => `${API_BASE_URL.replace(/\/v1$/, '')}${path}`
 
 const authenticatedRequest = async <T>(
   path: string,
@@ -198,6 +205,60 @@ export const saveFavoriteFood = (payload: FavoriteFoodInput) =>
 export const deleteFavoriteFood = (foodKey: string) =>
   authenticatedRequest<void>(`/nutrition/favorites/${encodeURIComponent(foodKey)}`, 'DELETE')
 
+export const reserveFoodPhoto = (idempotencyKey: string) =>
+  authenticatedRequest<FoodPhotoTicket>(
+    '/nutrition/photo-candidates',
+    'POST',
+    {
+      consent: {
+        granted: true,
+        version: foodPhotoConsentVersion,
+      },
+    },
+    { 'x-idempotency-key': idempotencyKey },
+  )
+
+export const uploadFoodPhoto = async (
+  uploadPath: string,
+  filePath: string,
+  retry = true,
+): Promise<FoodPhotoAnalysis> => {
+  const token = await getAccessToken()
+  const response = await Taro.uploadFile({
+    url: privateApiUrl(uploadPath),
+    filePath,
+    name: 'file',
+    header: { authorization: `Bearer ${token}` },
+  })
+  let body: unknown
+  try {
+    body = typeof response.data === 'string' ? JSON.parse(response.data) : response.data
+  } catch {
+    body = { message: '图片分析返回了无法读取的内容' }
+  }
+  if (response.statusCode === 401 && retry) {
+    Taro.removeStorageSync(TOKEN_KEY)
+    return uploadFoodPhoto(uploadPath, filePath, false)
+  }
+  if (response.statusCode < 200 || response.statusCode >= 300) {
+    throw new ApiError(response.statusCode, body as ApiErrorBody)
+  }
+  return body as FoodPhotoAnalysis
+}
+
+export const listFoodPhotoCandidates = () =>
+  authenticatedRequest<{ items: FoodPhotoAnalysis[] }>('/nutrition/photo-candidates', 'GET')
+
+export const confirmFoodPhotoCandidate = (photoId: string, payload: ConfirmFoodPhotoCandidate) =>
+  authenticatedRequest<FoodPhotoConfirmation>(
+    `/nutrition/photo-candidates/${photoId}/confirm`,
+    'POST',
+    payload,
+  )
+
+export const deleteFoodPhotoCandidate = (photoId: string) =>
+  authenticatedRequest<void>(`/nutrition/photo-candidates/${photoId}`, 'DELETE')
+
 export const getDashboard = (timezone: string) =>
   authenticatedRequest<Dashboard>(
     `/insights/dashboard?timezone=${encodeURIComponent(timezone)}`,
@@ -241,3 +302,4 @@ export const getAiExplanationHistory = async (planId: string) =>
   ).items
 
 export const apiBaseUrl = API_BASE_URL
+export const privatePhotoUrl = privateApiUrl

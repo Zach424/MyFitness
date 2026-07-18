@@ -5,6 +5,7 @@ import { starterFoodCatalog } from '@myfitness/contracts/nutrition.constants'
 import {
   buildMealRequest,
   draftFromCatalog,
+  draftsFromPhotoConfirmation,
   draftFromMeal,
   initialMealDraft,
   mealDraftSummary,
@@ -12,6 +13,17 @@ import {
 } from './nutrition.model'
 
 describe('nutrition page model', () => {
+  it('maps confirmed photo candidates to gram-based unsaved food drafts', () => {
+    const items = draftsFromPhotoConfirmation([
+      { catalogKey: 'rice_cooked', grams: 165 },
+      { catalogKey: 'chicken_breast_cooked', grams: 120 },
+    ])
+    expect(items.map((item) => [item.food.foodKey, item.amount, item.unit])).toEqual([
+      ['rice_cooked', '165', 'g'],
+      ['chicken_breast_cooked', '120', 'g'],
+    ])
+  })
+
   it('builds canonical grams and a deterministic meal preview', () => {
     const draft = initialMealDraft()
     draft.items = [draftFromCatalog(starterFoodCatalog[0]), draftFromCatalog(starterFoodCatalog[1])]

@@ -12,6 +12,7 @@ const configureApplication = (app: INestApplication) => {
       'http://localhost:10086',
     ],
     allowedHeaders: ['Authorization', 'Content-Type', 'x-idempotency-key', 'x-expected-revision'],
+    credentials: true,
   })
   app.enableShutdownHooks()
   mountOpenApi(app)

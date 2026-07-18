@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Button, Input, ScrollView, Text, Textarea, View } from '@tarojs/components'
+import { Button, Image, Input, ScrollView, Text, Textarea, View } from '@tarojs/components'
 import Taro from '@tarojs/taro'
 import type {
   FavoriteFood,
+  FoodPhotoAnalysis,
   FoodServing,
   FoodSnapshot,
   Meal,
@@ -13,19 +14,26 @@ import { starterFoodCatalog } from '@myfitness/contracts/nutrition.constants'
 import { buttonA11yProps } from '../../lib/accessibility'
 import {
   ApiError,
+  confirmFoodPhotoCandidate,
   createMeal,
+  deleteFoodPhotoCandidate,
   deleteFavoriteFood,
   deleteMeal,
   getMealHistory,
+  listFoodPhotoCandidates,
   listFavoriteFoods,
   listMeals,
+  privatePhotoUrl,
+  reserveFoodPhoto,
   saveFavoriteFood,
   updateMeal,
+  uploadFoodPhoto,
 } from '../../lib/api'
 import {
   buildMealRequest,
   createCustomFoodDraft,
   draftFromCatalog,
+  draftsFromPhotoConfirmation,
   draftFromMeal,
   draftFromSavedFood,
   initialMealDraft,
@@ -74,10 +82,15 @@ const displayTime = (value: string) =>
 const requestKey = () =>
   `meal-${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`}`
 
+const photoRequestKey = () =>
+  `food-photo-${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`}`
+
 const messageOf = (error: unknown) =>
   error instanceof ApiError || error instanceof Error ? error.message : '操作失败，请稍后重试'
 
 type SavedFood = { food: FoodSnapshot; defaultServing: FoodServing }
+
+const confidenceLabels = { low: '低置信', medium: '中置信', high: '高置信' } as const
 
 const NutritionPage = () => {
   const [draft, setDraft] = useState<MealDraft>(initialMealDraft)
@@ -101,14 +114,42 @@ const NutritionPage = () => {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [feedback, setFeedback] = useState('')
+  const [photoConsent, setPhotoConsent] = useState(false)
+  const [photoAnalysis, setPhotoAnalysis] = useState<FoodPhotoAnalysis>()
+  const [photoSelected, setPhotoSelected] = useState<string[]>([])
+  const [photoGrams, setPhotoGrams] = useState<Record<string, string>>({})
+  const [photoBusy, setPhotoBusy] = useState(false)
   const pendingKey = useRef('')
+
+  const showPhotoAnalysis = (analysis: FoodPhotoAnalysis) => {
+    setPhotoAnalysis(analysis)
+    const candidates = analysis.content?.candidates ?? []
+    setPhotoSelected(candidates.map((candidate) => candidate.catalogKey))
+    setPhotoGrams(
+      Object.fromEntries(
+        candidates.map((candidate) => [
+          candidate.catalogKey,
+          String(
+            Math.round((candidate.portionRange.minGrams + candidate.portionRange.maxGrams) / 2),
+          ),
+        ]),
+      ),
+    )
+  }
 
   useEffect(() => {
     void (async () => {
       try {
-        const [mealResult, favoriteResult] = await Promise.all([listMeals(), listFavoriteFoods()])
+        const [mealResult, favoriteResult, photoResult] = await Promise.all([
+          listMeals(),
+          listFavoriteFoods(),
+          listFoodPhotoCandidates(),
+        ])
         setMeals(mealResult.items)
         setFavorites(favoriteResult.items)
+        const reviewable =
+          photoResult.items.find((item) => item.status === 'ready') ?? photoResult.items[0]
+        if (reviewable) showPhotoAnalysis(reviewable)
       } catch (error) {
         setFeedback(messageOf(error))
       } finally {
@@ -180,6 +221,108 @@ const NutritionPage = () => {
     })
     setCustomOpen(false)
     setFeedback('自定义食物已加入；营养值按你填写的每 100g 快照计算。')
+  }
+
+  const choosePhoto = async () => {
+    if (!photoConsent) {
+      setFeedback('请先确认本次照片用途和删除规则。')
+      return
+    }
+    setPhotoBusy(true)
+    let reservedId = ''
+    try {
+      const selected = await Taro.chooseImage({
+        count: 1,
+        sizeType: ['original'],
+        sourceType: ['album', 'camera'],
+      })
+      const filePath = selected.tempFilePaths[0]
+      if (!filePath) throw new Error('没有读取到所选照片')
+      const ticket = await reserveFoodPhoto(photoRequestKey())
+      reservedId = ticket.id
+      const analysis = await uploadFoodPhoto(ticket.upload.path, filePath)
+      showPhotoAnalysis(analysis)
+      setPhotoConsent(false)
+      setFeedback(
+        analysis.status === 'ready'
+          ? '候选已生成。请逐项核对食物和份量；尚未写入餐次。'
+          : '照片未生成可用候选，媒体已删除；你仍可手动记录。',
+      )
+    } catch (error) {
+      if (reservedId) await deleteFoodPhotoCandidate(reservedId).catch(() => undefined)
+      const message = messageOf(error)
+      if (!message.toLowerCase().includes('cancel')) setFeedback(message)
+    } finally {
+      setPhotoBusy(false)
+    }
+  }
+
+  const togglePhotoCandidate = (catalogKey: string) => {
+    setPhotoSelected((current) =>
+      current.includes(catalogKey)
+        ? current.filter((key) => key !== catalogKey)
+        : [...current, catalogKey],
+    )
+  }
+
+  const discardPhoto = async () => {
+    if (!photoAnalysis) return
+    setPhotoBusy(true)
+    try {
+      await deleteFoodPhotoCandidate(photoAnalysis.id)
+      setPhotoAnalysis(undefined)
+      setPhotoSelected([])
+      setPhotoGrams({})
+      setFeedback('照片和衍生候选已删除。')
+    } catch (error) {
+      setFeedback(messageOf(error))
+    } finally {
+      setPhotoBusy(false)
+    }
+  }
+
+  const confirmPhoto = async () => {
+    if (!photoAnalysis?.content || photoAnalysis.status !== 'ready') return
+    const candidates = new Map(
+      photoAnalysis.content.candidates.map((candidate) => [candidate.catalogKey, candidate]),
+    )
+    const items = photoSelected.map((catalogKey) => ({
+      catalogKey,
+      grams: Number(photoGrams[catalogKey]),
+    }))
+    if (!items.length) {
+      setFeedback('请至少选择一个候选，或删除校样后手动添加食物。')
+      return
+    }
+    for (const item of items) {
+      const candidate = candidates.get(item.catalogKey)
+      if (
+        !candidate ||
+        !Number.isInteger(item.grams) ||
+        item.grams < candidate.portionRange.minGrams ||
+        item.grams > candidate.portionRange.maxGrams
+      ) {
+        setFeedback('确认克重需要位于每个候选显示的区间内。')
+        return
+      }
+    }
+
+    setPhotoBusy(true)
+    try {
+      const confirmed = await confirmFoodPhotoCandidate(photoAnalysis.id, { items })
+      setDraft((current) => ({
+        ...current,
+        items: [...current.items, ...draftsFromPhotoConfirmation(confirmed.items)],
+      }))
+      setPhotoAnalysis(undefined)
+      setPhotoSelected([])
+      setPhotoGrams({})
+      setFeedback('候选已带入当前草稿，照片已删除；餐次尚未保存，请继续核对。')
+    } catch (error) {
+      setFeedback(messageOf(error))
+    } finally {
+      setPhotoBusy(false)
+    }
   }
 
   const isFavorite = (foodKey: string) =>
@@ -360,6 +503,166 @@ const NutritionPage = () => {
                     setDraft((current) => ({ ...current, title: event.detail.value }))
                   }
                 />
+              </View>
+
+              <View className="photo-proof">
+                <View className="photo-proof__heading">
+                  <View>
+                    <Text className="nutrition-eyebrow">PHOTO PROOF / 可撤销校样</Text>
+                    <Text className="photo-proof__title">从照片整理待确认食物</Text>
+                  </View>
+                  <Text className="photo-proof__index metric">AI · 01</Text>
+                </View>
+
+                {!photoAnalysis ? (
+                  <View className="photo-intake">
+                    <Text className="photo-intake__body">
+                      仅用于本次食物候选分析。服务端会重编码并移除照片元数据；照片最长保留 24
+                      小时，确认、删除或分析失败时立即删除。
+                    </Text>
+                    <Button
+                      {...buttonA11yProps}
+                      className={`photo-consent ${photoConsent ? 'photo-consent--active' : ''}`}
+                      aria-pressed={photoConsent}
+                      onClick={() => setPhotoConsent((current) => !current)}
+                    >
+                      <Text className="photo-consent__check">{photoConsent ? '✓' : '□'}</Text>
+                      <Text>我同意本次上传与上述处理</Text>
+                    </Button>
+                    <Button
+                      {...buttonA11yProps}
+                      className="photo-choose"
+                      disabled={!photoConsent || photoBusy}
+                      aria-disabled={!photoConsent || photoBusy}
+                      onClick={() => void choosePhoto()}
+                    >
+                      {photoBusy ? '正在制作校样…' : '选择一张餐食照片'}
+                    </Button>
+                    <Text className="photo-intake__formats metric">JPEG · PNG · WEBP / ≤ 6 MB</Text>
+                  </View>
+                ) : photoAnalysis.status === 'ready' ? (
+                  <View className="photo-review">
+                    <View className="photo-review__proof">
+                      <Image
+                        className="photo-review__image"
+                        src={privatePhotoUrl(photoAnalysis.previewPath!)}
+                        mode="aspectFill"
+                        aria-label="已移除元数据的私有餐食照片预览"
+                      />
+                      <View className="photo-review__stamp">未确认 / PROOF</View>
+                      <View className="photo-review__caption">
+                        <Text>
+                          {photoAnalysis.source === 'fixture'
+                            ? '本地演示夹具 · 非真实识别'
+                            : 'AI 图像候选 · 仍需人工确认'}
+                        </Text>
+                        <Text className="metric">24H AUTO DELETE</Text>
+                      </View>
+                    </View>
+
+                    <View className="photo-candidates">
+                      <Text className="photo-candidates__summary">
+                        {photoAnalysis.content?.summary}
+                      </Text>
+                      {(photoAnalysis.content?.candidates ?? []).map((candidate, index) => {
+                        const active = photoSelected.includes(candidate.catalogKey)
+                        return (
+                          <View className="photo-candidate" key={candidate.catalogKey}>
+                            <Button
+                              {...buttonA11yProps}
+                              className={`photo-candidate__select ${active ? 'photo-candidate__select--active' : ''}`}
+                              aria-pressed={active}
+                              aria-label={`${active ? '取消选择' : '选择'}${candidate.label}`}
+                              onClick={() => togglePhotoCandidate(candidate.catalogKey)}
+                            >
+                              <Text className="photo-candidate__number metric">
+                                {String(index + 1).padStart(2, '0')}
+                              </Text>
+                              <View>
+                                <Text className="photo-candidate__name">{candidate.label}</Text>
+                                <Text className="photo-candidate__basis">
+                                  {candidate.visualBasis}
+                                </Text>
+                              </View>
+                              <Text
+                                className={`photo-candidate__confidence photo-candidate__confidence--${candidate.confidence}`}
+                              >
+                                {confidenceLabels[candidate.confidence]}
+                              </Text>
+                            </Button>
+                            <View className="photo-candidate__portion">
+                              <Text className="metric">
+                                估计 {candidate.portionRange.minGrams}–
+                                {candidate.portionRange.maxGrams} g
+                              </Text>
+                              <View className="photo-candidate__input-wrap">
+                                <Input
+                                  className="photo-candidate__input metric"
+                                  type="number"
+                                  disabled={!active}
+                                  value={photoGrams[candidate.catalogKey] ?? ''}
+                                  aria-label={`${candidate.label}确认克重`}
+                                  onInput={(event) =>
+                                    setPhotoGrams((current) => ({
+                                      ...current,
+                                      [candidate.catalogKey]: event.detail.value,
+                                    }))
+                                  }
+                                />
+                                <Text>g</Text>
+                              </View>
+                            </View>
+                          </View>
+                        )
+                      })}
+                      {photoAnalysis.content?.needsManualEntry ? (
+                        <Text className="photo-candidates__manual">
+                          画面或目录不足以覆盖全部食物，请在下方食物库继续手动补充。
+                        </Text>
+                      ) : null}
+                    </View>
+
+                    <View className="photo-review__actions">
+                      <Button
+                        {...buttonA11yProps}
+                        className="photo-review__discard"
+                        disabled={photoBusy}
+                        onClick={() => void discardPhoto()}
+                      >
+                        删除校样
+                      </Button>
+                      <Button
+                        {...buttonA11yProps}
+                        className="photo-review__confirm"
+                        disabled={photoBusy}
+                        onClick={() => void confirmPhoto()}
+                      >
+                        {photoBusy ? '正在确认…' : `确认 ${photoSelected.length} 项并带入草稿`}
+                      </Button>
+                    </View>
+                    <Text className="photo-review__warning">
+                      确认只会填充当前草稿；你仍需检查营养参考值并点击“保存餐次”。
+                    </Text>
+                  </View>
+                ) : (
+                  <View className="photo-unavailable">
+                    <Text className="photo-review__stamp photo-review__stamp--deleted">
+                      MEDIA DELETED
+                    </Text>
+                    <Text className="photo-unavailable__title">没有生成可用候选</Text>
+                    <Text className="photo-unavailable__body">
+                      照片已删除，不会生成猜测记录。请使用下方食物库手动添加，或删除本条结果后重新尝试。
+                    </Text>
+                    <Button
+                      {...buttonA11yProps}
+                      className="photo-review__discard"
+                      disabled={photoBusy}
+                      onClick={() => void discardPhoto()}
+                    >
+                      删除衍生结果
+                    </Button>
+                  </View>
+                )}
               </View>
 
               <View className="food-picker">

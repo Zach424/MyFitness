@@ -1,6 +1,6 @@
 # Nutrition record model
 
-Status: implemented for manual meal records in iteration 006
+Status: implemented for manual meal records and revocable photo candidates through iteration 010
 
 Nutrition records are user-confirmed snapshots of food, portion and context. They support personal recall and later deterministic summaries; they are not dietary prescriptions, laboratory measurements or judgments about food quality.
 
@@ -56,6 +56,8 @@ Owner list/history/mutations are enforced by the API. Cross-user and absent reso
 
 “再记一次” copies the food and serving snapshots into a new draft, resets occurrence time and note, and then uses normal idempotent creation. It never mutates the previous meal or copies a server identity/revision.
 
-Food-photo assistance will be a separate proposal workflow: image processing can suggest candidate foods, portions, ranges and provenance, but cannot create a confirmed meal. The user must review/edit the proposal before this manual record contract is used. Image IDs, confidence, model/prompt versions and retention therefore do not appear prematurely in this migration.
+Food-photo assistance is a separate proposal aggregate. A private sanitized image can suggest catalog-bound foods, confidence words and portion ranges, but cannot create a meal or nutrient snapshot. The user selects and edits candidates; confirmation deletes the image and returns gram-based food drafts. Only the existing manual Save Meal path can create `nutrition_meals` and immutable meal revisions.
+
+Photo consent, media status, prompt/validator/provider/model provenance, failure, expiry and selected draft inputs live in `nutrition_photo_candidates`, not in historical meals. Media is removed on confirmation, rejection, failure, explicit delete or 24-hour expiry. The full boundary is documented in [FOOD_PHOTO_MODEL.md](FOOD_PHOTO_MODEL.md).
 
 The MVP excludes eating-disorder treatment, therapeutic diets and disease-specific advice. Later planning must screen the profile boundary and validate energy/macro changes before presenting them.

@@ -1,6 +1,9 @@
+import path from 'node:path'
+
 const localDatabaseUrl = 'postgresql://myfitness:myfitness_local@127.0.0.1:54329/myfitness'
 const localAiServiceUrl = 'http://127.0.0.1:8001'
 const localAiServiceToken = 'myfitness-ai-local'
+const localPhotoSigningSecret = 'myfitness-photo-local-signing-secret-2026'
 
 const parsePort = (value: string | undefined) => {
   const port = Number(value ?? 3100)
@@ -16,12 +19,23 @@ export const getRuntimeConfig = () => {
   const aiServiceUrl = process.env.AI_SERVICE_URL ?? (production ? undefined : localAiServiceUrl)
   const aiServiceToken =
     process.env.AI_SERVICE_TOKEN ?? (production ? undefined : localAiServiceToken)
+  const photoStorageRoot =
+    process.env.PHOTO_STORAGE_ROOT ??
+    (production ? undefined : path.resolve(process.cwd(), 'uploads/private'))
+  const photoSigningSecret =
+    process.env.PHOTO_UPLOAD_SIGNING_SECRET ?? (production ? undefined : localPhotoSigningSecret)
 
   if (!databaseUrl) {
     throw new Error('DATABASE_URL is required in production')
   }
   if (!aiServiceUrl || !aiServiceToken) {
     throw new Error('AI_SERVICE_URL and AI_SERVICE_TOKEN are required in production')
+  }
+  if (!photoStorageRoot || !photoSigningSecret) {
+    throw new Error('PHOTO_STORAGE_ROOT and PHOTO_UPLOAD_SIGNING_SECRET are required in production')
+  }
+  if (photoSigningSecret.length < 32) {
+    throw new Error('PHOTO_UPLOAD_SIGNING_SECRET must contain at least 32 characters')
   }
 
   const aiTimeoutMs = Number(process.env.AI_SERVICE_TIMEOUT_MS ?? 22_000)
@@ -35,5 +49,7 @@ export const getRuntimeConfig = () => {
     aiServiceUrl: aiServiceUrl.replace(/\/$/, ''),
     aiServiceToken,
     aiTimeoutMs,
+    photoStorageRoot: path.resolve(photoStorageRoot),
+    photoSigningSecret,
   }
 }

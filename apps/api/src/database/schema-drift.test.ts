@@ -12,6 +12,12 @@ import {
   equipmentOptions,
   exerciseCategories,
   foodCategories,
+  foodPhotoConsentPurpose,
+  foodPhotoPromptVersion,
+  foodPhotoProviders,
+  foodPhotoSources,
+  foodPhotoStatuses,
+  foodPhotoValidatorVersion,
   foodPortionUnits,
   loadUnits,
   experienceLevels,
@@ -65,6 +71,10 @@ const planMigrationPath = path.resolve(
 const aiMigrationPath = path.resolve(
   __dirname,
   '../../../../infra/postgres/migrations/0007_ai_explanations.sql',
+)
+const foodPhotoMigrationPath = path.resolve(
+  __dirname,
+  '../../../../infra/postgres/migrations/0008_food_photo_candidates.sql',
 )
 
 describe('health-record migration drift', () => {
@@ -153,6 +163,20 @@ describe('health-record migration drift', () => {
       aiPlanValidatorVersion,
     ]) {
       expect(migration, `${value} is missing from the AI migration`).toContain(`'${value}'`)
+    }
+  })
+
+  it('contains every food-photo lifecycle, provenance and contract version', async () => {
+    const migration = await readFile(foodPhotoMigrationPath, 'utf8')
+    for (const value of [
+      ...foodPhotoStatuses,
+      ...foodPhotoSources,
+      ...foodPhotoProviders,
+      foodPhotoConsentPurpose,
+      foodPhotoPromptVersion,
+      foodPhotoValidatorVersion,
+    ]) {
+      expect(migration, `${value} is missing from the food-photo migration`).toContain(`'${value}'`)
     }
   })
 })

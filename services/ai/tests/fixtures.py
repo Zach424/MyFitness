@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.models import WorkerRequest
+from app.models import FoodPhotoWorkerRequest, WorkerRequest
 
 
 def worker_request() -> WorkerRequest:
@@ -51,5 +51,24 @@ def worker_request() -> WorkerRequest:
                     "nutrition_focus",
                 ],
             },
+        }
+    )
+
+
+def food_photo_worker_request() -> FoodPhotoWorkerRequest:
+    return FoodPhotoWorkerRequest.model_validate(
+        {
+            "requestId": "33333333-3333-4333-8333-333333333333",
+            "promptVersion": "food-photo-candidates-v1",
+            "validatorVersion": "food-photo-catalog-safety-v1",
+            "imageDataUrl": "data:image/jpeg;base64,/9j/2Q==",
+            "allowedFoods": [
+                {"catalogKey": "rice_cooked", "label": "熟米饭", "category": "staple"},
+                {
+                    "catalogKey": "chicken_breast_cooked",
+                    "label": "熟鸡胸肉",
+                    "category": "protein",
+                },
+            ],
         }
     )

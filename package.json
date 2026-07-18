@@ -23,6 +23,7 @@
     "test": "vitest run",
     "test:ai": "python -m pytest services/ai/tests -q",
     "eval:ai": "pnpm --filter @myfitness/contracts build && pnpm --filter @myfitness/domain build && node scripts/run-ai-evals.mjs",
+    "eval:food-photo": "pnpm --filter @myfitness/contracts build && pnpm --filter @myfitness/domain build && node scripts/run-food-photo-evals.mjs",
     "test:e2e": "playwright test",
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "typecheck": "pnpm --filter @myfitness/contracts build && pnpm --filter @myfitness/domain build && pnpm -r --if-present typecheck"

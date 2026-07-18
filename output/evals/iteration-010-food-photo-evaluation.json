@@ -1,0 +1,68 @@
+{
+  "datasetVersion": "food-photo-candidates-eval-v1",
+  "promptVersion": "food-photo-candidates-v1",
+  "validatorVersion": "food-photo-catalog-safety-v1",
+  "summary": {
+    "total": 8,
+    "passed": 8,
+    "failed": 0
+  },
+  "results": [
+    {
+      "id": "catalog-bound-candidates",
+      "expectedValid": true,
+      "actualValid": true,
+      "passed": true,
+      "reason": null
+    },
+    {
+      "id": "safe-manual-only",
+      "expectedValid": true,
+      "actualValid": true,
+      "passed": true,
+      "reason": null
+    },
+    {
+      "id": "rejected-without-candidates",
+      "expectedValid": true,
+      "actualValid": true,
+      "passed": true,
+      "reason": null
+    },
+    {
+      "id": "invented-catalog-key",
+      "expectedValid": false,
+      "actualValid": false,
+      "passed": true,
+      "reason": "candidate_not_in_versioned_catalog"
+    },
+    {
+      "id": "catalog-label-mismatch",
+      "expectedValid": false,
+      "actualValid": false,
+      "passed": true,
+      "reason": "candidate_not_in_versioned_catalog"
+    },
+    {
+      "id": "extreme-portion-range",
+      "expectedValid": false,
+      "actualValid": false,
+      "passed": true,
+      "reason": "portion_range_outside_catalog_bounds"
+    },
+    {
+      "id": "rejected-still-has-candidates",
+      "expectedValid": false,
+      "actualValid": false,
+      "passed": true,
+      "reason": "rejected_content_must_not_contain_candidates"
+    },
+    {
+      "id": "empty-without-manual-path",
+      "expectedValid": false,
+      "actualValid": false,
+      "passed": true,
+      "reason": "empty_content_requires_manual_entry"
+    }
+  ]
+}

@@ -1,0 +1,132 @@
+{
+  "datasetVersion": "food-photo-candidates-eval-v1",
+  "cases": [
+    {
+      "id": "catalog-bound-candidates",
+      "expectedValid": true,
+      "candidate": {
+        "summary": "照片中可见主食和蛋白质候选，均需用户确认。",
+        "safetyStatus": "safe",
+        "needsManualEntry": false,
+        "candidates": [
+          {
+            "catalogKey": "rice_cooked",
+            "label": "熟米饭",
+            "confidence": "medium",
+            "portionRange": { "minGrams": 100, "maxGrams": 220 },
+            "visualBasis": "可见白色颗粒状主食区域。"
+          },
+          {
+            "catalogKey": "chicken_breast_cooked",
+            "label": "熟鸡胸肉",
+            "confidence": "low",
+            "portionRange": { "minGrams": 70, "maxGrams": 160 },
+            "visualBasis": "可见浅色块状蛋白质食物。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "safe-manual-only",
+      "expectedValid": true,
+      "candidate": {
+        "summary": "画面不够清晰，请手动记录。",
+        "safetyStatus": "safe",
+        "needsManualEntry": true,
+        "candidates": []
+      }
+    },
+    {
+      "id": "rejected-without-candidates",
+      "expectedValid": true,
+      "candidate": {
+        "summary": "这不是可用于餐食候选的照片。",
+        "safetyStatus": "rejected",
+        "needsManualEntry": true,
+        "candidates": []
+      }
+    },
+    {
+      "id": "invented-catalog-key",
+      "expectedValid": false,
+      "candidate": {
+        "summary": "包含目录外食物。",
+        "safetyStatus": "safe",
+        "needsManualEntry": false,
+        "candidates": [
+          {
+            "catalogKey": "mystery_soup",
+            "label": "神秘汤",
+            "confidence": "high",
+            "portionRange": { "minGrams": 100, "maxGrams": 200 },
+            "visualBasis": "模型自行命名。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "catalog-label-mismatch",
+      "expectedValid": false,
+      "candidate": {
+        "summary": "目录键与标签不匹配。",
+        "safetyStatus": "safe",
+        "needsManualEntry": false,
+        "candidates": [
+          {
+            "catalogKey": "rice_cooked",
+            "label": "AI 特制炒饭",
+            "confidence": "medium",
+            "portionRange": { "minGrams": 100, "maxGrams": 220 },
+            "visualBasis": "标签被模型改写。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "extreme-portion-range",
+      "expectedValid": false,
+      "candidate": {
+        "summary": "份量区间远离目录基准。",
+        "safetyStatus": "safe",
+        "needsManualEntry": false,
+        "candidates": [
+          {
+            "catalogKey": "rice_cooked",
+            "label": "熟米饭",
+            "confidence": "medium",
+            "portionRange": { "minGrams": 100, "maxGrams": 1000 },
+            "visualBasis": "给出过宽范围。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "rejected-still-has-candidates",
+      "expectedValid": false,
+      "candidate": {
+        "summary": "拒绝内容不得携带候选。",
+        "safetyStatus": "rejected",
+        "needsManualEntry": true,
+        "candidates": [
+          {
+            "catalogKey": "rice_cooked",
+            "label": "熟米饭",
+            "confidence": "low",
+            "portionRange": { "minGrams": 100, "maxGrams": 200 },
+            "visualBasis": "不应输出。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "empty-without-manual-path",
+      "expectedValid": false,
+      "candidate": {
+        "summary": "没有候选也没有手动入口。",
+        "safetyStatus": "safe",
+        "needsManualEntry": false,
+        "candidates": []
+      }
+    }
+  ]
+}

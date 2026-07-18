@@ -2883,6 +2883,564 @@
         "tags": ["nutrition"]
       }
     },
+    "/v1/nutrition/photo-candidates": {
+      "post": {
+        "operationId": "PhotoCandidatesController_reserve",
+        "parameters": [
+          {
+            "name": "x-idempotency-key",
+            "in": "header",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "consent": {
+                    "type": "object",
+                    "properties": {
+                      "granted": { "type": "boolean", "enum": [true] },
+                      "version": { "type": "string", "enum": ["food-photo-analysis-2026-07-19.v1"] }
+                    },
+                    "required": ["granted", "version"],
+                    "additionalProperties": false
+                  }
+                },
+                "required": ["consent"],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "status": { "type": "string", "enum": ["reserved"] },
+                    "upload": {
+                      "type": "object",
+                      "properties": {
+                        "path": {
+                          "type": "string",
+                          "pattern": "^\\/v1\\/nutrition\\/photo-candidates\\/.*"
+                        },
+                        "expiresAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                        },
+                        "maxBytes": { "type": "number", "enum": [6291456] },
+                        "acceptedContentTypes": {
+                          "type": "array",
+                          "items": {
+                            "anyOf": [
+                              { "type": "string", "enum": ["image/jpeg"] },
+                              { "type": "string", "enum": ["image/png"] },
+                              { "type": "string", "enum": ["image/webp"] }
+                            ]
+                          },
+                          "minItems": 3,
+                          "maxItems": 3
+                        }
+                      },
+                      "required": ["path", "expiresAt", "maxBytes", "acceptedContentTypes"],
+                      "additionalProperties": false
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    }
+                  },
+                  "required": ["id", "status", "upload", "createdAt", "expiresAt"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": { "description": "Explicit current-version consent is required." },
+          "401": { "description": "Bearer token is missing, invalid, expired or revoked." },
+          "409": { "description": "Reservation or consent state conflicts." }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Reserve a private, expiring food-photo analysis upload",
+        "tags": ["nutrition photo candidates"]
+      },
+      "get": {
+        "operationId": "PhotoCandidatesController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "status": { "type": "string", "enum": ["ready", "failed", "rejected"] },
+                          "previewPath": {
+                            "nullable": true,
+                            "type": "string",
+                            "pattern": "^\\/v1\\/nutrition\\/photo-candidates\\/.*"
+                          },
+                          "content": {
+                            "nullable": true,
+                            "type": "object",
+                            "properties": {
+                              "summary": { "type": "string", "minLength": 1, "maxLength": 180 },
+                              "safetyStatus": { "type": "string", "enum": ["safe", "rejected"] },
+                              "needsManualEntry": { "type": "boolean" },
+                              "candidates": {
+                                "maxItems": 5,
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "catalogKey": {
+                                      "type": "string",
+                                      "pattern": "^[a-z0-9_:-]{2,100}$"
+                                    },
+                                    "label": { "type": "string", "minLength": 1, "maxLength": 100 },
+                                    "confidence": {
+                                      "type": "string",
+                                      "enum": ["low", "medium", "high"]
+                                    },
+                                    "portionRange": {
+                                      "type": "object",
+                                      "properties": {
+                                        "minGrams": {
+                                          "type": "integer",
+                                          "minimum": 5,
+                                          "maximum": 2000
+                                        },
+                                        "maxGrams": {
+                                          "type": "integer",
+                                          "minimum": 5,
+                                          "maximum": 2000
+                                        }
+                                      },
+                                      "required": ["minGrams", "maxGrams"],
+                                      "additionalProperties": false
+                                    },
+                                    "visualBasis": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 180
+                                    }
+                                  },
+                                  "required": [
+                                    "catalogKey",
+                                    "label",
+                                    "confidence",
+                                    "portionRange",
+                                    "visualBasis"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              }
+                            },
+                            "required": [
+                              "summary",
+                              "safetyStatus",
+                              "needsManualEntry",
+                              "candidates"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "source": {
+                            "nullable": true,
+                            "type": "string",
+                            "enum": ["model", "fixture"]
+                          },
+                          "provider": {
+                            "nullable": true,
+                            "type": "string",
+                            "enum": ["fixture", "openai"]
+                          },
+                          "model": {
+                            "nullable": true,
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 120
+                          },
+                          "promptVersion": {
+                            "type": "string",
+                            "enum": ["food-photo-candidates-v1"]
+                          },
+                          "validatorVersion": {
+                            "type": "string",
+                            "enum": ["food-photo-catalog-safety-v1"]
+                          },
+                          "failureCode": {
+                            "nullable": true,
+                            "type": "string",
+                            "enum": [
+                              "provider_unavailable",
+                              "provider_timeout",
+                              "provider_refusal",
+                              "provider_error",
+                              "invalid_output",
+                              "safety_validation_failed"
+                            ]
+                          },
+                          "mediaDeleted": { "type": "boolean" },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                          },
+                          "expiresAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "status",
+                          "previewPath",
+                          "content",
+                          "source",
+                          "provider",
+                          "model",
+                          "promptVersion",
+                          "validatorVersion",
+                          "failureCode",
+                          "mediaDeleted",
+                          "createdAt",
+                          "expiresAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": ["items"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": { "description": "Bearer token is missing, invalid, expired or revoked." }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "List recent reviewable food-photo candidates",
+        "tags": ["nutrition photo candidates"]
+      }
+    },
+    "/v1/nutrition/photo-candidates/{photoId}/upload": {
+      "post": {
+        "operationId": "PhotoCandidatesController_upload",
+        "parameters": [
+          {
+            "name": "photoId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": ["file"],
+                "properties": { "file": { "type": "string", "format": "binary" } }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "status": { "type": "string", "enum": ["ready", "failed", "rejected"] },
+                    "previewPath": {
+                      "nullable": true,
+                      "type": "string",
+                      "pattern": "^\\/v1\\/nutrition\\/photo-candidates\\/.*"
+                    },
+                    "content": {
+                      "nullable": true,
+                      "type": "object",
+                      "properties": {
+                        "summary": { "type": "string", "minLength": 1, "maxLength": 180 },
+                        "safetyStatus": { "type": "string", "enum": ["safe", "rejected"] },
+                        "needsManualEntry": { "type": "boolean" },
+                        "candidates": {
+                          "maxItems": 5,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "catalogKey": { "type": "string", "pattern": "^[a-z0-9_:-]{2,100}$" },
+                              "label": { "type": "string", "minLength": 1, "maxLength": 100 },
+                              "confidence": { "type": "string", "enum": ["low", "medium", "high"] },
+                              "portionRange": {
+                                "type": "object",
+                                "properties": {
+                                  "minGrams": { "type": "integer", "minimum": 5, "maximum": 2000 },
+                                  "maxGrams": { "type": "integer", "minimum": 5, "maximum": 2000 }
+                                },
+                                "required": ["minGrams", "maxGrams"],
+                                "additionalProperties": false
+                              },
+                              "visualBasis": { "type": "string", "minLength": 1, "maxLength": 180 }
+                            },
+                            "required": [
+                              "catalogKey",
+                              "label",
+                              "confidence",
+                              "portionRange",
+                              "visualBasis"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": ["summary", "safetyStatus", "needsManualEntry", "candidates"],
+                      "additionalProperties": false
+                    },
+                    "source": { "nullable": true, "type": "string", "enum": ["model", "fixture"] },
+                    "provider": {
+                      "nullable": true,
+                      "type": "string",
+                      "enum": ["fixture", "openai"]
+                    },
+                    "model": {
+                      "nullable": true,
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 120
+                    },
+                    "promptVersion": { "type": "string", "enum": ["food-photo-candidates-v1"] },
+                    "validatorVersion": {
+                      "type": "string",
+                      "enum": ["food-photo-catalog-safety-v1"]
+                    },
+                    "failureCode": {
+                      "nullable": true,
+                      "type": "string",
+                      "enum": [
+                        "provider_unavailable",
+                        "provider_timeout",
+                        "provider_refusal",
+                        "provider_error",
+                        "invalid_output",
+                        "safety_validation_failed"
+                      ]
+                    },
+                    "mediaDeleted": { "type": "boolean" },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "status",
+                    "previewPath",
+                    "content",
+                    "source",
+                    "provider",
+                    "model",
+                    "promptVersion",
+                    "validatorVersion",
+                    "failureCode",
+                    "mediaDeleted",
+                    "createdAt",
+                    "expiresAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": { "description": "Image bytes or signed upload token are invalid." },
+          "401": { "description": "Bearer token is missing, invalid, expired or revoked." },
+          "409": { "description": "Reservation is no longer uploadable." }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Upload, sanitize and analyze one private food photo",
+        "tags": ["nutrition photo candidates"]
+      }
+    },
+    "/v1/nutrition/photo-candidates/{photoId}/preview": {
+      "get": {
+        "operationId": "PhotoCandidatesController_preview",
+        "parameters": [
+          {
+            "name": "photoId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": { "404": { "description": "Preview is deleted, expired or unavailable." } },
+        "summary": "Read a sanitized private preview using a short-lived signature",
+        "tags": ["nutrition photo candidates"]
+      }
+    },
+    "/v1/nutrition/photo-candidates/{photoId}/confirm": {
+      "post": {
+        "operationId": "PhotoCandidatesController_confirm",
+        "parameters": [
+          {
+            "name": "photoId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "items": {
+                    "minItems": 1,
+                    "maxItems": 5,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "catalogKey": { "type": "string", "pattern": "^[a-z0-9_:-]{2,100}$" },
+                        "grams": { "type": "integer", "minimum": 5, "maximum": 2000 }
+                      },
+                      "required": ["catalogKey", "grams"],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": ["items"],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "photoCandidateId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "status": { "type": "string", "enum": ["confirmed"] },
+                    "items": {
+                      "minItems": 1,
+                      "maxItems": 5,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "catalogKey": { "type": "string", "pattern": "^[a-z0-9_:-]{2,100}$" },
+                          "grams": { "type": "integer", "minimum": 5, "maximum": 2000 }
+                        },
+                        "required": ["catalogKey", "grams"],
+                        "additionalProperties": false
+                      }
+                    },
+                    "mediaDeleted": { "type": "boolean", "enum": [true] },
+                    "confirmedAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    }
+                  },
+                  "required": [
+                    "photoCandidateId",
+                    "status",
+                    "items",
+                    "mediaDeleted",
+                    "confirmedAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": { "description": "Bearer token is missing, invalid, expired or revoked." },
+          "404": { "description": "Photo candidate is unavailable for this user." },
+          "422": { "description": "Selection is outside displayed candidates or ranges." }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Confirm selected candidates and immediately delete the photo",
+        "tags": ["nutrition photo candidates"]
+      }
+    },
+    "/v1/nutrition/photo-candidates/{photoId}": {
+      "delete": {
+        "operationId": "PhotoCandidatesController_remove",
+        "parameters": [
+          {
+            "name": "photoId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "204": { "description": "Private photo and derived content were deleted." },
+          "401": { "description": "Bearer token is missing, invalid, expired or revoked." },
+          "404": { "description": "Photo candidate is unavailable for this user." }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Delete private photo media and derived candidate content",
+        "tags": ["nutrition photo candidates"]
+      }
+    },
     "/v1/me/onboarding": {
       "put": {
         "operationId": "OnboardingController_upsert",

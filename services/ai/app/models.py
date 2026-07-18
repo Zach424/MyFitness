@@ -122,3 +122,62 @@ class WorkerResponse(ContractModel):
         if self.status == "failed" and (self.content is not None or self.failure_code is None):
             raise ValueError("failed responses require a failure code only")
         return self
+
+
+class AllowedFood(ContractModel):
+    catalog_key: str = Field(pattern=r"^[a-z0-9_:-]{2,100}$")
+    label: str = Field(min_length=1, max_length=100)
+    category: Literal["staple", "protein", "vegetable", "fruit", "dairy", "snack", "custom"]
+
+
+class FoodPhotoPortionRange(ContractModel):
+    min_grams: int = Field(ge=5, le=2000)
+    max_grams: int = Field(ge=5, le=2000)
+
+    @model_validator(mode="after")
+    def ordered_range(self) -> "FoodPhotoPortionRange":
+        if self.max_grams < self.min_grams:
+            raise ValueError("maxGrams must be greater than or equal to minGrams")
+        return self
+
+
+class FoodPhotoCandidate(ContractModel):
+    catalog_key: str = Field(pattern=r"^[a-z0-9_:-]{2,100}$")
+    label: str = Field(min_length=1, max_length=100)
+    confidence: Literal["low", "medium", "high"]
+    portion_range: FoodPhotoPortionRange
+    visual_basis: str = Field(min_length=1, max_length=180)
+
+
+class FoodPhotoContent(ContractModel):
+    summary: str = Field(min_length=1, max_length=180)
+    safety_status: Literal["safe", "rejected"]
+    needs_manual_entry: bool
+    candidates: list[FoodPhotoCandidate] = Field(max_length=5)
+
+
+class FoodPhotoWorkerRequest(ContractModel):
+    request_id: str
+    prompt_version: Literal["food-photo-candidates-v1"]
+    validator_version: Literal["food-photo-catalog-safety-v1"]
+    image_data_url: str = Field(pattern=r"^data:image/jpeg;base64,", max_length=12_000_000)
+    allowed_foods: list[AllowedFood] = Field(min_length=1, max_length=100)
+
+
+class FoodPhotoWorkerResponse(ContractModel):
+    status: Literal["generated", "failed"]
+    provider: Literal["fixture", "openai"]
+    model: str = Field(min_length=1, max_length=120)
+    content: FoodPhotoContent | None
+    failure_code: FailureCode | None
+    provider_response_id: str | None = Field(default=None, max_length=200)
+    usage: WorkerUsage | None
+    latency_ms: int = Field(ge=0)
+
+    @model_validator(mode="after")
+    def state_matches_payload(self) -> "FoodPhotoWorkerResponse":
+        if self.status == "generated" and (self.content is None or self.failure_code is not None):
+            raise ValueError("generated responses require content only")
+        if self.status == "failed" and (self.content is not None or self.failure_code is None):
+            raise ValueError("failed responses require a failure code only")
+        return self

@@ -13,6 +13,9 @@ import { InsightsService } from './insights/insights.service'
 import { HealthController } from './health/health.controller'
 import { NutritionController } from './nutrition/nutrition.controller'
 import { NutritionService } from './nutrition/nutrition.service'
+import { PhotoCandidatesController } from './nutrition/photo-candidates.controller'
+import { PhotoCandidatesService } from './nutrition/photo-candidates.service'
+import { PhotoStorageService } from './nutrition/photo-storage.service'
 import { OnboardingController } from './onboarding/onboarding.controller'
 import { OnboardingService } from './onboarding/onboarding.service'
 import { PlansController } from './plans/plans.controller'
@@ -28,6 +31,7 @@ import { WorkoutsService } from './workouts/workouts.service'
     HealthRecordsController,
     InsightsController,
     NutritionController,
+    PhotoCandidatesController,
     OnboardingController,
     PlansController,
     WorkoutsController,
@@ -39,6 +43,8 @@ import { WorkoutsService } from './workouts/workouts.service'
     HealthRecordsService,
     InsightsService,
     NutritionService,
+    PhotoCandidatesService,
+    PhotoStorageService,
     OnboardingService,
     PlansService,
     SessionAuthGuard,

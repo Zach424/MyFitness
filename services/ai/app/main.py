@@ -5,7 +5,7 @@ import hmac
 from fastapi import Depends, FastAPI, Header, HTTPException
 
 from .config import Settings, load_settings
-from .models import WorkerRequest, WorkerResponse
+from .models import FoodPhotoWorkerRequest, FoodPhotoWorkerResponse, WorkerRequest, WorkerResponse
 from .providers import build_provider
 
 
@@ -38,3 +38,15 @@ async def health(current: Settings = Depends(settings)) -> dict[str, str]:
 @app.post("/v1/explanations", response_model=WorkerResponse, dependencies=[Depends(authorize)])
 async def explain(request: WorkerRequest, current: Settings = Depends(settings)) -> WorkerResponse:
     return await build_provider(current).generate(request)
+
+
+@app.post(
+    "/v1/food-photo-candidates",
+    response_model=FoodPhotoWorkerResponse,
+    dependencies=[Depends(authorize)],
+)
+async def food_photo_candidates(
+    request: FoodPhotoWorkerRequest,
+    current: Settings = Depends(settings),
+) -> FoodPhotoWorkerResponse:
+    return await build_provider(current).generate_food_photo(request)

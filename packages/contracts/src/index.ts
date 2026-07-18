@@ -1,4 +1,5 @@
 export * from './ai'
+export * from './food-photo'
 export * from './health-record'
 export * from './insights'
 export * from './nutrition'

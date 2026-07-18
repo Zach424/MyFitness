@@ -9,6 +9,8 @@ from typing import Literal
 class Settings:
     provider: Literal["fixture", "openai"]
     model: str
+    vision_model: str
+    vision_detail: Literal["low", "high"]
     reasoning_effort: Literal["none", "low", "medium"]
     request_timeout_seconds: float
     service_token: str
@@ -23,6 +25,10 @@ def load_settings() -> Settings:
     reasoning_effort = os.getenv("AI_REASONING_EFFORT", "low")
     if reasoning_effort not in {"none", "low", "medium"}:
         raise RuntimeError("AI_REASONING_EFFORT must be none, low or medium")
+
+    vision_detail = os.getenv("AI_VISION_DETAIL", "high")
+    if vision_detail not in {"low", "high"}:
+        raise RuntimeError("AI_VISION_DETAIL must be low or high")
 
     timeout = float(os.getenv("AI_REQUEST_TIMEOUT_SECONDS", "20"))
     if timeout < 1 or timeout > 60:
@@ -39,6 +45,8 @@ def load_settings() -> Settings:
     return Settings(
         provider=provider,  # type: ignore[arg-type]
         model=os.getenv("AI_MODEL", "gpt-5.6-terra"),
+        vision_model=os.getenv("AI_VISION_MODEL", "gpt-5.6-terra"),
+        vision_detail=vision_detail,  # type: ignore[arg-type]
         reasoning_effort=reasoning_effort,  # type: ignore[arg-type]
         request_timeout_seconds=timeout,
         service_token=service_token,

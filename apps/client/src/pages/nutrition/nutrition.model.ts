@@ -1,5 +1,6 @@
 import type {
   CreateMeal,
+  ConfirmFoodPhotoCandidate,
   FoodServing,
   FoodSnapshot,
   Meal,
@@ -54,6 +55,16 @@ export const draftFromCatalog = (entry: StarterFood): FoodDraft => ({
   unit: entry.defaultServing.unit,
   gramsPerUnit: entry.defaultServing.grams / entry.defaultServing.amount,
 })
+
+export const draftsFromPhotoConfirmation = (
+  items: ConfirmFoodPhotoCandidate['items'],
+): FoodDraft[] =>
+  items.map((item) => {
+    const catalog = starterFoodCatalog.find((entry) => entry.foodKey === item.catalogKey)
+    if (!catalog) throw new Error('照片候选已不在当前食物库中，请重新选择照片')
+    const draft = draftFromCatalog(catalog)
+    return { ...draft, amount: String(item.grams), unit: 'g', gramsPerUnit: 1 }
+  })
 
 export const createCustomFoodDraft = (input: {
   name: string
