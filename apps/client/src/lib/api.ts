@@ -1,4 +1,12 @@
-import type { DevSession, OnboardingRequest, OnboardingResponse } from '@myfitness/contracts'
+import type {
+  CreateHealthRecord,
+  DevSession,
+  HealthRecord,
+  HealthRecordHistoryItem,
+  OnboardingRequest,
+  OnboardingResponse,
+  UpdateHealthRecord,
+} from '@myfitness/contracts'
 import Taro from '@tarojs/taro'
 
 const API_BASE_URL = __API_BASE_URL__.replace(/\/$/, '')
@@ -57,8 +65,9 @@ const getAccessToken = async () => {
 
 const authenticatedRequest = async <T>(
   path: string,
-  method: 'GET' | 'PUT',
-  data?: OnboardingRequest,
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE',
+  data?: unknown,
+  headers: Record<string, string> = {},
   retry = true,
 ): Promise<T> => {
   const token = await getAccessToken()
@@ -69,12 +78,13 @@ const authenticatedRequest = async <T>(
     header: {
       authorization: `Bearer ${token}`,
       'content-type': 'application/json',
+      ...headers,
     },
   })
 
   if (response.statusCode === 401 && retry) {
     Taro.removeStorageSync(TOKEN_KEY)
-    return authenticatedRequest<T>(path, method, data, false)
+    return authenticatedRequest<T>(path, method, data, headers, false)
   }
   if (response.statusCode < 200 || response.statusCode >= 300) {
     throw new ApiError(response.statusCode, response.data as ApiErrorBody)
@@ -93,5 +103,27 @@ export const getOnboarding = async (): Promise<OnboardingResponse | undefined> =
 
 export const saveOnboarding = (payload: OnboardingRequest) =>
   authenticatedRequest<OnboardingResponse>('/me/onboarding', 'PUT', payload)
+
+export const listHealthRecords = () =>
+  authenticatedRequest<{ items: HealthRecord[] }>('/health-records', 'GET')
+
+export const createHealthRecord = (payload: CreateHealthRecord, idempotencyKey: string) =>
+  authenticatedRequest<HealthRecord>('/health-records', 'POST', payload, {
+    'x-idempotency-key': idempotencyKey,
+  })
+
+export const updateHealthRecord = (recordId: string, payload: UpdateHealthRecord) =>
+  authenticatedRequest<HealthRecord>(`/health-records/${recordId}`, 'PUT', payload)
+
+export const deleteHealthRecord = (recordId: string, expectedRevision: number) =>
+  authenticatedRequest<void>(`/health-records/${recordId}`, 'DELETE', undefined, {
+    'x-expected-revision': String(expectedRevision),
+  })
+
+export const getHealthRecordHistory = async (recordId: string) =>
+  authenticatedRequest<{ recordId: string; items: HealthRecordHistoryItem[] }>(
+    `/health-records/${recordId}/history`,
+    'GET',
+  )
 
 export const apiBaseUrl = API_BASE_URL

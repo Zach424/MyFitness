@@ -106,6 +106,80 @@ describe('health-record API with PostgreSQL', () => {
       .set('Authorization', `Bearer ${String(otherSession.body.accessToken)}`)
       .expect(200)
     expect(otherUserList.body.items).toEqual([])
+
+    const updateInput = { ...record, value: 165, expectedRevision: 1 }
+    const updated = await request(app.getHttpServer())
+      .put(`/v1/health-records/${String(first.body.id)}`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send(updateInput)
+      .expect(200)
+    expect(updated.body).toMatchObject({
+      id: first.body.id,
+      canonicalValue: 74.8427,
+      displayValue: 165,
+      revision: 2,
+    })
+
+    await request(app.getHttpServer())
+      .put(`/v1/health-records/${String(first.body.id)}`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send(updateInput)
+      .expect(409)
+
+    await request(app.getHttpServer())
+      .put(`/v1/health-records/${String(first.body.id)}`)
+      .set('Authorization', `Bearer ${String(otherSession.body.accessToken)}`)
+      .send({ ...updateInput, expectedRevision: 2 })
+      .expect(404)
+
+    const history = await request(app.getHttpServer())
+      .get(`/v1/health-records/${String(first.body.id)}/history`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200)
+    expect(history.body.recordId).toBe(first.body.id)
+    expect(history.body.items.map((item: { action: string }) => item.action)).toEqual([
+      'updated',
+      'created',
+    ])
+    expect(history.body.items.map((item: { revision: number }) => item.revision)).toEqual([2, 1])
+
+    await request(app.getHttpServer())
+      .get(`/v1/health-records/${String(first.body.id)}/history`)
+      .set('Authorization', `Bearer ${String(otherSession.body.accessToken)}`)
+      .expect(404)
+
+    await request(app.getHttpServer())
+      .delete(`/v1/health-records/${String(first.body.id)}`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('x-expected-revision', '2')
+      .expect(204)
+
+    const emptyList = await request(app.getHttpServer())
+      .get('/v1/health-records')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200)
+    expect(emptyList.body.items).toEqual([])
+
+    const deletedHistory = await request(app.getHttpServer())
+      .get(`/v1/health-records/${String(first.body.id)}/history`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200)
+    expect(
+      deletedHistory.body.items.map((item: { action: string; revision: number }) => [
+        item.action,
+        item.revision,
+      ]),
+    ).toEqual([
+      ['deleted', 3],
+      ['updated', 2],
+      ['created', 1],
+    ])
+
+    await request(app.getHttpServer())
+      .delete(`/v1/health-records/${String(first.body.id)}`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('x-expected-revision', '3')
+      .expect(404)
   })
 
   it('refuses to persist an AI estimate as confirmed fact', async () => {

@@ -12,6 +12,10 @@
     "./onboarding.constants": {
       "types": "./dist/onboarding.constants.d.ts",
       "default": "./dist/onboarding.constants.js"
+    },
+    "./health-record.constants": {
+      "types": "./dist/health-record.constants.d.ts",
+      "default": "./dist/health-record.constants.js"
     }
   },
   "files": [

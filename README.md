@@ -2,7 +2,7 @@
 
 面向普通健身人群的多端记录与 AI 规划产品。产品把身体、训练、饮食和恢复数据整理为可解释、可调整、可持续执行的个人计划。
 
-> 当前阶段：Adult onboarding / 第 3 轮已完成。仓库已提供 Taro 今日页与三步成人建档、NestJS API、服务端会话身份、版本化同意、健康记录契约、PostgreSQL 迁移和本地端到端验收；今日节律仍使用夹具，身体与恢复记录界面将在下一轮接入真实 API。
+> 当前阶段：Body & recovery records / 第 4 轮已完成。仓库已提供 Taro 今日页、成人建档和真实身体/恢复记录簿，NestJS API 支持服务端身份、版本化同意、记录增删改查、不可变历史与乐观锁，PostgreSQL 和生产浏览器闭环均已验收；今日节律仍使用夹具，下一轮进入训练记录。
 
 ## 产品边界
 
@@ -16,7 +16,7 @@
 ```text
 apps/
   client/          Taro + React：微信小程序与 H5
-  api/             NestJS：身份、建档、健康记录 API、OpenAPI 与迁移入口
+  api/             NestJS：身份、建档、记录生命周期 API、OpenAPI 与迁移入口
 packages/
   contracts/       Zod：跨端请求、响应和来源契约
   domain/          单位归一化、指标范围和确定性规则
@@ -86,6 +86,7 @@ Playwright 会复用或启动 API 与 H5 预览服务。`pnpm db:down` 会停止
 - [架构决策 0001](docs/architecture/decisions/0001-platform-architecture.md)
 - [架构决策 0002](docs/architecture/decisions/0002-health-record-contract.md)
 - [架构决策 0003](docs/architecture/decisions/0003-identity-onboarding-boundary.md)
+- [架构决策 0004](docs/architecture/decisions/0004-health-record-revision-lifecycle.md)
 - [健康记录数据模型](docs/architecture/HEALTH_RECORD_MODEL.md)
 - [身份与建档数据模型](docs/architecture/IDENTITY_PROFILE_MODEL.md)
 - [API 契约与 OpenAPI](docs/api/README.md)
@@ -93,10 +94,13 @@ Playwright 会复用或启动 API 与 H5 预览服务。`pnpm db:down` 会停止
 - [第 1 轮档案](docs/iterations/001-client-foundation.md)
 - [第 2 轮档案](docs/iterations/002-api-foundation.md)
 - [第 3 轮档案](docs/iterations/003-onboarding.md)
+- [第 4 轮档案](docs/iterations/004-body-recovery-records.md)
 - [移动端视觉证据](output/playwright/iteration-001-mobile.png)
 - [宽屏视觉证据](output/playwright/iteration-001-wide.png)
 - [建档移动端证据](output/playwright/iteration-003-onboarding-mobile.png)
 - [建档宽屏证据](output/playwright/iteration-003-onboarding-wide.png)
+- [记录移动端证据](output/playwright/iteration-004-records-mobile.png)
+- [记录宽屏证据](output/playwright/iteration-004-records-wide.png)
 
 ## 仓库同步说明
 

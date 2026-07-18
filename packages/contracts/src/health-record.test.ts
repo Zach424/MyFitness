@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import * as z from 'zod'
 
-import { createHealthRecordBaseSchema, createHealthRecordSchema } from './health-record'
+import {
+  createHealthRecordBaseSchema,
+  createHealthRecordSchema,
+  expectedRevisionHeaderSchema,
+  updateHealthRecordSchema,
+} from './health-record'
 
 const manualRecord = {
   metric: 'body.weight',
@@ -51,6 +56,16 @@ describe('health-record contract', () => {
     expect(
       createHealthRecordSchema.safeParse({ ...manualRecord, timezone: 'Shanghai/Local' }).success,
     ).toBe(false)
+  })
+
+  it('requires a positive optimistic revision for updates and deletes', () => {
+    expect(updateHealthRecordSchema.parse({ ...manualRecord, expectedRevision: 2 })).toMatchObject({
+      expectedRevision: 2,
+    })
+    expect(
+      updateHealthRecordSchema.safeParse({ ...manualRecord, expectedRevision: 0 }).success,
+    ).toBe(false)
+    expect(expectedRevisionHeaderSchema.parse('3')).toBe(3)
   })
 
   it('emits an OpenAPI-compatible JSON schema from the base contract', () => {

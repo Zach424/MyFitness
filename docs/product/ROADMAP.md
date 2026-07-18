@@ -2,7 +2,7 @@
 
 The roadmap is organized as controlled iterations. A round may take several working sessions, but it ends only after implementation, validation, archive update, and a commit.
 
-Progress snapshot (2026-07-18): iterations 0–3 are complete locally; iteration 4 is the active next scope. The identity, adult eligibility, profile, goals and consent gates now support real record screens.
+Progress snapshot (2026-07-18): iterations 0–4 are complete locally; iteration 5 is the active next scope. Authenticated users can now create, revise, audit, trend and remove body/recovery records through the shared H5/WeApp client.
 
 | Iteration | Primary scope                                       | Exit evidence                                                                              |
 | --------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------ |

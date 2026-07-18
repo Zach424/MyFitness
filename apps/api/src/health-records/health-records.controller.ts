@@ -1,21 +1,42 @@
-import { BadRequestException, Body, Controller, Get, Headers, Post } from '@nestjs/common'
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Headers,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Post,
+  Put,
+} from '@nestjs/common'
 import {
   ApiBadRequestResponse,
   ApiBody,
   ApiConflictResponse,
   ApiCreatedResponse,
   ApiHeader,
+  ApiNoContentResponse,
+  ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
+  ApiParam,
   ApiTags,
 } from '@nestjs/swagger'
 import {
   createHealthRecordBaseSchema,
   createHealthRecordSchema,
+  expectedRevisionHeaderSchema,
+  healthRecordHistorySchema,
   healthRecordListSchema,
   healthRecordSchema,
   idempotencyKeySchema,
+  recordIdSchema,
+  updateHealthRecordBaseSchema,
+  updateHealthRecordSchema,
   type CreateHealthRecord,
+  type UpdateHealthRecord,
 } from '@myfitness/contracts'
 import * as z from 'zod'
 
@@ -31,17 +52,23 @@ const parseHeader = <T>(schema: z.ZodType<T>, value: string | undefined, name: s
   return parsed.data
 }
 
-const parseBody = (body: unknown): CreateHealthRecord => {
-  const parsed = createHealthRecordSchema.safeParse(body)
+const parseBody = <T>(schema: z.ZodType<T>, body: unknown, message: string): T => {
+  const parsed = schema.safeParse(body)
   if (!parsed.success) {
     throw new BadRequestException({
-      message: 'health record is invalid',
+      message,
       issues: parsed.error.issues.map((issue) => ({
         path: issue.path.join('.'),
         message: issue.message,
       })),
     })
   }
+  return parsed.data
+}
+
+const parseRecordId = (value: string) => {
+  const parsed = recordIdSchema.safeParse(value)
+  if (!parsed.success) throw new BadRequestException('recordId must be a UUID')
   return parsed.data
 }
 
@@ -70,7 +97,12 @@ export class HealthRecordsController {
     @Body() body: unknown,
   ) {
     const idempotencyKey = parseHeader(idempotencyKeySchema, rawIdempotencyKey, 'x-idempotency-key')
-    const record = await this.records.create(principal.userId, idempotencyKey, parseBody(body))
+    const input: CreateHealthRecord = parseBody(
+      createHealthRecordSchema,
+      body,
+      'health record is invalid',
+    )
+    const record = await this.records.create(principal.userId, idempotencyKey, input)
     return healthRecordSchema.parse(record)
   }
 
@@ -79,5 +111,67 @@ export class HealthRecordsController {
   @ApiOkResponse({ schema: openApiSchema(healthRecordListSchema) })
   async list(@CurrentUser() principal: AuthPrincipal) {
     return healthRecordListSchema.parse(await this.records.list(principal.userId))
+  }
+
+  @Put(':recordId')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Replace a measurement using optimistic revision control' })
+  @ApiParam({ name: 'recordId', schema: { type: 'string', format: 'uuid' } })
+  @ApiBody({ schema: openApiSchema(updateHealthRecordBaseSchema) })
+  @ApiOkResponse({ schema: openApiSchema(healthRecordSchema) })
+  @ApiBadRequestResponse({ description: 'Record identifier or measurement input is invalid.' })
+  @ApiConflictResponse({ description: 'expectedRevision does not match the stored record.' })
+  @ApiNotFoundResponse({ description: 'Record does not exist for the authenticated user.' })
+  async update(
+    @CurrentUser() principal: AuthPrincipal,
+    @Param('recordId') rawRecordId: string,
+    @Body() body: unknown,
+  ) {
+    const input: UpdateHealthRecord = parseBody(
+      updateHealthRecordSchema,
+      body,
+      'health record update is invalid',
+    )
+    return healthRecordSchema.parse(
+      await this.records.update(principal.userId, parseRecordId(rawRecordId), input),
+    )
+  }
+
+  @Delete(':recordId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Soft-delete a measurement using optimistic revision control' })
+  @ApiParam({ name: 'recordId', schema: { type: 'string', format: 'uuid' } })
+  @ApiHeader({
+    name: 'x-expected-revision',
+    required: true,
+    schema: { type: 'integer', minimum: 1 },
+  })
+  @ApiNoContentResponse({ description: 'Measurement was deleted and retained in its audit trail.' })
+  @ApiBadRequestResponse({ description: 'Record identifier or expected revision is invalid.' })
+  @ApiConflictResponse({ description: 'Expected revision does not match the stored record.' })
+  @ApiNotFoundResponse({ description: 'Record does not exist for the authenticated user.' })
+  async remove(
+    @CurrentUser() principal: AuthPrincipal,
+    @Param('recordId') rawRecordId: string,
+    @Headers('x-expected-revision') rawExpectedRevision: string | undefined,
+  ) {
+    const expectedRevision = parseHeader(
+      expectedRevisionHeaderSchema,
+      rawExpectedRevision,
+      'x-expected-revision',
+    )
+    await this.records.remove(principal.userId, parseRecordId(rawRecordId), expectedRevision)
+  }
+
+  @Get(':recordId/history')
+  @ApiOperation({ summary: 'Get the immutable revision history for a measurement' })
+  @ApiParam({ name: 'recordId', schema: { type: 'string', format: 'uuid' } })
+  @ApiOkResponse({ schema: openApiSchema(healthRecordHistorySchema) })
+  @ApiBadRequestResponse({ description: 'Record identifier is invalid.' })
+  @ApiNotFoundResponse({ description: 'Record does not exist for the authenticated user.' })
+  async history(@CurrentUser() principal: AuthPrincipal, @Param('recordId') rawRecordId: string) {
+    return healthRecordHistorySchema.parse(
+      await this.records.history(principal.userId, parseRecordId(rawRecordId)),
+    )
   }
 }

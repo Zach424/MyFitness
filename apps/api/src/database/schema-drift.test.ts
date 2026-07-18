@@ -8,6 +8,8 @@ import {
   experienceLevels,
   metricCodes,
   primaryGoals,
+  recordStatuses,
+  revisionActions,
   riskFlags,
   sexForCalculationOptions,
   sourceKinds,
@@ -24,6 +26,10 @@ const migrationPath = path.resolve(
 const onboardingMigrationPath = path.resolve(
   __dirname,
   '../../../../infra/postgres/migrations/0002_users_onboarding.sql',
+)
+const lifecycleMigrationPath = path.resolve(
+  __dirname,
+  '../../../../infra/postgres/migrations/0003_health_record_lifecycle.sql',
 )
 
 describe('health-record migration drift', () => {
@@ -51,6 +57,20 @@ describe('health-record migration drift', () => {
 
     for (const value of values) {
       expect(migration, `${value} is missing from the onboarding migration`).toContain(`'${value}'`)
+    }
+  })
+
+  it('contains every record lifecycle enum in the immutable revision boundary', async () => {
+    const migration = await readFile(lifecycleMigrationPath, 'utf8')
+
+    for (const value of [
+      ...metricCodes,
+      ...unitCodes,
+      ...sourceKinds,
+      ...recordStatuses,
+      ...revisionActions,
+    ]) {
+      expect(migration, `${value} is missing from the lifecycle migration`).toContain(`'${value}'`)
     }
   })
 })

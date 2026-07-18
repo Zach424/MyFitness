@@ -2,7 +2,7 @@
 
 Last reviewed: 2026-07-18
 
-Stage: adult onboarding complete; body and recovery recording next
+Stage: body and recovery recording complete; workout recording next
 
 Primary release target: WeChat Mini Program + responsive H5
 
@@ -12,20 +12,20 @@ MyFitness / 衡迹 turns body, training, nutrition, and recovery records into sa
 
 ## Module status
 
-| Module                  | Status                       | Current evidence                          | Next gate                                      |
-| ----------------------- | ---------------------------- | ----------------------------------------- | ---------------------------------------------- |
-| Product scope           | Done for MVP baseline        | `docs/product/PRODUCT_BRIEF.md`           | Validate with target-user interviews           |
-| Delivery roadmap        | Done for planning baseline   | `docs/product/ROADMAP.md`                 | Execute iteration 4                            |
-| Design language         | Partial, two flows validated | Today/onboarding docs + four screenshots  | Validate remaining states and 320 px viewport  |
-| Client: Mini Program/H5 | Partial                      | Builds + real onboarding E2E              | Implement body/recovery record flows           |
-| Admin console           | Pending                      | Architecture only                         | Content and support requirements frozen        |
-| Business API            | Partial                      | Auth, profile, consent and records API    | Add edit/delete/history record lifecycle       |
-| Domain rules            | Partial                      | Measurements + adult eligibility rules    | Add workout and nutrition domains              |
-| AI service              | Pending                      | Safety boundary listed                    | Offline fixture pipeline and validators        |
-| Native App/devices      | Deferred                     | Phase-two decision                        | MVP retention gate reached                     |
-| Privacy/compliance      | Partial                      | Purpose/version consent events + AI rules | Revocation, inventory, retention, legal review |
-| Testing/observability   | Partial                      | 28 unit + 8 integration + 2 browser E2E   | Add lint, CI, metrics and trace correlation    |
-| Deployment              | Partial, local only          | PostgreSQL Compose + runtime health       | Create repeatable shared test environment      |
+| Module                  | Status                         | Current evidence                               | Next gate                                      |
+| ----------------------- | ------------------------------ | ---------------------------------------------- | ---------------------------------------------- |
+| Product scope           | Done for MVP baseline          | `docs/product/PRODUCT_BRIEF.md`                | Validate with target-user interviews           |
+| Delivery roadmap        | Done for planning baseline     | `docs/product/ROADMAP.md`                      | Execute iteration 5                            |
+| Design language         | Partial, three flows validated | Today/onboarding/records + six screenshots     | Validate remaining states and 320 px viewport  |
+| Client: Mini Program/H5 | Partial                        | Builds + onboarding/record lifecycle E2E       | Implement workout record flows                 |
+| Admin console           | Pending                        | Architecture only                              | Content and support requirements frozen        |
+| Business API            | Partial                        | Auth, profile, consent + measurement lifecycle | Add workout record lifecycle                   |
+| Domain rules            | Partial                        | Measurements + adult eligibility rules         | Add workout and nutrition domains              |
+| AI service              | Pending                        | Safety boundary listed                         | Offline fixture pipeline and validators        |
+| Native App/devices      | Deferred                       | Phase-two decision                             | MVP retention gate reached                     |
+| Privacy/compliance      | Partial                        | Purpose/version consent events + AI rules      | Revocation, inventory, retention, legal review |
+| Testing/observability   | Partial                        | 34 unit + 8 integration + 4 browser E2E        | Add lint, CI, metrics and trace correlation    |
+| Deployment              | Partial, local only            | PostgreSQL Compose + runtime health            | Create repeatable shared test environment      |
 
 Status vocabulary: `Done` means validated for the present stage, `Partial` means usable but missing a named gate, `Pending` means not implemented, and `Deferred` means intentionally outside the current release.
 
@@ -37,6 +37,7 @@ Status vocabulary: `Done` means validated for the present stage, `Partial` means
 - NestJS 11 modular API with Zod 4 contracts rendered into a committed OpenAPI 3.0 document.
 - Provider-neutral users/identities plus opaque Bearer sessions; raw tokens never enter the database and the development issuer is production-disabled.
 - Transactional adult profile, goals, risk eligibility and immutable versioned consent events with optimistic revisions.
+- Transactional measurement create/replace/soft-delete with owner-only append-only snapshots, expected revisions and idempotent creation.
 - Parameterized `pg` access to PostgreSQL 18.4 with transactional, checksum-protected SQL migrations.
 - React Native for the later native App rather than forcing device integrations into the first client.
 - NestJS modular monolith + PostgreSQL + Redis for business services.
@@ -71,4 +72,4 @@ The MVP cannot enter public beta until all of the following are reproducible:
 
 ## Primary next step
 
-Iteration 4: implement body and recovery recording through the real API. Add create/list/edit/delete/history screens, confirmed-versus-estimated states, optimistic edits, unit/timezone correctness, empty/loading/offline/error handling, and end-to-end ownership checks.
+Iteration 5: implement workout recording. Add versioned exercise/set/rest structures, repeat-last-workout entry, in-session edits, deterministic volume calculations, ownership/history rules and mobile/wide E2E coverage.

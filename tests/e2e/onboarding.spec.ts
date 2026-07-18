@@ -6,20 +6,36 @@ const database = new Pool({
   connectionString:
     process.env.DATABASE_URL ?? 'postgresql://myfitness:myfitness_local@127.0.0.1:54329/myfitness',
 })
+let trackedSubject: string | undefined
+
+test.beforeEach(async ({ page }) => {
+  trackedSubject = undefined
+  page.on('request', (request) => {
+    if (!request.url().endsWith('/v1/auth/dev/session') || request.method() !== 'POST') return
+    try {
+      const body = request.postDataJSON() as { subject?: unknown }
+      if (typeof body.subject === 'string') trackedSubject = body.subject
+    } catch {
+      // The storage fallback below still covers a request body that cannot be parsed.
+    }
+  })
+})
 
 test.afterEach(async ({ page }) => {
-  const subject = await page
-    .evaluate((key) => {
-      const raw = localStorage.getItem(key)
-      if (!raw) return null
-      try {
-        const stored = JSON.parse(raw) as { data?: unknown }
-        return typeof stored.data === 'string' ? stored.data : null
-      } catch {
-        return raw
-      }
-    }, subjectStorageKey)
-    .catch(() => null)
+  const subject =
+    trackedSubject ??
+    (await page
+      .evaluate((key) => {
+        const raw = localStorage.getItem(key)
+        if (!raw) return null
+        try {
+          const stored = JSON.parse(raw) as { data?: unknown }
+          return typeof stored.data === 'string' ? stored.data : null
+        } catch {
+          return raw
+        }
+      }, subjectStorageKey)
+      .catch(() => null))
   if (!subject) return
   await database.query(
     `DELETE FROM users

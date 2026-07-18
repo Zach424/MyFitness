@@ -1,36 +1,20 @@
 import * as z from 'zod'
 
-export const metricCodes = [
-  'body.weight',
-  'body.waist',
-  'body.body_fat',
-  'body.resting_heart_rate',
-  'recovery.sleep_duration',
-  'recovery.sleep_quality',
-  'recovery.soreness',
-  'recovery.energy',
-  'recovery.stress',
-] as const
+import {
+  metricCodes,
+  recordStatuses,
+  revisionActions,
+  sourceKinds,
+  unitCodes,
+} from './health-record.constants'
 
-export const unitCodes = [
-  'kg',
-  'lb',
-  'cm',
-  'in',
-  'percent',
-  'bpm',
-  'minute',
-  'hour',
-  'score_1_5',
-] as const
-
-export const sourceKinds = ['manual', 'device', 'imported', 'ai_estimate'] as const
-export const recordStatuses = ['candidate', 'confirmed'] as const
+export * from './health-record.constants'
 
 export const metricCodeSchema = z.enum(metricCodes)
 export const unitCodeSchema = z.enum(unitCodes)
 export const sourceKindSchema = z.enum(sourceKinds)
 export const recordStatusSchema = z.enum(recordStatuses)
+export const revisionActionSchema = z.enum(revisionActions)
 
 export const sourceMetadataSchema = z
   .object({
@@ -71,7 +55,10 @@ const isValidIanaTimezone = (timezone: string) => {
   }
 }
 
-export const createHealthRecordSchema = createHealthRecordBaseSchema.superRefine((record, ctx) => {
+const validateRecordRules = (
+  record: z.infer<typeof createHealthRecordBaseSchema>,
+  ctx: z.RefinementCtx,
+) => {
   if (!isValidIanaTimezone(record.timezone)) {
     ctx.addIssue({
       code: 'custom',
@@ -118,7 +105,17 @@ export const createHealthRecordSchema = createHealthRecordBaseSchema.superRefine
       })
     }
   }
+}
+
+export const createHealthRecordSchema =
+  createHealthRecordBaseSchema.superRefine(validateRecordRules)
+
+export const updateHealthRecordBaseSchema = createHealthRecordBaseSchema.extend({
+  expectedRevision: z.number().int().positive(),
 })
+
+export const updateHealthRecordSchema =
+  updateHealthRecordBaseSchema.superRefine(validateRecordRules)
 
 export const healthRecordSchema = z
   .object({
@@ -146,6 +143,18 @@ export const healthRecordListSchema = z
   })
   .strict()
 
+export const healthRecordHistoryItemSchema = healthRecordSchema.extend({
+  action: revisionActionSchema,
+  changedAt: z.string().datetime({ offset: true }),
+})
+
+export const healthRecordHistorySchema = z
+  .object({
+    recordId: z.string().uuid(),
+    items: z.array(healthRecordHistoryItemSchema),
+  })
+  .strict()
+
 export const problemDetailsSchema = z
   .object({
     statusCode: z.number().int(),
@@ -164,9 +173,13 @@ export const problemDetailsSchema = z
 
 export const demoUserIdSchema = z.string().uuid()
 export const idempotencyKeySchema = z.string().trim().min(8).max(128)
+export const recordIdSchema = z.string().uuid()
+export const expectedRevisionHeaderSchema = z.coerce.number().int().positive()
 
 export type MetricCode = z.infer<typeof metricCodeSchema>
 export type UnitCode = z.infer<typeof unitCodeSchema>
 export type RecordSource = z.infer<typeof recordSourceSchema>
 export type CreateHealthRecord = z.infer<typeof createHealthRecordSchema>
+export type UpdateHealthRecord = z.infer<typeof updateHealthRecordSchema>
 export type HealthRecord = z.infer<typeof healthRecordSchema>
+export type HealthRecordHistoryItem = z.infer<typeof healthRecordHistoryItemSchema>

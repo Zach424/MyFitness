@@ -1,6 +1,6 @@
 # Design system baseline
 
-Status: implemented and visually validated for the Today shell and iteration-003 onboarding flow
+Status: implemented and visually validated for Today, onboarding and iteration-004 body/recovery records
 
 Working brand: 衡迹 / MyFitness
 
@@ -113,6 +113,19 @@ Reviewed evidence:
 The review found and corrected a wide-layout collision between the profile mark and fixed navigation, a missing favicon request, and generic button semantics in the accessibility tree. The final browser run reports zero console errors or warnings and exposes primary actions as buttons. The lunch estimate remains visibly uncertain and produces a confirmation-required message instead of silently becoming a record.
 
 Still open before the complete client design can be called validated: 320 px width, large text, keyboard focus traversal, reduced motion, and the full loading/empty/edited/offline/error state matrix.
+
+## Implementation review — iteration 004
+
+The body/recovery page turns the logbook direction into a working two-column ledger. The editor groups nine measurements into “身体指标” and “恢复感受”, uses large monospaced values for physical readings, and changes to five explicit tiles for subjective scores. Unit controls stay adjacent to the value; copy explains measurement conditions without calling guardrails clinical ranges.
+
+The right ledger lists source, confirmation state and revision. Editing says that a new historical version will be created, deletion explains that the list entry is removed while audit history remains, and the history sheet distinguishes creation/update/deletion with text plus mark shape. The selected metric drives a restrained seven-entry bar trend; an empty trend gives one next action rather than an invented insight.
+
+Reviewed evidence:
+
+- [390 × 844 mobile history capture](../../output/playwright/iteration-004-records-mobile.png)
+- [1440 × 1000 wide empty-ledger capture](../../output/playwright/iteration-004-records-wide.png)
+
+The production-browser review exercised create, update, history and delete through PostgreSQL. It caught a CORS preflight omission for the delete revision header that direct API integration tests could not reveal. After correction, mobile and wide runs reported no page-script or console errors. Open items remain offline/retry visualization, stale-revision recovery UI, 320 px/large-text review and a confirmed-versus-AI-candidate screen once photo/import proposals exist.
 
 ## Implementation review — iteration 003
 

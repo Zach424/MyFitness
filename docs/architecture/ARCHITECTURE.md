@@ -1,6 +1,6 @@
 # Architecture baseline
 
-Status: accepted and implemented through the iteration-003 identity/onboarding foundation; changes require an ADR.
+Status: accepted and implemented through the iteration-004 measurement lifecycle; changes require an ADR.
 
 ## System shape
 
@@ -43,6 +43,7 @@ Implemented foundation:
 - PostgreSQL 18.4 stores measurements through parameterized `pg`; ordered SQL migrations run transactionally and record a SHA-256 checksum to detect drift.
 - Protected routes resolve an opaque Bearer session to a server-owned user principal. Only SHA-256 token hashes are persisted; the local issuer is disabled in production and can later be replaced by verified WeChat/phone adapters without changing resource ownership.
 - Adult profile, training goal, risk eligibility and immutable purpose/version consent events persist transactionally. Profile updates use optimistic revision checks.
+- Body/recovery record creation, replacement and soft deletion run in database transactions. Each accepted state is copied to an append-only revision table; writes use expected revisions and lists exclude deleted records while owner history remains available.
 
 ## Data rules
 
@@ -60,6 +61,8 @@ AI output is a proposal. Only an explicit user action or deterministic system pr
 The implemented measurement subset and field-level invariants are documented in [HEALTH_RECORD_MODEL.md](HEALTH_RECORD_MODEL.md). ADR-0002 records why contract validation, deterministic normalization and database checks deliberately overlap.
 
 The implemented identity, profile, goal, risk and consent invariants are documented in [IDENTITY_PROFILE_MODEL.md](IDENTITY_PROFILE_MODEL.md). ADR-0003 records the replaceable provider identity and opaque session decision.
+
+ADR-0004 records the health-record replacement, append-only snapshot, soft-delete and optimistic-concurrency decision.
 
 ## API and event conventions
 

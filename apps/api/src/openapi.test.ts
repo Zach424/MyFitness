@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { INestApplication } from '@nestjs/common'
+import request from 'supertest'
 
 import { createApplication } from './bootstrap'
 import { buildOpenApiDocument } from './openapi'
@@ -22,9 +23,24 @@ describe('OpenAPI document', () => {
     expect(document.paths['/v1/health']?.get).toBeDefined()
     expect(document.paths['/v1/health-records']?.post).toBeDefined()
     expect(document.paths['/v1/health-records']?.get).toBeDefined()
+    expect(document.paths['/v1/health-records/{recordId}']?.put).toBeDefined()
+    expect(document.paths['/v1/health-records/{recordId}']?.delete).toBeDefined()
+    expect(document.paths['/v1/health-records/{recordId}/history']?.get).toBeDefined()
     expect(document.paths['/v1/auth/dev/session']?.post).toBeDefined()
     expect(document.paths['/v1/me/onboarding']?.put).toBeDefined()
     expect(document.paths['/v1/me/onboarding']?.get).toBeDefined()
     expect(document.components?.securitySchemes?.bearer).toBeDefined()
+  })
+
+  it('allows lifecycle headers through the H5 CORS preflight', async () => {
+    const response = await request(app.getHttpServer())
+      .options('/v1/health-records/00000000-0000-4000-8000-000000000000')
+      .set('Origin', 'http://127.0.0.1:4173')
+      .set('Access-Control-Request-Method', 'DELETE')
+      .set('Access-Control-Request-Headers', 'authorization,x-expected-revision')
+      .expect(204)
+
+    expect(response.headers['access-control-allow-origin']).toBe('http://127.0.0.1:4173')
+    expect(response.headers['access-control-allow-headers']).toContain('x-expected-revision')
   })
 })

@@ -27,6 +27,8 @@ const navItems = [
   { key: 'me', glyph: '我', label: '我的' },
 ] as const
 
+const openRecords = () => void Taro.navigateTo({ url: '/pages/records/index' })
+
 const RailEntry = ({ item, onAction }: { item: RailItem; onAction: (item: RailItem) => void }) => (
   <View className={`rail-entry rail-entry--${item.status}`}>
     <View className="rail-entry__time metric">{item.time}</View>
@@ -171,9 +173,10 @@ const IndexPage = () => {
                       {...buttonA11yProps}
                       className="quick-action"
                       key={action.key}
-                      onClick={() =>
-                        setFeedback(`已选择${action.label}记录；表单将在对应模块接入。`)
-                      }
+                      onClick={() => {
+                        if (action.key === 'body' || action.key === 'recovery') openRecords()
+                        else setFeedback(`${action.label}记录将在后续迭代接入。`)
+                      }}
                     >
                       <Text className="quick-action__glyph" aria-hidden="true">
                         {action.glyph}
@@ -200,6 +203,8 @@ const IndexPage = () => {
             onClick={() => {
               if (item.key === 'me') {
                 void Taro.navigateTo({ url: '/pages/onboarding/index' })
+              } else if (item.key === 'record') {
+                openRecords()
               } else if (item.key !== 'today') {
                 setFeedback(`${item.label}模块将在后续迭代接入。`)
               }

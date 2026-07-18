@@ -492,6 +492,473 @@
         "tags": ["health records"]
       }
     },
+    "/v1/health-records/{recordId}": {
+      "put": {
+        "operationId": "HealthRecordsController_update",
+        "parameters": [
+          {
+            "name": "recordId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "metric": {
+                    "type": "string",
+                    "enum": [
+                      "body.weight",
+                      "body.waist",
+                      "body.body_fat",
+                      "body.resting_heart_rate",
+                      "recovery.sleep_duration",
+                      "recovery.sleep_quality",
+                      "recovery.soreness",
+                      "recovery.energy",
+                      "recovery.stress"
+                    ]
+                  },
+                  "value": { "type": "number" },
+                  "unit": {
+                    "type": "string",
+                    "enum": [
+                      "kg",
+                      "lb",
+                      "cm",
+                      "in",
+                      "percent",
+                      "bpm",
+                      "minute",
+                      "hour",
+                      "score_1_5"
+                    ]
+                  },
+                  "source": {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "enum": ["manual", "device", "imported", "ai_estimate"]
+                      },
+                      "metadata": {
+                        "type": "object",
+                        "properties": {
+                          "provider": { "type": "string", "minLength": 1, "maxLength": 80 },
+                          "externalId": { "type": "string", "minLength": 1, "maxLength": 160 },
+                          "deviceName": { "type": "string", "minLength": 1, "maxLength": 120 },
+                          "modelVersion": { "type": "string", "minLength": 1, "maxLength": 120 },
+                          "promptVersion": { "type": "string", "minLength": 1, "maxLength": 120 }
+                        },
+                        "additionalProperties": false
+                      }
+                    },
+                    "required": ["kind"],
+                    "additionalProperties": false
+                  },
+                  "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+                  "status": { "type": "string", "enum": ["candidate", "confirmed"] },
+                  "occurredAt": {
+                    "type": "string",
+                    "format": "date-time",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                  },
+                  "timezone": { "type": "string", "minLength": 1, "maxLength": 64 },
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "exclusiveMinimum": true,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "metric",
+                  "value",
+                  "unit",
+                  "source",
+                  "status",
+                  "occurredAt",
+                  "timezone",
+                  "expectedRevision"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "userId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "metric": {
+                      "type": "string",
+                      "enum": [
+                        "body.weight",
+                        "body.waist",
+                        "body.body_fat",
+                        "body.resting_heart_rate",
+                        "recovery.sleep_duration",
+                        "recovery.sleep_quality",
+                        "recovery.soreness",
+                        "recovery.energy",
+                        "recovery.stress"
+                      ]
+                    },
+                    "canonicalValue": { "type": "number" },
+                    "canonicalUnit": {
+                      "type": "string",
+                      "enum": [
+                        "kg",
+                        "lb",
+                        "cm",
+                        "in",
+                        "percent",
+                        "bpm",
+                        "minute",
+                        "hour",
+                        "score_1_5"
+                      ]
+                    },
+                    "displayValue": { "type": "number" },
+                    "displayUnit": {
+                      "type": "string",
+                      "enum": [
+                        "kg",
+                        "lb",
+                        "cm",
+                        "in",
+                        "percent",
+                        "bpm",
+                        "minute",
+                        "hour",
+                        "score_1_5"
+                      ]
+                    },
+                    "source": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": ["manual", "device", "imported", "ai_estimate"]
+                        },
+                        "metadata": {
+                          "type": "object",
+                          "properties": {
+                            "provider": { "type": "string", "minLength": 1, "maxLength": 80 },
+                            "externalId": { "type": "string", "minLength": 1, "maxLength": 160 },
+                            "deviceName": { "type": "string", "minLength": 1, "maxLength": 120 },
+                            "modelVersion": { "type": "string", "minLength": 1, "maxLength": 120 },
+                            "promptVersion": { "type": "string", "minLength": 1, "maxLength": 120 }
+                          },
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": ["kind"],
+                      "additionalProperties": false
+                    },
+                    "confidence": {
+                      "nullable": true,
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "status": { "type": "string", "enum": ["candidate", "confirmed"] },
+                    "occurredAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "timezone": { "type": "string" },
+                    "revision": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "exclusiveMinimum": true,
+                      "maximum": 9007199254740991
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "updatedAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "userId",
+                    "metric",
+                    "canonicalValue",
+                    "canonicalUnit",
+                    "displayValue",
+                    "displayUnit",
+                    "source",
+                    "confidence",
+                    "status",
+                    "occurredAt",
+                    "timezone",
+                    "revision",
+                    "createdAt",
+                    "updatedAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": { "description": "Record identifier or measurement input is invalid." },
+          "401": { "description": "Bearer token is missing, invalid, expired or revoked." },
+          "404": { "description": "Record does not exist for the authenticated user." },
+          "409": { "description": "expectedRevision does not match the stored record." }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Replace a measurement using optimistic revision control",
+        "tags": ["health records"]
+      },
+      "delete": {
+        "operationId": "HealthRecordsController_remove",
+        "parameters": [
+          {
+            "name": "recordId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "x-expected-revision",
+            "in": "header",
+            "required": true,
+            "schema": { "type": "integer", "minimum": 1 }
+          }
+        ],
+        "responses": {
+          "204": { "description": "Measurement was deleted and retained in its audit trail." },
+          "400": { "description": "Record identifier or expected revision is invalid." },
+          "401": { "description": "Bearer token is missing, invalid, expired or revoked." },
+          "404": { "description": "Record does not exist for the authenticated user." },
+          "409": { "description": "Expected revision does not match the stored record." }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Soft-delete a measurement using optimistic revision control",
+        "tags": ["health records"]
+      }
+    },
+    "/v1/health-records/{recordId}/history": {
+      "get": {
+        "operationId": "HealthRecordsController_history",
+        "parameters": [
+          {
+            "name": "recordId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "recordId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "userId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "metric": {
+                            "type": "string",
+                            "enum": [
+                              "body.weight",
+                              "body.waist",
+                              "body.body_fat",
+                              "body.resting_heart_rate",
+                              "recovery.sleep_duration",
+                              "recovery.sleep_quality",
+                              "recovery.soreness",
+                              "recovery.energy",
+                              "recovery.stress"
+                            ]
+                          },
+                          "canonicalValue": { "type": "number" },
+                          "canonicalUnit": {
+                            "type": "string",
+                            "enum": [
+                              "kg",
+                              "lb",
+                              "cm",
+                              "in",
+                              "percent",
+                              "bpm",
+                              "minute",
+                              "hour",
+                              "score_1_5"
+                            ]
+                          },
+                          "displayValue": { "type": "number" },
+                          "displayUnit": {
+                            "type": "string",
+                            "enum": [
+                              "kg",
+                              "lb",
+                              "cm",
+                              "in",
+                              "percent",
+                              "bpm",
+                              "minute",
+                              "hour",
+                              "score_1_5"
+                            ]
+                          },
+                          "source": {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "enum": ["manual", "device", "imported", "ai_estimate"]
+                              },
+                              "metadata": {
+                                "type": "object",
+                                "properties": {
+                                  "provider": { "type": "string", "minLength": 1, "maxLength": 80 },
+                                  "externalId": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 160
+                                  },
+                                  "deviceName": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 120
+                                  },
+                                  "modelVersion": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 120
+                                  },
+                                  "promptVersion": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 120
+                                  }
+                                },
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": ["kind"],
+                            "additionalProperties": false
+                          },
+                          "confidence": {
+                            "nullable": true,
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 1
+                          },
+                          "status": { "type": "string", "enum": ["candidate", "confirmed"] },
+                          "occurredAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                          },
+                          "timezone": { "type": "string" },
+                          "revision": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "exclusiveMinimum": true,
+                            "maximum": 9007199254740991
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                          },
+                          "updatedAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                          },
+                          "action": { "type": "string", "enum": ["created", "updated", "deleted"] },
+                          "changedAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "userId",
+                          "metric",
+                          "canonicalValue",
+                          "canonicalUnit",
+                          "displayValue",
+                          "displayUnit",
+                          "source",
+                          "confidence",
+                          "status",
+                          "occurredAt",
+                          "timezone",
+                          "revision",
+                          "createdAt",
+                          "updatedAt",
+                          "action",
+                          "changedAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": ["recordId", "items"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": { "description": "Record identifier is invalid." },
+          "401": { "description": "Bearer token is missing, invalid, expired or revoked." },
+          "404": { "description": "Record does not exist for the authenticated user." }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Get the immutable revision history for a measurement",
+        "tags": ["health records"]
+      }
+    },
     "/v1/me/onboarding": {
       "put": {
         "operationId": "OnboardingController_upsert",
