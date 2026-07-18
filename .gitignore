@@ -2,9 +2,11 @@
 node_modules/
 .pnpm-store/
 dist/
+dist-*/
 build/
 .next/
 .taro/
+.swc/
 .expo/
 
 # Python
@@ -23,6 +25,7 @@ __pycache__/
 coverage/
 playwright-report/
 test-results/
+.playwright-cli/
 *.log
 
 # Editors and operating systems

@@ -20,16 +20,16 @@ flowchart TB
 
 ## Repository boundaries
 
-| Path | Responsibility | Must not own |
-| --- | --- | --- |
-| `apps/client` | End-user Mini Program/H5 rendering and interaction | Health formulas, model prompts, server authorization |
-| `apps/admin` | Support, content, audit and operational workflows | Direct database mutation from the browser |
-| `apps/api` | Authentication, authorization, record lifecycle, plans, jobs | Provider-specific AI code in controllers |
-| `apps/mobile` | Native UI and platform health/device adapters | Independent business schema |
-| `services/ai` | Model gateway, image pipeline, prompt/evaluation versions | Final authority to persist confirmed user facts |
-| `packages/contracts` | API schemas, enums, serialization | Database clients or UI styling |
-| `packages/domain` | Units, metrics, plan and deterministic safety rules | Network or framework dependencies |
-| `packages/design-tokens` | Cross-client visual primitives | Product data or business logic |
+| Path                     | Responsibility                                               | Must not own                                         |
+| ------------------------ | ------------------------------------------------------------ | ---------------------------------------------------- |
+| `apps/client`            | End-user Mini Program/H5 rendering and interaction           | Health formulas, model prompts, server authorization |
+| `apps/admin`             | Support, content, audit and operational workflows            | Direct database mutation from the browser            |
+| `apps/api`               | Authentication, authorization, record lifecycle, plans, jobs | Provider-specific AI code in controllers             |
+| `apps/mobile`            | Native UI and platform health/device adapters                | Independent business schema                          |
+| `services/ai`            | Model gateway, image pipeline, prompt/evaluation versions    | Final authority to persist confirmed user facts      |
+| `packages/contracts`     | API schemas, enums, serialization                            | Database clients or UI styling                       |
+| `packages/domain`        | Units, metrics, plan and deterministic safety rules          | Network or framework dependencies                    |
+| `packages/design-tokens` | Cross-client visual primitives                               | Product data or business logic                       |
 
 ## Delivery architecture
 

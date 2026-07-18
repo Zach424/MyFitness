@@ -1,0 +1,15 @@
+{
+  "appid": "touristappid",
+  "compileType": "miniprogram",
+  "description": "MyFitness / 衡迹微信小程序",
+  "miniprogramRoot": "dist-weapp/",
+  "projectname": "myfitness-client",
+  "setting": {
+    "checkSiteMap": false,
+    "coverView": true,
+    "es6": true,
+    "postcss": true,
+    "preloadBackgroundData": false,
+    "urlCheck": false
+  }
+}

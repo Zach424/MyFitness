@@ -1,0 +1,24 @@
+page,
+body {
+  min-height: 100%;
+  margin: 0;
+  color: var(--color-ink);
+  background: var(--color-mist);
+  font-family: var(--font-body);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+view,
+text,
+button {
+  box-sizing: border-box;
+}
+
+button {
+  font: inherit;
+}
+
+button::after {
+  border: 0;
+}

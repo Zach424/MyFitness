@@ -21,13 +21,13 @@ The MVP intentionally excludes minors and therapeutic plans for pregnancy, eatin
 
 ## Information architecture
 
-| Area | User question | MVP content |
-| --- | --- | --- |
-| Today | What should I do next? | Readiness, next action, plan-vs-actual rail, quick add |
-| Record | What happened? | Body, workout, nutrition, sleep/recovery entries |
-| Plan | What is this week trying to achieve? | Weekly training and nutrition targets, substitutions |
-| Coach | Why is the plan changing? | Evidence-backed summary, questions, feedback |
-| Me | What data and permissions do I control? | Profile, goals, units, consent, export, deletion |
+| Area   | User question                           | MVP content                                            |
+| ------ | --------------------------------------- | ------------------------------------------------------ |
+| Today  | What should I do next?                  | Readiness, next action, plan-vs-actual rail, quick add |
+| Record | What happened?                          | Body, workout, nutrition, sleep/recovery entries       |
+| Plan   | What is this week trying to achieve?    | Weekly training and nutrition targets, substitutions   |
+| Coach  | Why is the plan changing?               | Evidence-backed summary, questions, feedback           |
+| Me     | What data and permissions do I control? | Profile, goals, units, consent, export, deletion       |
 
 ## MVP functional scope
 

@@ -1,6 +1,6 @@
 # Design system baseline
 
-Status: planned, not yet visually validated
+Status: implemented and visually validated for the iteration-001 Today shell baseline
 
 Working brand: 衡迹 / MyFitness
 
@@ -18,15 +18,15 @@ The memorable element is the **Rhythm Rail / 节律轨**: a vertical rail that p
 
 ### Color
 
-| Token name | Hex | Role |
-| --- | --- | --- |
-| Ink / 墨尺 | `#142426` | Primary text and high-contrast controls |
-| Mineral / 矿蓝 | `#244C66` | Brand anchors, links, plan marks |
-| Juniper / 杜松 | `#3F756B` | Confirmed records and steady progress |
-| Pulse / 脉冲 | `#E96A5B` | Exertion, time-sensitive attention, never routine error decoration |
-| Mist / 薄雾 | `#F2F6F5` | App surface and grouped backgrounds |
-| Paper / 纸白 | `#FCFDFC` | Cards, forms, reading surfaces |
-| Warning / 琥珀 | `#A96821` | Risk checks and uncertain data |
+| Token name     | Hex       | Role                                                               |
+| -------------- | --------- | ------------------------------------------------------------------ |
+| Ink / 墨尺     | `#142426` | Primary text and high-contrast controls                            |
+| Mineral / 矿蓝 | `#244C66` | Brand anchors, links, plan marks                                   |
+| Juniper / 杜松 | `#3F756B` | Confirmed records and steady progress                              |
+| Pulse / 脉冲   | `#E96A5B` | Exertion, time-sensitive attention, never routine error decoration |
+| Mist / 薄雾    | `#F2F6F5` | App surface and grouped backgrounds                                |
+| Paper / 纸白   | `#FCFDFC` | Cards, forms, reading surfaces                                     |
+| Warning / 琥珀 | `#A96821` | Risk checks and uncertain data                                     |
 
 Accessibility constraints:
 
@@ -100,6 +100,19 @@ Wide layout adds context but does not turn the product into a dense enterprise d
 ## Self-critique before implementation
 
 The first palette draft leaned toward the common near-black plus acid fitness aesthetic. It was revised to mineral blue, juniper, and paper surfaces because the product's central behavior is sustained observation rather than maximum-intensity performance. The single expressive risk is now the Rhythm Rail and its fill grammar; the rest of the interface stays quiet so that records remain readable.
+
+## Implementation review — iteration 001
+
+The first Taro implementation uses shared CSS variables from `packages/design-tokens`, keeps Chinese text on system sans-serif fallbacks, and reserves monospaced treatment for measurements. The Today shell contains readiness, the plan-vs-actual Rhythm Rail, an explanation card, quick recording actions, persistent navigation, and an explicit non-medical AI note.
+
+Reviewed evidence:
+
+- [390 × 844 mobile production capture](../../output/playwright/iteration-001-mobile.png)
+- [1280 × 900 responsive H5 production capture](../../output/playwright/iteration-001-wide.png)
+
+The review found and corrected a wide-layout collision between the profile mark and fixed navigation, a missing favicon request, and generic button semantics in the accessibility tree. The final browser run reports zero console errors or warnings and exposes primary actions as buttons. The lunch estimate remains visibly uncertain and produces a confirmation-required message instead of silently becoming a record.
+
+Still open before the complete client design can be called validated: 320 px width, large text, keyboard focus traversal, reduced motion, and the full loading/empty/edited/offline/error state matrix.
 
 ## Screenshot review checklist
 

@@ -1,0 +1,34 @@
+:root,
+page {
+  --color-ink: #142426;
+  --color-mineral: #244c66;
+  --color-juniper: #3f756b;
+  --color-pulse: #e96a5b;
+  --color-mist: #f2f6f5;
+  --color-paper: #fcfdfc;
+  --color-warning: #a96821;
+  --color-line: #d5e0dd;
+  --color-muted: #607174;
+  --color-mineral-soft: #e4edf1;
+  --color-juniper-soft: #e2efeb;
+  --color-warning-soft: #f6ecdf;
+
+  --font-body: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+  --font-display: 'Barlow Condensed', 'Arial Narrow', var(--font-body);
+  --font-metric: 'JetBrains Mono', 'Cascadia Mono', 'SFMono-Regular', monospace;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  --radius-control: 10px;
+  --radius-card: 14px;
+  --radius-round: 999px;
+
+  --shadow-float: 0 16px 36px rgba(36, 76, 102, 0.1);
+  --motion-quick: 160ms;
+  --motion-settle: 220ms;
+}

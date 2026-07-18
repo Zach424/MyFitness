@@ -2,7 +2,7 @@
 
 面向普通健身人群的多端记录与 AI 规划产品。产品把身体、训练、饮食和恢复数据整理为可解释、可调整、可持续执行的个人计划。
 
-> 当前阶段：Foundation / 第 0 轮。仓库正在建立产品边界、设计系统、技术架构和可审计的迭代流程，尚未发布可运行版本。
+> 当前阶段：Client foundation / 第 1 轮已完成。仓库已提供可运行的 Taro 今日页，能够分别构建微信小程序与响应式 H5；目前使用本地夹具数据，尚未接入账号、API 或真实持久化。
 
 ## 产品边界
 
@@ -11,25 +11,33 @@
 - AI 定位：解释记录、生成生活方式建议并协助调整计划，不诊断疾病，不替代医生、营养师或持证教练。
 - 隐私默认：健康记录和身体照片按敏感数据保护，AI 估计值必须经用户确认后才能写入正式记录。
 
-## 计划中的仓库结构
+## 当前仓库结构
 
 ```text
 apps/
   client/          Taro + React：微信小程序与 H5
-  admin/           Next.js：运营与内容管理后台
-  api/             NestJS：业务 API 与异步任务入口
-  mobile/          React Native：第二阶段原生 App
-services/
-  ai/              FastAPI：模型编排、视觉分析与评估
 packages/
-  contracts/       跨端 API 类型与数据校验
-  domain/          指标、单位、计划和安全规则
   design-tokens/   颜色、字体、间距、动效和图表变量
 docs/              产品、设计、架构和每轮迭代档案
-infra/             本地环境、CI/CD 与部署清单
+output/playwright/ 浏览器视觉验收证据
 ```
 
-目录会随对应模块开始开发时创建，避免在没有实现的情况下制造空壳。
+后续迭代会按路线图逐步增加 `apps/api`、`packages/contracts`、`packages/domain`、`services/ai`、管理后台和基础设施目录，避免在没有实现的情况下制造空壳。
+
+## 本地运行
+
+需要 Node.js、pnpm 和微信开发者工具。安装依赖后可执行：
+
+```bash
+pnpm install
+pnpm dev:h5
+pnpm build:h5
+pnpm build:weapp
+pnpm test
+pnpm typecheck
+```
+
+H5 和微信小程序产物分别生成到 `apps/client/dist-h5` 与 `apps/client/dist-weapp`，两次构建不会互相清理。
 
 ## 开发方式
 
@@ -52,6 +60,9 @@ infra/             本地环境、CI/CD 与部署清单
 - [技术架构](docs/architecture/ARCHITECTURE.md)
 - [架构决策 0001](docs/architecture/decisions/0001-platform-architecture.md)
 - [第 0 轮档案](docs/iterations/000-foundation.md)
+- [第 1 轮档案](docs/iterations/001-client-foundation.md)
+- [移动端视觉证据](output/playwright/iteration-001-mobile.png)
+- [宽屏视觉证据](output/playwright/iteration-001-wide.png)
 
 ## 仓库同步说明
 
