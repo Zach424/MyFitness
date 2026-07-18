@@ -2,7 +2,7 @@
 
 The roadmap is organized as controlled iterations. A round may take several working sessions, but it ends only after implementation, validation, archive update, and a commit.
 
-Progress snapshot (2026-07-18): iterations 0–2 are complete locally; iteration 3 is the active next scope. Later iterations remain queued behind its identity, profile and consent gates.
+Progress snapshot (2026-07-18): iterations 0–3 are complete locally; iteration 4 is the active next scope. The identity, adult eligibility, profile, goals and consent gates now support real record screens.
 
 | Iteration | Primary scope                                       | Exit evidence                                                                              |
 | --------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------ |

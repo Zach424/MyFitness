@@ -4,14 +4,22 @@ import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
   resolve: {
-    alias: {
-      '@myfitness/contracts': fileURLToPath(
-        new URL('./packages/contracts/src/index.ts', import.meta.url),
-      ),
-      '@myfitness/domain': fileURLToPath(
-        new URL('./packages/domain/src/index.ts', import.meta.url),
-      ),
-    },
+    alias: [
+      {
+        find: '@myfitness/contracts/onboarding.constants',
+        replacement: fileURLToPath(
+          new URL('./packages/contracts/src/onboarding.constants.ts', import.meta.url),
+        ),
+      },
+      {
+        find: '@myfitness/contracts',
+        replacement: fileURLToPath(new URL('./packages/contracts/src/index.ts', import.meta.url)),
+      },
+      {
+        find: '@myfitness/domain',
+        replacement: fileURLToPath(new URL('./packages/domain/src/index.ts', import.meta.url)),
+      },
+    ],
   },
   test: {
     coverage: {

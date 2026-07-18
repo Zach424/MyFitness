@@ -52,12 +52,15 @@
   height: 42px;
   align-items: center;
   justify-content: center;
+  margin: 0;
+  padding: 0;
   border: 1px solid rgba(36, 76, 102, 0.18);
   border-radius: 50%;
   color: var(--color-mineral);
   background: var(--color-paper);
   font-size: 14px;
   font-weight: 700;
+  line-height: 1;
 }
 
 .hero {

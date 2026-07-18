@@ -8,6 +8,7 @@ export const buildOpenApiDocument = (app: INestApplication) => {
       'Privacy-first record API. AI-derived values remain candidates until explicit confirmation.',
     )
     .setVersion('0.1.0')
+    .addBearerAuth(undefined, 'bearer')
     .build()
 
   return SwaggerModule.createDocument(app, config, {

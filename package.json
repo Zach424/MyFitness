@@ -19,11 +19,16 @@
     "dev:h5": "pnpm --filter @myfitness/client dev:h5",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "preview:h5": "node scripts/serve-h5.mjs",
     "test": "vitest run",
+    "test:e2e": "playwright test",
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "typecheck": "pnpm --filter @myfitness/contracts build && pnpm --filter @myfitness/domain build && pnpm -r --if-present typecheck"
   },
   "devDependencies": {
+    "@playwright/test": "1.61.1",
+    "@types/pg": "8.20.0",
+    "pg": "8.22.0",
     "prettier": "^3.6.2",
     "typescript": "5.9.3",
     "vitest": "4.1.10"

@@ -1,6 +1,6 @@
 # Architecture baseline
 
-Status: accepted and implemented through the iteration-002 client/API foundations; changes require an ADR.
+Status: accepted and implemented through the iteration-003 identity/onboarding foundation; changes require an ADR.
 
 ## System shape
 
@@ -41,7 +41,8 @@ Implemented foundation:
 - `packages/contracts` owns Zod request/response schemas and emits OpenAPI 3.0 JSON Schema.
 - `packages/domain` owns measurement units, canonical conversion, plausible ranges and integer score rules.
 - PostgreSQL 18.4 stores measurements through parameterized `pg`; ordered SQL migrations run transactionally and record a SHA-256 checksum to detect drift.
-- Local identity is an explicit `x-demo-user-id` header. It is deliberately documented as temporary and must be replaced before any shared environment.
+- Protected routes resolve an opaque Bearer session to a server-owned user principal. Only SHA-256 token hashes are persisted; the local issuer is disabled in production and can later be replaced by verified WeChat/phone adapters without changing resource ownership.
+- Adult profile, training goal, risk eligibility and immutable purpose/version consent events persist transactionally. Profile updates use optimistic revision checks.
 
 ## Data rules
 
@@ -57,6 +58,8 @@ All health-domain events store:
 AI output is a proposal. Only an explicit user action or deterministic system process with a documented contract can create a confirmed record.
 
 The implemented measurement subset and field-level invariants are documented in [HEALTH_RECORD_MODEL.md](HEALTH_RECORD_MODEL.md). ADR-0002 records why contract validation, deterministic normalization and database checks deliberately overlap.
+
+The implemented identity, profile, goal, risk and consent invariants are documented in [IDENTITY_PROFILE_MODEL.md](IDENTITY_PROFILE_MODEL.md). ADR-0003 records the replaceable provider identity and opaque session decision.
 
 ## API and event conventions
 

@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@myfitness/contracts": "workspace:*",
     "@myfitness/design-tokens": "workspace:*",
     "@tarojs/components": "4.2.1",
     "@tarojs/helper": "4.2.1",

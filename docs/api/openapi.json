@@ -1,6 +1,62 @@
 {
   "openapi": "3.0.0",
   "paths": {
+    "/v1/auth/dev/session": {
+      "post": {
+        "description": "Disabled when NODE_ENV=production. Replace with WeChat/phone verification.",
+        "operationId": "AuthController_createDevSession",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "subject": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 128,
+                    "pattern": "^[A-Za-z0-9._:-]+$"
+                  }
+                },
+                "required": ["subject"],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "accessToken": { "type": "string", "minLength": 32 },
+                    "userId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    }
+                  },
+                  "required": ["accessToken", "userId", "expiresAt"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create a local-only opaque session",
+        "tags": ["authentication"]
+      }
+    },
     "/v1/health": {
       "get": {
         "operationId": "HealthController_readiness",
@@ -32,13 +88,6 @@
       "post": {
         "operationId": "HealthRecordsController_create",
         "parameters": [
-          {
-            "name": "x-demo-user-id",
-            "in": "header",
-            "description": "Temporary local identity boundary; replaced by authenticated user context later.",
-            "required": true,
-            "schema": { "type": "string", "format": "uuid" }
-          },
           {
             "name": "x-idempotency-key",
             "in": "header",
@@ -264,22 +313,16 @@
             }
           },
           "400": { "description": "Contract, provenance, timezone, unit or range is invalid." },
+          "401": { "description": "Bearer token is missing, invalid, expired or revoked." },
           "409": { "description": "Idempotency key was reused with different content." }
         },
+        "security": [{ "bearer": [] }],
         "summary": "Create an idempotent body or recovery measurement",
         "tags": ["health records"]
       },
       "get": {
         "operationId": "HealthRecordsController_list",
-        "parameters": [
-          {
-            "name": "x-demo-user-id",
-            "in": "header",
-            "description": "Temporary local identity boundary; replaced by authenticated user context later.",
-            "required": true,
-            "schema": { "type": "string", "format": "uuid" }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "200": {
             "description": "",
@@ -441,10 +484,562 @@
                 }
               }
             }
+          },
+          "401": { "description": "Bearer token is missing, invalid, expired or revoked." }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "List the latest 100 measurements for the authenticated user",
+        "tags": ["health records"]
+      }
+    },
+    "/v1/me/onboarding": {
+      "put": {
+        "operationId": "OnboardingController_upsert",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "adultConfirmed": { "type": "boolean", "enum": [true] },
+                  "profile": {
+                    "type": "object",
+                    "properties": {
+                      "displayName": { "type": "string", "minLength": 1, "maxLength": 40 },
+                      "ageBand": {
+                        "type": "string",
+                        "enum": ["18_24", "25_34", "35_44", "45_54", "55_64", "65_plus"]
+                      },
+                      "sexForCalculations": {
+                        "type": "string",
+                        "enum": ["female", "male", "unspecified"]
+                      },
+                      "height": {
+                        "type": "object",
+                        "properties": {
+                          "value": { "type": "number", "minimum": 0, "exclusiveMinimum": true },
+                          "unit": { "type": "string", "enum": ["cm", "in"] }
+                        },
+                        "required": ["value", "unit"],
+                        "additionalProperties": false
+                      },
+                      "unitSystem": { "type": "string", "enum": ["metric", "imperial"] },
+                      "timezone": { "type": "string", "minLength": 1, "maxLength": 64 }
+                    },
+                    "required": [
+                      "displayName",
+                      "ageBand",
+                      "sexForCalculations",
+                      "height",
+                      "unitSystem",
+                      "timezone"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "goal": {
+                    "type": "object",
+                    "properties": {
+                      "primaryGoal": {
+                        "type": "string",
+                        "enum": ["fat_loss", "muscle_gain", "fitness", "habit"]
+                      },
+                      "experience": {
+                        "type": "string",
+                        "enum": ["beginner", "intermediate", "advanced"]
+                      },
+                      "availableDays": {
+                        "minItems": 1,
+                        "maxItems": 7,
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+                        }
+                      },
+                      "sessionMinutes": { "type": "integer", "minimum": 15, "maximum": 180 },
+                      "equipment": {
+                        "minItems": 1,
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "bodyweight",
+                            "dumbbells",
+                            "barbell",
+                            "machines",
+                            "bands",
+                            "cardio"
+                          ]
+                        }
+                      },
+                      "dietaryPreferences": {
+                        "minItems": 1,
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": ["none", "vegetarian", "vegan", "halal", "lactose_free"]
+                        }
+                      }
+                    },
+                    "required": [
+                      "primaryGoal",
+                      "experience",
+                      "availableDays",
+                      "sessionMinutes",
+                      "equipment",
+                      "dietaryPreferences"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "risk": {
+                    "type": "object",
+                    "properties": {
+                      "flags": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "chest_pain",
+                            "fainting",
+                            "uncontrolled_condition",
+                            "acute_injury",
+                            "pregnancy",
+                            "eating_disorder_history"
+                          ]
+                        }
+                      },
+                      "acknowledged": { "type": "boolean", "enum": [true] }
+                    },
+                    "required": ["flags", "acknowledged"],
+                    "additionalProperties": false
+                  },
+                  "consents": {
+                    "type": "object",
+                    "properties": {
+                      "terms": {
+                        "type": "object",
+                        "properties": {
+                          "accepted": { "type": "boolean", "enum": [true] },
+                          "version": { "type": "string", "enum": ["2026-07-18"] }
+                        },
+                        "required": ["accepted", "version"],
+                        "additionalProperties": false
+                      },
+                      "privacy": {
+                        "type": "object",
+                        "properties": {
+                          "accepted": { "type": "boolean", "enum": [true] },
+                          "version": { "type": "string", "enum": ["2026-07-18"] }
+                        },
+                        "required": ["accepted", "version"],
+                        "additionalProperties": false
+                      },
+                      "healthData": {
+                        "type": "object",
+                        "properties": {
+                          "accepted": { "type": "boolean", "enum": [true] },
+                          "version": { "type": "string", "enum": ["2026-07-18"] }
+                        },
+                        "required": ["accepted", "version"],
+                        "additionalProperties": false
+                      }
+                    },
+                    "required": ["terms", "privacy", "healthData"],
+                    "additionalProperties": false
+                  },
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": ["adultConfirmed", "profile", "goal", "risk", "consents"],
+                "additionalProperties": false
+              }
+            }
           }
         },
-        "summary": "List the latest 100 measurements for the demo user",
-        "tags": ["health records"]
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "userId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "revision": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "exclusiveMinimum": true,
+                      "maximum": 9007199254740991
+                    },
+                    "profile": {
+                      "type": "object",
+                      "properties": {
+                        "displayName": { "type": "string" },
+                        "ageBand": {
+                          "type": "string",
+                          "enum": ["18_24", "25_34", "35_44", "45_54", "55_64", "65_plus"]
+                        },
+                        "sexForCalculations": {
+                          "type": "string",
+                          "enum": ["female", "male", "unspecified"]
+                        },
+                        "canonicalHeightCm": { "type": "number" },
+                        "displayHeight": {
+                          "type": "object",
+                          "properties": {
+                            "value": { "type": "number" },
+                            "unit": { "type": "string", "enum": ["cm", "in"] }
+                          },
+                          "required": ["value", "unit"],
+                          "additionalProperties": false
+                        },
+                        "unitSystem": { "type": "string", "enum": ["metric", "imperial"] },
+                        "timezone": { "type": "string" }
+                      },
+                      "required": [
+                        "displayName",
+                        "ageBand",
+                        "sexForCalculations",
+                        "canonicalHeightCm",
+                        "displayHeight",
+                        "unitSystem",
+                        "timezone"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "goal": {
+                      "type": "object",
+                      "properties": {
+                        "primaryGoal": {
+                          "type": "string",
+                          "enum": ["fat_loss", "muscle_gain", "fitness", "habit"]
+                        },
+                        "experience": {
+                          "type": "string",
+                          "enum": ["beginner", "intermediate", "advanced"]
+                        },
+                        "availableDays": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "enum": ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+                          }
+                        },
+                        "sessionMinutes": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "equipment": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "enum": [
+                              "bodyweight",
+                              "dumbbells",
+                              "barbell",
+                              "machines",
+                              "bands",
+                              "cardio"
+                            ]
+                          }
+                        },
+                        "dietaryPreferences": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "enum": ["none", "vegetarian", "vegan", "halal", "lactose_free"]
+                          }
+                        }
+                      },
+                      "required": [
+                        "primaryGoal",
+                        "experience",
+                        "availableDays",
+                        "sessionMinutes",
+                        "equipment",
+                        "dietaryPreferences"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "eligibility": {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "enum": ["eligible", "professional_clearance_required"]
+                        },
+                        "riskFlags": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "enum": [
+                              "chest_pain",
+                              "fainting",
+                              "uncontrolled_condition",
+                              "acute_injury",
+                              "pregnancy",
+                              "eating_disorder_history"
+                            ]
+                          }
+                        }
+                      },
+                      "required": ["status", "riskFlags"],
+                      "additionalProperties": false
+                    },
+                    "consents": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "purpose": {
+                            "type": "string",
+                            "enum": ["terms", "privacy", "health_data"]
+                          },
+                          "version": { "type": "string" },
+                          "acceptedAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                          }
+                        },
+                        "required": ["purpose", "version", "acceptedAt"],
+                        "additionalProperties": false
+                      }
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "updatedAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    }
+                  },
+                  "required": [
+                    "userId",
+                    "revision",
+                    "profile",
+                    "goal",
+                    "eligibility",
+                    "consents",
+                    "createdAt",
+                    "updatedAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": { "description": "Profile, goal, risk or consent input is invalid." },
+          "401": { "description": "Bearer token is missing, invalid, expired or revoked." },
+          "409": { "description": "expectedRevision does not match the stored profile." }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Create or revise the authenticated adult profile and goals",
+        "tags": ["onboarding"]
+      },
+      "get": {
+        "operationId": "OnboardingController_get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "userId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "revision": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "exclusiveMinimum": true,
+                      "maximum": 9007199254740991
+                    },
+                    "profile": {
+                      "type": "object",
+                      "properties": {
+                        "displayName": { "type": "string" },
+                        "ageBand": {
+                          "type": "string",
+                          "enum": ["18_24", "25_34", "35_44", "45_54", "55_64", "65_plus"]
+                        },
+                        "sexForCalculations": {
+                          "type": "string",
+                          "enum": ["female", "male", "unspecified"]
+                        },
+                        "canonicalHeightCm": { "type": "number" },
+                        "displayHeight": {
+                          "type": "object",
+                          "properties": {
+                            "value": { "type": "number" },
+                            "unit": { "type": "string", "enum": ["cm", "in"] }
+                          },
+                          "required": ["value", "unit"],
+                          "additionalProperties": false
+                        },
+                        "unitSystem": { "type": "string", "enum": ["metric", "imperial"] },
+                        "timezone": { "type": "string" }
+                      },
+                      "required": [
+                        "displayName",
+                        "ageBand",
+                        "sexForCalculations",
+                        "canonicalHeightCm",
+                        "displayHeight",
+                        "unitSystem",
+                        "timezone"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "goal": {
+                      "type": "object",
+                      "properties": {
+                        "primaryGoal": {
+                          "type": "string",
+                          "enum": ["fat_loss", "muscle_gain", "fitness", "habit"]
+                        },
+                        "experience": {
+                          "type": "string",
+                          "enum": ["beginner", "intermediate", "advanced"]
+                        },
+                        "availableDays": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "enum": ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+                          }
+                        },
+                        "sessionMinutes": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "equipment": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "enum": [
+                              "bodyweight",
+                              "dumbbells",
+                              "barbell",
+                              "machines",
+                              "bands",
+                              "cardio"
+                            ]
+                          }
+                        },
+                        "dietaryPreferences": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "enum": ["none", "vegetarian", "vegan", "halal", "lactose_free"]
+                          }
+                        }
+                      },
+                      "required": [
+                        "primaryGoal",
+                        "experience",
+                        "availableDays",
+                        "sessionMinutes",
+                        "equipment",
+                        "dietaryPreferences"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "eligibility": {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "enum": ["eligible", "professional_clearance_required"]
+                        },
+                        "riskFlags": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "enum": [
+                              "chest_pain",
+                              "fainting",
+                              "uncontrolled_condition",
+                              "acute_injury",
+                              "pregnancy",
+                              "eating_disorder_history"
+                            ]
+                          }
+                        }
+                      },
+                      "required": ["status", "riskFlags"],
+                      "additionalProperties": false
+                    },
+                    "consents": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "purpose": {
+                            "type": "string",
+                            "enum": ["terms", "privacy", "health_data"]
+                          },
+                          "version": { "type": "string" },
+                          "acceptedAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                          }
+                        },
+                        "required": ["purpose", "version", "acceptedAt"],
+                        "additionalProperties": false
+                      }
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "updatedAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    }
+                  },
+                  "required": [
+                    "userId",
+                    "revision",
+                    "profile",
+                    "goal",
+                    "eligibility",
+                    "consents",
+                    "createdAt",
+                    "updatedAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": { "description": "Bearer token is missing, invalid, expired or revoked." },
+          "404": { "description": "Onboarding has not been completed." }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Get the authenticated user profile, goals and consent receipts",
+        "tags": ["onboarding"]
       }
     }
   },
@@ -456,5 +1051,8 @@
   },
   "tags": [],
   "servers": [],
-  "components": { "schemas": {} }
+  "components": {
+    "securitySchemes": { "bearer": { "scheme": "bearer", "bearerFormat": "JWT", "type": "http" } },
+    "schemas": {}
+  }
 }

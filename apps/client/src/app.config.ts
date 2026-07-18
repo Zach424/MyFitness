@@ -1,5 +1,5 @@
 export default defineAppConfig({
-  pages: ['pages/index/index'],
+  pages: ['pages/index/index', 'pages/onboarding/index'],
   window: {
     backgroundColor: '#F2F6F5',
     backgroundTextStyle: 'dark',

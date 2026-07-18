@@ -2,7 +2,7 @@
 
 面向普通健身人群的多端记录与 AI 规划产品。产品把身体、训练、饮食和恢复数据整理为可解释、可调整、可持续执行的个人计划。
 
-> 当前阶段：API foundation / 第 2 轮已完成。仓库已提供 Taro 今日页、NestJS API、共享健康记录契约、PostgreSQL 迁移与本地 Compose 环境；客户端仍使用夹具数据，账号与建档流程将在下一轮接入。
+> 当前阶段：Adult onboarding / 第 3 轮已完成。仓库已提供 Taro 今日页与三步成人建档、NestJS API、服务端会话身份、版本化同意、健康记录契约、PostgreSQL 迁移和本地端到端验收；今日节律仍使用夹具，身体与恢复记录界面将在下一轮接入真实 API。
 
 ## 产品边界
 
@@ -16,7 +16,7 @@
 ```text
 apps/
   client/          Taro + React：微信小程序与 H5
-  api/             NestJS：健康记录 API、OpenAPI 与迁移入口
+  api/             NestJS：身份、建档、健康记录 API、OpenAPI 与迁移入口
 packages/
   contracts/       Zod：跨端请求、响应和来源契约
   domain/          单位归一化、指标范围和确定性规则
@@ -52,7 +52,17 @@ pnpm test:integration
 pnpm dev:api
 ```
 
-随后可访问 `http://127.0.0.1:3100/v1/health` 与 `http://127.0.0.1:3100/docs`。`x-demo-user-id` 仅用于本地开发边界，不代表已完成生产认证；`pnpm db:down` 会停止本地容器并保留数据卷。
+随后可访问 `http://127.0.0.1:3100/v1/health` 与 `http://127.0.0.1:3100/docs`。开发身份通过 `POST /v1/auth/dev/session` 获取不透明 Bearer 令牌；该签发器在 `NODE_ENV=production` 时关闭，数据库只保存 SHA-256 哈希。生产身份提供商仍需在发布前接入。
+
+生产构建的浏览器端到端验收需要数据库已迁移，执行：
+
+```bash
+pnpm build:api
+pnpm build:h5
+pnpm test:e2e
+```
+
+Playwright 会复用或启动 API 与 H5 预览服务。`pnpm db:down` 会停止本地容器并保留数据卷。
 
 ## 开发方式
 
@@ -75,13 +85,18 @@ pnpm dev:api
 - [技术架构](docs/architecture/ARCHITECTURE.md)
 - [架构决策 0001](docs/architecture/decisions/0001-platform-architecture.md)
 - [架构决策 0002](docs/architecture/decisions/0002-health-record-contract.md)
+- [架构决策 0003](docs/architecture/decisions/0003-identity-onboarding-boundary.md)
 - [健康记录数据模型](docs/architecture/HEALTH_RECORD_MODEL.md)
+- [身份与建档数据模型](docs/architecture/IDENTITY_PROFILE_MODEL.md)
 - [API 契约与 OpenAPI](docs/api/README.md)
 - [第 0 轮档案](docs/iterations/000-foundation.md)
 - [第 1 轮档案](docs/iterations/001-client-foundation.md)
 - [第 2 轮档案](docs/iterations/002-api-foundation.md)
+- [第 3 轮档案](docs/iterations/003-onboarding.md)
 - [移动端视觉证据](output/playwright/iteration-001-mobile.png)
 - [宽屏视觉证据](output/playwright/iteration-001-wide.png)
+- [建档移动端证据](output/playwright/iteration-003-onboarding-mobile.png)
+- [建档宽屏证据](output/playwright/iteration-003-onboarding-wide.png)
 
 ## 仓库同步说明
 

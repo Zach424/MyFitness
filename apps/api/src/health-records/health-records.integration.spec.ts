@@ -11,9 +11,11 @@ import { runMigrations } from '../database/migrate'
 
 describe('health-record API with PostgreSQL', () => {
   const databaseUrl = getRuntimeConfig().databaseUrl
-  const userId = randomUUID()
   const pool = new Pool({ connectionString: databaseUrl })
   let app: INestApplication
+  let accessToken = ''
+  let userId = ''
+  let otherUserId = ''
 
   const record = {
     metric: 'body.weight',
@@ -29,10 +31,19 @@ describe('health-record API with PostgreSQL', () => {
     await runMigrations(databaseUrl)
     app = await createApplication(false)
     await app.init()
+    const session = await request(app.getHttpServer())
+      .post('/v1/auth/dev/session')
+      .send({ subject: `records-${randomUUID()}` })
+      .expect(200)
+    accessToken = session.body.accessToken as string
+    userId = session.body.userId as string
   })
 
   afterAll(async () => {
     await pool.query('DELETE FROM health_records WHERE user_id = $1', [userId])
+    await pool.query('DELETE FROM users WHERE id = ANY($1::uuid[])', [
+      [userId, otherUserId].filter(Boolean),
+    ])
     await pool.end()
     await app.close()
   })
@@ -47,7 +58,7 @@ describe('health-record API with PostgreSQL', () => {
     const idempotencyKey = `test-${randomUUID()}`
     const first = await request(app.getHttpServer())
       .post('/v1/health-records')
-      .set('x-demo-user-id', userId)
+      .set('Authorization', `Bearer ${accessToken}`)
       .set('x-idempotency-key', idempotencyKey)
       .send(record)
       .expect(201)
@@ -65,7 +76,7 @@ describe('health-record API with PostgreSQL', () => {
 
     const replay = await request(app.getHttpServer())
       .post('/v1/health-records')
-      .set('x-demo-user-id', userId)
+      .set('Authorization', `Bearer ${accessToken}`)
       .set('x-idempotency-key', idempotencyKey)
       .send(record)
       .expect(201)
@@ -73,21 +84,26 @@ describe('health-record API with PostgreSQL', () => {
 
     await request(app.getHttpServer())
       .post('/v1/health-records')
-      .set('x-demo-user-id', userId)
+      .set('Authorization', `Bearer ${accessToken}`)
       .set('x-idempotency-key', idempotencyKey)
       .send({ ...record, value: 170 })
       .expect(409)
 
     const list = await request(app.getHttpServer())
       .get('/v1/health-records')
-      .set('x-demo-user-id', userId)
+      .set('Authorization', `Bearer ${accessToken}`)
       .expect(200)
     expect(list.body.items).toHaveLength(1)
     expect(list.body.items[0].id).toBe(first.body.id)
 
+    const otherSession = await request(app.getHttpServer())
+      .post('/v1/auth/dev/session')
+      .send({ subject: `records-other-${randomUUID()}` })
+      .expect(200)
+    otherUserId = otherSession.body.userId as string
     const otherUserList = await request(app.getHttpServer())
       .get('/v1/health-records')
-      .set('x-demo-user-id', randomUUID())
+      .set('Authorization', `Bearer ${String(otherSession.body.accessToken)}`)
       .expect(200)
     expect(otherUserList.body.items).toEqual([])
   })
@@ -95,7 +111,7 @@ describe('health-record API with PostgreSQL', () => {
   it('refuses to persist an AI estimate as confirmed fact', async () => {
     const response = await request(app.getHttpServer())
       .post('/v1/health-records')
-      .set('x-demo-user-id', userId)
+      .set('Authorization', `Bearer ${accessToken}`)
       .set('x-idempotency-key', `test-${randomUUID()}`)
       .send({
         ...record,

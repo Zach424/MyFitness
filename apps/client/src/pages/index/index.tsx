@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { Button, ScrollView, Text, View } from '@tarojs/components'
+import Taro from '@tarojs/taro'
 
+import { buttonA11yProps } from '../../lib/accessibility'
 import { todayFixture, type RailItem } from './today.fixture'
 import './index.scss'
 
@@ -24,11 +26,6 @@ const navItems = [
   { key: 'coach', glyph: '问', label: '教练' },
   { key: 'me', glyph: '我', label: '我的' },
 ] as const
-
-// Taro renders these attributes on H5, but its cross-platform ButtonProps does
-// not currently declare the standard HTML role attribute. A shared spread keeps
-// the runtime accessibility contract explicit without weakening component types.
-const buttonA11yProps = { role: 'button', tabIndex: 0 } as const
 
 const RailEntry = ({ item, onAction }: { item: RailItem; onAction: (item: RailItem) => void }) => (
   <View className={`rail-entry rail-entry--${item.status}`}>
@@ -77,9 +74,14 @@ const IndexPage = () => {
               <Text className="wordmark__cn">衡迹</Text>
               <Text className="wordmark__en">DAILY NOTE</Text>
             </View>
-            <View className="profile-mark" aria-label="个人资料">
+            <Button
+              {...buttonA11yProps}
+              className="profile-mark"
+              aria-label="建立或更新个人资料"
+              onClick={() => void Taro.navigateTo({ url: '/pages/onboarding/index' })}
+            >
               陈
-            </View>
+            </Button>
           </View>
 
           <View className="desktop-grid">
@@ -196,7 +198,11 @@ const IndexPage = () => {
             key={item.key}
             aria-current={item.key === 'today' ? 'page' : undefined}
             onClick={() => {
-              if (item.key !== 'today') setFeedback(`${item.label}模块将在后续迭代接入。`)
+              if (item.key === 'me') {
+                void Taro.navigateTo({ url: '/pages/onboarding/index' })
+              } else if (item.key !== 'today') {
+                setFeedback(`${item.label}模块将在后续迭代接入。`)
+              }
             }}
           >
             <Text className="nav-item__glyph" aria-hidden="true">
