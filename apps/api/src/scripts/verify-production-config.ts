@@ -15,6 +15,10 @@ process.stdout.write(
       bind: { host: config.host, port: config.port },
       authProviders: config.authEnabledProviders,
       aiProtocol: endpointProtocol(config.aiServiceUrl),
+      aiRunRecovery: {
+        staleMs: config.aiRunStaleMs,
+        pollMs: config.aiRunReconcilePollMs,
+      },
       redisProtocol: endpointProtocol(config.redisUrl),
       objectStorage: {
         protocol: endpointProtocol(config.objectStorageEndpoint),

@@ -1,6 +1,6 @@
 # Product risk register
 
-Last reviewed: 2026-07-20, iteration 022
+Last reviewed: 2026-07-20, iteration 023
 
 This register tracks release-affecting uncertainty. A mitigation is evidence to collect, not a claim that the risk is gone.
 

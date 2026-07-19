@@ -3,6 +3,7 @@ import path from 'node:path'
 
 import {
   aiExplanationProviders,
+  aiExplanationContentSchema,
   aiExplanationSources,
   aiPlanPromptVersion,
   aiPlanValidatorVersion,
@@ -101,6 +102,10 @@ const verifiedUserIdentityMigrationPath = path.resolve(
   __dirname,
   '../../../../infra/postgres/migrations/0015_verified_user_identity.sql',
 )
+const aiRecoveryMigrationPath = path.resolve(
+  __dirname,
+  '../../../../infra/postgres/migrations/0017_reconcile_ai_explanation_runs.sql',
+)
 
 describe('health-record migration drift', () => {
   it('contains every contract metric, unit and source kind', async () => {
@@ -189,6 +194,23 @@ describe('health-record migration drift', () => {
     ]) {
       expect(migration, `${value} is missing from the AI migration`).toContain(`'${value}'`)
     }
+  })
+
+  it('gives pending AI explanations a bounded deterministic recovery state', async () => {
+    const migration = await readFile(aiRecoveryMigrationPath, 'utf8')
+    for (const value of [
+      'recovery_content',
+      'expires_at',
+      'ai_explanation_runs_recovery_check',
+      'ai_explanation_runs_expiry_idx',
+    ]) {
+      expect(migration).toContain(value)
+    }
+    const legacyRecoveryJson = migration.match(/THEN\s+'(\{[\s\S]*?\})'::jsonb/)?.[1]
+    expect(legacyRecoveryJson).toBeDefined()
+    expect(aiExplanationContentSchema.parse(JSON.parse(legacyRecoveryJson!))).toMatchObject({
+      headline: '上次说明已安全结束',
+    })
   })
 
   it('contains every food-photo lifecycle, provenance and contract version', async () => {

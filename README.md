@@ -2,7 +2,7 @@
 
 面向普通健身人群的多端记录与 AI 规划产品。产品把身体、训练、饮食和恢复数据整理为可解释、可调整、可持续执行的个人计划。
 
-> 当前阶段：首个服务候选 `v0.1.0-rc.1` 已发布验证；H5/WeApp 的确定性 TAR、来源绑定、实际字节校验和部署准入已在第 21 轮实现。现有候选仍是“仅服务”记录，下一候选必须先配置经批准的客户端 API 地址才能发布客户端制品。托管账号、真实微信/OIDC 凭据、域名/TLS、集中遥测和责任人仍是上线门槛。
+> 当前阶段：首个服务候选 `v0.1.0-rc.1` 已发布验证；H5/WeApp 的确定性 TAR、来源绑定、实际字节校验、部署准入、删除回执恢复与 AI 解释崩溃恢复已完成本地验收。现有候选仍是“仅服务”记录，下一候选必须先配置经批准的客户端 API 地址才能发布客户端制品。托管账号、真实微信/OIDC 凭据、域名/TLS、集中遥测和责任人仍是上线门槛。
 
 ## 产品边界
 
@@ -75,7 +75,7 @@ pnpm dev:api
 
 每个业务请求会收到 `X-Request-ID` 和限流头。生产环境还必须配置 `REDIS_URL`、`RATE_LIMIT_HASH_SECRET`、`OPERATIONS_TOKEN` 与准确的 `TRUST_PROXY_HOPS`。受独立令牌保护的 `GET /v1/internal/metrics` 只用于私网 Prometheus 抓取，令牌不得进入客户端代码。Redis 故障时业务流量按设计返回可关联的 `503`，不会退化为单进程或 fail-open 限流；具体见 [API 运营手册](docs/operations/API_OPERATIONS_RUNBOOK.md)。
 
-AI worker 健康地址是 `http://127.0.0.1:8001/health`。本地默认使用无费用的 `fixture`，不会读取 `OPENAI_API_KEY`；切换 `AI_PROVIDER=openai` 前必须完成隐私、地域、费用、限额和质量审批。计划解释只使用精简计划摘要。照片路径只向 worker 提供服务端重编码 JPEG 和食物目录允许清单；`store:false` 不等于零留存协议，外部提供方回执只会标记为受审批政策约束。
+AI worker 健康地址是 `http://127.0.0.1:8001/health`。本地默认使用无费用的 `fixture`，不会读取 `OPENAI_API_KEY`；切换 `AI_PROVIDER=openai` 前必须完成隐私、地域、费用、限额和质量审批。计划解释只使用精简计划摘要；每个待处理请求都带有晚于 worker 超时的数据库截止时间和预验证恢复结果，API 启动/定时任务会把过期请求原子收敛为可见的确定性 fallback。照片路径只向 worker 提供服务端重编码 JPEG 和食物目录允许清单；`store:false` 不等于零留存协议，外部提供方回执只会标记为受审批政策约束。
 
 本地照片和恢复删除日志存放在私有 MinIO bucket；照片逻辑键为 `<user UUID>/<photo UUID>.jpg`，对象前缀与 ledger 前缀可独立配置。API 使用 AWS SDK v3 写入 SHA-256 校验和，新照片条件写入避免覆盖；所有删除路径先落 PostgreSQL 持久任务。生产环境必须配置 HTTPS 对象端点、最小权限凭据、SSE/KMS、生命周期/版本/复制、独立 ledger 留存以及至少 32 字符的照片签名和 ledger HMAC 密钥。真实照片模型仍默认关闭；本地 MinIO 不是生产对象存储证明。
 
@@ -138,6 +138,7 @@ Playwright 会复用或启动 API、H5 与管理员预览服务。`pnpm db:down`
 - [架构决策 0020](docs/architecture/decisions/0020-managed-environment-admission.md)
 - [架构决策 0021](docs/architecture/decisions/0021-immutable-client-delivery-artifacts.md)
 - [架构决策 0022](docs/architecture/decisions/0022-recoverable-account-erasure-receipts.md)
+- [架构决策 0023](docs/architecture/decisions/0023-crash-safe-ai-explanation-lifecycle.md)
 - [健康记录数据模型](docs/architecture/HEALTH_RECORD_MODEL.md)
 - [训练记录数据模型](docs/architecture/WORKOUT_MODEL.md)
 - [饮食记录数据模型](docs/architecture/NUTRITION_MODEL.md)
@@ -177,6 +178,7 @@ Playwright 会复用或启动 API、H5 与管理员预览服务。`pnpm db:down`
 - [第 20 轮档案](docs/iterations/020-managed-environment-admission.md)
 - [第 21 轮档案](docs/iterations/021-immutable-client-delivery-artifacts.md)
 - [第 22 轮档案](docs/iterations/022-recoverable-account-erasure-receipts.md)
+- [第 23 轮档案](docs/iterations/023-crash-safe-ai-explanation-lifecycle.md)
 - [移动端视觉证据](output/playwright/iteration-001-mobile.png)
 - [宽屏视觉证据](output/playwright/iteration-001-wide.png)
 - [建档移动端证据](output/playwright/iteration-003-onboarding-mobile.png)

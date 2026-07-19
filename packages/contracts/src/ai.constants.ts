@@ -22,5 +22,6 @@ export const aiWorkerFailureCodes = [
 export const aiPlanPromptVersion = 'plan-explanation-v1' as const
 export const aiPlanValidatorVersion = 'plan-explanation-safety-v1' as const
 export const aiPlanConsentVersion = 'ai-plan-explanation-2026-07-19.v1' as const
+export const aiRunRecoveryModel = 'orchestrator-recovery-v1' as const
 export const aiPlanSafetyNote =
   '这是对既有计划的辅助解释，不是医疗诊断或处方；计划内容没有被 AI 自动修改。' as const

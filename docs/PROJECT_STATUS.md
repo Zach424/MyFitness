@@ -2,7 +2,7 @@
 
 Last reviewed: 2026-07-20
 
-Stage: first service candidate published; deterministic client release, combined admission and recoverable account-erasure receipts are locally green before the next candidate and external shared infrastructure
+Stage: first service candidate published; deterministic client release, combined admission, recoverable erasure receipts and crash-safe AI explanation lifecycle are locally green before the next candidate and external shared infrastructure
 
 Primary release target: WeChat Mini Program + responsive H5
 
@@ -15,16 +15,16 @@ MyFitness / 衡迹 turns body, training, nutrition, and recovery records into sa
 | Module                  | Status                       | Current evidence                                                    | Next gate                                   |
 | ----------------------- | ---------------------------- | ------------------------------------------------------------------- | ------------------------------------------- |
 | Product scope           | Done for MVP baseline        | `docs/product/PRODUCT_BRIEF.md`                                     | Validate with target-user interviews        |
-| Delivery roadmap        | Done for planning baseline   | `docs/product/ROADMAP.md`                                           | Execute iteration 23 managed shared test    |
+| Delivery roadmap        | Done for planning baseline   | `docs/product/ROADMAP.md`                                           | Execute iteration 24 managed shared test    |
 | Design language         | Partial, eleven flows tested | Core flows + recovery state + 23 reviewed screenshots               | Large text, keyboard and remaining states   |
 | Client: Mini Program/H5 | Partial                      | Source-bound WeApp candidate + preview-only H5 deterministic TARs   | Publish next candidate; device/H5 identity  |
 | Admin console           | Partial, local slice done    | OIDC BFF, exact lookup, role split and Evidence Rail exercised      | Select IdP, owner, retention and deployment |
 | Business API            | Partial                      | Verified identity plus non-root self-contained OCI runtime          | Shared deployment and real credential proof |
 | Domain rules            | Partial                      | Safety validators + strict privacy action contracts                 | Add release policy enforcement              |
-| AI service              | Partial                      | Text/vision fixture/OpenAI adapters + 15 eval cases                 | Approved real-provider canary               |
+| AI service              | Partial                      | Crash-safe review-only runs + text/vision adapters + 15 eval cases  | Approved real-provider canary               |
 | Native App/devices      | Deferred                     | Phase-two decision                                                  | MVP retention gate reached                  |
 | Privacy/compliance      | Partial, durable local proof | Recoverable erasure, identity suppression and restore replay tested | Production retention/provider/legal review  |
-| Testing/observability   | Partial                      | 134 unit, 43 integration and 22 browser tests locally green         | Green implementing CI; centralize telemetry |
+| Testing/observability   | Partial                      | 138 unit, 46 integration and 22 browser tests locally green         | Green implementing CI; centralize telemetry |
 | Deployment              | Partial, admission ready     | Service/client byte gate + strict non-secret environment admission  | Approve dossier, provision and canary       |
 
 Status vocabulary: `Done` means validated for the present stage, `Partial` means usable but missing a named gate, `Pending` means not implemented, and `Deferred` means intentionally outside the current release.
@@ -50,7 +50,7 @@ Status vocabulary: `Done` means validated for the present stage, `Partial` means
 - React Native for the later native App rather than forcing device integrations into the first client.
 - NestJS modular monolith + PostgreSQL + Redis for business services.
 - FastAPI worker with authenticated fixture/OpenAI provider adapters, strict structured output, bounded retry and health check.
-- Review-only AI runs with explicit versioned consent, minimized context, prompt/model/validator provenance, owner-scoped idempotency, deterministic validation/fallback and exact plan-revision binding.
+- Review-only AI runs with explicit versioned consent, minimized context, prompt/model/validator provenance, owner-scoped idempotency, deterministic validation/fallback and exact plan-revision binding. Every reservation stores a separately validated recovery result and database deadline beyond the worker timeout; runtime startup/interval reconciliation uses atomic `SKIP LOCKED` claims, while private operations routes expose aggregate health and a bounded manual pass without user content.
 - Revocable food-photo proposals with per-request consent, signed upload/preview, Sharp metadata stripping, 24-hour expiry, catalog-bound validation, durable deletion paths and confirmation into an unsaved draft only.
 - Private S3-compatible object storage with checksummed/conditional writes, production-required SSE, user-scoped photo keys and local pinned MinIO.
 - PostgreSQL durable data-operation jobs with transactional enqueue, atomic `SKIP LOCKED` claims, leases, exponential retry, attempts, dead-letter state and aggregate operations evidence.
@@ -79,7 +79,6 @@ Status vocabulary: `Done` means validated for the present stage, `Partial` means
 | Food-photo portion estimates can be misleading                                         | High   | Catalog-bound ranges/confidence, user edit, no auto-write; broaden real-image evaluation               |
 | AI may generate unsafe training or diet changes                                        | High   | Deterministic constraints and validators precede model output                                          |
 | Production AI retention/region/cost/quality are unverified                             | High   | Keep fixture default and provider receipts `policy_bound`; require approved real canary                |
-| Pending AI runs can outlive a crashed orchestration request                            | Medium | Add expiry and reconciliation before shared beta                                                       |
 | Fifteen AI eval cases do not establish broad safety                                    | High   | Add expert-reviewed real/obfuscated/injection image and text cases with thresholds                     |
 | Local MinIO does not prove production object controls                                  | High   | Configure cloud bucket/KMS/IAM/lifecycle/versioning/replication and exercise outage/restore            |
 | Domestic Android health data is fragmented                                             | Medium | Defer device sync; start HealthKit/Health Connect/Huawei feasibility after retention gate              |
@@ -113,4 +112,4 @@ The MVP cannot enter public beta until all of the following are reproducible:
 
 ## Primary next step
 
-Iteration 23: obtain the approved client API URL plus owner-approved account/region/budget and protected references, publish a new immutable service/client candidate, provision the managed shared test environment, inject real WeChat/OIDC secrets, deploy admitted services without general traffic, upload the exact WeApp TAR to private preview, and exercise identity, custody, telemetry, canary and no-traffic rollback. H5 public delivery remains held until iteration 24 selects a production identity adapter.
+Iteration 24: obtain the approved client API URL plus owner-approved account/region/budget and protected references, publish a new immutable service/client candidate, provision the managed shared test environment, inject real WeChat/OIDC secrets, deploy admitted services without general traffic, upload the exact WeApp TAR to private preview, and exercise identity, custody, telemetry, canary and no-traffic rollback. H5 public delivery remains held until iteration 25 selects a production identity adapter.

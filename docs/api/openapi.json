@@ -4773,6 +4773,44 @@
         "tags": ["operations"]
       }
     },
+    "/v1/internal/ai-explanations": {
+      "get": {
+        "operationId": "OperationsController_aiExplanationStatus",
+        "parameters": [
+          {
+            "name": "x-operations-token",
+            "in": "header",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Aggregate pending/reconciled counts without user content." },
+          "401": { "description": "Operations token is missing or invalid." }
+        },
+        "summary": "Read aggregate AI explanation run lifecycle health",
+        "tags": ["operations"]
+      }
+    },
+    "/v1/internal/ai-explanations/reconcile": {
+      "post": {
+        "operationId": "OperationsController_reconcileAiExplanations",
+        "parameters": [
+          {
+            "name": "x-operations-token",
+            "in": "header",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Count of runs moved to deterministic fallback." },
+          "401": { "description": "Operations token is missing or invalid." }
+        },
+        "summary": "Run one bounded expired AI explanation reconciliation pass",
+        "tags": ["operations"]
+      }
+    },
     "/v1/plans/weekly": {
       "post": {
         "operationId": "PlansController_generate",

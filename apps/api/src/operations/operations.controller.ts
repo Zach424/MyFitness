@@ -7,6 +7,7 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger'
 
+import { AiService } from '../ai/ai.service'
 import { InternalOperationsGuard } from './internal-operations.guard'
 import { DataOperationsService } from './data-operations.service'
 import { OperationalMetricsService } from './operational-metrics.service'
@@ -20,6 +21,7 @@ export class OperationsController {
   constructor(
     private readonly metrics: OperationalMetricsService,
     private readonly dataOperations: DataOperationsService,
+    private readonly ai: AiService,
   ) {}
 
   @Get('metrics')
@@ -52,5 +54,26 @@ export class OperationsController {
   @ApiUnauthorizedResponse({ description: 'Operations token is missing or invalid.' })
   drainDataOperations() {
     return this.dataOperations.drain()
+  }
+
+  @Get('ai-explanations')
+  @Header('Cache-Control', 'no-store')
+  @ApiOperation({ summary: 'Read aggregate AI explanation run lifecycle health' })
+  @ApiHeader({ name: 'x-operations-token', required: true })
+  @ApiOkResponse({ description: 'Aggregate pending/reconciled counts without user content.' })
+  @ApiUnauthorizedResponse({ description: 'Operations token is missing or invalid.' })
+  aiExplanationStatus() {
+    return this.ai.snapshot()
+  }
+
+  @Post('ai-explanations/reconcile')
+  @HttpCode(200)
+  @Header('Cache-Control', 'no-store')
+  @ApiOperation({ summary: 'Run one bounded expired AI explanation reconciliation pass' })
+  @ApiHeader({ name: 'x-operations-token', required: true })
+  @ApiOkResponse({ description: 'Count of runs moved to deterministic fallback.' })
+  @ApiUnauthorizedResponse({ description: 'Operations token is missing or invalid.' })
+  reconcileAiExplanations() {
+    return this.ai.reconcileExpired()
   }
 }

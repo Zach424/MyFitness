@@ -1,6 +1,6 @@
 # AI plan-explanation model
 
-Status: implemented for iteration 009 review-only explanations
+Status: review-only explanations implemented in iteration 009; crash-safe pending-run recovery implemented in iteration 023
 
 ## Boundary
 
@@ -9,7 +9,7 @@ The AI path explains an already-generated deterministic weekly plan. It cannot a
 ```mermaid
 flowchart LR
   C["Taro client\nexplicit per-request consent"] --> A["NestJS API\nownership + plan revision gate"]
-  A --> D[("AI run + consent provenance")]
+  A --> D[("AI run + consent provenance\nrecovery result + deadline")]
   A --> W["FastAPI worker\nprovider-neutral request"]
   W --> F["Fixture provider"]
   W --> O["OpenAI Responses API"]
@@ -18,6 +18,7 @@ flowchart LR
   V -->|valid| D
   V -->|invalid or unavailable| B["Deterministic fallback"]
   B --> D
+  R["Runtime reconciler\nstartup + interval"] -->|"expired pending only\nSKIP LOCKED"| D
 ```
 
 The client labels `model`, `fixture`, and `fallback` separately. No UI action can apply model prose to the plan.
@@ -31,7 +32,7 @@ The client labels `model`, `fixture`, and `fallback` separately. No UI action ca
 - raw body, workout, meal, and recovery record histories;
 - photos, free-text notes, and database identifiers other than the plan ID needed for request correlation.
 
-The API stores a SHA-256 input fingerprint, not the serialized prompt or minimized input. A completed run stores the explanation, plan revision, prompt/validator/model provenance, source, failure code, latency, optional token counts, provider response ID, and consent-event reference.
+The API stores a SHA-256 input fingerprint, not the serialized prompt or minimized input. While a run is pending it also stores a validated deterministic recovery result derived from that same minimized context and a database deadline. The recovery column is cleared on completion. A completed run stores the explanation, plan revision, prompt/validator/model provenance, source, failure code, latency, optional token counts, provider response ID, and consent-event reference.
 
 ## Consent and lifecycle
 
@@ -40,8 +41,12 @@ Generation requires the client to submit an affirmative `ai_plan_explanation` co
 1. verifies ownership, current plan revision, actionable status, onboarding revision, and professional-clearance eligibility;
 2. records or reuses the immutable purpose/version consent event;
 3. reserves a `pending` run before contacting a provider, using an owner-scoped idempotency key;
-4. returns the prior completed result for an identical retry or reports an in-progress conflict;
+4. returns the prior completed result for an identical retry, reconciles it when its deadline has passed, or reports an in-progress conflict;
 5. validates the provider output and completes the run as `model`, `fixture`, or `fallback`.
+
+The configured run deadline must exceed the worker HTTP timeout by at least five seconds. Runtime instances reconcile expired rows once at startup and on `AI_RUN_RECONCILE_POLL_MS`; metadata-only application assembly performs no background I/O. A bounded common-table expression orders expired rows and uses `FOR UPDATE SKIP LOCKED`, so multiple replicas cannot complete the same row. If the worker and reconciler race, the first terminal update wins and the normal request reads that same completed result instead of returning a second outcome.
+
+Reconciliation never calls an external provider. It promotes the prevalidated recovery result as `source=fallback`, `provider=unavailable`, `model=orchestrator-recovery-v1`, and `failureCode=provider_timeout`. Migration 0017 gives legacy pending rows a generic safe recovery result and deadline, so already abandoned work is recoverable without retaining historical prompts or context.
 
 The client considers an explanation current only when its `planRevision` exactly matches the plan. After a plan change, the old result remains auditable in storage but is not shown as the current explanation.
 
@@ -78,4 +83,6 @@ The initial fixture used the harmless negation “不生成能量处方”. The 
 
 The checked-in `plan-explanation-v1.json` evaluation set covers grounded output, an allowed plan number, calorie prescription, diagnosis, invented number, unknown evidence, and missing schema fields. `pnpm eval:ai` writes the reproducible report under `output/evals/`.
 
-Before shared beta, add expert-reviewed Chinese cases, multilingual/obfuscated unsafe text, prompt-injection inputs, cost/latency budgets, rate limits, trace correlation, abandoned-pending recovery, consent revocation/export, provider data-processing review, and a real-provider canary approved by the project owner.
+Private operations routes report only pending/expired/reconciled counts and oldest-pending time, and can run one bounded reconciliation pass. They require the independent operations token, return `no-store`, and expose no run ID, user ID, plan ID, prompt, context or explanation content.
+
+Before shared beta, add expert-reviewed Chinese cases, multilingual/obfuscated unsafe text, prompt-injection inputs, cost/latency budgets, route-specific rate limits, centralized lifecycle alerts, consent revocation/export review, provider data-processing review, and a real-provider canary approved by the project owner.

@@ -84,6 +84,27 @@ describe('production user identity configuration', () => {
     expect(() => getRuntimeConfig()).toThrow('REDIS_URL must use rediss:// in production')
   })
 
+  it('keeps the AI run deadline beyond the worker timeout and bounds reconciliation polling', () => {
+    configureProduction()
+    expect(getRuntimeConfig()).toMatchObject({
+      aiTimeoutMs: 22_000,
+      aiRunStaleMs: 30_000,
+      aiRunReconcilePollMs: 15_000,
+    })
+
+    setEnvironment('AI_SERVICE_TIMEOUT_MS', '26000')
+    expect(() => getRuntimeConfig()).toThrow(
+      'AI_RUN_STALE_MS must exceed AI_SERVICE_TIMEOUT_MS by at least 5000',
+    )
+    setEnvironment('AI_RUN_STALE_MS', '31000')
+    expect(getRuntimeConfig().aiRunStaleMs).toBe(31_000)
+
+    setEnvironment('AI_RUN_RECONCILE_POLL_MS', '999')
+    expect(() => getRuntimeConfig()).toThrow(
+      'AI_RUN_RECONCILE_POLL_MS must be an integer between 1000 and 300000',
+    )
+  })
+
   it('rejects the development adapter in production', () => {
     configureProduction()
     setEnvironment('AUTH_ENABLED_PROVIDERS', 'dev,wechat')

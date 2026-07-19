@@ -4,10 +4,11 @@ import type { INestApplication } from '@nestjs/common'
 import { aiPlanConsentVersion } from '@myfitness/contracts'
 import { Pool } from 'pg'
 import request from 'supertest'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
 import { createApplication } from '../bootstrap'
 import { runMigrations } from '../database/migrate'
+import { AiService } from './ai.service'
 
 const databaseUrl =
   process.env.DATABASE_URL ?? 'postgresql://myfitness:myfitness_local@127.0.0.1:54329/myfitness'
@@ -54,6 +55,7 @@ describe('AI plan explanations with PostgreSQL and fixture worker', () => {
   let otherToken: string
   let planId: string
   const userIds: string[] = []
+  const previousReconcilePollMs = process.env.AI_RUN_RECONCILE_POLL_MS
 
   const createSession = async (subject: string) => {
     const response = await request(app.getHttpServer())
@@ -65,6 +67,7 @@ describe('AI plan explanations with PostgreSQL and fixture worker', () => {
   }
 
   beforeAll(async () => {
+    process.env.AI_RUN_RECONCILE_POLL_MS = '300000'
     await runMigrations(databaseUrl)
     pool = new Pool({ connectionString: databaseUrl })
     app = await createApplication(false)
@@ -93,6 +96,8 @@ describe('AI plan explanations with PostgreSQL and fixture worker', () => {
     await pool.query('DELETE FROM users WHERE id = ANY($1::uuid[])', [userIds])
     await pool.end()
     await app.close()
+    if (previousReconcilePollMs === undefined) delete process.env.AI_RUN_RECONCILE_POLL_MS
+    else process.env.AI_RUN_RECONCILE_POLL_MS = previousReconcilePollMs
   })
 
   it('records explicit consent, idempotent provenance and owner-only history', async () => {
@@ -178,6 +183,163 @@ describe('AI plan explanations with PostgreSQL and fixture worker', () => {
       await fallbackApp.close()
       if (previousUrl === undefined) delete process.env.AI_SERVICE_URL
       else process.env.AI_SERVICE_URL = previousUrl
+    }
+  })
+
+  it('reconciles a crashed pending run once and keeps the original request idempotent', async () => {
+    let releaseWorker: (() => void) | undefined
+    const blockedWorker = new Promise<Response>((resolve) => {
+      releaseWorker = () => resolve(new Response(null, { status: 503 }))
+    })
+    const originalFetch = globalThis.fetch
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      if (String(input).endsWith('/v1/explanations')) return blockedWorker
+      return originalFetch(input, init)
+    })
+    const key = `ai-crash-${randomUUID()}`
+    const generation = request(app.getHttpServer())
+      .post(`/v1/plans/weekly/${planId}/explanation`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('x-idempotency-key', key)
+      .send(explanationBody(1))
+      .expect(201)
+      .then((response) => response)
+
+    try {
+      await expect
+        .poll(async () => {
+          const pending = await pool.query<{ count: string }>(
+            `SELECT COUNT(*)::text AS count FROM ai_explanation_runs
+             WHERE idempotency_key = $1 AND status = 'pending'`,
+            [key],
+          )
+          return pending.rows[0]?.count
+        })
+        .toBe('1')
+
+      const reserved = await pool.query<{
+        id: string
+        recovery_content: unknown
+        has_bounded_deadline: boolean
+      }>(
+        `SELECT id, recovery_content, expires_at > created_at AS has_bounded_deadline
+         FROM ai_explanation_runs WHERE idempotency_key = $1`,
+        [key],
+      )
+      expect(reserved.rows[0]?.has_bounded_deadline).toBe(true)
+      expect(reserved.rows[0]?.recovery_content).toEqual(
+        expect.objectContaining({ headline: expect.any(String), highlights: expect.any(Array) }),
+      )
+
+      await pool.query(
+        `UPDATE ai_explanation_runs
+         SET created_at = NOW() - INTERVAL '2 minutes',
+             expires_at = NOW() - INTERVAL '1 minute'
+         WHERE id = $1`,
+        [reserved.rows[0]!.id],
+      )
+      const reconciliations = await Promise.all([
+        app.get(AiService).reconcileExpired(1),
+        app.get(AiService).reconcileExpired(1),
+      ])
+      expect(reconciliations.reduce((sum, result) => sum + result.reconciled, 0)).toBe(1)
+
+      releaseWorker?.()
+      const response = await generation
+      expect(response.body).toMatchObject({
+        source: 'fallback',
+        provider: 'unavailable',
+        model: 'orchestrator-recovery-v1',
+        failureCode: 'provider_timeout',
+      })
+
+      const repeated = await request(app.getHttpServer())
+        .post(`/v1/plans/weekly/${planId}/explanation`)
+        .set('Authorization', `Bearer ${token}`)
+        .set('x-idempotency-key', key)
+        .send(explanationBody(1))
+        .expect(201)
+      expect(repeated.body.id).toBe(response.body.id)
+
+      const stored = await pool.query<{
+        status: string
+        recovery_content: unknown
+        failure_code: string
+      }>(
+        `SELECT status, recovery_content, failure_code
+         FROM ai_explanation_runs WHERE id = $1`,
+        [response.body.id],
+      )
+      expect(stored.rows[0]).toMatchObject({
+        status: 'completed',
+        recovery_content: null,
+        failure_code: 'provider_timeout',
+      })
+    } finally {
+      releaseWorker?.()
+      fetchSpy.mockRestore()
+    }
+  })
+
+  it('recovers an expired pending run from the identical idempotent retry', async () => {
+    let releaseWorker: (() => void) | undefined
+    const blockedWorker = new Promise<Response>((resolve) => {
+      releaseWorker = () => resolve(new Response(null, { status: 503 }))
+    })
+    const originalFetch = globalThis.fetch
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      if (String(input).endsWith('/v1/explanations')) return blockedWorker
+      return originalFetch(input, init)
+    })
+    const key = `ai-retry-recovery-${randomUUID()}`
+    const generation = request(app.getHttpServer())
+      .post(`/v1/plans/weekly/${planId}/explanation`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('x-idempotency-key', key)
+      .send(explanationBody(1))
+      .expect(201)
+      .then((response) => response)
+
+    try {
+      await expect
+        .poll(async () => {
+          const pending = await pool.query<{ id: string }>(
+            `SELECT id FROM ai_explanation_runs
+             WHERE idempotency_key = $1 AND status = 'pending'`,
+            [key],
+          )
+          return pending.rows[0]?.id
+        })
+        .toEqual(expect.any(String))
+
+      await pool.query(
+        `UPDATE ai_explanation_runs
+         SET created_at = NOW() - INTERVAL '2 minutes',
+             expires_at = NOW() - INTERVAL '1 minute'
+         WHERE idempotency_key = $1`,
+        [key],
+      )
+
+      const repeated = await request(app.getHttpServer())
+        .post(`/v1/plans/weekly/${planId}/explanation`)
+        .set('Authorization', `Bearer ${token}`)
+        .set('x-idempotency-key', key)
+        .send(explanationBody(1))
+        .expect(201)
+      expect(repeated.body).toMatchObject({
+        source: 'fallback',
+        provider: 'unavailable',
+        model: 'orchestrator-recovery-v1',
+        failureCode: 'provider_timeout',
+      })
+
+      releaseWorker?.()
+      const original = await generation
+      expect(original.body.id).toBe(repeated.body.id)
+      expect(original.body.content).toEqual(repeated.body.content)
+    } finally {
+      releaseWorker?.()
+      fetchSpy.mockRestore()
     }
   })
 

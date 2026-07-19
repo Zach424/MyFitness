@@ -1,6 +1,14 @@
 import { createHash, randomUUID } from 'node:crypto'
 
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common'
+import {
+  ConflictException,
+  Inject,
+  Injectable,
+  Logger,
+  NotFoundException,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common'
 import type {
   AiExplanation,
   AiExplanationContent,
@@ -12,6 +20,7 @@ import {
   aiExplanationContentSchema,
   aiPlanConsentVersion,
   aiPlanPromptVersion,
+  aiRunRecoveryModel,
   aiPlanSafetyNote,
   aiPlanValidatorVersion,
   aiWorkerResponseSchema,
@@ -23,6 +32,10 @@ import {
 } from '@myfitness/domain'
 import type { QueryResult, QueryResultRow } from 'pg'
 
+import {
+  APPLICATION_LIFECYCLE_POLICY,
+  type ApplicationLifecyclePolicy,
+} from '../application-lifecycle'
 import { getRuntimeConfig } from '../config'
 import { DatabaseService } from '../database/database.service'
 import { PlansService } from '../plans/plans.service'
@@ -50,6 +63,8 @@ type RunRow = {
   latency_ms: number | null
   input_tokens: number | null
   output_tokens: number | null
+  recovery_content: AiExplanationContent | null
+  expires_at: Date
   created_at: Date
   completed_at: Date | null
 }
@@ -70,13 +85,34 @@ const mapRun = (row: RunRow): AiExplanation => ({
 })
 
 @Injectable()
-export class AiService {
+export class AiService implements OnModuleInit, OnModuleDestroy {
   private readonly config = getRuntimeConfig()
+  private readonly logger = new Logger(AiService.name)
+  private reconcileTimer?: NodeJS.Timeout
 
   constructor(
     private readonly database: DatabaseService,
     private readonly plans: PlansService,
+    @Inject(APPLICATION_LIFECYCLE_POLICY)
+    private readonly lifecycle: ApplicationLifecyclePolicy,
   ) {}
+
+  async onModuleInit() {
+    if (!this.lifecycle.runBackgroundJobs) return
+    await this.reconcileExpired().catch(() =>
+      this.logger.error('initial AI explanation reconciliation failed'),
+    )
+    this.reconcileTimer = setInterval(() => {
+      void this.reconcileExpired().catch(() =>
+        this.logger.error('AI explanation reconciliation failed'),
+      )
+    }, this.config.aiRunReconcilePollMs)
+    this.reconcileTimer.unref()
+  }
+
+  onModuleDestroy() {
+    if (this.reconcileTimer) clearInterval(this.reconcileTimer)
+  }
 
   private async callWorker(request: unknown): Promise<AiWorkerResponse | null> {
     try {
@@ -103,6 +139,7 @@ export class AiService {
     planRevision: number,
     idempotencyKey: string,
     requestHash: string,
+    recoveryContent: AiExplanationContent,
   ): Promise<{ id: string; existing?: AiExplanation }> {
     return this.database.withTransaction(async (client) => {
       await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [
@@ -117,6 +154,8 @@ export class AiService {
         throw new ConflictException('idempotency key was already used for another request')
       }
       if (row?.status === 'pending') {
+        const recovered = await this.reconcileOne(client, row.id)
+        if (recovered) return { id: recovered.id, existing: mapRun(recovered) }
         throw new ConflictException({
           code: 'ai_explanation_in_progress',
           message: '解释仍在生成，请稍后读取历史记录。',
@@ -142,8 +181,11 @@ export class AiService {
           INSERT INTO ai_explanation_runs (
             id, user_id, plan_id, plan_revision, status,
             prompt_version, validator_version, input_fingerprint,
-            idempotency_key, consent_event_id
-          ) VALUES ($1, $2, $3, $4, 'pending', $5, $6, $7, $8, $9)
+            idempotency_key, consent_event_id, recovery_content, expires_at
+          ) VALUES (
+            $1, $2, $3, $4, 'pending', $5, $6, $7, $8, $9, $10::jsonb,
+            NOW() + ($11::integer * INTERVAL '1 millisecond')
+          )
         `,
         [
           id,
@@ -155,10 +197,88 @@ export class AiService {
           requestHash,
           idempotencyKey,
           consentId,
+          JSON.stringify(recoveryContent),
+          this.config.aiRunStaleMs,
         ],
       )
       return { id }
     })
+  }
+
+  private async reconcileOne(executor: QueryExecutor, id: string) {
+    const result = await executor.query<RunRow>(
+      `UPDATE ai_explanation_runs
+       SET status = 'completed', source = 'fallback', provider = 'unavailable',
+           model = $2, content = recovery_content, recovery_content = NULL,
+           safety_note = $3, failure_code = 'provider_timeout',
+           latency_ms = LEAST(
+             2147483647,
+             GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (NOW() - created_at)) * 1000))
+           )::integer,
+           completed_at = NOW()
+       WHERE id = $1 AND status = 'pending' AND expires_at <= NOW()
+       RETURNING *`,
+      [id, aiRunRecoveryModel, aiPlanSafetyNote],
+    )
+    return result.rows[0]
+  }
+
+  async reconcileExpired(limit = 50) {
+    const boundedLimit = Math.max(1, Math.min(100, Math.trunc(limit)))
+    const result = await this.database.query<RunRow>(
+      `WITH expired AS (
+         SELECT id
+         FROM ai_explanation_runs
+         WHERE status = 'pending' AND expires_at <= NOW()
+         ORDER BY expires_at, created_at
+         FOR UPDATE SKIP LOCKED
+         LIMIT $1
+       )
+       UPDATE ai_explanation_runs AS run
+       SET status = 'completed', source = 'fallback', provider = 'unavailable',
+           model = $2, content = run.recovery_content, recovery_content = NULL,
+           safety_note = $3, failure_code = 'provider_timeout',
+           latency_ms = LEAST(
+             2147483647,
+             GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (NOW() - run.created_at)) * 1000))
+           )::integer,
+           completed_at = NOW()
+       FROM expired
+       WHERE run.id = expired.id AND run.status = 'pending'
+       RETURNING run.*`,
+      [boundedLimit, aiRunRecoveryModel, aiPlanSafetyNote],
+    )
+    return { reconciled: result.rowCount ?? 0 }
+  }
+
+  async snapshot() {
+    const result = await this.database.query<{
+      pending: string
+      expired: string
+      reconciled: string
+      oldest_pending_at: Date | null
+    }>(
+      `SELECT
+         COUNT(*) FILTER (WHERE status = 'pending')::text AS pending,
+         COUNT(*) FILTER (
+           WHERE status = 'pending' AND expires_at <= NOW()
+         )::text AS expired,
+         COUNT(*) FILTER (
+           WHERE status = 'completed' AND model = $1 AND failure_code = 'provider_timeout'
+         )::text AS reconciled,
+         MIN(created_at) FILTER (WHERE status = 'pending') AS oldest_pending_at
+       FROM ai_explanation_runs`,
+      [aiRunRecoveryModel],
+    )
+    const row = result.rows[0]!
+    return {
+      counts: {
+        pending: Number(row.pending),
+        expired: Number(row.expired),
+        reconciled: Number(row.reconciled),
+      },
+      oldestPendingAt: row.oldest_pending_at?.toISOString() ?? null,
+    }
   }
 
   private async complete(
@@ -182,7 +302,8 @@ export class AiService {
         SET status = 'completed', source = $2, provider = $3, model = $4,
             content = $5::jsonb, safety_note = $6, failure_code = $7,
             provider_response_id = $8, latency_ms = $9,
-            input_tokens = $10, output_tokens = $11, completed_at = NOW()
+            input_tokens = $10, output_tokens = $11, recovery_content = NULL,
+            completed_at = NOW()
         WHERE id = $1 AND status = 'pending'
         RETURNING *
       `,
@@ -201,7 +322,14 @@ export class AiService {
       ],
     )
     const row = updated.rows[0]
-    if (!row) throw new ConflictException('AI explanation run is no longer pending')
+    if (!row) {
+      const existing = await executor.query<RunRow>(
+        'SELECT * FROM ai_explanation_runs WHERE id = $1',
+        [id],
+      )
+      if (existing.rows[0]?.status === 'completed') return mapRun(existing.rows[0])
+      throw new ConflictException('AI explanation run is no longer pending')
+    }
     return mapRun(row)
   }
 
@@ -213,6 +341,7 @@ export class AiService {
   ) {
     const plan = await this.plans.getActionableForAi(userId, planId, input.expectedPlanRevision)
     const context = buildAiPlanContext(plan)
+    const recoveryContent = buildDeterministicAiFallback(context)
     const requestHash = createHash('sha256')
       .update(JSON.stringify({ context, consentVersion: input.consent.version }))
       .digest('hex')
@@ -222,6 +351,7 @@ export class AiService {
       plan.revision,
       idempotencyKey,
       requestHash,
+      recoveryContent,
     )
     if (reservation.existing) return reservation.existing
 
@@ -245,14 +375,14 @@ export class AiService {
         provider = worker.provider
         model = worker.model
       } else {
-        content = buildDeterministicAiFallback(context)
+        content = recoveryContent
         source = 'fallback'
         provider = worker.provider
         model = worker.model
         failureCode = 'safety_validation_failed'
       }
     } else {
-      content = buildDeterministicAiFallback(context)
+      content = recoveryContent
       source = 'fallback'
       provider = worker?.provider ?? 'unavailable'
       model = worker?.model ?? 'worker-unavailable'

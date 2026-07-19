@@ -13,6 +13,7 @@ Use the artifact, secret, migration, rollout and immutable-digest procedure in [
 5. Scrape `/v1/internal/metrics` through a private network path. Never put the operations token in H5, Mini Program code or a browser admin bundle.
 6. Send a canary request with a UUIDv4 `x-request-id` and verify the same value in response headers and structured logs.
 7. Verify aggregate `/v1/internal/data-operations` access and complete the [data custody preflight](DATA_CUSTODY_RUNBOOK.md) before accepting photo/account-erasure traffic.
+8. Verify aggregate `/v1/internal/ai-explanations` access. Confirm `AI_RUN_STALE_MS` exceeds `AI_SERVICE_TIMEOUT_MS` by at least 5 seconds and the polling interval fits the approved recovery objective.
 
 ## Minimum dashboard
 
@@ -22,6 +23,7 @@ Use the artifact, secret, migration, rollout and immutable-digest procedure in [
 - Any increase in `myfitness_rate_limit_backend_failures_total`.
 - PostgreSQL/Redis readiness and process/container restarts.
 - Object-storage readiness plus durable-job counts and oldest outstanding age.
+- AI explanation pending/expired/reconciled counts plus oldest pending age.
 - Redis memory, connections, command latency and rejected writes under `noeviction`.
 
 Suggested initial review thresholds—not production-certified SLOs:
@@ -53,6 +55,14 @@ Suggested initial review thresholds—not production-certified SLOs:
 - Rotating `RATE_LIMIT_HASH_SECRET` changes every actor fingerprint and effectively resets active windows. Perform during a controlled deployment and record the reset.
 - Never log either secret or place them in committed environment files.
 
+## Expired AI explanation incident
+
+1. Read `GET /v1/internal/ai-explanations` through the private operations path. It returns aggregate counts and the oldest pending timestamp only; do not query or copy user explanation rows into an incident channel.
+2. If `expired` is non-zero, call `POST /v1/internal/ai-explanations/reconcile` once. One call processes at most 50 rows with atomic `SKIP LOCKED` claims and returns only the reconciled count.
+3. Read the aggregate again. A decreasing count confirms database progress; repeated or growing expiry suggests worker latency, API restarts, database contention or a polling configuration fault.
+4. Check AI worker health, API restart history and `AI_SERVICE_TIMEOUT_MS`/`AI_RUN_STALE_MS` values. Do not raise the deadline merely to hide an unhealthy provider, and do not replay external model calls from operations.
+5. Recovered rows remain visibly labeled deterministic fallbacks with `provider_timeout`; they never mutate a weekly plan. Escalate sustained expiry to the future named AI/operations owner and preserve aggregate timing evidence.
+
 ## Rollback verification
 
-After an application rollback, rerun liveness/readiness, verify migration compatibility, make one correlated business request, inspect rate headers, scrape metrics, inspect outstanding durable jobs and run the current privacy deletion/restore smoke tests. Do not roll back to a version that cannot understand migrations 0013/0014 while deletion work is pending. A rollback is incomplete if it bypasses Redis/object custody, weakens auth, loses request correlation or strands erasure jobs.
+After an application rollback, rerun liveness/readiness, verify migration compatibility, make one correlated business request, inspect rate headers, scrape metrics, inspect outstanding durable jobs and AI explanation lifecycle aggregates, and run the current privacy deletion/restore smoke tests. Do not roll back to a version that cannot understand migrations 0013/0014/0017 while deletion or AI explanation work is pending. A rollback is incomplete if it bypasses Redis/object custody, weakens auth, loses request correlation, strands erasure jobs or leaves expired AI runs unreconciled.

@@ -286,6 +286,23 @@ export const getRuntimeConfig = () => {
   if (!Number.isInteger(aiTimeoutMs) || aiTimeoutMs < 1_000 || aiTimeoutMs > 65_000) {
     throw new Error('AI_SERVICE_TIMEOUT_MS must be an integer between 1000 and 65000')
   }
+  const aiRunStaleMs = parsePositiveInteger(
+    process.env.AI_RUN_STALE_MS,
+    30_000,
+    'AI_RUN_STALE_MS',
+    10_000,
+    300_000,
+  )
+  if (aiRunStaleMs < aiTimeoutMs + 5_000) {
+    throw new Error('AI_RUN_STALE_MS must exceed AI_SERVICE_TIMEOUT_MS by at least 5000')
+  }
+  const aiRunReconcilePollMs = parsePositiveInteger(
+    process.env.AI_RUN_RECONCILE_POLL_MS,
+    15_000,
+    'AI_RUN_RECONCILE_POLL_MS',
+    1_000,
+    300_000,
+  )
 
   return {
     databaseUrl,
@@ -298,6 +315,8 @@ export const getRuntimeConfig = () => {
     aiServiceUrl: exactAiServiceUrl.replace(/\/$/, ''),
     aiServiceToken,
     aiTimeoutMs,
+    aiRunStaleMs,
+    aiRunReconcilePollMs,
     photoSigningSecret,
     objectStorageEndpoint,
     objectStorageBucket: parseObjectStorageBucket(objectStorageBucket),

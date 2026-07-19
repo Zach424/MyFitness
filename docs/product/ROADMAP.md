@@ -2,7 +2,7 @@
 
 The roadmap is organized as controlled iterations. A round may take several working sessions, but it ends only after implementation, validation, archive update, and a commit.
 
-Progress snapshot (2026-07-20): iterations 0–22 are complete locally, including green hosted quality/smoke through iteration 21, verified service-only `v0.1.0-rc.1` assets, strict managed-environment admission, deterministic source-bound H5/WeApp TARs and recoverable account-erasure receipts. The externally gated managed deployment moved to iteration 23 because no owner-approved account, budget, domain, client API URL or protected credential references exist yet; this risk-reduction round did not invent them. Managed infrastructure, real WeChat credentials/device/domain proof, H5 production identity, cloud custody, centralized alerting and model/provider approval remain gated.
+Progress snapshot (2026-07-20): iterations 0–23 are complete locally, including green hosted quality/smoke through iteration 22, verified service-only `v0.1.0-rc.1` assets, strict managed-environment admission, deterministic source-bound H5/WeApp TARs, recoverable account-erasure receipts and crash-safe AI explanation reconciliation. The externally gated managed deployment moved to iteration 24 because no owner-approved account, budget, domain, client API URL or protected credential references exist yet; this risk-reduction round did not invent them. Managed infrastructure, real WeChat credentials/device/domain proof, H5 production identity, cloud custody, centralized alerting and model/provider approval remain gated.
 
 | Iteration | Primary scope                                       | Exit evidence                                                                                    |
 | --------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
@@ -29,9 +29,10 @@ Progress snapshot (2026-07-20): iterations 0–22 are complete locally, includin
 | 20        | Managed environment admission                       | Strict non-secret inventory, release/checksum binding, ordered plan and explicit rollback        |
 | 21        | Immutable client delivery artifacts                 | Deterministic H5/WeApp TARs, checksums, source/API binding and byte-level admission integration  |
 | 22        | Recoverable account-erasure receipts                | Single-use intent, hashed secret, lost-response/reload recovery and restore-safe proof           |
-| 23        | Managed shared test deployment                      | Managed services/secrets, real WeChat proof, telemetry, calibrated limits and rollback           |
-| 24        | Beta hardening and release                          | H5 identity, security review, budgets, accessibility, filing artifacts and staged rollout        |
-| 25        | Native App feasibility and device sync              | Retention gate reviewed; HealthKit/Health Connect/Huawei proof of concept                        |
+| 23        | Crash-safe AI explanation lifecycle                 | Durable deadline/fallback, startup/interval recovery, aggregate operations and race proof        |
+| 24        | Managed shared test deployment                      | Managed services/secrets, real WeChat proof, telemetry, calibrated limits and rollback           |
+| 25        | Beta hardening and release                          | H5 identity, security review, budgets, accessibility, filing artifacts and staged rollout        |
+| 26        | Native App feasibility and device sync              | Retention gate reviewed; HealthKit/Health Connect/Huawei proof of concept                        |
 
 ## Release gates
 
@@ -43,14 +44,14 @@ Progress snapshot (2026-07-20): iterations 0–22 are complete locally, includin
 
 ### Closed beta
 
-- Iterations 9–23 complete.
+- Iterations 9–24 complete.
 - AI evaluation set is versioned and safety validators block known high-risk cases.
 - Data export and deletion are exercised end to end.
 - Support, monitoring, cost limits, rollback, and incident ownership are assigned.
 
 ### Public release
 
-- Iteration 24 complete.
+- Iteration 25 complete.
 - Applicable ICP/APP/Mini Program privacy/AI registration and content-labeling work is reviewed.
 - Store materials match actual data practices and product claims.
 - Release starts with a small cohort and automatic rollback thresholds.

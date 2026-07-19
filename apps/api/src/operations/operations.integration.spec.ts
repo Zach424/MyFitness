@@ -203,6 +203,32 @@ describe('operations perimeter integration', () => {
       .expect({ claimed: 0, succeeded: 0 })
   })
 
+  it('exposes only aggregate AI lifecycle health and a bounded reconciliation pass', async () => {
+    await request(app.getHttpServer()).get('/v1/internal/ai-explanations').expect(401)
+    await request(app.getHttpServer()).post('/v1/internal/ai-explanations/reconcile').expect(401)
+
+    const status = await request(app.getHttpServer())
+      .get('/v1/internal/ai-explanations')
+      .set('x-operations-token', operationsToken)
+      .expect(200)
+    expect(status.headers['cache-control']).toBe('no-store')
+    expect(status.body).toEqual({
+      counts: {
+        pending: expect.any(Number),
+        expired: expect.any(Number),
+        reconciled: expect.any(Number),
+      },
+      oldestPendingAt: null,
+    })
+    expect(JSON.stringify(status.body)).not.toMatch(/[0-9a-f]{8}-[0-9a-f-]{27}/)
+
+    await request(app.getHttpServer())
+      .post('/v1/internal/ai-explanations/reconcile')
+      .set('x-operations-token', operationsToken)
+      .expect(200)
+      .expect({ reconciled: 0 })
+  })
+
   it('lets independent workers claim distinct durable jobs without duplicate execution', async () => {
     const jobIds = [randomUUID(), randomUUID()]
     const userIds = [randomUUID(), randomUUID()]

@@ -23,6 +23,8 @@ describe('OpenAPI document', () => {
     expect(document.paths['/v1/health']?.get).toBeDefined()
     expect(document.paths['/v1/health/live']?.get).toBeDefined()
     expect(document.paths['/v1/internal/metrics']?.get).toBeDefined()
+    expect(document.paths['/v1/internal/ai-explanations']?.get).toBeDefined()
+    expect(document.paths['/v1/internal/ai-explanations/reconcile']?.post).toBeDefined()
     expect(document.paths['/v1/admin/auth/dev/session']?.post).toBeDefined()
     expect(document.paths['/v1/admin/auth/oidc/exchange']?.post).toBeDefined()
     expect(document.paths['/v1/admin/auth/me']?.get).toBeDefined()
