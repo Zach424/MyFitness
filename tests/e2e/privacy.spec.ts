@@ -143,6 +143,9 @@ test.afterEach(async () => {
   }
   await database.query('DELETE FROM data_operation_jobs WHERE created_at >= $1', [testStartedAt])
   if (trackedReceiptId) {
+    await database.query('DELETE FROM auth_identity_suppressions WHERE erasure_receipt_id = $1', [
+      trackedReceiptId,
+    ])
     await database.query('DELETE FROM privacy_erasure_receipts WHERE receipt_id = $1', [
       trackedReceiptId,
     ])

@@ -1,13 +1,13 @@
 # Product risk register
 
-Last reviewed: 2026-07-19, iteration 015
+Last reviewed: 2026-07-19, iteration 016
 
 This register tracks release-affecting uncertainty. A mitigation is evidence to collect, not a claim that the risk is gone.
 
 | ID    | Risk                                                                                   | Level  | Current control / next gate                                                                                                                            |
 | ----- | -------------------------------------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | R-001 | GitHub transport is unavailable in the execution environment                           | High   | Preserve signed-off local commits; later authenticated fetch/replay/push without force                                                                 |
-| R-002 | Development identity is not production authentication                                  | High   | Dev issuer is production-disabled; add verified WeChat/phone identity before shared test                                                               |
+| R-002 | WeChat identity is mock-proven only and H5 has no release identity adapter             | High   | Configure real AppID/secret/domain, exercise device/shared login and select H5 identity before beta                                                    |
 | R-003 | Local restore-ledger erasure works, but production backup/provider ownership is absent | High   | Automate backup/retention, independently retain ledger, exercise shared restore and approve provider controls                                          |
 | R-004 | Real food-photo quality, latency, cost and provider data controls are unknown          | High   | Fixture remains default; require owner-approved canary, legal/region/retention review and thresholds                                                   |
 | R-005 | Local MinIO does not prove production object-store custody                             | High   | Configure cloud bucket/KMS/IAM/lifecycle/versioning/replication and exercise failure/restore                                                           |
@@ -24,7 +24,8 @@ This register tracks release-affecting uncertainty. A mitigation is evidence to 
 | R-016 | Enterprise operator identity and access governance are not configured                  | High   | Select OIDC tenant/client and named owner; exercise dual-reviewed provisioning, recertification, disablement, revocation and shared login before use   |
 | R-017 | Administrator audit is immutable only inside the primary database                      | High   | Define retention and owner; export to independently protected storage, include restore evidence and alert on write/access anomalies before real access |
 | R-018 | A committed deletion request can lose its one-time receipt token in transit            | High   | Add request idempotency and authenticated/token-safe receipt recovery before closed beta                                                               |
-| R-019 | Erasure ledger/secret loss would invalidate restored-backup suppression                | High   | Independently retain/replicate ledger and recover HMAC secret; version rotation and exercise loss scenarios                                            |
+| R-019 | Erasure ledger/secret loss would invalidate user and provider-identity suppression     | High   | Independently retain/replicate ledger and recover HMAC secret; implement dual-read version rotation and exercise loss scenarios                        |
 | R-020 | Dead-letter jobs lack named alerts and a least-privilege recovery service              | High   | Use exact-job audited runbook locally; add centralized paging, owner and safe recovery workflow before shared beta                                     |
+| R-021 | MVP erased-identity suppression currently prevents a new account for the same identity | High   | Confirm product/legal policy; if return is allowed, require an explicit fresh-account consent flow without reconnecting erased data before beta        |
 
 Resolved implementation defects remain documented in their iteration archive rather than removed from history. Product-level risks close only when the named release evidence exists.

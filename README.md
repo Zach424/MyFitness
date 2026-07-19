@@ -67,7 +67,7 @@ pnpm ops:verify-backup-restore
 pnpm dev:api
 ```
 
-随后可访问 liveness `http://127.0.0.1:3100/v1/health/live`、PostgreSQL+Redis+对象存储 readiness `http://127.0.0.1:3100/v1/health` 与 `http://127.0.0.1:3100/docs`。开发身份通过 `POST /v1/auth/dev/session` 获取不透明 Bearer 令牌；该签发器在 `NODE_ENV=production` 时关闭，数据库只保存 SHA-256 哈希。生产用户身份提供商仍需在发布前接入。
+随后可访问 liveness `http://127.0.0.1:3100/v1/health/live`、PostgreSQL+Redis+对象存储 readiness `http://127.0.0.1:3100/v1/health` 与 `http://127.0.0.1:3100/docs`。开发身份通过 `POST /v1/auth/dev/session` 获取不透明 Bearer 令牌；该签发器在生产环境关闭。微信小程序发布构建设置 `TARO_APP_AUTH_MODE=wechat` 和 HTTPS API 地址，客户端以 `Taro.login` code 调用 `POST /v1/auth/wechat/session`，API 服务端完成 `code2Session` 校验且不保存 `session_key`。真实 AppID、域名白名单与设备联调仍是共享测试环境门禁，详见 [用户身份运行手册](docs/operations/USER_IDENTITY_RUNBOOK.md)。
 
 管理员支持台默认运行在 `http://127.0.0.1:3101`。它通过 Next.js BFF 把管理员 API 令牌保存在 `HttpOnly`、`SameSite=Strict` Cookie 中，浏览器不能读取该令牌。生产登录使用 Authorization Code + PKCE + state + nonce，API 再独立验证 ID Token 的签名、issuer、audience、时效与 nonce，并只允许预配操作员换取一次性管理员会话。本地演示需要显式设置 `ADMIN_ENABLE_LOCAL_LOGIN=true`；即使管理端误开该开关，生产 API 仍会把本地签发入口返回为 `404` 并记录拒绝。配置和人员开通步骤见 [管理员访问手册](docs/operations/ADMIN_ACCESS_RUNBOOK.md)。
 

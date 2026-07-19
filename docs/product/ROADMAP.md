@@ -2,7 +2,7 @@
 
 The roadmap is organized as controlled iterations. A round may take several working sessions, but it ends only after implementation, validation, archive update, and a commit.
 
-Progress snapshot (2026-07-19): iterations 0–15 are complete locally; iteration 16 is next. The product now covers authenticated records, Today/trends, versioned deterministic plans, consented review-only AI/photo assistance, user-owned inventory/export/revocation, durable asynchronous erasure with restore-ledger proof, a Redis-backed API operational perimeter, compatibility-tested Taro security floors and an independent read-only operator/audit boundary. Production audit critical/high findings are zero; six moderate Taro build-chain findings, verified production user/operator identity, cloud storage/backup ownership, centralized alerting, model/provider approval and shared deployment remain gated.
+Progress snapshot (2026-07-19): iterations 0–16 are complete locally; iteration 17 is next. The product now adds a server-verified WeChat Mini Program identity path, provider-bound sessions and restore-safe erased-identity suppression to the existing authenticated record/planning/privacy loop. Production audit critical/high findings are zero; real WeChat credentials/device/domain proof, an H5 release identity, cloud storage/backup ownership, centralized alerting, model/provider approval and shared deployment remain gated.
 
 | Iteration | Primary scope                                       | Exit evidence                                                                                |
 | --------- | --------------------------------------------------- | -------------------------------------------------------------------------------------------- |
@@ -22,9 +22,10 @@ Progress snapshot (2026-07-19): iterations 0–15 are complete locally; iteratio
 | 13        | Production dependency remediation                   | Zero critical/high audit findings plus full type/test/dual-build/E2E compatibility evidence  |
 | 14        | Administrator access and support                    | Operator identity, RBAC, immutable audit and read-only support workflow exercised            |
 | 15        | Durable data operations                             | Durable jobs, private object storage, fault retries, restore ledger and provider disposition |
-| 16        | Production identity and shared test deployment      | Verified user identity, centralized telemetry, calibrated limits and rollback exercised      |
-| 17        | Beta hardening and release                          | Security review, performance budget, accessibility, store/filing artifacts, staged rollout   |
-| 18        | Native App feasibility and device sync              | Retention gate reviewed; HealthKit/Health Connect/Huawei proof of concept                    |
+| 16        | Verified WeChat user identity                       | Server code exchange, provider-bound sessions, erasure suppression and WeApp build proof     |
+| 17        | Shared test deployment                              | Managed services/secrets, real WeChat proof, telemetry, calibrated limits and rollback       |
+| 18        | Beta hardening and release                          | H5 identity, security review, budgets, accessibility, filing artifacts and staged rollout    |
+| 19        | Native App feasibility and device sync              | Retention gate reviewed; HealthKit/Health Connect/Huawei proof of concept                    |
 
 ## Release gates
 
@@ -36,14 +37,14 @@ Progress snapshot (2026-07-19): iterations 0–15 are complete locally; iteratio
 
 ### Closed beta
 
-- Iterations 9–16 complete.
+- Iterations 9–18 complete.
 - AI evaluation set is versioned and safety validators block known high-risk cases.
 - Data export and deletion are exercised end to end.
 - Support, monitoring, cost limits, rollback, and incident ownership are assigned.
 
 ### Public release
 
-- Iteration 17 complete.
+- Iteration 18 complete.
 - Applicable ICP/APP/Mini Program privacy/AI registration and content-labeling work is reviewed.
 - Store materials match actual data practices and product claims.
 - Release starts with a small cohort and automatic rollback thresholds.

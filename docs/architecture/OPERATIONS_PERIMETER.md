@@ -51,17 +51,18 @@ The two layers are deliberate. A route interceptor can use the authenticated use
 
 Redis stores only `prefix:policy:HMAC(actor)` keys. The HMAC secret stays outside Redis, and each key expires with its policy window. One Lua script performs `INCR`, first-write `PEXPIRE` and `PTTL`, so separate API replicas share a single decision. The local Redis container is non-persistent and uses `noeviction`; production requires a TLS/ACL-protected managed Redis-compatible service and isolated key prefix.
 
-| Policy              | Scope                | Limit/window |
-| ------------------- | -------------------- | ------------ |
-| API ingress         | normalized remote IP | 1200/minute  |
-| Standard route      | user, otherwise IP   | 600/minute   |
-| Development session | IP                   | 60/minute    |
-| AI explanation      | authenticated user   | 20/minute    |
-| Photo reservation   | authenticated user   | 30/minute    |
-| Photo upload        | authenticated user   | 12/minute    |
-| Privacy export      | authenticated user   | 6/5 minutes  |
-| Consent withdrawal  | authenticated user   | 10/5 minutes |
-| Account erasure     | authenticated user   | 3/hour       |
+| Policy                | Scope                | Limit/window |
+| --------------------- | -------------------- | ------------ |
+| API ingress           | normalized remote IP | 1200/minute  |
+| Standard route        | user, otherwise IP   | 600/minute   |
+| Development session   | IP                   | 60/minute    |
+| Verified user session | IP                   | 30/minute    |
+| AI explanation        | authenticated user   | 20/minute    |
+| Photo reservation     | authenticated user   | 30/minute    |
+| Photo upload          | authenticated user   | 12/minute    |
+| Privacy export        | authenticated user   | 6/5 minutes  |
+| Consent withdrawal    | authenticated user   | 10/5 minutes |
+| Account erasure       | authenticated user   | 3/hour       |
 
 These are conservative engineering defaults, not traffic-tested product quotas. A rejection returns `RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset`, `Retry-After`, a stable error code and the request ID. Redis failure returns a correlated `503`; business traffic never silently falls back to per-process or fail-open counters.
 

@@ -17,7 +17,7 @@ The application owns three coupled but separately observable states:
 1. Configure `OBJECT_STORAGE_ENDPOINT`, region, bucket and credentials through a secret manager. Production endpoints must be HTTPS.
 2. Set `OBJECT_STORAGE_FORCE_PATH_STYLE` only when required by the chosen provider. Never make the bucket or photo prefix public.
 3. Enable `OBJECT_STORAGE_SSE=AES256` or `aws:kms`; for KMS also provide `OBJECT_STORAGE_KMS_KEY_ID`. Configure least-privilege IAM for head/get/put/delete/list on the exact bucket/prefixes.
-4. Set independent, at-least-32-character `PHOTO_UPLOAD_SIGNING_SECRET` and `ERASURE_LEDGER_HASH_SECRET` values. Back up the ledger HMAC secret through the secret-recovery process; rotating it requires a versioned dual-read migration.
+4. Set independent, at-least-32-character `PHOTO_UPLOAD_SIGNING_SECRET` and `ERASURE_LEDGER_HASH_SECRET` values. The latter protects both user and provider-identity references. Back it up through the secret-recovery process; rotating it requires a versioned dual-read migration across the ledger and `auth_identity_suppressions`.
 5. Configure `PHOTO_OBJECT_PREFIX` and `ERASURE_LEDGER_PREFIX`. Apply bucket encryption, versioning/retention, lifecycle, access logs, replication and restore tests outside the application; the local Compose stack does not prove those controls.
 6. Apply all checksum-verified migrations. Enable the worker on at least one API replica and choose a polling interval appropriate to the service objective.
 7. Verify `GET /v1/health` reports PostgreSQL, Redis and object storage `up`. Verify the private bucket rejects anonymous access.
@@ -49,7 +49,7 @@ Receipt fields mean:
 
 - `primaryStoreStatus=deleted`: the active user graph was cascaded from the main database.
 - `mediaStatus=deleted`: known legacy keys and the whole scoped photo prefix were deleted successfully.
-- `backupStatus=ledger_published`: an external HMAC ledger entry exists; it is not a claim that every backup has already expired.
+- `backupStatus=ledger_published`: an external HMAC ledger entry exists with the user reference and any provider-identity references; it is not a claim that every backup has already expired.
 - `providerStatus=not_applicable`: no recorded provider event; `fixture_only`: only local fixtures; `policy_bound`: an OpenAI-backed event existed and its approved policy/contract governs retention. `policy_bound` is not “remote deleted.”
 
 ## Storage or worker incident
@@ -69,8 +69,8 @@ The required order is fail closed:
 1. Restore the selected `pg_dump` artifact into an isolated database with no client/API traffic.
 2. Verify migration checksums and application compatibility.
 3. Load the independently retained erasure ledger and HMAC secret.
-4. Run ledger reconciliation against the restored database. It deletes any user whose HMAC reference appears in the ledger and removes that user's photo prefix.
-5. Verify `restoredUserAfterLedger=0` for the drill subject, then run normal integrity/readiness smoke tests.
+4. Run ledger reconciliation against the restored database. It first derives any legacy v1 identity references from the isolated rows, upserts v2 `auth_identity_suppressions`, deletes users matched by user or identity HMAC, and removes their photo prefixes.
+5. Verify `restoredUserAfterLedger=0` and `restoredSuppressionsAfterLedger=1` for the drill subject, then run normal integrity/readiness smoke tests.
 6. Only after reconciliation and approval may traffic shift to the restored database.
 
 Local evidence command:
@@ -79,7 +79,7 @@ Local evidence command:
 pnpm ops:verify-backup-restore
 ```
 
-The script creates a real `pg_dump`, restores it to a temporary PostgreSQL database, proves the deleted user is present before ledger replay, reconciles the ledger and proves the user is absent afterward. It cleans the temporary database, backup file and verification ledger. This is a development drill, not a production scheduler, retention policy or disaster-recovery certification.
+The script creates a real `pg_dump`, restores it to a temporary PostgreSQL database, proves the deleted user is present and its suppression absent before ledger replay, then proves the user is absent and its suppression present afterward. It cleans the temporary database, backup file and verification ledger. This is a development drill, not a production scheduler, retention policy or disaster-recovery certification.
 
 ## Minimum alerts and production gates
 

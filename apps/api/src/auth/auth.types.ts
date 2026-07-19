@@ -1,7 +1,9 @@
+import type { UserAuthProvider } from '@myfitness/contracts'
+
 export type AuthPrincipal = {
   userId: string
   sessionId: string
-  provider: 'dev'
+  provider: UserAuthProvider
 }
 
 export type AuthenticatedRequest = {

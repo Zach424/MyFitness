@@ -15,6 +15,7 @@ Local routes after `pnpm db:up`, `pnpm db:migrate`, and `pnpm dev:api`:
 - Private Prometheus metrics: `GET http://127.0.0.1:3100/v1/internal/metrics`
 - Durable-job aggregate status/drain: `GET/POST http://127.0.0.1:3100/v1/internal/data-operations[/drain]`
 - Local-only session: `POST http://127.0.0.1:3100/v1/auth/dev/session`
+- WeChat Mini Program code exchange: `POST http://127.0.0.1:3100/v1/auth/wechat/session`
 - Local-only administrator session: `POST http://127.0.0.1:3100/v1/admin/auth/dev/session`
 - Administrator OIDC exchange: `POST http://127.0.0.1:3100/v1/admin/auth/oidc/exchange`
 - Administrator identity/session: `GET .../v1/admin/auth/me` / `DELETE .../v1/admin/auth/session`
@@ -50,7 +51,7 @@ Local routes after `pnpm db:up`, `pnpm db:migrate`, and `pnpm dev:api`:
 - Swagger UI: `http://127.0.0.1:3100/docs`
 - OpenAPI JSON: `http://127.0.0.1:3100/docs/openapi.json`
 
-Protected routes require `Authorization: Bearer <opaque-token>`. The local session issuer accepts a stable development subject, returns a seven-day token, stores only its SHA-256 hash, and is disabled when `NODE_ENV=production`. It exercises the same server-side principal and user-ownership boundary as a future verified WeChat/phone adapter, but is not production authentication.
+Protected routes require `Authorization: Bearer <opaque-token>`. The local issuer accepts a stable development subject and is disabled in production. The WeChat route accepts only a short-lived Mini Program code, verifies it server-side with `code2Session`, namespaces the returned `openid` by AppID, discards `session_key`, and returns the same seven-day opaque principal shape with `provider` and `isNewUser`. PostgreSQL stores only token hashes. Production enables `wechat` but never `dev`; real credentials/device/domain proof remain deployment gates.
 
 Administrator routes use the independent OpenAPI `adminBearer` scheme and `mf_admin_*` sessions. User and administrator tokens cannot be exchanged or reused across guards. Production OIDC exchange verifies remote JWKS signature, issuer, audience, maximum age and a matching nonce, accepts only pre-provisioned active subjects/roles, and consumes each ID-token hash once. Administrator support lookup requires one exact UUID, ticket reference and enumerated reason; it returns only lifecycle/aggregate/custody evidence. Audit targets are HMAC references and audit rows reject update/delete. The local administrator issuer is also production-disabled and its denied use is audited. See [administrator support model](../architecture/ADMIN_SUPPORT_MODEL.md).
 

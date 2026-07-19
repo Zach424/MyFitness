@@ -5,6 +5,7 @@ import type {
   CreateWorkout,
   Dashboard,
   DevSession,
+  VerifiedSession,
   FavoriteFood,
   FavoriteFoodInput,
   FoodPhotoAnalysis,
@@ -38,8 +39,15 @@ import { foodPhotoConsentVersion } from '@myfitness/contracts'
 import Taro from '@tarojs/taro'
 
 const API_BASE_URL = __API_BASE_URL__.replace(/\/$/, '')
-const TOKEN_KEY = 'myfitness.dev.accessToken'
+const AUTH_MODE = __AUTH_MODE__
+const TOKEN_KEY = 'myfitness.auth.accessToken'
+const LEGACY_TOKEN_KEY = 'myfitness.dev.accessToken'
 const SUBJECT_KEY = 'myfitness.dev.subject'
+
+type ClientSession = {
+  accessToken: string
+  isNewUser: boolean
+}
 
 type ApiErrorBody = {
   message?: string | string[]
@@ -65,8 +73,9 @@ const createSubject = () => {
   return `local:${randomPart}`
 }
 
-const requestDevSession = async (): Promise<DevSession> => {
+const requestDevSession = async (): Promise<ClientSession> => {
   let subject = Taro.getStorageSync<string>(SUBJECT_KEY)
+  const isNewUser = !subject
   if (!subject) {
     subject = createSubject()
     Taro.setStorageSync(SUBJECT_KEY, subject)
@@ -82,13 +91,34 @@ const requestDevSession = async (): Promise<DevSession> => {
     throw new ApiError(response.statusCode, response.data as ApiErrorBody)
   }
   Taro.setStorageSync(TOKEN_KEY, response.data.accessToken)
+  return { accessToken: response.data.accessToken, isNewUser }
+}
+
+const requestWechatSession = async (): Promise<ClientSession> => {
+  const login = await Taro.login({ timeout: 8_000 })
+  if (!login.code) throw new Error('微信登录凭证获取失败，请稍后重试')
+  const response = await Taro.request<VerifiedSession>({
+    url: `${API_BASE_URL}/auth/wechat/session`,
+    method: 'POST',
+    data: { code: login.code },
+    header: { 'content-type': 'application/json' },
+  })
+  if (response.statusCode < 200 || response.statusCode >= 300) {
+    throw new ApiError(response.statusCode, response.data as ApiErrorBody)
+  }
+  Taro.setStorageSync(TOKEN_KEY, response.data.accessToken)
   return response.data
+}
+
+const requestAuthSession = () => {
+  Taro.removeStorageSync(LEGACY_TOKEN_KEY)
+  return AUTH_MODE === 'wechat' ? requestWechatSession() : requestDevSession()
 }
 
 const getAccessToken = async () => {
   const stored = Taro.getStorageSync<string>(TOKEN_KEY)
   if (stored) return stored
-  return (await requestDevSession()).accessToken
+  return (await requestAuthSession()).accessToken
 }
 
 const privateApiUrl = (path: string) => `${API_BASE_URL.replace(/\/v1$/, '')}${path}`
@@ -123,12 +153,16 @@ const authenticatedRequest = async <T>(
 }
 
 export const getOnboarding = async (): Promise<OnboardingResponse | undefined> => {
-  const isFirstLocalSession = !Taro.getStorageSync<string>(SUBJECT_KEY)
-  if (isFirstLocalSession) {
-    await requestDevSession()
-    return undefined
+  if (!Taro.getStorageSync<string>(TOKEN_KEY)) {
+    const session = await requestAuthSession()
+    if (session.isNewUser) return undefined
   }
-  return authenticatedRequest<OnboardingResponse>('/me/onboarding', 'GET')
+  try {
+    return await authenticatedRequest<OnboardingResponse>('/me/onboarding', 'GET')
+  } catch (error) {
+    if (error instanceof ApiError && error.statusCode === 404) return undefined
+    throw error
+  }
 }
 
 export const saveOnboarding = (payload: OnboardingRequest) =>
@@ -355,6 +389,7 @@ export const deletePrivacyAccount = async (payload: AccountDeletionRequest) => {
     payload,
   )
   Taro.removeStorageSync(TOKEN_KEY)
+  Taro.removeStorageSync(LEGACY_TOKEN_KEY)
   Taro.removeStorageSync(SUBJECT_KEY)
   return result
 }

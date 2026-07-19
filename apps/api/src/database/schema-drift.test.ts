@@ -97,6 +97,10 @@ const durableDataOperationsMigrationPath = path.resolve(
   __dirname,
   '../../../../infra/postgres/migrations/0013_durable_data_operations.sql',
 )
+const verifiedUserIdentityMigrationPath = path.resolve(
+  __dirname,
+  '../../../../infra/postgres/migrations/0015_verified_user_identity.sql',
+)
 
 describe('health-record migration drift', () => {
   it('contains every contract metric, unit and source kind', async () => {
@@ -231,6 +235,21 @@ describe('health-record migration drift', () => {
     ]) {
       expect(migration).toContain(value)
     }
+  })
+
+  it('binds session providers and persists unlinkable erased identity suppressions', async () => {
+    const migration = await readFile(verifiedUserIdentityMigrationPath, 'utf8')
+    for (const value of [
+      'ALTER TABLE auth_sessions',
+      'ADD COLUMN provider',
+      'auth_identity_suppressions',
+      'subject_ref',
+      'erasure_receipt_id',
+      "'wechat'",
+    ]) {
+      expect(migration).toContain(value)
+    }
+    expect(migration).not.toContain('provider_subject')
   })
 
   it('contains every administrator enum and rejects audit mutation', async () => {

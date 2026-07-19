@@ -1,9 +1,23 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
 
-import { Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common'
-import type { DevSession, DevSessionRequest } from '@myfitness/contracts'
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+  ServiceUnavailableException,
+  UnauthorizedException,
+} from '@nestjs/common'
+import type {
+  DevSession,
+  DevSessionRequest,
+  UserAuthProvider,
+  VerifiedSession,
+  WechatSessionRequest,
+} from '@myfitness/contracts'
 
+import { getRuntimeConfig } from '../config'
 import { DatabaseService } from '../database/database.service'
+import { ErasureLedgerService } from '../privacy/erasure-ledger.service'
 import type { AuthPrincipal } from './auth.types'
 
 const sessionLifetimeMs = 7 * 24 * 60 * 60 * 1000
@@ -11,50 +25,144 @@ const hashToken = (token: string) => createHash('sha256').update(token).digest('
 
 @Injectable()
 export class AuthService {
-  constructor(private readonly database: DatabaseService) {}
+  private readonly config = getRuntimeConfig()
+
+  constructor(
+    private readonly database: DatabaseService,
+    private readonly erasureLedger: ErasureLedgerService,
+  ) {}
 
   async createDevSession(input: DevSessionRequest): Promise<DevSession> {
-    if (process.env.NODE_ENV === 'production') throw new NotFoundException()
+    if (
+      process.env.NODE_ENV === 'production' ||
+      !this.config.authEnabledProviders.includes('dev')
+    ) {
+      throw new NotFoundException()
+    }
+    const session = await this.issueProviderSession('dev', input.subject)
+    return {
+      accessToken: session.accessToken,
+      userId: session.userId,
+      expiresAt: session.expiresAt,
+    }
+  }
 
-    const accessToken = `mf_dev_${randomBytes(32).toString('base64url')}`
+  async createWechatSession(input: WechatSessionRequest): Promise<VerifiedSession> {
+    if (!this.config.authEnabledProviders.includes('wechat')) throw new NotFoundException()
+    const openid = await this.exchangeWechatCode(input.code)
+    return this.issueProviderSession('wechat', `${this.config.wechatMiniAppId}:${openid}`)
+  }
+
+  private async exchangeWechatCode(code: string) {
+    const url = new URL(this.config.wechatCodeSessionUrl)
+    url.searchParams.set('appid', this.config.wechatMiniAppId!)
+    url.searchParams.set('secret', this.config.wechatMiniAppSecret!)
+    url.searchParams.set('js_code', code)
+    url.searchParams.set('grant_type', 'authorization_code')
+
+    let response: Response
+    try {
+      response = await fetch(url, {
+        headers: { accept: 'application/json' },
+        signal: AbortSignal.timeout(8_000),
+      })
+    } catch {
+      throw new ServiceUnavailableException('identity provider is unavailable')
+    }
+    if (!response.ok) throw new ServiceUnavailableException('identity provider is unavailable')
+
+    let payload: unknown
+    try {
+      payload = await response.json()
+    } catch {
+      throw new ServiceUnavailableException('identity provider returned an invalid response')
+    }
+    if (!payload || typeof payload !== 'object') {
+      throw new ServiceUnavailableException('identity provider returned an invalid response')
+    }
+    const result = payload as { errcode?: unknown; openid?: unknown }
+    if (typeof result.errcode === 'number' && result.errcode !== 0) {
+      throw new UnauthorizedException('WeChat login code is invalid or expired')
+    }
+    if (typeof result.openid !== 'string' || !/^[A-Za-z0-9_-]{8,128}$/.test(result.openid)) {
+      throw new ServiceUnavailableException('identity provider returned an invalid response')
+    }
+    return result.openid
+  }
+
+  private async issueProviderSession(
+    provider: UserAuthProvider,
+    providerSubject: string,
+  ): Promise<VerifiedSession> {
+    const accessToken = `mf_user_${randomBytes(32).toString('base64url')}`
     const sessionId = randomUUID()
     const expiresAt = new Date(Date.now() + sessionLifetimeMs)
+    const subjectRef = this.erasureLedger.identitySubjectRef(provider, providerSubject)
 
-    const userId = await this.database.withTransaction(async (client) => {
-      await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`dev:${input.subject}`])
-      const existing = await client.query<{ user_id: string }>(
-        `SELECT user_id FROM auth_identities WHERE provider = 'dev' AND provider_subject = $1`,
-        [input.subject],
+    const issued = await this.database.withTransaction(async (client) => {
+      await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [
+        `user-auth:${provider}:${providerSubject}`,
+      ])
+      const suppressed = await client.query(
+        `SELECT 1 FROM auth_identity_suppressions
+         WHERE provider = $1 AND subject_ref = $2`,
+        [provider, subjectRef],
+      )
+      if (suppressed.rows[0]) {
+        throw new ForbiddenException('this identity was permanently erased')
+      }
+
+      const existing = await client.query<{ user_id: string; status: string }>(
+        `SELECT identity.user_id, app_user.status
+         FROM auth_identities AS identity
+         JOIN users AS app_user ON app_user.id = identity.user_id
+         WHERE identity.provider = $1 AND identity.provider_subject = $2`,
+        [provider, providerSubject],
       )
 
       let resolvedUserId = existing.rows[0]?.user_id
+      if (resolvedUserId && existing.rows[0]?.status !== 'active') {
+        throw new ForbiddenException('account is not active')
+      }
+      let isNewUser = false
       if (!resolvedUserId) {
+        isNewUser = true
         resolvedUserId = randomUUID()
         await client.query('INSERT INTO users (id) VALUES ($1)', [resolvedUserId])
         await client.query(
           `
             INSERT INTO auth_identities (id, user_id, provider, provider_subject, verified_at)
-            VALUES ($1, $2, 'dev', $3, NOW())
+            VALUES ($1, $2, $3, $4, NOW())
           `,
-          [randomUUID(), resolvedUserId, input.subject],
+          [randomUUID(), resolvedUserId, provider, providerSubject],
         )
       }
 
       await client.query(
         `
-          INSERT INTO auth_sessions (id, user_id, token_hash, expires_at)
-          VALUES ($1, $2, $3, $4)
+          INSERT INTO auth_sessions (id, user_id, provider, token_hash, expires_at)
+          VALUES ($1, $2, $3, $4, $5)
         `,
-        [sessionId, resolvedUserId, hashToken(accessToken), expiresAt],
+        [sessionId, resolvedUserId, provider, hashToken(accessToken), expiresAt],
       )
-      return resolvedUserId
+      return { userId: resolvedUserId, isNewUser }
     })
 
-    return { accessToken, userId, expiresAt: expiresAt.toISOString() }
+    return {
+      accessToken,
+      userId: issued.userId,
+      provider,
+      isNewUser: issued.isNewUser,
+      expiresAt: expiresAt.toISOString(),
+    }
   }
 
   async authenticate(accessToken: string): Promise<AuthPrincipal> {
-    const result = await this.database.query<{ id: string; user_id: string }>(
+    const result = await this.database.query<{
+      id: string
+      user_id: string
+      provider: UserAuthProvider
+    }>(
       `
         UPDATE auth_sessions AS session
         SET last_used_at = NOW()
@@ -64,13 +172,13 @@ export class AuthService {
           AND session.revoked_at IS NULL
           AND session.expires_at > NOW()
           AND app_user.status = 'active'
-        RETURNING session.id, session.user_id
+        RETURNING session.id, session.user_id, session.provider
       `,
       [hashToken(accessToken)],
     )
 
     const session = result.rows[0]
     if (!session) throw new UnauthorizedException('invalid or expired access token')
-    return { userId: session.user_id, sessionId: session.id, provider: 'dev' }
+    return { userId: session.user_id, sessionId: session.id, provider: session.provider }
   }
 }

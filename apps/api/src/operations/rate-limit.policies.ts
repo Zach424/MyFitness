@@ -4,6 +4,12 @@ export const rateLimitPolicies = {
   ingress: { name: 'api_ingress', limit: 1_200, windowSeconds: 60, scope: 'ip' },
   standard: { name: 'api_standard', limit: 600, windowSeconds: 60, scope: 'auto' },
   authSession: { name: 'auth_session', limit: 60, windowSeconds: 60, scope: 'ip' },
+  verifiedAuthSession: {
+    name: 'verified_auth_session',
+    limit: 30,
+    windowSeconds: 60,
+    scope: 'ip',
+  },
   adminAuth: { name: 'admin_auth', limit: 20, windowSeconds: 60, scope: 'ip' },
   adminSupport: { name: 'admin_support', limit: 60, windowSeconds: 60, scope: 'operator' },
   adminAudit: { name: 'admin_audit', limit: 30, windowSeconds: 60, scope: 'operator' },

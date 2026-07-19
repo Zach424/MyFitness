@@ -4,6 +4,9 @@ import {
   devSessionRequestSchema,
   devSessionSchema,
   type DevSessionRequest,
+  type WechatSessionRequest,
+  verifiedSessionSchema,
+  wechatSessionRequestSchema,
 } from '@myfitness/contracts'
 
 import { openApiSchema } from '../openapi-schema'
@@ -14,6 +17,12 @@ import { AuthService } from './auth.service'
 const parseRequest = (body: unknown): DevSessionRequest => {
   const result = devSessionRequestSchema.safeParse(body)
   if (!result.success) throw new BadRequestException('development session request is invalid')
+  return result.data
+}
+
+const parseWechatRequest = (body: unknown): WechatSessionRequest => {
+  const result = wechatSessionRequestSchema.safeParse(body)
+  if (!result.success) throw new BadRequestException('WeChat session request is invalid')
   return result.data
 }
 
@@ -33,5 +42,21 @@ export class AuthController {
   @ApiOkResponse({ schema: openApiSchema(devSessionSchema) })
   async createDevSession(@Body() body: unknown) {
     return devSessionSchema.parse(await this.auth.createDevSession(parseRequest(body)))
+  }
+
+  @Post('wechat/session')
+  @RateLimit(rateLimitPolicies.verifiedAuthSession)
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Exchange a WeChat Mini Program login code for an opaque user session',
+    description:
+      'The API verifies the short-lived code with WeChat and never accepts an openid from the client.',
+  })
+  @ApiBody({ schema: openApiSchema(wechatSessionRequestSchema) })
+  @ApiOkResponse({ schema: openApiSchema(verifiedSessionSchema) })
+  async createWechatSession(@Body() body: unknown) {
+    return verifiedSessionSchema.parse(
+      await this.auth.createWechatSession(parseWechatRequest(body)),
+    )
   }
 }

@@ -64,6 +64,7 @@ const main = async () => {
   const restoreDatabase = `myfitness_restore_${randomUUID().replaceAll('-', '').slice(0, 12)}`
   const primaryPool = new Pool({ connectionString: config.databaseUrl })
   const testUserId = randomUUID()
+  const testProviderSubject = `restore-drill-${randomUUID()}`
   let receiptId: string | undefined
   let restoredPool: Pool | undefined
   const app = await createApplication(false)
@@ -71,6 +72,12 @@ const main = async () => {
   try {
     await app.init()
     await primaryPool.query('INSERT INTO users (id) VALUES ($1)', [testUserId])
+    await primaryPool.query(
+      `INSERT INTO auth_identities
+         (id, user_id, provider, provider_subject, verified_at)
+       VALUES ($1, $2, 'dev', $3, NOW())`,
+      [randomUUID(), testUserId, testProviderSubject],
+    )
     const dump = docker([
       'exec',
       postgresContainer,
@@ -142,6 +149,11 @@ const main = async () => {
     const migrations = await restoredPool.query<{ count: string }>(
       'SELECT COUNT(*)::text AS count FROM schema_migrations',
     )
+    const suppressionsBefore = await restoredPool.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count FROM auth_identity_suppressions
+       WHERE erasure_receipt_id = $1`,
+      [receiptId],
+    )
     const reconciliation = await app
       .get(ErasureLedgerService)
       .reconcileRestoredDatabase(restoredPool)
@@ -149,25 +161,35 @@ const main = async () => {
       'SELECT COUNT(*)::text AS count FROM users WHERE id = $1',
       [testUserId],
     )
+    const suppressionsAfter = await restoredPool.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count FROM auth_identity_suppressions
+       WHERE provider = 'dev' AND erasure_receipt_id = $1`,
+      [receiptId],
+    )
     const receipt = await primaryPool.query<{ status: string; backup_status: string }>(
       'SELECT status, backup_status FROM privacy_erasure_receipts WHERE receipt_id = $1',
       [receiptId],
     )
     const proof = {
-      proofVersion: 'backup-restore-erasure-v1',
+      proofVersion: 'backup-restore-erasure-v2',
       backupBytes: exactDump.length,
       restoredMigrationCount: Number(migrations.rows[0]?.count ?? 0),
       restoredUserBeforeLedger: Number(before.rows[0]?.count ?? 0),
+      restoredSuppressionsBeforeLedger: Number(suppressionsBefore.rows[0]?.count ?? 0),
       ...reconciliation,
       restoredUserAfterLedger: Number(after.rows[0]?.count ?? 0),
+      restoredSuppressionsAfterLedger: Number(suppressionsAfter.rows[0]?.count ?? 0),
       receiptStatus: receipt.rows[0]?.status,
       backupDisposition: receipt.rows[0]?.backup_status,
     }
     if (
-      proof.restoredMigrationCount !== 14 ||
+      proof.restoredMigrationCount !== 15 ||
       proof.restoredUserBeforeLedger !== 1 ||
+      proof.restoredSuppressionsBeforeLedger !== 0 ||
+      proof.restoredIdentitySuppressions !== 1 ||
       proof.erasedRestoredUsers !== 1 ||
       proof.restoredUserAfterLedger !== 0 ||
+      proof.restoredSuppressionsAfterLedger !== 1 ||
       proof.receiptStatus !== 'completed' ||
       proof.backupDisposition !== 'ledger_published'
     ) {
@@ -196,6 +218,9 @@ const main = async () => {
         .catch(() => undefined)
       await primaryPool
         .query('DELETE FROM data_operation_jobs WHERE receipt_id = $1', [receiptId])
+        .catch(() => undefined)
+      await primaryPool
+        .query('DELETE FROM auth_identity_suppressions WHERE erasure_receipt_id = $1', [receiptId])
         .catch(() => undefined)
       await primaryPool
         .query('DELETE FROM privacy_erasure_receipts WHERE receipt_id = $1', [receiptId])

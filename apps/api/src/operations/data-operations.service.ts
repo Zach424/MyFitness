@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common'
+import { userAuthProviderSchema, type UserAuthProvider } from '@myfitness/contracts'
 import type { PoolClient, QueryResultRow } from 'pg'
 
 import { getRuntimeConfig } from '../config'
@@ -273,6 +274,17 @@ export class DataOperationsService implements OnModuleInit, OnModuleDestroy {
     if (!receiptRow) throw new InvalidJobPayloadError()
 
     const providerStatus = await this.providerDisposition(userId)
+    const identities = await this.database.query<{
+      provider: UserAuthProvider
+      provider_subject: string
+    }>('SELECT provider, provider_subject FROM auth_identities WHERE user_id = $1', [userId])
+    const identityRefs = identities.rows.map((identity) => ({
+      provider: userAuthProviderSchema.parse(identity.provider),
+      subjectRef: this.erasureLedger.identitySubjectRef(
+        userAuthProviderSchema.parse(identity.provider),
+        identity.provider_subject,
+      ),
+    }))
     const storedPhotos = await this.database.query<{ storage_key: string }>(
       `SELECT storage_key FROM nutrition_photo_candidates
        WHERE user_id = $1 AND storage_key IS NOT NULL`,
@@ -280,9 +292,10 @@ export class DataOperationsService implements OnModuleInit, OnModuleDestroy {
     )
     try {
       await this.erasureLedger.publish({
-        schemaVersion: 'durable-erasure-ledger-v1',
+        schemaVersion: 'durable-erasure-ledger-v2',
         receiptId,
         subjectRef: receiptRow.subject_ref,
+        identityRefs,
         requestedAt: receiptRow.requested_at.toISOString(),
       })
       for (const photo of storedPhotos.rows) {
@@ -301,6 +314,15 @@ export class DataOperationsService implements OnModuleInit, OnModuleDestroy {
         [job.id, job.lease_token],
       )
       if (!leased.rows[0]) throw new Error('data-operation lease changed')
+      for (const identity of identityRefs) {
+        await client.query(
+          `INSERT INTO auth_identity_suppressions
+             (provider, subject_ref, erasure_receipt_id, suppressed_at)
+           VALUES ($1, $2, $3, $4)
+           ON CONFLICT (provider, subject_ref) DO NOTHING`,
+          [identity.provider, identity.subjectRef, receiptId, receiptRow.requested_at],
+        )
+      }
       const deleted = await client.query(
         "DELETE FROM users WHERE id = $1 AND status = 'deletion_pending'",
         [userId],

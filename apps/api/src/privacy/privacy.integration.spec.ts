@@ -135,6 +135,10 @@ describe('privacy ownership API with PostgreSQL and private media', () => {
     }
     await pool.query('DELETE FROM data_operation_jobs WHERE created_at >= $1', [operationJobCutoff])
     await pool.query('DELETE FROM users WHERE id = ANY($1::uuid[])', [[...users]])
+    await pool.query(
+      'DELETE FROM auth_identity_suppressions WHERE erasure_receipt_id = ANY($1::uuid[])',
+      [[...receipts]],
+    )
     await pool.query('DELETE FROM privacy_erasure_receipts WHERE receipt_id = ANY($1::uuid[])', [
       [...receipts],
     ])

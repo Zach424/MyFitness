@@ -14,6 +14,21 @@ const localObjectStorageBucket = 'myfitness-private'
 const localObjectStorageAccessKeyId = 'myfitness-minio'
 const localObjectStorageSecretAccessKey = 'myfitness-minio-secret-2026-local'
 const localErasureLedgerHashSecret = 'myfitness-erasure-ledger-local-hash-secret-2026'
+const officialWechatCodeSessionUrl = 'https://api.weixin.qq.com/sns/jscode2session'
+
+const parseAuthProviders = (value: string | undefined, production: boolean) => {
+  const requested = (value ?? (production ? 'wechat' : 'dev'))
+    .split(',')
+    .map((provider) => provider.trim())
+  if (!requested.length || requested.some((provider) => !['dev', 'wechat'].includes(provider))) {
+    throw new Error('AUTH_ENABLED_PROVIDERS must contain only dev or wechat')
+  }
+  const providers = [...new Set(requested)]
+  if (production && providers.includes('dev')) {
+    throw new Error('AUTH_ENABLED_PROVIDERS must not enable dev in production')
+  }
+  return providers as Array<'dev' | 'wechat'>
+}
 
 const parsePort = (value: string | undefined) => {
   const port = Number(value ?? 3100)
@@ -127,6 +142,7 @@ const parsePositiveInteger = (
 
 export const getRuntimeConfig = () => {
   const production = process.env.NODE_ENV === 'production'
+  const authEnabledProviders = parseAuthProviders(process.env.AUTH_ENABLED_PROVIDERS, production)
   const databaseUrl = process.env.DATABASE_URL ?? (production ? undefined : localDatabaseUrl)
   const aiServiceUrl = process.env.AI_SERVICE_URL ?? (production ? undefined : localAiServiceUrl)
   const aiServiceToken =
@@ -168,6 +184,13 @@ export const getRuntimeConfig = () => {
   const erasureLedgerHashSecret =
     process.env.ERASURE_LEDGER_HASH_SECRET ??
     (production ? undefined : localErasureLedgerHashSecret)
+  const wechatMiniAppId = process.env.WECHAT_MINI_APP_ID?.trim()
+  const wechatMiniAppSecret = process.env.WECHAT_MINI_APP_SECRET?.trim()
+  const wechatCodeSessionUrl = parseAdminUrl(
+    process.env.WECHAT_CODE_SESSION_URL ?? officialWechatCodeSessionUrl,
+    'WECHAT_CODE_SESSION_URL',
+    production,
+  )
 
   if (!databaseUrl) {
     throw new Error('DATABASE_URL is required in production')
@@ -192,6 +215,22 @@ export const getRuntimeConfig = () => {
     throw new Error(
       'OBJECT_STORAGE_BUCKET and ERASURE_LEDGER_HASH_SECRET are required in production',
     )
+  }
+  if (authEnabledProviders.includes('wechat')) {
+    if (!wechatMiniAppId || !wechatMiniAppSecret) {
+      throw new Error(
+        'WECHAT_MINI_APP_ID and WECHAT_MINI_APP_SECRET are required when wechat auth is enabled',
+      )
+    }
+    if (!/^wx[A-Za-z0-9]{8,30}$/.test(wechatMiniAppId)) {
+      throw new Error('WECHAT_MINI_APP_ID must be a valid WeChat Mini Program AppID')
+    }
+    if (wechatMiniAppSecret.length < 24) {
+      throw new Error('WECHAT_MINI_APP_SECRET must contain at least 24 characters')
+    }
+  }
+  if (production && wechatCodeSessionUrl !== officialWechatCodeSessionUrl) {
+    throw new Error('WECHAT_CODE_SESSION_URL cannot be overridden in production')
   }
   if ((objectStorageAccessKeyId === undefined) !== (objectStorageSecretAccessKey === undefined)) {
     throw new Error(
@@ -236,6 +275,10 @@ export const getRuntimeConfig = () => {
 
   return {
     databaseUrl,
+    authEnabledProviders,
+    wechatMiniAppId,
+    wechatMiniAppSecret,
+    wechatCodeSessionUrl,
     port: parsePort(process.env.API_PORT),
     aiServiceUrl: aiServiceUrl.replace(/\/$/, ''),
     aiServiceToken,
