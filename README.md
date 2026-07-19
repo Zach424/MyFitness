@@ -92,7 +92,9 @@ pnpm test:e2e
 
 Playwright 会复用或启动 API、H5 与管理员预览服务。`pnpm db:down` 会停止本地容器并保留数据卷。`apps/admin` 的 `start` 命令面向 Linux standalone 产物；Windows 本地验收使用 `start:preview`，避免 standalone 符号链接权限差异。
 
-完整镜像验收使用 `pnpm deploy:smoke`：顺序构建三个最终镜像，运行一次性迁移，等待 API/AI/管理员端与 PostgreSQL/Redis/MinIO 健康，执行外部黑盒检查，最后自动删除容器和测试卷。该命令使用 fixture AI、开发身份和本地 MinIO，只证明部署制品，不代表共享或生产上线。候选版本标签触发 GHCR 多架构发布后，工作流会把 API、Admin、AI 的三个 `sha256` 摘要聚合成 `myfitness-release/v1` 清单并作为不可覆盖的 GitHub Release 资产发布；部署与回滚只消费清单中的 digest 引用。生产配置、发布顺序和离线清单校验见[部署运行手册](docs/operations/DEPLOYMENT_RUNBOOK.md)。
+完整镜像验收使用 `pnpm deploy:smoke`：顺序构建三个最终镜像，运行一次性迁移，等待 API/AI/管理员端与 PostgreSQL/Redis/MinIO 健康，执行外部黑盒检查，最后自动删除容器和测试卷。该命令使用 fixture AI、开发身份和本地 MinIO，只证明部署制品，不代表共享或生产上线。候选版本标签触发 GHCR 多架构发布后，工作流会把 API、Admin、AI 的三个 `sha256` 摘要聚合成 `myfitness-release/v1` 清单并作为不可覆盖的 GitHub Release 资产发布；部署与回滚只消费清单中的 digest 引用。
+
+托管环境必须先从 `infra/deploy/managed-environment.example.json` 创建一份受变更系统保护、只包含逻辑引用而没有密钥值的环境清单，再用 `pnpm deploy:admit -- ...` 同时校验环境、Release 清单及 SHA-256。模板本身故意不可准入；只有完整账号/预算、域名、所有者、数据托管、告警和 AI 策略引用才能生成 `myfitness-deployment-admission/v1`。生产配置、准入命令、发布顺序和回滚规则见[部署运行手册](docs/operations/DEPLOYMENT_RUNBOOK.md)。
 
 ## 开发方式
 
@@ -133,6 +135,7 @@ Playwright 会复用或启动 API、H5 与管理员预览服务。`pnpm db:down`
 - [架构决策 0017](docs/architecture/decisions/0017-reproducible-oci-deployment-boundary.md)
 - [架构决策 0018](docs/architecture/decisions/0018-explicit-api-startup-lifecycle.md)
 - [架构决策 0019](docs/architecture/decisions/0019-immutable-release-promotion.md)
+- [架构决策 0020](docs/architecture/decisions/0020-managed-environment-admission.md)
 - [健康记录数据模型](docs/architecture/HEALTH_RECORD_MODEL.md)
 - [训练记录数据模型](docs/architecture/WORKOUT_MODEL.md)
 - [饮食记录数据模型](docs/architecture/NUTRITION_MODEL.md)
@@ -169,6 +172,7 @@ Playwright 会复用或启动 API、H5 与管理员预览服务。`pnpm db:down`
 - [第 17 轮档案](docs/iterations/017-reproducible-deployment-artifacts.md)
 - [第 18 轮档案](docs/iterations/018-hermetic-ci-bootstrap.md)
 - [第 19 轮档案](docs/iterations/019-immutable-release-promotion.md)
+- [第 20 轮档案](docs/iterations/020-managed-environment-admission.md)
 - [移动端视觉证据](output/playwright/iteration-001-mobile.png)
 - [宽屏视觉证据](output/playwright/iteration-001-wide.png)
 - [建档移动端证据](output/playwright/iteration-003-onboarding-mobile.png)

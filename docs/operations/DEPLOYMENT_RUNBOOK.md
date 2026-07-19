@@ -1,10 +1,10 @@
 # Deployment and image runbook
 
-Status: OCI packaging and disposable topology are green locally and in hosted CI; strict release promotion is locally accepted while shared managed infrastructure and public traffic remain unconfigured
+Status: OCI packaging, hosted CI and `v0.1.0-rc.1` immutable publication are green; managed-environment admission is locally accepted while real shared infrastructure, external approvals and public traffic remain unconfigured
 
 ## Source and lifecycle qualification
 
-Before image acceptance, stop local MyFitness dependencies and run `pnpm test`. The 32-file/103-test unit gate must pass without PostgreSQL, Redis or MinIO. OpenAPI tests and generation use the explicit API `metadata` startup mode, which assembles the shipped application graph and HTTP policy but does not run background jobs or verify external dependencies.
+Before image acceptance, stop local MyFitness dependencies and run `pnpm test`. The current 34-file/122-test unit gate must pass without PostgreSQL, Redis or MinIO. OpenAPI tests and generation use the explicit API `metadata` startup mode, which assembles the shipped application graph and HTTP policy but does not run background jobs or verify external dependencies.
 
 Production, integration, restore, E2E and deployment processes use the default `runtime` mode. It retains object-storage startup verification, photo-expiry reconciliation and durable data-operation workers. Do not select metadata mode for a traffic-serving process, and do not treat its successful initialization as readiness evidence; `/v1/health` and the black-box deployment verifier own that proof.
 
@@ -67,17 +67,38 @@ pnpm release:verify -- \
 
 Require `status: ok`, the intended source revision and exactly three `image@sha256:...` references. Copy the accepted files into the environment's independently protected change record. Do not deploy version or `sha-*` tags; they are discovery metadata. Do not replace or move an existing tag/release. Keep the complete previous verified manifest available for rollback and verify that all registry provenance attestations name the same repository revision.
 
+## Managed environment admission
+
+Copy `infra/deploy/managed-environment.example.json` into the approved external change workflow. Do not edit the repository template into a plausible-looking environment: it deliberately contains placeholders and a zero budget and must fail. Populate only logical references to approved accounts, services, owners, evidence and secret-manager bundles; never place credentials in this JSON, command arguments, CI artifacts or admission output.
+
+For the first shared-test deployment, verify the environment and downloaded candidate bundle before loading any platform credential:
+
+```bash
+pnpm deploy:admit -- \
+  --environment managed-environment.json \
+  --release release-manifest.json \
+  --release-checksum release-manifest.sha256 \
+  --rollback-mode no-traffic \
+  --evaluated-at 2026-07-19T12:30:00.000Z \
+  --output deployment-admission.json
+```
+
+`no-traffic` is valid only for a first `shared-test` deployment. It means withdraw public traffic and scale API, administrator and AI application services to zero; it does not delete managed data, reverse migrations or restore a backup. A production admission must instead add `--previous-release` and `--previous-release-checksum` and select `--rollback-mode previous-release`. The previous manifest must belong to this repository, have a different version and revision, and predate the target.
+
+Require `schemaVersion: myfitness-deployment-admission/v1`, `status: admitted`, the expected environment/change reference, the downloaded release checksum and exactly seven ordered actions. The tool validates reference syntax and completeness but does not contact the external change/evidence systems. A successful local command is not owner approval; retain the environment, release bundle and output inside the protected change record and obtain the platform approval there.
+
 ## Deployment order
 
-1. Confirm managed PostgreSQL/Redis/object storage backups, encryption, network policy, capacity and named owners.
-2. Load secrets and run the production configuration preflight.
-3. Verify the release checksum/manifest and resolve all three services from its digest-qualified references; reject handwritten or tag-only substitutions.
-4. Run one API-image migration job with `node dist/database/migrate.js`; stop on checksum drift or any non-zero exit.
-5. Deploy AI privately and verify `/health` without exposing its service token.
-6. Deploy API with no public traffic; verify `/v1/health/live`, then dependency readiness and private operations evidence.
-7. Deploy administrator BFF behind the approved OIDC/edge boundary. Verify CSP, frame denial and a real least-privilege login.
-8. Shift a small canary cohort, verify request correlation/logs/metrics and exercise record, privacy, erasure and restore controls before broader traffic.
-9. Run `node scripts/verify-deployment.mjs` against the shared endpoints and attach its redacted JSON plus the accepted release manifest to the deployment record.
+1. Approve and retain one complete managed-environment dossier in the external change system.
+2. Run `pnpm deploy:admit` and require the exact target/rollback release binding before loading platform credentials.
+3. Confirm managed PostgreSQL/Redis/object storage backups, encryption, network policy, capacity and named owners against the admitted references.
+4. Load secrets and run the production configuration preflight; compare origins and `TRUST_PROXY_HOPS` with the admission record.
+5. Run one admitted API-image migration job with `node dist/database/migrate.js`; stop on checksum drift or any non-zero exit.
+6. Deploy the admitted AI digest privately and verify `/health` without exposing its service token.
+7. Deploy the admitted API digest with no public traffic; verify `/v1/health/live`, dependency readiness and private operations evidence.
+8. Deploy the admitted administrator digest behind the approved OIDC/edge boundary. Verify CSP, frame denial and a real least-privilege login.
+9. Verify request correlation/logs/metrics and exercise record, privacy, erasure and restore controls before shifting a bounded canary cohort.
+10. Run `node scripts/verify-deployment.mjs` against the shared endpoints and attach its redacted JSON plus the admission/release records to the protected change.
 
 ## Rollback
 
@@ -96,4 +117,4 @@ Stop the rollout on failed migration, manifest/provenance verification, readines
 | Telemetry and incident response                            | Private scraping/log destination, paging channel, thresholds and named responder |
 | AI provider                                                | Region/retention/legal/cost approval and bounded canary thresholds               |
 
-No shared/public deployment may be described as complete until these owners and evidence are recorded.
+No shared/public deployment may be described as complete until these owners and evidence are recorded, externally approved and exercised. A syntactically admitted fixture is not a managed deployment.

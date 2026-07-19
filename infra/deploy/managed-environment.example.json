@@ -1,0 +1,65 @@
+{
+  "schemaVersion": "myfitness-managed-environment/v1",
+  "deployment": {
+    "name": "shared-test",
+    "stage": "shared-test",
+    "changeAuthorityRef": "change://REPLACE_WITH_APPROVED_CHANGE"
+  },
+  "cloud": {
+    "provider": "replace-with-approved-provider",
+    "accountRef": "account://REPLACE_WITH_APPROVED_ACCOUNT",
+    "region": "replace-with-approved-region",
+    "monthlyBudgetCny": 0
+  },
+  "endpoints": {
+    "apiOrigin": "https://api.example.com",
+    "h5Origin": "https://h5.example.com",
+    "adminOrigin": "https://admin.example.com",
+    "tlsPolicyRef": "evidence://REPLACE_WITH_TLS_POLICY",
+    "edgePolicyRef": "evidence://REPLACE_WITH_EDGE_POLICY",
+    "trustProxyHops": 0
+  },
+  "runtimeSecrets": {
+    "apiRuntimeRef": "secret://REPLACE_WITH_API_RUNTIME_BUNDLE",
+    "adminRuntimeRef": "secret://REPLACE_WITH_ADMIN_RUNTIME_BUNDLE",
+    "aiRuntimeRef": "secret://REPLACE_WITH_AI_RUNTIME_BUNDLE",
+    "wechatCredentialRef": "secret://REPLACE_WITH_WECHAT_CREDENTIAL",
+    "adminOidcCredentialRef": "secret://REPLACE_WITH_ADMIN_OIDC_CREDENTIAL"
+  },
+  "dataStores": {
+    "postgres": {
+      "serviceRef": "service://REPLACE_WITH_POSTGRES_SERVICE",
+      "ownerRef": "owner://REPLACE_WITH_POSTGRES_OWNER",
+      "backupPolicyRef": "evidence://REPLACE_WITH_POSTGRES_BACKUP_POLICY",
+      "restoreEvidenceRef": "evidence://REPLACE_WITH_POSTGRES_RESTORE_EVIDENCE"
+    },
+    "redis": {
+      "serviceRef": "service://REPLACE_WITH_REDIS_SERVICE",
+      "ownerRef": "owner://REPLACE_WITH_REDIS_OWNER",
+      "tlsPolicyRef": "evidence://REPLACE_WITH_REDIS_TLS_POLICY"
+    },
+    "objectStorage": {
+      "serviceRef": "service://REPLACE_WITH_OBJECT_STORAGE_SERVICE",
+      "ownerRef": "owner://REPLACE_WITH_OBJECT_STORAGE_OWNER",
+      "encryptionPolicyRef": "evidence://REPLACE_WITH_OBJECT_ENCRYPTION_POLICY",
+      "lifecyclePolicyRef": "evidence://REPLACE_WITH_OBJECT_LIFECYCLE_POLICY"
+    },
+    "erasureLedger": {
+      "serviceRef": "service://REPLACE_WITH_ERASURE_LEDGER_SERVICE",
+      "ownerRef": "owner://REPLACE_WITH_ERASURE_LEDGER_OWNER",
+      "recoveryEvidenceRef": "evidence://REPLACE_WITH_LEDGER_RECOVERY_EVIDENCE"
+    }
+  },
+  "observability": {
+    "telemetryRef": "service://REPLACE_WITH_TELEMETRY_SERVICE",
+    "alertPolicyRef": "evidence://REPLACE_WITH_ALERT_POLICY",
+    "responderRef": "owner://REPLACE_WITH_INCIDENT_RESPONDER",
+    "rollbackThresholdsRef": "evidence://REPLACE_WITH_ROLLBACK_THRESHOLDS"
+  },
+  "aiProvider": {
+    "policyRef": "evidence://REPLACE_WITH_AI_PROVIDER_POLICY",
+    "retentionEvidenceRef": "evidence://REPLACE_WITH_AI_RETENTION_EVIDENCE",
+    "budgetEvidenceRef": "evidence://REPLACE_WITH_AI_BUDGET_EVIDENCE",
+    "canaryOwnerRef": "owner://REPLACE_WITH_AI_CANARY_OWNER"
+  }
+}

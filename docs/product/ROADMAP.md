@@ -2,7 +2,7 @@
 
 The roadmap is organized as controlled iterations. A round may take several working sessions, but it ends only after implementation, validation, archive update, and a commit.
 
-Progress snapshot (2026-07-19): iterations 0–18 are complete. The lifecycle remediation's hosted run passed quality and disposable deployment smoke. Iteration 19 is adding a strict aggregate release record and will exercise the first prerelease tag against GHCR/GitHub Releases. Production audit critical/high findings are zero; managed shared infrastructure, real WeChat credentials/device/domain proof, H5 release identity, cloud custody ownership, centralized alerting and model/provider approval remain gated.
+Progress snapshot (2026-07-19): iterations 0–19 are complete, including green hosted quality/smoke and the verified `v0.1.0-rc.1` GHCR/GitHub prerelease. Iteration 20 adds a strict non-secret managed-environment admission record before any cloud credential or traffic is involved. Production audit critical/high findings are zero; actual managed infrastructure, owner approvals, real WeChat credentials/device/domain proof, H5 release identity, cloud custody, centralized alerting and model/provider approval remain gated.
 
 | Iteration | Primary scope                                       | Exit evidence                                                                                    |
 | --------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
@@ -26,9 +26,11 @@ Progress snapshot (2026-07-19): iterations 0–18 are complete. The lifecycle re
 | 17        | Reproducible deployment artifacts                   | Non-root OCI images, migration gate, local topology proof, CI/release workflow and rollback unit |
 | 18        | Hermetic CI bootstrap                               | Dependency-free unit/contract generation, Node 24 actions and green hosted quality/image smoke   |
 | 19        | Immutable OCI release promotion                     | One strict digest manifest, provenance, candidate GHCR/GitHub Release and pull proof             |
-| 20        | Managed shared test deployment                      | Managed services/secrets, real WeChat proof, telemetry, calibrated limits and rollback           |
-| 21        | Beta hardening and release                          | H5 identity, security review, budgets, accessibility, filing artifacts and staged rollout        |
-| 22        | Native App feasibility and device sync              | Retention gate reviewed; HealthKit/Health Connect/Huawei proof of concept                        |
+| 20        | Managed environment admission                       | Strict non-secret inventory, release/checksum binding, ordered plan and explicit rollback        |
+| 21        | Immutable client delivery artifacts                 | Deterministic H5/WeApp bundles, checksums, source binding and admission integration              |
+| 22        | Managed shared test deployment                      | Managed services/secrets, real WeChat proof, telemetry, calibrated limits and rollback           |
+| 23        | Beta hardening and release                          | H5 identity, security review, budgets, accessibility, filing artifacts and staged rollout        |
+| 24        | Native App feasibility and device sync              | Retention gate reviewed; HealthKit/Health Connect/Huawei proof of concept                        |
 
 ## Release gates
 
@@ -40,14 +42,14 @@ Progress snapshot (2026-07-19): iterations 0–18 are complete. The lifecycle re
 
 ### Closed beta
 
-- Iterations 9–20 complete.
+- Iterations 9–22 complete.
 - AI evaluation set is versioned and safety validators block known high-risk cases.
 - Data export and deletion are exercised end to end.
 - Support, monitoring, cost limits, rollback, and incident ownership are assigned.
 
 ### Public release
 
-- Iteration 21 complete.
+- Iteration 23 complete.
 - Applicable ICP/APP/Mini Program privacy/AI registration and content-labeling work is reviewed.
 - Store materials match actual data practices and product claims.
 - Release starts with a small cohort and automatic rollback thresholds.
