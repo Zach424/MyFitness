@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { accountDeletionConfirmationPhrase } from '@myfitness/contracts'
 
-import { deletionReady, formatInventoryCount } from './privacy.model'
+import { deletionReady, formatInventoryCount, formatReceiptToken } from './privacy.model'
 
 describe('privacy page model', () => {
   it('formats zero separately from owned items', () => {
@@ -20,5 +20,11 @@ describe('privacy page model', () => {
     expect(deletionReady({ ...complete, phrase: '删除账户' })).toBe(false)
     expect(deletionReady({ ...complete, exportChoice: null })).toBe(false)
     expect(deletionReady({ ...complete, understandsPermanent: false })).toBe(false)
+  })
+
+  it('does not render a complete erasure receipt secret', () => {
+    const token = 'abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG'
+    expect(formatReceiptToken(token)).toBe('abcd…BCDEFG')
+    expect(formatReceiptToken(token)).not.toContain(token)
   })
 })

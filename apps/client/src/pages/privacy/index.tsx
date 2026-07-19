@@ -13,8 +13,11 @@ import { buttonA11yProps, checkboxA11yProps } from '../../lib/accessibility'
 import {
   deletePrivacyAccount,
   downloadPrivacyExport,
+  forgetErasureReceipt,
   getErasureReceiptStatus,
   getPrivacyOverview,
+  prepareAccountDeletion,
+  recoverPendingAccountDeletion,
   revokeOptionalConsent,
 } from '../../lib/api'
 import {
@@ -22,6 +25,7 @@ import {
   consentStatusCopy,
   deletionReady,
   formatInventoryCount,
+  formatReceiptToken,
   privacyCategoryCopy,
 } from './privacy.model'
 import './index.scss'
@@ -79,7 +83,29 @@ const PrivacyPage = () => {
   }
 
   useEffect(() => {
-    void loadOverview()
+    let active = true
+    void recoverPendingAccountDeletion()
+      .then((receipt) => {
+        if (!active) return
+        if (receipt) {
+          setDeleted(receipt)
+          setLoading(false)
+          return
+        }
+        void loadOverview()
+      })
+      .catch((recoveryError) => {
+        if (!active) return
+        setError(
+          recoveryError instanceof Error
+            ? recoveryError.message
+            : '删除回执恢复失败，请检查网络后重试。',
+        )
+        setLoading(false)
+      })
+    return () => {
+      active = false
+    }
   }, [])
 
   const readyToDelete = useMemo(
@@ -131,17 +157,27 @@ const PrivacyPage = () => {
     setDeleting(true)
     setError('')
     try {
-      const result = await deletePrivacyAccount({
-        confirmationPhrase: accountDeletionConfirmationPhrase,
-        exportChoice: exportChoice!,
-        understandsPermanent: true,
-      })
+      const intent = await prepareAccountDeletion()
+      const result = await deletePrivacyAccount(
+        {
+          intentId: intent.intentId,
+          confirmationPhrase: accountDeletionConfirmationPhrase,
+          exportChoice: exportChoice!,
+          understandsPermanent: true,
+        },
+        intent.intentToken,
+      )
       setDeleted(result)
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : '账户删除未能安全完成')
     } finally {
       setDeleting(false)
     }
+  }
+
+  const handleForgetReceipt = () => {
+    forgetErasureReceipt()
+    void Taro.reLaunch({ url: '/pages/onboarding/index' })
   }
 
   if (deleted) {
@@ -170,18 +206,17 @@ const PrivacyPage = () => {
           </Text>
           <View className="deletion-complete__receipt">
             <Text>凭据 {deleted.receiptId}</Text>
-            <Text>查询密钥 {deleted.statusToken}</Text>
+            <Text>查询密钥 已保存在本机 · {formatReceiptToken(deleted.statusToken)}</Text>
             <Text>清除范围 {deleted.scopeVersion}</Text>
             <Text>状态 {deleted.status}</Text>
             <Text>{formatDate(deleted.deletedAt ?? deleted.requestedAt)}</Text>
           </View>
+          <Text className="deletion-complete__local-note">
+            查询密钥已保存在本机，页面重启后仍可恢复回执。从本机移除后，系统不会再显示这份回执。
+          </Text>
           {complete ? (
-            <Button
-              {...buttonA11yProps}
-              className="primary-action"
-              onClick={() => void Taro.reLaunch({ url: '/pages/onboarding/index' })}
-            >
-              重新开始
+            <Button {...buttonA11yProps} className="primary-action" onClick={handleForgetReceipt}>
+              从本机移除回执
             </Button>
           ) : null}
         </View>

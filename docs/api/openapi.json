@@ -898,6 +898,89 @@
         "tags": ["authentication"]
       }
     },
+    "/v1/privacy/erasure-receipts/recover": {
+      "post": {
+        "operationId": "ErasureReceiptsController_recover",
+        "parameters": [
+          {
+            "name": "X-Erasure-Receipt-Token",
+            "in": "header",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "receiptId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": ["queued", "running", "completed", "dead_letter"]
+                    },
+                    "deleted": { "type": "boolean" },
+                    "scopeVersion": { "type": "string", "enum": ["durable-erasure-v2"] },
+                    "primaryStoreStatus": { "type": "string", "enum": ["pending", "deleted"] },
+                    "mediaStatus": { "type": "string", "enum": ["pending", "deleted"] },
+                    "providerStatus": {
+                      "type": "string",
+                      "enum": ["pending", "not_applicable", "fixture_only", "policy_bound"]
+                    },
+                    "backupStatus": { "type": "string", "enum": ["pending", "ledger_published"] },
+                    "requestedAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "deletedAt": {
+                      "nullable": true,
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "lastErrorCode": {
+                      "nullable": true,
+                      "type": "string",
+                      "enum": [
+                        "object_storage_unavailable",
+                        "database_unavailable",
+                        "invalid_job_payload",
+                        "unexpected_error"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "receiptId",
+                    "status",
+                    "deleted",
+                    "scopeVersion",
+                    "primaryStoreStatus",
+                    "mediaStatus",
+                    "providerStatus",
+                    "backupStatus",
+                    "requestedAt",
+                    "deletedAt",
+                    "lastErrorCode"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": { "description": "Receipt secret is invalid." }
+        },
+        "summary": "Recover minimal erasure progress after a committed deletion response was lost",
+        "tags": ["privacy"]
+      }
+    },
     "/v1/privacy/erasure-receipts/{receiptId}": {
       "get": {
         "operationId": "ErasureReceiptsController_status",
@@ -6253,10 +6336,55 @@
         "tags": ["privacy"]
       }
     },
+    "/v1/me/privacy/account-deletion-intents": {
+      "post": {
+        "description": "The returned secret must be persisted by the client before deletion and becomes the receipt recovery credential after commit.",
+        "operationId": "PrivacyController_createDeletionIntent",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "intentId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "intentToken": { "type": "string", "pattern": "^[A-Za-z0-9_-]{43}$" },
+                    "expiresAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    }
+                  },
+                  "required": ["intentId", "intentToken", "expiresAt"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": { "description": "Bearer token is missing, invalid, expired or revoked." }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Create a short-lived, single-use account deletion intent",
+        "tags": ["privacy"]
+      }
+    },
     "/v1/me/privacy/account": {
       "delete": {
         "operationId": "PrivacyController_deleteAccount",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "X-Erasure-Intent-Token",
+            "in": "header",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
         "responses": {
           "202": {
             "description": "",

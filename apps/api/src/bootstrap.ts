@@ -28,6 +28,7 @@ const configureApplication = (app: INestApplication) => {
       'Content-Type',
       'x-idempotency-key',
       'x-expected-revision',
+      'x-erasure-intent-token',
       'x-erasure-receipt-token',
       'x-request-id',
     ],

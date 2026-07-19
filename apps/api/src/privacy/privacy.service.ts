@@ -18,6 +18,7 @@ import {
   privacyOverviewSchema,
   revocableConsentPurposes,
   type AccountDeletionRequest,
+  type AccountDeletionIntent,
   type ConsentState,
   type PrivacyExport,
   type PrivacyInventoryItem,
@@ -57,6 +58,8 @@ const requiredConsentPurposes = new Set<ConsentState['purpose']>([
   'privacy',
   'health_data',
 ])
+const deletionIntentLifetimeMs = 15 * 60 * 1000
+const hashSecret = (secret: string) => createHash('sha256').update(secret).digest('hex')
 
 const jsonSafe = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T
 
@@ -480,19 +483,66 @@ export class PrivacyService {
   }
 
   async erasureReceipt(receiptId: string, statusToken: string) {
-    return this.receipt(receiptId, createHash('sha256').update(statusToken).digest('hex'))
+    return this.receipt(receiptId, hashSecret(statusToken))
   }
 
-  async deleteAccount(userId: string, _input: AccountDeletionRequest) {
+  async recoverErasureReceipt(statusToken: string) {
+    const result = await this.database.query<Parameters<PrivacyService['receiptResult']>[0]>(
+      `SELECT receipt_id, status, scope_version, primary_store_status, media_status,
+              provider_status, backup_status, requested_at, completed_at, last_error_code
+       FROM privacy_erasure_receipts
+       WHERE status_token_hash = $1 AND scope_version = $2`,
+      [hashSecret(statusToken), privacyErasureScopeVersion],
+    )
+    const row = result.rows[0]
+    if (!row) throw new UnauthorizedException('erasure receipt token is invalid')
+    return this.receiptResult(row)
+  }
+
+  async createDeletionIntent(userId: string): Promise<AccountDeletionIntent> {
+    const intentId = randomUUID()
+    const intentToken = randomBytes(32).toString('base64url')
+    const expiresAt = new Date(Date.now() + deletionIntentLifetimeMs)
+    await this.database.withTransaction(async (client) => {
+      const account = await client.query(
+        "SELECT id FROM users WHERE id = $1 AND status = 'active' FOR UPDATE",
+        [userId],
+      )
+      if (!account.rows[0]) throw new NotFoundException('active account not found')
+      await client.query(
+        `INSERT INTO privacy_erasure_intents
+           (intent_id, user_id, token_hash, created_at, expires_at)
+         VALUES ($1, $2, $3, NOW(), $4)
+         ON CONFLICT (user_id) DO UPDATE
+         SET intent_id = EXCLUDED.intent_id,
+             token_hash = EXCLUDED.token_hash,
+             created_at = EXCLUDED.created_at,
+             expires_at = EXCLUDED.expires_at`,
+        [intentId, userId, hashSecret(intentToken), expiresAt],
+      )
+    })
+    return { intentId, intentToken, expiresAt: expiresAt.toISOString() }
+  }
+
+  async deleteAccount(userId: string, input: AccountDeletionRequest, intentToken: string) {
     const receiptId = randomUUID()
-    const statusToken = randomBytes(32).toString('base64url')
-    const statusTokenHash = createHash('sha256').update(statusToken).digest('hex')
+    const statusToken = intentToken
+    const statusTokenHash = hashSecret(statusToken)
     const jobId = await this.database.withTransaction(async (client) => {
       const account = await client.query<{ id: string }>(
         "SELECT id FROM users WHERE id = $1 AND status = 'active' FOR UPDATE",
         [userId],
       )
       if (!account.rows[0]) throw new ConflictException('account is not active')
+      const intent = await client.query(
+        `DELETE FROM privacy_erasure_intents
+         WHERE intent_id = $1 AND user_id = $2 AND token_hash = $3 AND expires_at > NOW()
+         RETURNING intent_id`,
+        [input.intentId, userId, statusTokenHash],
+      )
+      if (!intent.rows[0]) {
+        throw new UnauthorizedException('account deletion intent is invalid or expired')
+      }
       await client.query(
         "UPDATE users SET status = 'deletion_pending', updated_at = NOW() WHERE id = $1 RETURNING id",
         [userId],

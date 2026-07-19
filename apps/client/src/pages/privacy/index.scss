@@ -302,7 +302,8 @@
   margin: 12px 0 0 39px;
   color: var(--color-muted);
   font-family: var(--font-metric);
-  font-size: 8px;
+  font-size: 10px;
+  line-height: 1.55;
   line-height: 1.5;
 }
 
@@ -668,6 +669,15 @@
   font-family: var(--font-metric);
   font-size: 8px;
   overflow-wrap: anywhere;
+}
+
+.deletion-complete__local-note {
+  display: block;
+  max-width: 420px;
+  margin: 14px auto 0;
+  color: var(--color-muted);
+  font-size: 11px;
+  line-height: 1.65;
 }
 
 button:focus-visible,

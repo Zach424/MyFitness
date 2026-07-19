@@ -25,8 +25,10 @@ Local routes after `pnpm db:up`, `pnpm db:migrate`, and `pnpm dev:api`:
 - Privacy inventory: `GET http://127.0.0.1:3100/v1/me/privacy`
 - Portable data export: `GET http://127.0.0.1:3100/v1/me/privacy/export`
 - Optional consent withdrawal: `POST http://127.0.0.1:3100/v1/me/privacy/consents/:purpose/revoke`
-- Permanent account erasure: `DELETE http://127.0.0.1:3100/v1/me/privacy/account`
+- Account-erasure intent: `POST http://127.0.0.1:3100/v1/me/privacy/account-deletion-intents`
+- Permanent account erasure: `DELETE http://127.0.0.1:3100/v1/me/privacy/account` with intent UUID and `X-Erasure-Intent-Token`
 - Secret-gated erasure receipt: `GET http://127.0.0.1:3100/v1/privacy/erasure-receipts/:receiptId` with `X-Erasure-Receipt-Token`
+- Lost-response receipt recovery: `POST http://127.0.0.1:3100/v1/privacy/erasure-receipts/recover` with `X-Erasure-Receipt-Token`
 - Measurements: `GET/POST http://127.0.0.1:3100/v1/health-records`
 - Measurement lifecycle: `PUT/DELETE http://127.0.0.1:3100/v1/health-records/:recordId`
 - Measurement history: `GET http://127.0.0.1:3100/v1/health-records/:recordId/history`
@@ -73,4 +75,4 @@ Food-photo reservation requires `x-idempotency-key` and current affirmative purp
 
 The privacy inventory reports stable user-facing categories and current consent state. Its versioned JSON export runs from a repeatable-read snapshot, includes revision history and retained sanitized photo bytes, and responds as a no-store attachment; session tokens, hashes, idempotency keys and private storage keys are excluded. Only AI-plan and food-photo purposes can be withdrawn independently.
 
-Account erasure requires the exact shared-contract phrase, an export choice and permanent acknowledgement. The `202` response closes access and returns a `durable-erasure-v2` receipt UUID plus one-time status token. A PostgreSQL worker then publishes the HMAC restore ledger, deletes exact/owner-prefix media and cascades the user graph with leased retry/dead-letter evidence. The secret-gated public status separates primary, media, provider and backup dispositions. `providerStatus=policy_bound` is not a remote-delete claim; `backupStatus=ledger_published` is not backup expiry. Production restore must replay the independently retained ledger before serving traffic.
+Account erasure requires the exact shared-contract phrase, an export choice and permanent acknowledgement. The client first creates a 15-minute single-use intent and persists its 256-bit secret; the server stores only SHA-256. Deletion atomically consumes the UUID/secret pair, closes access and returns a `durable-erasure-v2` receipt. If that response is lost, the same bearer secret recovers minimal status without authentication or a receipt UUID. A PostgreSQL worker then publishes the HMAC restore ledger, deletes exact/owner-prefix media and cascades the user graph with leased retry/dead-letter evidence. Both public status routes are rate-limited/no-store and separate primary, media, provider and backup dispositions. `providerStatus=policy_bound` is not a remote-delete claim; `backupStatus=ledger_published` is not backup expiry. Production restore must replay the independently retained ledger before serving traffic.

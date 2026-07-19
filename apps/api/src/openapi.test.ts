@@ -61,7 +61,9 @@ describe('OpenAPI document', () => {
     expect(document.paths['/v1/me/privacy']?.get).toBeDefined()
     expect(document.paths['/v1/me/privacy/export']?.get).toBeDefined()
     expect(document.paths['/v1/me/privacy/consents/{purpose}/revoke']?.post).toBeDefined()
+    expect(document.paths['/v1/me/privacy/account-deletion-intents']?.post).toBeDefined()
     expect(document.paths['/v1/me/privacy/account']?.delete).toBeDefined()
+    expect(document.paths['/v1/privacy/erasure-receipts/recover']?.post).toBeDefined()
     expect(document.components?.securitySchemes?.bearer).toBeDefined()
     expect(document.components?.securitySchemes?.adminBearer).toBeDefined()
   })
@@ -73,12 +75,13 @@ describe('OpenAPI document', () => {
       .set('Access-Control-Request-Method', 'DELETE')
       .set(
         'Access-Control-Request-Headers',
-        'authorization,x-expected-revision,x-erasure-receipt-token,x-request-id',
+        'authorization,x-expected-revision,x-erasure-intent-token,x-erasure-receipt-token,x-request-id',
       )
       .expect(204)
 
     expect(response.headers['access-control-allow-origin']).toBe('http://127.0.0.1:4173')
     expect(response.headers['access-control-allow-headers']).toContain('x-expected-revision')
+    expect(response.headers['access-control-allow-headers']).toContain('x-erasure-intent-token')
     expect(response.headers['access-control-allow-headers']).toContain('x-erasure-receipt-token')
     expect(response.headers['access-control-allow-headers']).toContain('x-request-id')
     expect(response.headers['access-control-expose-headers']).toContain('x-request-id')

@@ -5,12 +5,16 @@ import {
   Delete,
   Get,
   Header,
+  Headers,
   HttpCode,
   Param,
   Post,
   StreamableFile,
+  UnauthorizedException,
 } from '@nestjs/common'
 import {
+  ApiCreatedResponse,
+  ApiHeader,
   ApiBadRequestResponse,
   ApiConflictResponse,
   ApiAcceptedResponse,
@@ -21,12 +25,14 @@ import {
   ApiTags,
 } from '@nestjs/swagger'
 import {
+  accountDeletionIntentSchema,
   accountDeletionRequestSchema,
   accountDeletionResultSchema,
   consentRevocationRequestSchema,
   consentRevocationResultSchema,
   privacyOverviewSchema,
   revocableConsentPurposeSchema,
+  erasureReceiptTokenSchema,
   type AccountDeletionRequest,
   type ConsentRevocationRequest,
 } from '@myfitness/contracts'
@@ -107,6 +113,23 @@ export class PrivacyController {
     )
   }
 
+  @Post('account-deletion-intents')
+  @RateLimit(rateLimitPolicies.accountErasureIntent)
+  @HttpCode(201)
+  @Header('Cache-Control', 'no-store, private')
+  @Header('Pragma', 'no-cache')
+  @ApiOperation({
+    summary: 'Create a short-lived, single-use account deletion intent',
+    description:
+      'The returned secret must be persisted by the client before deletion and becomes the receipt recovery credential after commit.',
+  })
+  @ApiCreatedResponse({ schema: openApiSchema(accountDeletionIntentSchema) })
+  async createDeletionIntent(@CurrentUser() principal: AuthPrincipal) {
+    return accountDeletionIntentSchema.parse(
+      await this.privacy.createDeletionIntent(principal.userId),
+    )
+  }
+
   @Delete('account')
   @RateLimit(rateLimitPolicies.accountErasure)
   @HttpCode(202)
@@ -116,14 +139,23 @@ export class PrivacyController {
     description: 'The exact deletion phrase and acknowledgement are required.',
   })
   @ApiConflictResponse({ description: 'The account is not active or deletion state changed.' })
-  async deleteAccount(@CurrentUser() principal: AuthPrincipal, @Body() body: unknown) {
+  @ApiHeader({ name: 'X-Erasure-Intent-Token', required: true })
+  async deleteAccount(
+    @CurrentUser() principal: AuthPrincipal,
+    @Headers('x-erasure-intent-token') rawIntentToken: string | undefined,
+    @Body() body: unknown,
+  ) {
+    const intentToken = erasureReceiptTokenSchema.safeParse(rawIntentToken)
+    if (!intentToken.success) {
+      throw new UnauthorizedException('account deletion intent is invalid or expired')
+    }
     const input = parseBody<AccountDeletionRequest>(
       accountDeletionRequestSchema,
       body,
       'account deletion request is invalid',
     )
     return accountDeletionResultSchema.parse(
-      await this.privacy.deleteAccount(principal.userId, input),
+      await this.privacy.deleteAccount(principal.userId, input, intentToken.data),
     )
   }
 }

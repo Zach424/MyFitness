@@ -35,6 +35,9 @@ export const consentStatusCopy: Record<ConsentState['status'], string> = {
 
 export const formatInventoryCount = (count: number) => (count === 0 ? '无数据' : `${count} 项`)
 
+export const formatReceiptToken = (token: string) =>
+  token.length > 12 ? `${token.slice(0, 4)}…${token.slice(-6)}` : '已保存在本机'
+
 export const deletionReady = (input: {
   phrase: string
   exportChoice: 'downloaded' | 'skip' | null

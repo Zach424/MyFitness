@@ -26,6 +26,7 @@ import type {
   ConsentRevocationResult,
   AccountDeletionRequest,
   AccountDeletionResult,
+  AccountDeletionIntent,
   ErasureReceiptStatus,
   UpdateHealthRecord,
   UpdateMeal,
@@ -43,6 +44,50 @@ const AUTH_MODE = __AUTH_MODE__
 const TOKEN_KEY = 'myfitness.auth.accessToken'
 const LEGACY_TOKEN_KEY = 'myfitness.dev.accessToken'
 const SUBJECT_KEY = 'myfitness.dev.subject'
+const ERASURE_RECEIPT_KEY = 'myfitness.privacy.erasureReceipt'
+
+type StoredErasureReceipt = {
+  intentId: string
+  statusToken: string
+  expiresAt: string
+  receiptId?: string
+}
+
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+const erasureTokenPattern = /^[A-Za-z0-9_-]{43}$/
+
+const readStoredErasureReceipt = (): StoredErasureReceipt | null => {
+  const raw = Taro.getStorageSync<string>(ERASURE_RECEIPT_KEY)
+  if (!raw || typeof raw !== 'string') return null
+  try {
+    const value = JSON.parse(raw) as Partial<StoredErasureReceipt>
+    if (
+      typeof value.intentId !== 'string' ||
+      !uuidPattern.test(value.intentId) ||
+      typeof value.statusToken !== 'string' ||
+      !erasureTokenPattern.test(value.statusToken) ||
+      typeof value.expiresAt !== 'string' ||
+      !Number.isFinite(Date.parse(value.expiresAt)) ||
+      (value.receiptId !== undefined &&
+        (typeof value.receiptId !== 'string' || !uuidPattern.test(value.receiptId)))
+    ) {
+      throw new Error('stored erasure receipt is invalid')
+    }
+    return value as StoredErasureReceipt
+  } catch {
+    Taro.removeStorageSync(ERASURE_RECEIPT_KEY)
+    return null
+  }
+}
+
+const writeStoredErasureReceipt = (value: StoredErasureReceipt) =>
+  Taro.setStorageSync(ERASURE_RECEIPT_KEY, JSON.stringify(value))
+
+const clearAuthStorage = () => {
+  Taro.removeStorageSync(TOKEN_KEY)
+  Taro.removeStorageSync(LEGACY_TOKEN_KEY)
+  Taro.removeStorageSync(SUBJECT_KEY)
+}
 
 type ClientSession = {
   accessToken: string
@@ -382,18 +427,6 @@ export const downloadPrivacyExport = async (
   return { fileName, filePath, byteLength: response.dataLength ?? null }
 }
 
-export const deletePrivacyAccount = async (payload: AccountDeletionRequest) => {
-  const result = await authenticatedRequest<AccountDeletionResult>(
-    '/me/privacy/account',
-    'DELETE',
-    payload,
-  )
-  Taro.removeStorageSync(TOKEN_KEY)
-  Taro.removeStorageSync(LEGACY_TOKEN_KEY)
-  Taro.removeStorageSync(SUBJECT_KEY)
-  return result
-}
-
 export const getErasureReceiptStatus = async (
   receiptId: string,
   statusToken: string,
@@ -406,7 +439,90 @@ export const getErasureReceiptStatus = async (
   if (response.statusCode < 200 || response.statusCode >= 300) {
     throw new ApiError(response.statusCode, response.data as ApiErrorBody)
   }
+  const stored = readStoredErasureReceipt()
+  if (stored?.statusToken === statusToken) {
+    writeStoredErasureReceipt({ ...stored, receiptId })
+  }
   return response.data
+}
+
+const recoverErasureReceipt = async (statusToken: string): Promise<ErasureReceiptStatus> => {
+  const response = await Taro.request<ErasureReceiptStatus>({
+    url: `${API_BASE_URL}/privacy/erasure-receipts/recover`,
+    method: 'POST',
+    header: { 'X-Erasure-Receipt-Token': statusToken },
+  })
+  if (response.statusCode < 200 || response.statusCode >= 300) {
+    throw new ApiError(response.statusCode, response.data as ApiErrorBody)
+  }
+  return response.data
+}
+
+export const prepareAccountDeletion = async (): Promise<AccountDeletionIntent> => {
+  const intent = await authenticatedRequest<AccountDeletionIntent>(
+    '/me/privacy/account-deletion-intents',
+    'POST',
+  )
+  writeStoredErasureReceipt({
+    intentId: intent.intentId,
+    statusToken: intent.intentToken,
+    expiresAt: intent.expiresAt,
+  })
+  return intent
+}
+
+export const recoverPendingAccountDeletion = async (): Promise<AccountDeletionResult | null> => {
+  const stored = readStoredErasureReceipt()
+  if (!stored) return null
+  try {
+    const status = await recoverErasureReceipt(stored.statusToken)
+    const result = { ...status, statusToken: stored.statusToken }
+    writeStoredErasureReceipt({ ...stored, receiptId: status.receiptId })
+    clearAuthStorage()
+    return result
+  } catch (error) {
+    if (error instanceof ApiError && error.statusCode === 401 && !stored.receiptId) {
+      if (Date.parse(stored.expiresAt) <= Date.now()) {
+        Taro.removeStorageSync(ERASURE_RECEIPT_KEY)
+      }
+      return null
+    }
+    throw error
+  }
+}
+
+export const forgetErasureReceipt = () => Taro.removeStorageSync(ERASURE_RECEIPT_KEY)
+
+export const deletePrivacyAccount = async (
+  payload: AccountDeletionRequest,
+  intentToken: string,
+): Promise<AccountDeletionResult> => {
+  let result: AccountDeletionResult
+  try {
+    result = await authenticatedRequest<AccountDeletionResult>(
+      '/me/privacy/account',
+      'DELETE',
+      payload,
+      { 'X-Erasure-Intent-Token': intentToken },
+      false,
+    )
+  } catch (error) {
+    try {
+      const recovered = await recoverErasureReceipt(intentToken)
+      result = { ...recovered, statusToken: intentToken }
+    } catch {
+      throw error
+    }
+  }
+  const stored = readStoredErasureReceipt()
+  writeStoredErasureReceipt({
+    intentId: payload.intentId,
+    statusToken: intentToken,
+    expiresAt: stored?.expiresAt ?? result.requestedAt,
+    receiptId: result.receiptId,
+  })
+  clearAuthStorage()
+  return result
 }
 
 export const apiBaseUrl = API_BASE_URL

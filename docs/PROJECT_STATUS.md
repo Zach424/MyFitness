@@ -1,8 +1,8 @@
 # Project status
 
-Last reviewed: 2026-07-19
+Last reviewed: 2026-07-20
 
-Stage: first service candidate published; deterministic client release and combined admission are locally green before the next candidate and external shared infrastructure
+Stage: first service candidate published; deterministic client release, combined admission and recoverable account-erasure receipts are locally green before the next candidate and external shared infrastructure
 
 Primary release target: WeChat Mini Program + responsive H5
 
@@ -12,20 +12,20 @@ MyFitness / 衡迹 turns body, training, nutrition, and recovery records into sa
 
 ## Module status
 
-| Module                  | Status                       | Current evidence                                                   | Next gate                                   |
-| ----------------------- | ---------------------------- | ------------------------------------------------------------------ | ------------------------------------------- |
-| Product scope           | Done for MVP baseline        | `docs/product/PRODUCT_BRIEF.md`                                    | Validate with target-user interviews        |
-| Delivery roadmap        | Done for planning baseline   | `docs/product/ROADMAP.md`                                          | Execute iteration 22 managed shared test    |
-| Design language         | Partial, eleven flows tested | Core flows + 22 reviewed screenshots                               | Large text, keyboard and remaining states   |
-| Client: Mini Program/H5 | Partial                      | Source-bound WeApp candidate + preview-only H5 deterministic TARs  | Publish next candidate; device/H5 identity  |
-| Admin console           | Partial, local slice done    | OIDC BFF, exact lookup, role split and Evidence Rail exercised     | Select IdP, owner, retention and deployment |
-| Business API            | Partial                      | Verified identity plus non-root self-contained OCI runtime         | Shared deployment and real credential proof |
-| Domain rules            | Partial                      | Safety validators + strict privacy action contracts                | Add release policy enforcement              |
-| AI service              | Partial                      | Text/vision fixture/OpenAI adapters + 15 eval cases                | Approved real-provider canary               |
-| Native App/devices      | Deferred                     | Phase-two decision                                                 | MVP retention gate reached                  |
-| Privacy/compliance      | Partial, durable local proof | Erasure, identity suppression and backup-ledger replay exercised   | Production retention/provider/legal review  |
-| Testing/observability   | Partial                      | 132 unit tests; hosted quality/smoke/release baseline green        | Green implementing CI; centralize telemetry |
-| Deployment              | Partial, admission ready     | Service/client byte gate + strict non-secret environment admission | Approve dossier, provision and canary       |
+| Module                  | Status                       | Current evidence                                                    | Next gate                                   |
+| ----------------------- | ---------------------------- | ------------------------------------------------------------------- | ------------------------------------------- |
+| Product scope           | Done for MVP baseline        | `docs/product/PRODUCT_BRIEF.md`                                     | Validate with target-user interviews        |
+| Delivery roadmap        | Done for planning baseline   | `docs/product/ROADMAP.md`                                           | Execute iteration 23 managed shared test    |
+| Design language         | Partial, eleven flows tested | Core flows + recovery state + 23 reviewed screenshots               | Large text, keyboard and remaining states   |
+| Client: Mini Program/H5 | Partial                      | Source-bound WeApp candidate + preview-only H5 deterministic TARs   | Publish next candidate; device/H5 identity  |
+| Admin console           | Partial, local slice done    | OIDC BFF, exact lookup, role split and Evidence Rail exercised      | Select IdP, owner, retention and deployment |
+| Business API            | Partial                      | Verified identity plus non-root self-contained OCI runtime          | Shared deployment and real credential proof |
+| Domain rules            | Partial                      | Safety validators + strict privacy action contracts                 | Add release policy enforcement              |
+| AI service              | Partial                      | Text/vision fixture/OpenAI adapters + 15 eval cases                 | Approved real-provider canary               |
+| Native App/devices      | Deferred                     | Phase-two decision                                                  | MVP retention gate reached                  |
+| Privacy/compliance      | Partial, durable local proof | Recoverable erasure, identity suppression and restore replay tested | Production retention/provider/legal review  |
+| Testing/observability   | Partial                      | 134 unit, 43 integration and 22 browser tests locally green         | Green implementing CI; centralize telemetry |
+| Deployment              | Partial, admission ready     | Service/client byte gate + strict non-secret environment admission  | Approve dossier, provision and canary       |
 
 Status vocabulary: `Done` means validated for the present stage, `Partial` means usable but missing a named gate, `Pending` means not implemented, and `Deferred` means intentionally outside the current release.
 
@@ -55,6 +55,7 @@ Status vocabulary: `Done` means validated for the present stage, `Partial` means
 - Private S3-compatible object storage with checksummed/conditional writes, production-required SSE, user-scoped photo keys and local pinned MinIO.
 - PostgreSQL durable data-operation jobs with transactional enqueue, atomic `SKIP LOCKED` claims, leases, exponential retry, attempts, dead-letter state and aggregate operations evidence.
 - User-owned privacy custody with inventory/export/revocation plus `durable-erasure-v2`: immediate access closure, status-token receipt, media/primary/provider/backup dispositions and cleared completed-subject fields.
+- Recoverable account erasure uses a 15-minute single-use intent, stores only SHA-256 token hashes, persists the secret on the client before deletion and reuses it for a rate-limited no-store receipt lookup after the account session is closed.
 - HMAC erasure ledger outside the database backup domain and a real `pg_dump → pg_restore → ledger replay` drill that removes a deleted user restored from an older backup.
 - UUIDv4 request correlation, stable-route completion logs, a pre-authentication IP gate and post-authentication policy limits backed by HMAC-keyed Redis counters.
 - Durable erasure ledger v2 stores unlinkable provider-identity HMAC references outside the backup domain; restore replay recreates identity suppressions before traffic, while legacy v1 entries derive suppressions from identities found in the isolated backup.
@@ -89,7 +90,7 @@ Status vocabulary: `Done` means validated for the present stage, `Partial` means
 | Enterprise operator OIDC tenant/client and access owner are absent                     | High   | Select provider; exercise provisioning, recertification, disablement and shared login                  |
 | Administrator audit lacks independent retention/export and alerts                      | High   | Define retention/owner; ship immutable copy and alert review before real operator access               |
 | Local restore replay works; backup/provider operations are unowned                     | High   | Automate backup/retention, independently retain ledger and approve provider controls                   |
-| Lost deletion-response token cannot currently be recovered                             | High   | Add idempotent request/status recovery before closed beta                                              |
+| A receipt bearer secret remains in client application storage until explicit removal   | Medium | Review secure platform storage/shared-device handling and expiry policy before closed beta             |
 | Dead-letter recovery has no alert owner or safe service endpoint                       | High   | Centralize alerts; require audited exact-job runbook until a least-privilege tool exists               |
 | Process metrics are not centrally scraped and alerts have no owner                     | High   | Deploy private aggregation, dashboards, paging and named incident ownership before beta                |
 | Rate limits use uncalibrated fixed windows and exact proxy topology                    | Medium | Load-test policy boundaries and verify `TRUST_PROXY_HOPS` in the shared environment                    |
@@ -112,4 +113,4 @@ The MVP cannot enter public beta until all of the following are reproducible:
 
 ## Primary next step
 
-Iteration 22: obtain the approved client API URL plus owner-approved account/region/budget and protected references, publish a new immutable service/client candidate, provision the managed shared test environment, inject real WeChat/OIDC secrets, deploy admitted services without general traffic, upload the exact WeApp TAR to private preview, and exercise identity, custody, telemetry, canary and no-traffic rollback. H5 public delivery remains held until iteration 23 selects a production identity adapter.
+Iteration 23: obtain the approved client API URL plus owner-approved account/region/budget and protected references, publish a new immutable service/client candidate, provision the managed shared test environment, inject real WeChat/OIDC secrets, deploy admitted services without general traffic, upload the exact WeApp TAR to private preview, and exercise identity, custody, telemetry, canary and no-traffic rollback. H5 public delivery remains held until iteration 24 selects a production identity adapter.

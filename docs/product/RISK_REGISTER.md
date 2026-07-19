@@ -1,6 +1,6 @@
 # Product risk register
 
-Last reviewed: 2026-07-19, iteration 021
+Last reviewed: 2026-07-20, iteration 022
 
 This register tracks release-affecting uncertainty. A mitigation is evidence to collect, not a claim that the risk is gone.
 
@@ -22,12 +22,12 @@ This register tracks release-affecting uncertainty. A mitigation is evidence to 
 | R-015 | Production audit retains 6 moderate Taro build/development-chain advisories             | Medium | Critical/high are zero; remove esbuild/webpack-dev-server/uuid findings through a supported Taro upgrade and rerun full graph/dual-client/E2E evidence |
 | R-016 | Enterprise operator identity and access governance are not configured                   | High   | Select OIDC tenant/client and named owner; exercise dual-reviewed provisioning, recertification, disablement, revocation and shared login before use   |
 | R-017 | Administrator audit is immutable only inside the primary database                       | High   | Define retention and owner; export to independently protected storage, include restore evidence and alert on write/access anomalies before real access |
-| R-018 | A committed deletion request can lose its one-time receipt token in transit             | High   | Add request idempotency and authenticated/token-safe receipt recovery before closed beta                                                               |
 | R-019 | Erasure ledger/secret loss would invalidate user and provider-identity suppression      | High   | Independently retain/replicate ledger and recover HMAC secret; implement dual-read version rotation and exercise loss scenarios                        |
 | R-020 | Dead-letter jobs lack named alerts and a least-privilege recovery service               | High   | Use exact-job audited runbook locally; add centralized paging, owner and safe recovery workflow before shared beta                                     |
 | R-021 | MVP erased-identity suppression currently prevents a new account for the same identity  | High   | Confirm product/legal policy; if return is allowed, require an explicit fresh-account consent flow without reconnecting erased data before beta        |
 | R-022 | Managed deployment remains unproven after release and environment-admission proof       | Medium | Hosted quality/smoke/release are green and admission is executable; provision managed resources, deploy a canary and exercise no-traffic rollback      |
 | R-023 | Offline admission cannot prove external references exist or were genuinely approved     | High   | Create, dereference and approve the dossier inside a protected change workflow; never grant credentials or traffic from local verifier success alone   |
 | R-024 | The published `v0.1.0-rc.1` has no H5/WeApp assets, although the next-tag gate is ready | Medium | Configure the approved client API URL, publish a new immutable candidate, then download and independently verify both TARs before shared delivery      |
+| R-025 | A receipt bearer secret remains in client application storage until explicit removal    | Medium | Keep it masked and no-store over HTTP; review secure platform storage, shared-device behavior and expiry/removal policy before closed beta             |
 
 Resolved implementation defects remain documented in their iteration archive rather than removed from history. Product-level risks close only when the named release evidence exists.

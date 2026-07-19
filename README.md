@@ -79,7 +79,7 @@ AI worker 健康地址是 `http://127.0.0.1:8001/health`。本地默认使用无
 
 本地照片和恢复删除日志存放在私有 MinIO bucket；照片逻辑键为 `<user UUID>/<photo UUID>.jpg`，对象前缀与 ledger 前缀可独立配置。API 使用 AWS SDK v3 写入 SHA-256 校验和，新照片条件写入避免覆盖；所有删除路径先落 PostgreSQL 持久任务。生产环境必须配置 HTTPS 对象端点、最小权限凭据、SSE/KMS、生命周期/版本/复制、独立 ledger 留存以及至少 32 字符的照片签名和 ledger HMAC 密钥。真实照片模型仍默认关闭；本地 MinIO 不是生产对象存储证明。
 
-账户删除返回 `202`、删除回执 ID 和一次性状态密钥。账户访问先关闭，后台再删除私有对象、发布恢复删除日志并清除主数据库。备份恢复必须在开放流量前重放 ledger；本地真实演练命令是 `pnpm ops:verify-backup-restore`。任务状态、故障处理和生产门槛见 [数据托管运维手册](docs/operations/DATA_CUSTODY_RUNBOOK.md)。
+账户删除先创建 15 分钟单次意图并在客户端保存一次性密钥，再用意图 ID/密钥提交删除；服务端只保存 SHA-256。账户访问先关闭，后台再删除私有对象、发布恢复删除日志并清除主数据库。即使 `202` 响应丢失或页面刷新，客户端也能用原密钥找回最小回执状态。备份恢复必须在开放流量前重放 ledger；本地真实演练命令是 `pnpm ops:verify-backup-restore`。任务状态、故障处理和生产门槛见 [数据托管运维手册](docs/operations/DATA_CUSTODY_RUNBOOK.md)。
 
 生产构建的浏览器端到端验收需要数据库已迁移，执行：
 
@@ -137,6 +137,7 @@ Playwright 会复用或启动 API、H5 与管理员预览服务。`pnpm db:down`
 - [架构决策 0019](docs/architecture/decisions/0019-immutable-release-promotion.md)
 - [架构决策 0020](docs/architecture/decisions/0020-managed-environment-admission.md)
 - [架构决策 0021](docs/architecture/decisions/0021-immutable-client-delivery-artifacts.md)
+- [架构决策 0022](docs/architecture/decisions/0022-recoverable-account-erasure-receipts.md)
 - [健康记录数据模型](docs/architecture/HEALTH_RECORD_MODEL.md)
 - [训练记录数据模型](docs/architecture/WORKOUT_MODEL.md)
 - [饮食记录数据模型](docs/architecture/NUTRITION_MODEL.md)
@@ -174,6 +175,8 @@ Playwright 会复用或启动 API、H5 与管理员预览服务。`pnpm db:down`
 - [第 18 轮档案](docs/iterations/018-hermetic-ci-bootstrap.md)
 - [第 19 轮档案](docs/iterations/019-immutable-release-promotion.md)
 - [第 20 轮档案](docs/iterations/020-managed-environment-admission.md)
+- [第 21 轮档案](docs/iterations/021-immutable-client-delivery-artifacts.md)
+- [第 22 轮档案](docs/iterations/022-recoverable-account-erasure-receipts.md)
 - [移动端视觉证据](output/playwright/iteration-001-mobile.png)
 - [宽屏视觉证据](output/playwright/iteration-001-wide.png)
 - [建档移动端证据](output/playwright/iteration-003-onboarding-mobile.png)
@@ -196,6 +199,7 @@ Playwright 会复用或启动 API、H5 与管理员预览服务。`pnpm db:down`
 - [隐私台账宽屏证据](output/playwright/iteration-011-privacy-wide.png)
 - [管理员支持台移动端证据](output/playwright/iteration-014-admin-mobile.png)
 - [管理员支持台宽屏证据](output/playwright/iteration-014-admin-wide.png)
+- [删除回执恢复移动端证据](output/playwright/iteration-022-erasure-recovery-mobile.png)
 
 ## 仓库同步说明
 

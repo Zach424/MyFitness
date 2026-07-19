@@ -239,3 +239,60 @@ test('wide privacy controls revoke optional processing and permanently erase the
   expect(browserErrors).toEqual([])
   trackedSubject = undefined
 })
+
+test('privacy page recovers a committed deletion receipt after the response and page state are lost', async ({
+  page,
+  request,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  const session = await seedAccount(page, request)
+  let committedReceiptId: string | undefined
+
+  await page.route(
+    '**/v1/me/privacy/account',
+    async (route) => {
+      const response = await route.fetch()
+      const receipt = (await response.json()) as { receiptId: string }
+      committedReceiptId = receipt.receiptId
+      await route.abort('failed')
+    },
+    { times: 1 },
+  )
+
+  await page.getByRole('button', { name: '不导出' }).click()
+  await page.getByRole('checkbox', { name: /我知道删除无法撤销/ }).click()
+  await page
+    .locator(`input[placeholder="${accountDeletionConfirmationPhrase}"]`)
+    .fill(accountDeletionConfirmationPhrase)
+  const recoveredResponse = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/v1/privacy/erasure-receipts/recover') &&
+      response.request().method() === 'POST' &&
+      response.status() === 200,
+  )
+  await page.getByRole('button', { name: '永久删除账户' }).click()
+  await recoveredResponse
+
+  await expect(page.getByText('账户数据已删除')).toBeVisible()
+  await expect(page.getByText(/页面重启后仍可恢复回执/)).toBeVisible()
+  await page.screenshot({
+    path: 'output/playwright/iteration-022-erasure-recovery-mobile.png',
+    fullPage: true,
+  })
+  expect(committedReceiptId).toMatch(/^[0-9a-f-]{36}$/)
+  trackedReceiptId = committedReceiptId
+
+  await page.reload()
+  await expect(page.getByText('账户数据已删除')).toBeVisible()
+  await expect(page.getByText(new RegExp(committedReceiptId!))).toBeVisible()
+  await expect
+    .poll(async () => {
+      const account = await database.query<{ count: string }>(
+        'SELECT COUNT(*)::text AS count FROM users WHERE id = $1',
+        [session.userId],
+      )
+      return account.rows[0]?.count
+    })
+    .toBe('0')
+  trackedSubject = undefined
+})

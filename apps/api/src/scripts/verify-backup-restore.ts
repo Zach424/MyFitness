@@ -93,11 +93,17 @@ const main = async () => {
     await writeFile(backupPath, dump)
 
     const privacy = app.get(PrivacyService)
-    const deletion = await privacy.deleteAccount(testUserId, {
-      confirmationPhrase: accountDeletionConfirmationPhrase,
-      exportChoice: 'skip',
-      understandsPermanent: true,
-    })
+    const intent = await privacy.createDeletionIntent(testUserId)
+    const deletion = await privacy.deleteAccount(
+      testUserId,
+      {
+        intentId: intent.intentId,
+        confirmationPhrase: accountDeletionConfirmationPhrase,
+        exportChoice: 'skip',
+        understandsPermanent: true,
+      },
+      intent.intentToken,
+    )
     receiptId = deletion.receiptId
     if (deletion.status !== 'completed') {
       const jobs = app.get(DataOperationsService)
@@ -183,7 +189,7 @@ const main = async () => {
       backupDisposition: receipt.rows[0]?.backup_status,
     }
     if (
-      proof.restoredMigrationCount !== 15 ||
+      proof.restoredMigrationCount !== 16 ||
       proof.restoredUserBeforeLedger !== 1 ||
       proof.restoredSuppressionsBeforeLedger !== 0 ||
       proof.restoredIdentitySuppressions !== 1 ||

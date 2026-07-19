@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   accountDeletionConfirmationPhrase,
+  accountDeletionIntentSchema,
   accountDeletionResultSchema,
   accountDeletionRequestSchema,
   consentRevocationRequestSchema,
@@ -19,8 +20,10 @@ describe('privacy contracts', () => {
   })
 
   it('requires the exact permanent-account confirmation', () => {
+    const intentId = '619ef62a-e665-40dc-95ed-3790b947b48c'
     expect(
       accountDeletionRequestSchema.parse({
+        intentId,
         confirmationPhrase: accountDeletionConfirmationPhrase,
         exportChoice: 'skip',
         understandsPermanent: true,
@@ -28,9 +31,27 @@ describe('privacy contracts', () => {
     ).toMatchObject({ confirmationPhrase: accountDeletionConfirmationPhrase })
     expect(
       accountDeletionRequestSchema.safeParse({
+        intentId,
         confirmationPhrase: '删除账户',
         exportChoice: 'skip',
         understandsPermanent: true,
+      }).success,
+    ).toBe(false)
+  })
+
+  it('uses one bounded secret for deletion intent and later receipt recovery', () => {
+    expect(
+      accountDeletionIntentSchema.parse({
+        intentId: '619ef62a-e665-40dc-95ed-3790b947b48c',
+        intentToken: 'x'.repeat(43),
+        expiresAt: '2026-07-20T08:15:00.000Z',
+      }),
+    ).toMatchObject({ intentToken: 'x'.repeat(43) })
+    expect(
+      accountDeletionIntentSchema.safeParse({
+        intentId: '619ef62a-e665-40dc-95ed-3790b947b48c',
+        intentToken: 'too-short',
+        expiresAt: '2026-07-20T08:15:00.000Z',
       }).success,
     ).toBe(false)
   })

@@ -87,8 +87,19 @@ export const consentRevocationResultSchema = z
   })
   .strict()
 
+export const erasureReceiptTokenSchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/)
+
+export const accountDeletionIntentSchema = z
+  .object({
+    intentId: z.string().uuid(),
+    intentToken: erasureReceiptTokenSchema,
+    expiresAt: z.string().datetime({ offset: true }),
+  })
+  .strict()
+
 export const accountDeletionRequestSchema = z
   .object({
+    intentId: z.string().uuid(),
     confirmationPhrase: z.literal(accountDeletionConfirmationPhrase),
     exportChoice: z.enum(['downloaded', 'skip']),
     understandsPermanent: z.literal(true),
@@ -119,10 +130,8 @@ export const erasureReceiptStatusSchema = z
   .strict()
 
 export const accountDeletionResultSchema = erasureReceiptStatusSchema
-  .extend({ statusToken: z.string().regex(/^[A-Za-z0-9_-]{43}$/) })
+  .extend({ statusToken: erasureReceiptTokenSchema })
   .strict()
-
-export const erasureReceiptTokenSchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/)
 
 const jsonObjectSchema = z.record(z.string(), z.json())
 
@@ -158,6 +167,7 @@ export type ConsentState = z.infer<typeof consentStateSchema>
 export type RevocableConsentPurpose = z.infer<typeof revocableConsentPurposeSchema>
 export type ConsentRevocationRequest = z.infer<typeof consentRevocationRequestSchema>
 export type ConsentRevocationResult = z.infer<typeof consentRevocationResultSchema>
+export type AccountDeletionIntent = z.infer<typeof accountDeletionIntentSchema>
 export type AccountDeletionRequest = z.infer<typeof accountDeletionRequestSchema>
 export type AccountDeletionResult = z.infer<typeof accountDeletionResultSchema>
 export type ErasureReceiptStatus = z.infer<typeof erasureReceiptStatusSchema>

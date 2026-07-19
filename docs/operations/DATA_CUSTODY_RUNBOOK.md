@@ -41,9 +41,11 @@ queued ──claim/lease──> running ──success──> succeeded
 
 ## Account-erasure semantics
 
-`DELETE /v1/me/privacy/account` returns `202`, a receipt ID and a one-time status token. The account becomes `deletion_pending` in the same transaction that creates the receipt and durable job, so prior sessions stop authorizing business work immediately.
+An authenticated client first calls `POST /v1/me/privacy/account-deletion-intents`. The API rotates the user's previous intent, returns a 15-minute intent UUID and 256-bit base64url secret, and stores only its SHA-256 hash. The client must persist that secret locally before issuing the destructive request; never log it, display it in full or place it in a URL.
 
-The public status request is `GET /v1/privacy/erasure-receipts/:receiptId` with `X-Erasure-Receipt-Token`. It is rate-limited and `no-store`; the secret is never placed in a query string. Save both values; a receipt UUID alone is not authorization. The client currently displays the token but does not recover it after a lost response or reload.
+`DELETE /v1/me/privacy/account` requires the intent UUID in the strict request body and the secret in `X-Erasure-Intent-Token`. The server atomically consumes one matching, unexpired intent and reuses its secret as the final receipt status credential. It returns `202` and a receipt ID. The account becomes `deletion_pending` in the same transaction that creates the receipt and durable job, so prior sessions stop authorizing business work immediately. Rotated, expired and already-consumed intents fail closed.
+
+The public status request is `GET /v1/privacy/erasure-receipts/:receiptId` with `X-Erasure-Receipt-Token`. If the delete response and receipt UUID were lost after commit, call `POST /v1/privacy/erasure-receipts/recover` with the same secret in `X-Erasure-Receipt-Token`; it returns only the minimal receipt status and never returns the secret. Both routes are rate-limited and `no-store`; the secret is never placed in a query string. A receipt UUID alone is not authorization. The client keeps the secret across reloads, masks it in the receipt view and offers explicit local removal.
 
 Receipt fields mean:
 
@@ -85,4 +87,4 @@ The script creates a real `pg_dump`, restores it to a temporary PostgreSQL datab
 
 Alert on readiness failure, `dead_letter > 0`, sustained retry growth, outstanding age above the agreed objective, object-store/KMS errors and restore-ledger replication failure. Assign named owners and exercise delivery before closed beta.
 
-Production remains blocked until cloud bucket/KMS/IAM/lifecycle/versioning/replication are configured; backup schedule/retention and isolated restore are exercised; the ledger has independent durable retention; provider data controls and region are approved; dead-letter alert/recovery ownership exists; lost-response receipt recovery is designed; and privacy/legal text matches actual retention.
+Production remains blocked until cloud bucket/KMS/IAM/lifecycle/versioning/replication are configured; backup schedule/retention and isolated restore are exercised; the ledger has independent durable retention; provider data controls and region are approved; dead-letter alert/recovery ownership exists; receipt-secret platform storage/shared-device behavior is reviewed; and privacy/legal text matches actual retention.

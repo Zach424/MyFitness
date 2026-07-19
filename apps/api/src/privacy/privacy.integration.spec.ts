@@ -90,6 +90,18 @@ describe('privacy ownership API with PostgreSQL and private media', () => {
       })
       .expect(201)
 
+  const createDeletionIntent = async (token: string) => {
+    const response = await request(app.getHttpServer())
+      .post('/v1/me/privacy/account-deletion-intents')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(201)
+    return {
+      intentId: String(response.body.intentId),
+      intentToken: String(response.body.intentToken),
+      expiresAt: String(response.body.expiresAt),
+    }
+  }
+
   const createPhoto = async (token: string, userId: string, idempotencyKey = randomUUID()) => {
     const ticket = await request(app.getHttpServer())
       .post('/v1/nutrition/photo-candidates')
@@ -237,11 +249,14 @@ describe('privacy ownership API with PostgreSQL and private media', () => {
     const { token, userId } = await createUser()
     await createHealthRecord(token)
     const photo = await createPhoto(token, userId)
+    const intent = await createDeletionIntent(token)
 
     await request(app.getHttpServer())
       .delete('/v1/me/privacy/account')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Erasure-Intent-Token', intent.intentToken)
       .send({
+        intentId: intent.intentId,
         confirmationPhrase: '删除账户',
         exportChoice: 'skip',
         understandsPermanent: true,
@@ -251,7 +266,9 @@ describe('privacy ownership API with PostgreSQL and private media', () => {
     const deleted = await request(app.getHttpServer())
       .delete('/v1/me/privacy/account')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Erasure-Intent-Token', intent.intentToken)
       .send({
+        intentId: intent.intentId,
         confirmationPhrase: accountDeletionConfirmationPhrase,
         exportChoice: 'skip',
         understandsPermanent: true,
@@ -268,6 +285,7 @@ describe('privacy ownership API with PostgreSQL and private media', () => {
     expect(deleted.body.scopeVersion).toBe('durable-erasure-v2')
     expect(deleted.body.receiptId).toMatch(/^[0-9a-f-]{36}$/)
     expect(deleted.body.statusToken).toMatch(/^[A-Za-z0-9_-]{43}$/)
+    expect(deleted.body.statusToken).toBe(intent.intentToken)
     receipts.add(String(deleted.body.receiptId))
 
     await request(app.getHttpServer())
@@ -278,6 +296,22 @@ describe('privacy ownership API with PostgreSQL and private media', () => {
         expect(body).toMatchObject({ status: 'completed', deleted: true })
         expect(body).not.toHaveProperty('statusToken')
       })
+    await request(app.getHttpServer())
+      .post('/v1/privacy/erasure-receipts/recover')
+      .set('X-Erasure-Receipt-Token', intent.intentToken)
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body).toMatchObject({
+          receiptId: deleted.body.receiptId,
+          status: 'completed',
+          deleted: true,
+        })
+        expect(body).not.toHaveProperty('statusToken')
+      })
+    await request(app.getHttpServer())
+      .post('/v1/privacy/erasure-receipts/recover')
+      .set('X-Erasure-Receipt-Token', 'x'.repeat(43))
+      .expect(401)
     await request(app.getHttpServer())
       .get(`/v1/privacy/erasure-receipts/${deleted.body.receiptId}`)
       .set('X-Erasure-Receipt-Token', 'x'.repeat(43))
@@ -307,12 +341,15 @@ describe('privacy ownership API with PostgreSQL and private media', () => {
   it('keeps a deletion receipt recoverable while object storage is temporarily unavailable', async () => {
     const { token, userId } = await createUser()
     const photo = await createPhoto(token, userId)
+    const intent = await createDeletionIntent(token)
     objectStorage.failNextForTest('delete')
 
     const accepted = await request(app.getHttpServer())
       .delete('/v1/me/privacy/account')
       .set('Authorization', `Bearer ${token}`)
+      .set('X-Erasure-Intent-Token', intent.intentToken)
       .send({
+        intentId: intent.intentId,
         confirmationPhrase: accountDeletionConfirmationPhrase,
         exportChoice: 'skip',
         understandsPermanent: true,
@@ -362,5 +399,45 @@ describe('privacy ownership API with PostgreSQL and private media', () => {
     )
     expect(remaining.rows[0]?.count).toBe('0')
     users.delete(userId)
+  })
+
+  it('rotates prior deletion intents and rejects expired intent secrets without closing the account', async () => {
+    const { token, userId } = await createUser()
+    const first = await createDeletionIntent(token)
+    const second = await createDeletionIntent(token)
+    expect(second.intentId).not.toBe(first.intentId)
+    expect(second.intentToken).not.toBe(first.intentToken)
+
+    const deletionBody = {
+      intentId: first.intentId,
+      confirmationPhrase: accountDeletionConfirmationPhrase,
+      exportChoice: 'skip',
+      understandsPermanent: true,
+    }
+    await request(app.getHttpServer())
+      .delete('/v1/me/privacy/account')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Erasure-Intent-Token', first.intentToken)
+      .send(deletionBody)
+      .expect(401)
+
+    await pool.query(
+      `UPDATE privacy_erasure_intents
+       SET created_at = NOW() - INTERVAL '20 minutes',
+           expires_at = NOW() - INTERVAL '1 second'
+       WHERE intent_id = $1`,
+      [second.intentId],
+    )
+    await request(app.getHttpServer())
+      .delete('/v1/me/privacy/account')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Erasure-Intent-Token', second.intentToken)
+      .send({ ...deletionBody, intentId: second.intentId })
+      .expect(401)
+
+    const account = await pool.query<{ status: string }>('SELECT status FROM users WHERE id = $1', [
+      userId,
+    ])
+    expect(account.rows[0]?.status).toBe('active')
   })
 })

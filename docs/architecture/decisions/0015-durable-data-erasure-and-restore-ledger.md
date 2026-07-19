@@ -4,6 +4,8 @@ Date: 2026-07-19
 
 Status: accepted
 
+Extended by: [ADR-0022](0022-recoverable-account-erasure-receipts.md)
+
 ## Context
 
 Iteration 011 could remove an active account graph and local photo directory, but a process crash between PostgreSQL and filesystem work could leave media behind. A database backup taken before deletion could also restore an account that had already received a deletion receipt. Local disk cannot be shared safely by multiple API replicas, and an external AI provider's retention policy cannot truthfully be represented as a remote-delete confirmation when no deletion API exists.
@@ -25,7 +27,7 @@ The release boundary needs a durable, retryable record of every media/data opera
 
 Object deletion and account erasure survive API crashes and can be retried by another replica. A deletion request closes account access even while storage is unavailable. Restoring an older database no longer silently resurrects an account if the independently retained ledger and HMAC secret are available. The client can distinguish queued, running, completed and dead-letter outcomes instead of being shown premature success.
 
-The ledger becomes a critical recovery control: losing it or its HMAC secret invalidates the restore guarantee. Storing it in the same local MinIO service is sufficient only for reproducible development evidence; production must use independent retention/replication, access control, monitoring and restore procedures. The receipt token is shown once and is not currently recoverable if the request committed but the response was lost. Dead-letter recovery is an operator runbook/database action rather than a product endpoint. Object-store lifecycle/versioning, backup schedules, provider approval and legal retention review remain deployment gates.
+The ledger becomes a critical recovery control: losing it or its HMAC secret invalidates the restore guarantee. Storing it in the same local MinIO service is sufficient only for reproducible development evidence; production must use independent retention/replication, access control, monitoring and restore procedures. ADR-0022 replaces the response-only receipt secret with a single-use intent persisted before deletion and reusable for minimal receipt recovery after commit. Dead-letter recovery is an operator runbook/database action rather than a product endpoint. Object-store lifecycle/versioning, backup schedules, provider approval and legal retention review remain deployment gates.
 
 ## Alternatives rejected
 

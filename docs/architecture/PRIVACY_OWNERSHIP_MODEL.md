@@ -1,6 +1,6 @@
 # Privacy ownership model
 
-Status: durable local ownership/erasure boundary implemented through iteration 015
+Status: durable local ownership/erasure boundary with lost-response recovery implemented through iteration 022
 
 ## User-owned surface
 
@@ -48,8 +48,12 @@ sequenceDiagram
   participant O as Private object storage
   participant L as Restore erasure ledger
   U->>C: exact phrase + export choice + acknowledgement
-  C->>A: DELETE /me/privacy/account
-  A->>P: lock active user; mark deletion_pending; create receipt + job
+  C->>A: POST account-deletion-intents
+  A->>P: rotate intent; store token hash with 15-minute expiry
+  A-->>C: intent UUID + secret
+  C->>C: persist secret before destructive request
+  C->>A: DELETE /me/privacy/account + intent UUID/secret
+  A->>P: consume intent; mark deletion_pending; create receipt + job
   A-->>C: 202 + receipt ID + status token
   C-->>U: access closed; show/poll receipt
   J->>P: atomically claim leased account-erasure job
@@ -58,25 +62,29 @@ sequenceDiagram
   J->>P: cascade user graph; complete receipt; clear subject fields
   C->>A: GET receipt with UUID + token
   A-->>C: primary/media/provider/backup disposition
+  opt Delete response or page state was lost
+    C->>A: POST receipt recover + persisted token
+    A-->>C: minimal receipt status
+  end
 ```
 
 All product tables reference `users` with cascades, while new private objects use `private-photos/<user UUID>/<photo UUID>.jpg`. Marking the user `deletion_pending` stops session authorization immediately; storage failure never reopens access. The database transaction also creates a `durable-erasure-v2` receipt and `account_erasure` job. Account work allows 20 leased/retry attempts and becomes `dead_letter` only after exhaustion or invalid payload.
 
-The client receives a random receipt UUID and separate 256-bit base64url token; only the token hash is stored. `GET /v1/privacy/erasure-receipts/:receiptId` requires `X-Erasure-Receipt-Token`, is rate-limited/no-store and exposes queued/running/completed/dead-letter plus independent primary, media, provider and backup dispositions. Keeping the secret out of the URL avoids browser-history and proxy-query leakage. Completion clears `requested_user_id` and the HMAC subject field, so the primary receipt cannot identify the deleted account.
+Before deletion, the client requests a 15-minute single-use intent and persists its server-generated 256-bit base64url secret locally. PostgreSQL stores only the SHA-256 hash, and creating another intent rotates the previous one. Deletion requires both the intent UUID and header secret, atomically consumes the intent and reuses the same secret as the receipt credential. `GET /v1/privacy/erasure-receipts/:receiptId` requires `X-Erasure-Receipt-Token`, is rate-limited/no-store and exposes queued/running/completed/dead-letter plus independent primary, media, provider and backup dispositions. If the committed response or receipt UUID is lost, `POST /v1/privacy/erasure-receipts/recover` uses the same header secret to locate and return only the minimal receipt. Keeping the secret out of the URL and masking it in the UI avoids browser-history, proxy-query and shoulder-surfing leakage. Completion clears `requested_user_id` and the HMAC subject field, so the primary receipt cannot identify the deleted account.
 
 Provider semantics are deliberately bounded: `not_applicable`, `fixture_only` or `policy_bound`. OpenAI usage is `policy_bound` because `store:false` does not remove default abuse-monitoring/contractual retention; it is never reported as remote deletion.
 
 Before the main graph is deleted, the worker writes `control/erasure-ledger/<receipt>.json` containing receipt ID, request time and `HMAC-SHA256(secret, user UUID)`. The secret remains outside PostgreSQL. Any restored backup must replay this independently retained ledger before accepting traffic and cascade matching resurrected users. `backupStatus=ledger_published` proves this control exists; it does not mean all backup copies have expired.
 
-The status token is shown once. The current client cannot recover it if the deletion transaction committed but the response was lost or after the page is discarded; request idempotency and safe receipt recovery are required before closed beta.
+The client retains the bearer receipt secret across reloads until explicit local removal or expiry cleanup. This recovers ambiguous commits without restoring authentication, but platform-secure storage and shared-device behavior remain a closed-beta review gate.
 
 ## Known limits
 
 - Production identity, account recovery and linked-account deletion are not implemented.
 - A real local `pg_dump → pg_restore → ledger replay` drill passes, but production backup schedule/retention, independent ledger replication, HMAC-secret recovery and isolated restore ownership are not configured.
 - Export is generated in API memory and the Mini Program download API has a 50 MiB practical boundary.
-- Receipt status has a public secret-gated endpoint, but lost-response/reload recovery is unresolved.
+- Receipt status recovery is secret-gated and tested across response loss/reload, but client secure-storage and final token-retention policy are not yet approved.
 - Dead-letter recovery is a restricted exact-job runbook action; centralized alert delivery and least-privilege recovery tooling are absent.
 - Local MinIO, fault injection and restore proof do not establish production bucket encryption/IAM/lifecycle/versioning/replication or provider/legal approval.
 
-Operational detail is in the [data custody runbook](../operations/DATA_CUSTODY_RUNBOOK.md); ADR-0015 records the cross-system ordering and restore-ledger decision.
+Operational detail is in the [data custody runbook](../operations/DATA_CUSTODY_RUNBOOK.md); ADR-0015 records the cross-system ordering and restore-ledger decision, while ADR-0022 records the recoverable intent/receipt protocol.

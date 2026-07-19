@@ -28,6 +28,12 @@ export const rateLimitPolicies = {
     windowSeconds: 300,
     scope: 'user',
   },
+  accountErasureIntent: {
+    name: 'account_erasure_intent',
+    limit: 6,
+    windowSeconds: 3_600,
+    scope: 'user',
+  },
   accountErasure: {
     name: 'account_erasure',
     limit: 3,

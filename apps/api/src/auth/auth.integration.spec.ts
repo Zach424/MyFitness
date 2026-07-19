@@ -138,10 +138,16 @@ describe('verified WeChat user authentication with PostgreSQL', () => {
       'provider-secret-that-must-not-be-persisted',
     )
 
+    const intent = await request(app.getHttpServer())
+      .post('/v1/me/privacy/account-deletion-intents')
+      .set('Authorization', `Bearer ${second.body.accessToken as string}`)
+      .expect(201)
     const deletion = await request(app.getHttpServer())
       .delete('/v1/me/privacy/account')
       .set('Authorization', `Bearer ${second.body.accessToken as string}`)
+      .set('X-Erasure-Intent-Token', intent.body.intentToken as string)
       .send({
+        intentId: intent.body.intentId,
         confirmationPhrase: accountDeletionConfirmationPhrase,
         exportChoice: 'skip',
         understandsPermanent: true,
