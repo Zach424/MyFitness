@@ -1,6 +1,6 @@
 # Design system baseline
 
-Status: implemented and visually validated through iteration-010 revocable food-photo candidates
+Status: implemented and visually validated through iteration-014 administrator support evidence
 
 Working brand: 衡迹 / MyFitness
 
@@ -228,6 +228,19 @@ Reviewed evidence:
 - [1440 × 1000 wide ledger/action split](../../output/playwright/iteration-011-privacy-wide.png)
 
 The first browser run found two test-accessibility mismatches: repeated visible labels require region-scoped assertions, and Taro H5 did not expose its custom input through the expected textbox role even with an aria label. The flow now uses stable semantic regions for buttons and verifies the input through its user-visible placeholder. The wide screenshot also exposed an orphaned final title character, corrected by widening the intentional hero line. Open design gates remain system large text, complete keyboard traversal, real WeChat screen-reader behavior and the full error/retry surface for large exports.
+
+## Implementation review — iteration 014
+
+The administrator surface deliberately does not reuse the personal Today dashboard. It becomes an **Evidence Desk / 支持证据台** whose signature is the **Evidence Rail / 访问证据轨**: allowed, denied and not-found access decisions sit on one vertical line next to the ticketed request. Mineral blue identifies bounded action, Juniper marks verified/allowed evidence, and Paper/Mist surfaces keep the dense identifiers readable. There are no health charts, user avatars, destructive controls or generic search.
+
+The entry screen states the trust boundary before offering identity. After login, the header exposes provider, roles and session revocation. The query form requires exact UUID, ticket and one plain-language reason; selected state uses border, radio and fill together. The result reads as three custody columns—account lifecycle, bounded counts and consent/photo custody—followed by the lookup receipt. On mobile the order remains `请求 → 证据轨 → 摘要`, so audit context precedes data even when the rail grows.
+
+Reviewed evidence:
+
+- [390 × 844 mobile evidence desk](../../output/playwright/iteration-014-admin-mobile.png)
+- [1440 × 1100 wide evidence desk](../../output/playwright/iteration-014-admin-wide.png)
+
+The first browser run caught two implementation—not visual—problems: the API request context resolved `/auth` outside its `/v1` base because the base URL lacked a trailing slash, and Windows could not execute the pnpm-symlinked standalone tree without elevated filesystem privileges. The test now uses an explicit `/v1/` base and production preview on Windows while retaining Linux standalone output for deployment. Final wide/mobile flows verify CSP, HttpOnly/SameSite cookie behavior, exact lookup, audit evidence, summary exclusion and session revocation. Visual review found no horizontal overflow or hierarchy collision. Open gates remain system large text, complete keyboard/screen-reader audit, 320 px, provider-error/re-auth states and a deployed Linux standalone proof.
 
 ## Screenshot review checklist
 

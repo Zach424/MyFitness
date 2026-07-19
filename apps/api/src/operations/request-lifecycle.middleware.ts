@@ -38,7 +38,7 @@ export const createRequestLifecycleMiddleware = (metrics: OperationalMetricsServ
         route,
         status,
         durationMs: Number((durationSeconds * 1_000).toFixed(2)),
-        actor: request.user ? 'authenticated' : 'anonymous',
+        actor: request.operator ? 'operator' : request.user ? 'authenticated' : 'anonymous',
       })
       if (status >= 500) logger.error(event)
       else if (status === 429) logger.warn(event)

@@ -1,4 +1,5 @@
 import type { AuthPrincipal } from '../auth/auth.types'
+import type { AdminPrincipal } from '../admin/admin.types'
 
 export type OperationalRequest = {
   headers: Record<string, string | string[] | undefined>
@@ -7,6 +8,7 @@ export type OperationalRequest = {
   socket?: { remoteAddress?: string }
   requestId?: string
   user?: AuthPrincipal
+  operator?: AdminPrincipal
 }
 
 export type OperationalResponse = {
@@ -18,7 +20,7 @@ export type RateLimitPolicy = {
   name: string
   limit: number
   windowSeconds: number
-  scope?: 'auto' | 'ip' | 'user'
+  scope?: 'auto' | 'ip' | 'user' | 'operator'
 }
 
 export type RateLimitDecision = {

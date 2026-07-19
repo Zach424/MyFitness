@@ -14,6 +14,11 @@ Local routes after `pnpm db:up`, `pnpm db:migrate`, and `pnpm dev:api`:
 - API liveness: `GET http://127.0.0.1:3100/v1/health/live`
 - Private Prometheus metrics: `GET http://127.0.0.1:3100/v1/internal/metrics`
 - Local-only session: `POST http://127.0.0.1:3100/v1/auth/dev/session`
+- Local-only administrator session: `POST http://127.0.0.1:3100/v1/admin/auth/dev/session`
+- Administrator OIDC exchange: `POST http://127.0.0.1:3100/v1/admin/auth/oidc/exchange`
+- Administrator identity/session: `GET .../v1/admin/auth/me` / `DELETE .../v1/admin/auth/session`
+- Exact support evidence lookup: `POST http://127.0.0.1:3100/v1/admin/support/users/lookup`
+- Administrator audit page: `GET http://127.0.0.1:3100/v1/admin/audit?limit=25&cursor=...`
 - Current onboarding: `GET/PUT http://127.0.0.1:3100/v1/me/onboarding`
 - Privacy inventory: `GET http://127.0.0.1:3100/v1/me/privacy`
 - Portable data export: `GET http://127.0.0.1:3100/v1/me/privacy/export`
@@ -44,6 +49,8 @@ Local routes after `pnpm db:up`, `pnpm db:migrate`, and `pnpm dev:api`:
 - OpenAPI JSON: `http://127.0.0.1:3100/docs/openapi.json`
 
 Protected routes require `Authorization: Bearer <opaque-token>`. The local session issuer accepts a stable development subject, returns a seven-day token, stores only its SHA-256 hash, and is disabled when `NODE_ENV=production`. It exercises the same server-side principal and user-ownership boundary as a future verified WeChat/phone adapter, but is not production authentication.
+
+Administrator routes use the independent OpenAPI `adminBearer` scheme and `mf_admin_*` sessions. User and administrator tokens cannot be exchanged or reused across guards. Production OIDC exchange verifies remote JWKS signature, issuer, audience, maximum age and a matching nonce, accepts only pre-provisioned active subjects/roles, and consumes each ID-token hash once. Administrator support lookup requires one exact UUID, ticket reference and enumerated reason; it returns only lifecycle/aggregate/custody evidence. Audit targets are HMAC references and audit rows reject update/delete. The local administrator issuer is also production-disabled and its denied use is audited. See [administrator support model](../architecture/ADMIN_SUPPORT_MODEL.md).
 
 Every routed response exposes `X-Request-ID`. A caller UUIDv4 is preserved and normalized; missing or invalid values are replaced. Redis applies an IP ingress window before authentication and then a standard or sensitive route window after authentication. Rate responses expose `RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset` and, on `429`, `Retry-After`. If Redis is unavailable, business routes return a request-correlated `503`; `/health/live` remains available while `/health` reports dependency failure.
 

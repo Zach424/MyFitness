@@ -2,7 +2,7 @@
 
 面向普通健身人群的多端记录与 AI 规划产品。产品把身体、训练、饮食和恢复数据整理为可解释、可调整、可持续执行的个人计划。
 
-> 当前阶段：production dependency remediation / 第 13 轮已完成。本地生产依赖审计已从 20 项降至 6 项中危，严重和高危归零；Taro 4.2.1 的安全版本下限经过 H5、微信小程序与全量回归验证。剩余中危构建链风险继续登记，下一轮进入管理员身份、RBAC、审计与支持工作台。
+> 当前阶段：administrator access and support / 第 14 轮已完成。本地已实现独立操作员身份、最小角色、不可变审计、精确账户证据查询与只读支持台；普通用户令牌与管理员令牌不能互换。生产 OIDC、共享环境、审计留存与告警负责人仍是上线门槛，下一轮进入持久数据运营。
 
 ## 产品边界
 
@@ -17,6 +17,7 @@
 apps/
   client/          Taro + React：微信小程序与 H5、记录/计划/隐私所有权流程
   api/             NestJS：身份、记录、计划、AI/隐私编排、运营入口、OpenAPI 与迁移
+  admin/           Next.js：OIDC BFF、只读支持证据查询与不可变访问轨
 services/
   ai/              FastAPI：本地 fixture、OpenAI 适配、严格结构化输出与提供方失败处理
 packages/
@@ -29,7 +30,7 @@ output/evals/      可重复的 AI 离线安全评测报告
 output/playwright/ 浏览器视觉验收证据
 ```
 
-后续迭代会按路线图逐步增加管理后台、可观测性和发布基础设施，避免在没有实现的情况下制造空壳。
+后续迭代会按路线图补齐持久数据运营、生产身份、集中可观测性和发布基础设施，避免把本地实现误写成已上线能力。
 
 ## 本地运行
 
@@ -38,8 +39,10 @@ output/playwright/ 浏览器视觉验收证据
 ```bash
 pnpm install
 pnpm dev:h5
+pnpm dev:admin
 pnpm build:h5
 pnpm build:weapp
+pnpm build:admin
 pnpm test
 pnpm test:ai
 pnpm eval:ai
@@ -52,6 +55,8 @@ H5 和微信小程序产物分别生成到 `apps/client/dist-h5` 与 `apps/clien
 
 Taro 4.2.1 当前通过父级限定的 pnpm override 使用已验证的 Swiper、lodash-es、Vite 与 webpack 安全下限；Vitest 保留独立 Vite 8 工具链。`pnpm audit:prod` 只把严重/高危作为阻断门槛，原始审计中的 6 个中危项仍在风险登记中；升级与 override 退出规则见 [ADR-0013](docs/architecture/decisions/0013-auditable-transitive-security-floors.md)。
 
+Next.js 16.2.10 的管理员构建路径通过父级限定 override 使用 PostCSS 8.5.19，消除了新增的中危字符串化路径；任何 Next/Taro 升级都必须重新检查是否可以删除对应 override，而不是长期无条件保留。
+
 启动本地 API、PostgreSQL、Redis 与 AI worker：
 
 ```bash
@@ -61,7 +66,9 @@ pnpm test:integration
 pnpm dev:api
 ```
 
-随后可访问 liveness `http://127.0.0.1:3100/v1/health/live`、PostgreSQL+Redis readiness `http://127.0.0.1:3100/v1/health` 与 `http://127.0.0.1:3100/docs`。开发身份通过 `POST /v1/auth/dev/session` 获取不透明 Bearer 令牌；该签发器在 `NODE_ENV=production` 时关闭，数据库只保存 SHA-256 哈希。生产身份提供商仍需在发布前接入。
+随后可访问 liveness `http://127.0.0.1:3100/v1/health/live`、PostgreSQL+Redis readiness `http://127.0.0.1:3100/v1/health` 与 `http://127.0.0.1:3100/docs`。开发身份通过 `POST /v1/auth/dev/session` 获取不透明 Bearer 令牌；该签发器在 `NODE_ENV=production` 时关闭，数据库只保存 SHA-256 哈希。生产用户身份提供商仍需在发布前接入。
+
+管理员支持台默认运行在 `http://127.0.0.1:3101`。它通过 Next.js BFF 把管理员 API 令牌保存在 `HttpOnly`、`SameSite=Strict` Cookie 中，浏览器不能读取该令牌。生产登录使用 Authorization Code + PKCE + state + nonce，API 再独立验证 ID Token 的签名、issuer、audience、时效与 nonce，并只允许预配操作员换取一次性管理员会话。本地演示需要显式设置 `ADMIN_ENABLE_LOCAL_LOGIN=true`；即使管理端误开该开关，生产 API 仍会把本地签发入口返回为 `404` 并记录拒绝。配置和人员开通步骤见 [管理员访问手册](docs/operations/ADMIN_ACCESS_RUNBOOK.md)。
 
 每个业务请求会收到 `X-Request-ID` 和限流头。生产环境还必须配置 `REDIS_URL`、`RATE_LIMIT_HASH_SECRET`、`OPERATIONS_TOKEN` 与准确的 `TRUST_PROXY_HOPS`。受独立令牌保护的 `GET /v1/internal/metrics` 只用于私网 Prometheus 抓取，令牌不得进入客户端代码。Redis 故障时业务流量按设计返回可关联的 `503`，不会退化为单进程或 fail-open 限流；具体见 [API 运营手册](docs/operations/API_OPERATIONS_RUNBOOK.md)。
 
@@ -73,11 +80,12 @@ AI worker 健康地址是 `http://127.0.0.1:8001/health`。本地默认使用无
 
 ```bash
 pnpm build:api
+pnpm build:admin
 pnpm build:h5
 pnpm test:e2e
 ```
 
-Playwright 会复用或启动 API 与 H5 预览服务。`pnpm db:down` 会停止本地容器并保留数据卷。
+Playwright 会复用或启动 API、H5 与管理员预览服务。`pnpm db:down` 会停止本地容器并保留数据卷。`apps/admin` 的 `start` 命令面向 Linux standalone 产物；Windows 本地验收使用 `start:preview`，避免 standalone 符号链接权限差异。
 
 ## 开发方式
 
@@ -112,6 +120,7 @@ Playwright 会复用或启动 API 与 H5 预览服务。`pnpm db:down` 会停止
 - [架构决策 0011](docs/architecture/decisions/0011-user-owned-export-and-erasure.md)
 - [架构决策 0012](docs/architecture/decisions/0012-shared-api-operational-perimeter.md)
 - [架构决策 0013](docs/architecture/decisions/0013-auditable-transitive-security-floors.md)
+- [架构决策 0014](docs/architecture/decisions/0014-independent-operator-trust-boundary.md)
 - [健康记录数据模型](docs/architecture/HEALTH_RECORD_MODEL.md)
 - [训练记录数据模型](docs/architecture/WORKOUT_MODEL.md)
 - [饮食记录数据模型](docs/architecture/NUTRITION_MODEL.md)
@@ -121,7 +130,9 @@ Playwright 会复用或启动 API 与 H5 预览服务。`pnpm db:down` 会停止
 - [餐食照片候选模型](docs/architecture/FOOD_PHOTO_MODEL.md)
 - [隐私所有权模型](docs/architecture/PRIVACY_OWNERSHIP_MODEL.md)
 - [API 运营边界](docs/architecture/OPERATIONS_PERIMETER.md)
+- [管理员支持边界](docs/architecture/ADMIN_SUPPORT_MODEL.md)
 - [API 运营手册](docs/operations/API_OPERATIONS_RUNBOOK.md)
+- [管理员访问手册](docs/operations/ADMIN_ACCESS_RUNBOOK.md)
 - [API 契约与 OpenAPI](docs/api/README.md)
 - [第 0 轮档案](docs/iterations/000-foundation.md)
 - [第 1 轮档案](docs/iterations/001-client-foundation.md)
@@ -137,6 +148,7 @@ Playwright 会复用或启动 API 与 H5 预览服务。`pnpm db:down` 会停止
 - [第 11 轮档案](docs/iterations/011-privacy-ownership.md)
 - [第 12 轮档案](docs/iterations/012-api-operational-perimeter.md)
 - [第 13 轮档案](docs/iterations/013-production-dependency-remediation.md)
+- [第 14 轮档案](docs/iterations/014-administrator-access-support.md)
 - [移动端视觉证据](output/playwright/iteration-001-mobile.png)
 - [宽屏视觉证据](output/playwright/iteration-001-wide.png)
 - [建档移动端证据](output/playwright/iteration-003-onboarding-mobile.png)
@@ -157,6 +169,8 @@ Playwright 会复用或启动 API 与 H5 预览服务。`pnpm db:down` 会停止
 - [餐食照片候选宽屏证据](output/playwright/iteration-010-food-photo-wide.png)
 - [隐私台账移动端证据](output/playwright/iteration-011-privacy-mobile.png)
 - [隐私台账宽屏证据](output/playwright/iteration-011-privacy-wide.png)
+- [管理员支持台移动端证据](output/playwright/iteration-014-admin-mobile.png)
+- [管理员支持台宽屏证据](output/playwright/iteration-014-admin-wide.png)
 
 ## 仓库同步说明
 

@@ -1,6 +1,454 @@
 {
   "openapi": "3.0.0",
   "paths": {
+    "/v1/admin/audit": {
+      "get": {
+        "operationId": "AdminAuditController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "events": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "eventId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "operatorId": {
+                            "nullable": true,
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "action": {
+                            "type": "string",
+                            "enum": [
+                              "operator.session.created",
+                              "operator.session.denied",
+                              "operator.session.revoked",
+                              "operator.profile.read",
+                              "support.user.lookup",
+                              "audit.events.read",
+                              "authorization.denied"
+                            ]
+                          },
+                          "outcome": {
+                            "type": "string",
+                            "enum": ["allowed", "denied", "not_found"]
+                          },
+                          "targetType": {
+                            "nullable": true,
+                            "type": "string",
+                            "enum": ["operator", "user", "audit"]
+                          },
+                          "targetRef": {
+                            "nullable": true,
+                            "type": "string",
+                            "pattern": "^[0-9a-f]{64}$"
+                          },
+                          "requestId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "details": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "anyOf": [
+                                { "type": "string", "maxLength": 160 },
+                                { "type": "number" },
+                                { "type": "boolean" },
+                                { "type": "string", "nullable": true, "enum": [null] }
+                              ]
+                            }
+                          },
+                          "occurredAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                          }
+                        },
+                        "required": [
+                          "eventId",
+                          "operatorId",
+                          "action",
+                          "outcome",
+                          "targetType",
+                          "targetRef",
+                          "requestId",
+                          "details",
+                          "occurredAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "nextCursor": {
+                      "nullable": true,
+                      "type": "string",
+                      "minLength": 16,
+                      "maxLength": 256
+                    }
+                  },
+                  "required": ["events", "nextCursor"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": { "description": "Audit pagination input is invalid." },
+          "401": { "description": "Administrator session is missing or invalid." },
+          "403": { "description": "Administrator role does not permit this operation." }
+        },
+        "security": [{ "adminBearer": [] }],
+        "summary": "Read a bounded page of append-only administrator access events",
+        "tags": ["administrator audit"]
+      }
+    },
+    "/v1/admin/auth/dev/session": {
+      "post": {
+        "operationId": "AdminAuthController_createDevSession",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "accessToken": { "type": "string", "minLength": 32, "maxLength": 256 },
+                    "expiresAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "operator": {
+                      "type": "object",
+                      "properties": {
+                        "operatorId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "displayName": { "type": "string", "minLength": 1, "maxLength": 80 },
+                        "roles": {
+                          "minItems": 1,
+                          "maxItems": 2,
+                          "type": "array",
+                          "items": { "type": "string", "enum": ["support_reader", "audit_reader"] }
+                        },
+                        "identityProvider": { "type": "string", "enum": ["dev", "oidc"] }
+                      },
+                      "required": ["operatorId", "displayName", "roles", "identityProvider"],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": ["accessToken", "expiresAt", "operator"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": { "description": "The development operator request is invalid." },
+          "404": { "description": "The development issuer is disabled in production." }
+        },
+        "summary": "Create a local-only administrator session",
+        "tags": ["administrator authentication"]
+      }
+    },
+    "/v1/admin/auth/oidc/exchange": {
+      "post": {
+        "operationId": "AdminAuthController_exchangeOidc",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "accessToken": { "type": "string", "minLength": 32, "maxLength": 256 },
+                    "expiresAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "operator": {
+                      "type": "object",
+                      "properties": {
+                        "operatorId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "displayName": { "type": "string", "minLength": 1, "maxLength": 80 },
+                        "roles": {
+                          "minItems": 1,
+                          "maxItems": 2,
+                          "type": "array",
+                          "items": { "type": "string", "enum": ["support_reader", "audit_reader"] }
+                        },
+                        "identityProvider": { "type": "string", "enum": ["dev", "oidc"] }
+                      },
+                      "required": ["operatorId", "displayName", "roles", "identityProvider"],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": ["accessToken", "expiresAt", "operator"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": { "description": "The OIDC exchange request is invalid." }
+        },
+        "summary": "Exchange one verified, pre-provisioned OIDC identity token",
+        "tags": ["administrator authentication"]
+      }
+    },
+    "/v1/admin/auth/me": {
+      "get": {
+        "operationId": "AdminAuthController_me",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "operatorId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "displayName": { "type": "string", "minLength": 1, "maxLength": 80 },
+                    "roles": {
+                      "minItems": 1,
+                      "maxItems": 2,
+                      "type": "array",
+                      "items": { "type": "string", "enum": ["support_reader", "audit_reader"] }
+                    },
+                    "identityProvider": { "type": "string", "enum": ["dev", "oidc"] }
+                  },
+                  "required": ["operatorId", "displayName", "roles", "identityProvider"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": { "description": "Administrator session is missing or invalid." },
+          "403": { "description": "Administrator role does not permit this operation." }
+        },
+        "security": [{ "adminBearer": [] }],
+        "summary": "Read the current administrator identity and least-privilege roles",
+        "tags": ["administrator authentication"]
+      }
+    },
+    "/v1/admin/auth/session": {
+      "delete": {
+        "operationId": "AdminAuthController_revoke",
+        "parameters": [],
+        "responses": {
+          "204": { "description": "" },
+          "401": { "description": "Administrator session is missing or invalid." },
+          "403": { "description": "Administrator role does not permit this operation." }
+        },
+        "security": [{ "adminBearer": [] }],
+        "summary": "Revoke the current administrator API session",
+        "tags": ["administrator authentication"]
+      }
+    },
+    "/v1/admin/support/users/lookup": {
+      "post": {
+        "operationId": "AdminSupportController_lookup",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "lookupReceiptId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "auditedAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "account": {
+                      "type": "object",
+                      "properties": {
+                        "accountId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": ["active", "disabled", "deletion_pending"]
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                        },
+                        "identityProviders": {
+                          "maxItems": 3,
+                          "type": "array",
+                          "items": { "type": "string", "enum": ["dev", "wechat", "phone"] }
+                        },
+                        "onboarding": {
+                          "type": "object",
+                          "properties": {
+                            "profilePresent": { "type": "boolean" },
+                            "goalPresent": { "type": "boolean" },
+                            "profileRevision": {
+                              "nullable": true,
+                              "type": "integer",
+                              "minimum": 0,
+                              "exclusiveMinimum": true,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": ["profilePresent", "goalPresent", "profileRevision"],
+                          "additionalProperties": false
+                        },
+                        "evidenceCounts": {
+                          "type": "object",
+                          "properties": {
+                            "healthRecords": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "workouts": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "meals": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "weeklyPlans": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "aiExplanations": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "photoAnalyses": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "consentReceipts": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "healthRecords",
+                            "workouts",
+                            "meals",
+                            "weeklyPlans",
+                            "aiExplanations",
+                            "photoAnalyses",
+                            "consentReceipts"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "activeSessionCount": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "activePhotoCount": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "latestActivityAt": {
+                          "nullable": true,
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                        },
+                        "optionalConsents": {
+                          "type": "object",
+                          "properties": {
+                            "aiPlanExplanation": {
+                              "type": "string",
+                              "enum": ["never_granted", "active", "revoked"]
+                            },
+                            "foodPhotoAnalysis": {
+                              "type": "string",
+                              "enum": ["never_granted", "active", "revoked"]
+                            }
+                          },
+                          "required": ["aiPlanExplanation", "foodPhotoAnalysis"],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "accountId",
+                        "status",
+                        "createdAt",
+                        "updatedAt",
+                        "identityProviders",
+                        "onboarding",
+                        "evidenceCounts",
+                        "activeSessionCount",
+                        "activePhotoCount",
+                        "latestActivityAt",
+                        "optionalConsents"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": ["lookupReceiptId", "auditedAt", "account"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": { "description": "Exact account, ticket and reason are required." },
+          "401": { "description": "Administrator session is missing or invalid." },
+          "403": { "description": "Administrator role does not permit this operation." },
+          "404": { "description": "The exact account does not exist; the attempt is audited." }
+        },
+        "security": [{ "adminBearer": [] }],
+        "summary": "Look up one exact account and return only bounded support evidence",
+        "tags": ["administrator support"]
+      }
+    },
     "/v1/plans/weekly/{planId}/explanation": {
       "post": {
         "operationId": "AiController_generate",
@@ -6790,7 +7238,15 @@
   "tags": [],
   "servers": [],
   "components": {
-    "securitySchemes": { "bearer": { "scheme": "bearer", "bearerFormat": "JWT", "type": "http" } },
+    "securitySchemes": {
+      "bearer": { "scheme": "bearer", "bearerFormat": "JWT", "type": "http" },
+      "adminBearer": {
+        "scheme": "bearer",
+        "bearerFormat": "opaque administrator session",
+        "type": "http",
+        "description": "Independent administrator session; never interchangeable with a user token."
+      }
+    },
     "schemas": {}
   }
 }

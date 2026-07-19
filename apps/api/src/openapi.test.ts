@@ -23,6 +23,12 @@ describe('OpenAPI document', () => {
     expect(document.paths['/v1/health']?.get).toBeDefined()
     expect(document.paths['/v1/health/live']?.get).toBeDefined()
     expect(document.paths['/v1/internal/metrics']?.get).toBeDefined()
+    expect(document.paths['/v1/admin/auth/dev/session']?.post).toBeDefined()
+    expect(document.paths['/v1/admin/auth/oidc/exchange']?.post).toBeDefined()
+    expect(document.paths['/v1/admin/auth/me']?.get).toBeDefined()
+    expect(document.paths['/v1/admin/auth/session']?.delete).toBeDefined()
+    expect(document.paths['/v1/admin/support/users/lookup']?.post).toBeDefined()
+    expect(document.paths['/v1/admin/audit']?.get).toBeDefined()
     expect(document.paths['/v1/health-records']?.post).toBeDefined()
     expect(document.paths['/v1/health-records']?.get).toBeDefined()
     expect(document.paths['/v1/health-records/{recordId}']?.put).toBeDefined()
@@ -56,6 +62,7 @@ describe('OpenAPI document', () => {
     expect(document.paths['/v1/me/privacy/consents/{purpose}/revoke']?.post).toBeDefined()
     expect(document.paths['/v1/me/privacy/account']?.delete).toBeDefined()
     expect(document.components?.securitySchemes?.bearer).toBeDefined()
+    expect(document.components?.securitySchemes?.adminBearer).toBeDefined()
   })
 
   it('allows lifecycle headers through the H5 CORS preflight', async () => {

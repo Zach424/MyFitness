@@ -47,11 +47,17 @@ export class RateLimitInterceptor implements NestInterceptor {
     const actor =
       policy.scope === 'ip'
         ? `ip:${remoteAddress}`
-        : request.user
-          ? `user:${request.user.userId}`
-          : policy.scope === 'user'
-            ? null
-            : `ip:${remoteAddress}`
+        : policy.scope === 'operator'
+          ? request.operator
+            ? `operator:${request.operator.operatorId}`
+            : null
+          : request.operator
+            ? `operator:${request.operator.operatorId}`
+            : request.user
+              ? `user:${request.user.userId}`
+              : policy.scope === 'user'
+                ? null
+                : `ip:${remoteAddress}`
     if (!actor) {
       throw new ServiceUnavailableException({
         code: 'rate_limit_identity_unavailable',

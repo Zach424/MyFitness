@@ -12,6 +12,7 @@ overrides:
   '@tarojs/taro-loader@4.2.1>webpack': 5.104.1
   '@tarojs/webpack5-runner@4.2.1>webpack': 5.104.1
   '@tarojs/webpack5-prebundle@4.2.1>webpack': 5.104.1
+  'next@16.2.10>postcss': 8.5.19
 
 allowBuilds:
   '@parcel/watcher': true

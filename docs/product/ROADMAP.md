@@ -2,7 +2,7 @@
 
 The roadmap is organized as controlled iterations. A round may take several working sessions, but it ends only after implementation, validation, archive update, and a commit.
 
-Progress snapshot (2026-07-19): iterations 0–13 are complete locally; iteration 14 is next. The product now covers authenticated records, Today/trends, versioned deterministic plans, consented review-only AI/photo assistance, user-owned inventory/export/revocation/erasure, a Redis-backed API operational perimeter and compatibility-tested Taro security floors on H5/WeApp. Production audit critical/high findings are zero; six moderate build-chain findings, production user/operator identity, centralized alerting, model/provider approval and shared deployment remain gated.
+Progress snapshot (2026-07-19): iterations 0–14 are complete locally; iteration 15 is next. The product now covers authenticated records, Today/trends, versioned deterministic plans, consented review-only AI/photo assistance, user-owned inventory/export/revocation/erasure, a Redis-backed API operational perimeter, compatibility-tested Taro security floors and an independent read-only operator/audit boundary. Production audit critical/high findings are zero; six moderate Taro build-chain findings, production user/operator identity, durable storage/retention, centralized alerting, model/provider approval and shared deployment remain gated.
 
 | Iteration | Primary scope                                       | Exit evidence                                                                               |
 | --------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------- |

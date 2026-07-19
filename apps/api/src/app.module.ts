@@ -1,6 +1,15 @@
 import { Module } from '@nestjs/common'
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core'
 
+import { AdminAuditController } from './admin/admin-audit.controller'
+import { AdminAuditQueryService } from './admin/admin-audit-query.service'
+import { AdminAuditService } from './admin/admin-audit.service'
+import { AdminAuthController } from './admin/admin-auth.controller'
+import { AdminAuthService } from './admin/admin-auth.service'
+import { AdminRoleGuard } from './admin/admin-role.guard'
+import { AdminSessionGuard } from './admin/admin-session.guard'
+import { AdminSupportController } from './admin/admin-support.controller'
+import { AdminSupportService } from './admin/admin-support.service'
 import { AiController } from './ai/ai.controller'
 import { AiService } from './ai/ai.service'
 import { AuthController } from './auth/auth.controller'
@@ -35,6 +44,9 @@ import { WorkoutsService } from './workouts/workouts.service'
 
 @Module({
   controllers: [
+    AdminAuditController,
+    AdminAuthController,
+    AdminSupportController,
     AiController,
     AuthController,
     HealthController,
@@ -49,6 +61,12 @@ import { WorkoutsService } from './workouts/workouts.service'
     WorkoutsController,
   ],
   providers: [
+    AdminAuditQueryService,
+    AdminAuditService,
+    AdminAuthService,
+    AdminRoleGuard,
+    AdminSessionGuard,
+    AdminSupportService,
     AiService,
     AuthService,
     DatabaseService,

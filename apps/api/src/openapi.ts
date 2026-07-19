@@ -9,6 +9,15 @@ export const buildOpenApiDocument = (app: INestApplication) => {
     )
     .setVersion('0.1.0')
     .addBearerAuth(undefined, 'bearer')
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'opaque administrator session',
+        description: 'Independent administrator session; never interchangeable with a user token.',
+      },
+      'adminBearer',
+    )
     .build()
 
   return SwaggerModule.createDocument(app, config, {

@@ -2,7 +2,7 @@
 
 Last reviewed: 2026-07-19
 
-Stage: production dependency remediation complete locally; administrator access and audit next
+Stage: administrator access/support complete locally; durable data operations next
 
 Primary release target: WeChat Mini Program + responsive H5
 
@@ -15,16 +15,16 @@ MyFitness / 衡迹 turns body, training, nutrition, and recovery records into sa
 | Module                  | Status                       | Current evidence                                                    | Next gate                                   |
 | ----------------------- | ---------------------------- | ------------------------------------------------------------------- | ------------------------------------------- |
 | Product scope           | Done for MVP baseline        | `docs/product/PRODUCT_BRIEF.md`                                     | Validate with target-user interviews        |
-| Delivery roadmap        | Done for planning baseline   | `docs/product/ROADMAP.md`                                           | Execute iteration 14                        |
-| Design language         | Partial, ten flows validated | Core flows + 20 reviewed screenshots                                | Large text, keyboard and remaining states   |
+| Delivery roadmap        | Done for planning baseline   | `docs/product/ROADMAP.md`                                           | Execute iteration 15                        |
+| Design language         | Partial, eleven flows tested | Core flows + 22 reviewed screenshots                                | Large text, keyboard and remaining states   |
 | Client: Mini Program/H5 | Partial                      | Product loop plus tested Taro dependency floors                     | Add production identity and release polish  |
-| Admin console           | Pending                      | Access boundary and operator risks now documented                   | Implement identity/RBAC/audit/support slice |
-| Business API            | Partial                      | Product flows plus shared Redis operational edge                    | Add admin/audit, then durable jobs          |
+| Admin console           | Partial, local slice done    | OIDC BFF, exact lookup, role split and Evidence Rail exercised      | Select IdP, owner, retention and deployment |
+| Business API            | Partial                      | Product flows, shared edge and independent administrator boundary   | Add durable jobs and object storage         |
 | Domain rules            | Partial                      | Safety validators + strict privacy action contracts                 | Add release policy enforcement              |
 | AI service              | Partial                      | Text/vision fixture/OpenAI adapters + 15 eval cases                 | Approved real-provider canary               |
 | Native App/devices      | Deferred                     | Phase-two decision                                                  | MVP retention gate reached                  |
 | Privacy/compliance      | Partial, primary store done  | Inventory/export/revocation/erasure exercised                       | Backups/providers, policy and legal review  |
-| Testing/observability   | Partial                      | 87 unit + 31 integration + 7 worker + 19 E2E; high-risk audit clear | Centralize scraping, alerts, tracing and CI |
+| Testing/observability   | Partial                      | 91 unit + 36 integration + 7 worker + 21 E2E; high-risk audit clear | Centralize scraping, alerts, tracing and CI |
 | Deployment              | Partial, local only          | PostgreSQL + Redis + fixture AI Compose health                      | Create repeatable shared test environment   |
 
 Status vocabulary: `Done` means validated for the present stage, `Partial` means usable but missing a named gate, `Pending` means not implemented, and `Deferred` means intentionally outside the current release.
@@ -33,10 +33,13 @@ Status vocabulary: `Done` means validated for the present stage, `Partial` means
 
 - Taro 4 + React + TypeScript for Mini Program and H5.
 - pnpm workspace with checked-in lockfile and a shared CSS/TypeScript design-token package.
-- Parent-qualified pnpm security floors isolate the Taro client on Vite 6.4.3/webpack 5.104.1 while Vitest remains on Vite 8.1.5; critical/high production audit findings are zero and six moderate build-chain findings remain registered.
+- Parent-qualified pnpm security floors isolate the Taro client on Vite 6.4.3/webpack 5.104.1 and the Next admin on PostCSS 8.5.19 while Vitest remains on Vite 8.1.5; critical/high production audit findings are zero and six moderate Taro build-chain findings remain registered.
 - Separate `dist-h5` and `dist-weapp` production roots prevent one platform build from deleting the other.
 - NestJS 11 modular API with Zod 4 contracts rendered into a committed OpenAPI 3.0 document.
 - Provider-neutral users/identities plus opaque Bearer sessions; raw tokens never enter the database and the development issuer is production-disabled.
+- Independent pre-provisioned OIDC operator identities, least-privilege roles and opaque administrator sessions; remote JWKS/issuer/audience/age/nonce and one-time exchange are verified before issuance.
+- Exact ticketed support lookup returns only lifecycle, aggregate and custody evidence. Administrator targets are HMAC references in a PostgreSQL-trigger-enforced append-only audit stream.
+- Next.js 16 administrator BFF keeps the API credential in an HttpOnly cookie and renders the responsive Evidence Desk without user-content browsing or mutation controls.
 - Transactional adult profile, goals, risk eligibility and immutable versioned consent events with optimistic revisions.
 - Transactional measurement create/replace/soft-delete with owner-only append-only snapshots, expected revisions and idempotent creation.
 - Transactional relational workout aggregates with ordered exercises/sets, completed-only deterministic summaries, expected revisions, idempotent creation and immutable JSON snapshots.
@@ -72,6 +75,8 @@ Status vocabulary: `Done` means validated for the present stage, `Partial` means
 | H5 entry is 305 KiB/largest chunk 589 KiB; WeApp vendor is 417 KiB  | Medium | Set budgets and split route/provider code before beta                                      |
 | Taro emits non-blocking webpack cache serialization warnings        | Low    | Track upstream/package compatibility; clean builds and artifacts currently pass            |
 | Development session issuer is not production authentication         | High   | Production mode disables it; add verified WeChat/phone adapters before shared deployment   |
+| Enterprise operator OIDC tenant/client and access owner are absent  | High   | Select provider; exercise provisioning, recertification, disablement and shared login      |
+| Administrator audit lacks independent retention/export and alerts   | High   | Define retention/owner; ship immutable copy and alert review before real operator access   |
 | Primary-store privacy works but backups/providers are not exercised | High   | Freeze retention map and run backup/provider deletion evidence before beta                 |
 | Process metrics are not centrally scraped and alerts have no owner  | High   | Deploy private aggregation, dashboards, paging and named incident ownership before beta    |
 | Rate limits use uncalibrated fixed windows and exact proxy topology | Medium | Load-test policy boundaries and verify `TRUST_PROXY_HOPS` in the shared environment        |
@@ -94,4 +99,4 @@ The MVP cannot enter public beta until all of the following are reproducible:
 
 ## Primary next step
 
-Iteration 14: build one narrow administrator trust boundary—verified operator identity, least-privilege RBAC, append-only administrator audit, read-only user lookup and a restrained support console—without exposing direct database mutation or bypassing user-data ownership rules.
+Iteration 15: replace local-only data operations with durable evidence—private object storage, expiry/reconciliation jobs, backup/restore proof and provider-deletion tracking—without weakening current ownership, consent or administrator boundaries.

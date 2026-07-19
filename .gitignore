@@ -27,6 +27,7 @@ playwright-report/
 test-results/
 .playwright-cli/
 *.log
+*.tsbuildinfo
 
 # Editors and operating systems
 .idea/

@@ -41,6 +41,11 @@ import {
   workoutSetKinds,
   workoutSourceKinds,
   workoutStatuses,
+  adminAuditActions,
+  adminAuditOutcomes,
+  adminAuditTargetTypes,
+  adminIdentityProviders,
+  adminRoles,
 } from '@myfitness/contracts'
 import { describe, expect, it } from 'vitest'
 
@@ -83,6 +88,10 @@ const privacyMigrationPath = path.resolve(
 const erasureReceiptMigrationPath = path.resolve(
   __dirname,
   '../../../../infra/postgres/migrations/0011_erasure_receipts.sql',
+)
+const adminMigrationPath = path.resolve(
+  __dirname,
+  '../../../../infra/postgres/migrations/0012_admin_support_boundary.sql',
 )
 
 describe('health-record migration drift', () => {
@@ -200,5 +209,20 @@ describe('health-record migration drift', () => {
     expect(migration).toContain('CREATE TABLE privacy_erasure_receipts')
     expect(migration).toContain("scope_version = 'primary-store-v1'")
     expect(migration).not.toContain('user_id')
+  })
+
+  it('contains every administrator enum and rejects audit mutation', async () => {
+    const migration = await readFile(adminMigrationPath, 'utf8')
+    for (const value of [
+      ...adminRoles,
+      ...adminIdentityProviders,
+      ...adminAuditActions,
+      ...adminAuditOutcomes,
+      ...adminAuditTargetTypes,
+    ]) {
+      expect(migration, `${value} is missing from the admin migration`).toContain(`'${value}'`)
+    }
+    expect(migration).toContain('BEFORE UPDATE OR DELETE ON admin_audit_events')
+    expect(migration).toContain('admin audit events are append-only')
   })
 })

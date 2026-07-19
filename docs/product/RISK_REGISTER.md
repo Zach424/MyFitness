@@ -1,6 +1,6 @@
 # Product risk register
 
-Last reviewed: 2026-07-19, iteration 013
+Last reviewed: 2026-07-19, iteration 014
 
 This register tracks release-affecting uncertainty. A mitigation is evidence to collect, not a claim that the risk is gone.
 
@@ -21,5 +21,7 @@ This register tracks release-affecting uncertainty. A mitigation is evidence to 
 | R-013 | Synchronous JSON export can exceed API memory or Mini Program 50 MiB limits   | Medium | Measure closed-beta account sizes; move to encrypted expiring archive jobs before the threshold is reachable                                           |
 | R-014 | Fixed-window limits and proxy-hop trust are not traffic/topology calibrated   | Medium | Load-test boundaries and verify exact `TRUST_PROXY_HOPS` in the shared environment before opening traffic                                              |
 | R-015 | Production audit retains 6 moderate Taro build/development-chain advisories   | Medium | Critical/high are zero; remove esbuild/webpack-dev-server/uuid findings through a supported Taro upgrade and rerun full graph/dual-client/E2E evidence |
+| R-016 | Enterprise operator identity and access governance are not configured         | High   | Select OIDC tenant/client and named owner; exercise dual-reviewed provisioning, recertification, disablement, revocation and shared login before use   |
+| R-017 | Administrator audit is immutable only inside the primary database             | High   | Define retention and owner; export to independently protected storage, include restore evidence and alert on write/access anomalies before real access |
 
 Resolved implementation defects remain documented in their iteration archive rather than removed from history. Product-level risks close only when the named release evidence exists.

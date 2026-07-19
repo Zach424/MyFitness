@@ -1,6 +1,6 @@
 # Architecture baseline
 
-Status: accepted and implemented through the iteration-013 production-dependency-remediation loop; changes require an ADR.
+Status: accepted and implemented through the iteration-014 administrator-access loop; changes require an ADR.
 
 ## System shape
 
@@ -23,7 +23,7 @@ flowchart TB
 | Path                     | Responsibility                                               | Must not own                                         |
 | ------------------------ | ------------------------------------------------------------ | ---------------------------------------------------- |
 | `apps/client`            | End-user Mini Program/H5 rendering and interaction           | Health formulas, model prompts, server authorization |
-| `apps/admin`             | Support, content, audit and operational workflows            | Direct database mutation from the browser            |
+| `apps/admin`             | Operator login, bounded support evidence and audit reading   | User-content browsing or database mutation           |
 | `apps/api`               | Authentication, authorization, record lifecycle, plans, jobs | Provider-specific AI code in controllers             |
 | `apps/mobile`            | Native UI and platform health/device adapters                | Independent business schema                          |
 | `services/ai`            | Model gateway, image pipeline, prompt/evaluation versions    | Final authority to persist confirmed user facts      |
@@ -42,6 +42,7 @@ Implemented foundation:
 - `packages/domain` owns measurement units, canonical conversion, plausible ranges and integer score rules.
 - PostgreSQL 18.4 stores measurements through parameterized `pg`; ordered SQL migrations run transactionally and record a SHA-256 checksum to detect drift.
 - Protected routes resolve an opaque Bearer session to a server-owned user principal. Only SHA-256 token hashes are persisted; the local issuer is disabled in production and can later be replaced by verified WeChat/phone adapters without changing resource ownership.
+- Administrator routes use an independent operator/identity/role/session boundary and `adminBearer` OpenAPI scheme. The API verifies pre-provisioned OIDC subjects against remote JWKS, issuer, audience, age and nonce, rejects token replay, re-resolves roles per request and keeps the local operator issuer production-disabled.
 - Adult profile, training goal, risk eligibility and immutable purpose/version consent events persist transactionally. Profile updates use optimistic revision checks.
 - Body/recovery record creation, replacement and soft deletion run in database transactions. Each accepted state is copied to an append-only revision table; writes use expected revisions and lists exclude deleted records while owner history remains available.
 - Workout session, ordered exercise and ordered set rows form one bounded relational aggregate. Server-side domain rules normalize load and calculate completed-only summaries; each accepted aggregate state is also stored as an immutable JSON snapshot.
@@ -53,6 +54,8 @@ Implemented foundation:
 - Food-photo reservations keep the raw upload in memory, sanitize to a private expiring JPEG, send only that JPEG plus a catalog allow-list to the worker, validate candidates deterministically and delete media on confirm/failure/reject/delete/expiry.
 - The authenticated privacy boundary inventories owned data, creates a no-store repeatable-read portable JSON export, records renewed consent cycles, revokes optional processing and erases the primary account graph plus user-scoped private media.
 - Outer request middleware validates UUIDv4 correlation and records final status/duration from stable route templates. A Redis-backed IP guard runs before authentication; a second actor/route limiter runs after authentication. HMAC actor keys expire atomically, business traffic fails closed without Redis, and liveness stays separate from PostgreSQL+Redis readiness.
+- Exact administrator support lookup requires an account UUID, bounded ticket and enumerated reason, then returns lifecycle/aggregate evidence only. Every accepted/not-found lookup and authorization decision is correlated into an append-only audit table whose target identifiers are HMAC references and whose update/delete trigger fails closed.
+- `apps/admin` is a Next.js 16 App Router BFF/UI. Authorization Code + PKCE/state/nonce remains server-side, administrator API tokens stay in secure-by-default HttpOnly cookies, and the Evidence Rail renders only the bounded support/audit contract.
 - Parent-qualified pnpm overrides place audited floors only on affected Taro 4.2.1 edges: client Vite 6.4.3, webpack 5.104.1, Swiper 12.1.2 and lodash-es 4.18.1. Root Vite 8.1.5 stays isolated for Vitest; frozen install, peer checks, dual builds, E2E and the zero-critical/high audit gate control every graph change.
 
 ## Data rules
@@ -90,6 +93,8 @@ The request-correlation, shared-rate-limit, health and metric boundary is docume
 
 ADR-0013 records the parent-qualified Taro security floors, separate compiler/test Vite lanes, high-severity audit gate and override removal conditions.
 
+The independent operator identity, evidence-only lookup and immutable audit boundary is documented in [ADMIN_SUPPORT_MODEL.md](ADMIN_SUPPORT_MODEL.md). ADR-0014 records why it cannot reuse end-user identity or expose generic administration.
+
 ## API and event conventions
 
 - HTTP JSON contracts are defined in `packages/contracts` and exposed as OpenAPI.
@@ -118,7 +123,7 @@ Provider outages fall back to manual recording and deterministic summaries; core
 - Private object storage with short-lived signed access and isolated retention policies.
 - Purpose-specific consent versions and revocation state.
 - Tenant/user authorization enforced in the API, never inferred from client filters.
-- Admin RBAC, just-in-time access for sensitive support actions, and immutable audit events.
+- Independent administrator identity, least-privilege RBAC, exact support purpose and primary-database immutable audit events; just-in-time approval and external retention remain release gates.
 - Export, correction, deletion, retention expiry, backup handling, and provider deletion are explicit workflows.
 - China-region deployment is the default for China-user health data; any cross-border provider use requires a separate architecture and legal decision.
 
