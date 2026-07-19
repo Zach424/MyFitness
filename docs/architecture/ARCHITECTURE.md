@@ -1,6 +1,6 @@
 # Architecture baseline
 
-Status: accepted and implemented through the iteration-012 API operational-perimeter loop; changes require an ADR.
+Status: accepted and implemented through the iteration-013 production-dependency-remediation loop; changes require an ADR.
 
 ## System shape
 
@@ -53,6 +53,7 @@ Implemented foundation:
 - Food-photo reservations keep the raw upload in memory, sanitize to a private expiring JPEG, send only that JPEG plus a catalog allow-list to the worker, validate candidates deterministically and delete media on confirm/failure/reject/delete/expiry.
 - The authenticated privacy boundary inventories owned data, creates a no-store repeatable-read portable JSON export, records renewed consent cycles, revokes optional processing and erases the primary account graph plus user-scoped private media.
 - Outer request middleware validates UUIDv4 correlation and records final status/duration from stable route templates. A Redis-backed IP guard runs before authentication; a second actor/route limiter runs after authentication. HMAC actor keys expire atomically, business traffic fails closed without Redis, and liveness stays separate from PostgreSQL+Redis readiness.
+- Parent-qualified pnpm overrides place audited floors only on affected Taro 4.2.1 edges: client Vite 6.4.3, webpack 5.104.1, Swiper 12.1.2 and lodash-es 4.18.1. Root Vite 8.1.5 stays isolated for Vitest; frozen install, peer checks, dual builds, E2E and the zero-critical/high audit gate control every graph change.
 
 ## Data rules
 
@@ -86,6 +87,8 @@ The private media lifecycle, candidate contract, vision provider boundary and no
 The inventory/export/consent/erasure boundary is documented in [PRIVACY_OWNERSHIP_MODEL.md](PRIVACY_OWNERSHIP_MODEL.md). ADR-0011 records the user-scoped media, renewed consent and unlinkable primary-store receipt decisions.
 
 The request-correlation, shared-rate-limit, health and metric boundary is documented in [OPERATIONS_PERIMETER.md](OPERATIONS_PERIMETER.md). ADR-0012 records why ingress protection precedes authentication and administrator access.
+
+ADR-0013 records the parent-qualified Taro security floors, separate compiler/test Vite lanes, high-severity audit gate and override removal conditions.
 
 ## API and event conventions
 

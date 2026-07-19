@@ -2,7 +2,7 @@
 
 面向普通健身人群的多端记录与 AI 规划产品。产品把身体、训练、饮食和恢复数据整理为可解释、可调整、可持续执行的个人计划。
 
-> 当前阶段：API operational perimeter / 第 12 轮已完成。本地 API 已具备请求关联、Redis 共享双层限流、依赖就绪、无直接标识指标和显式故障策略。生产依赖审计仍有 Taro 传递依赖告警，下一轮先完成依赖安全修复与全量回归，再进入管理员身份、RBAC、审计与支持工作台。
+> 当前阶段：production dependency remediation / 第 13 轮已完成。本地生产依赖审计已从 20 项降至 6 项中危，严重和高危归零；Taro 4.2.1 的安全版本下限经过 H5、微信小程序与全量回归验证。剩余中危构建链风险继续登记，下一轮进入管理员身份、RBAC、审计与支持工作台。
 
 ## 产品边界
 
@@ -45,9 +45,12 @@ pnpm test:ai
 pnpm eval:ai
 pnpm eval:food-photo
 pnpm typecheck
+pnpm audit:prod
 ```
 
 H5 和微信小程序产物分别生成到 `apps/client/dist-h5` 与 `apps/client/dist-weapp`，两次构建不会互相清理。
+
+Taro 4.2.1 当前通过父级限定的 pnpm override 使用已验证的 Swiper、lodash-es、Vite 与 webpack 安全下限；Vitest 保留独立 Vite 8 工具链。`pnpm audit:prod` 只把严重/高危作为阻断门槛，原始审计中的 6 个中危项仍在风险登记中；升级与 override 退出规则见 [ADR-0013](docs/architecture/decisions/0013-auditable-transitive-security-floors.md)。
 
 启动本地 API、PostgreSQL、Redis 与 AI worker：
 
@@ -107,6 +110,8 @@ Playwright 会复用或启动 API 与 H5 预览服务。`pnpm db:down` 会停止
 - [架构决策 0009](docs/architecture/decisions/0009-review-only-ai-explanations.md)
 - [架构决策 0010](docs/architecture/decisions/0010-revocable-food-photo-candidates.md)
 - [架构决策 0011](docs/architecture/decisions/0011-user-owned-export-and-erasure.md)
+- [架构决策 0012](docs/architecture/decisions/0012-shared-api-operational-perimeter.md)
+- [架构决策 0013](docs/architecture/decisions/0013-auditable-transitive-security-floors.md)
 - [健康记录数据模型](docs/architecture/HEALTH_RECORD_MODEL.md)
 - [训练记录数据模型](docs/architecture/WORKOUT_MODEL.md)
 - [饮食记录数据模型](docs/architecture/NUTRITION_MODEL.md)
@@ -131,6 +136,7 @@ Playwright 会复用或启动 API 与 H5 预览服务。`pnpm db:down` 会停止
 - [第 10 轮档案](docs/iterations/010-food-photo-candidates.md)
 - [第 11 轮档案](docs/iterations/011-privacy-ownership.md)
 - [第 12 轮档案](docs/iterations/012-api-operational-perimeter.md)
+- [第 13 轮档案](docs/iterations/013-production-dependency-remediation.md)
 - [移动端视觉证据](output/playwright/iteration-001-mobile.png)
 - [宽屏视觉证据](output/playwright/iteration-001-wide.png)
 - [建档移动端证据](output/playwright/iteration-003-onboarding-mobile.png)

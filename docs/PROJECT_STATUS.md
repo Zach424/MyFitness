@@ -2,7 +2,7 @@
 
 Last reviewed: 2026-07-19
 
-Stage: API operational perimeter complete locally; administrator access and audit next
+Stage: production dependency remediation complete locally; administrator access and audit next
 
 Primary release target: WeChat Mini Program + responsive H5
 
@@ -12,20 +12,20 @@ MyFitness / 衡迹 turns body, training, nutrition, and recovery records into sa
 
 ## Module status
 
-| Module                  | Status                       | Current evidence                                    | Next gate                                   |
-| ----------------------- | ---------------------------- | --------------------------------------------------- | ------------------------------------------- |
-| Product scope           | Done for MVP baseline        | `docs/product/PRODUCT_BRIEF.md`                     | Validate with target-user interviews        |
-| Delivery roadmap        | Done for planning baseline   | `docs/product/ROADMAP.md`                           | Execute iteration 13                        |
-| Design language         | Partial, ten flows validated | Core flows + 20 reviewed screenshots                | Large text, keyboard and remaining states   |
-| Client: Mini Program/H5 | Partial                      | Record/plan loop + AI/photo + privacy custody       | Add production identity and release polish  |
-| Admin console           | Pending                      | Access boundary and operator risks now documented   | Implement identity/RBAC/audit/support slice |
-| Business API            | Partial                      | Product flows plus shared Redis operational edge    | Add admin/audit, then durable jobs          |
-| Domain rules            | Partial                      | Safety validators + strict privacy action contracts | Add release policy enforcement              |
-| AI service              | Partial                      | Text/vision fixture/OpenAI adapters + 15 eval cases | Approved real-provider canary               |
-| Native App/devices      | Deferred                     | Phase-two decision                                  | MVP retention gate reached                  |
-| Privacy/compliance      | Partial, primary store done  | Inventory/export/revocation/erasure exercised       | Backups/providers, policy and legal review  |
-| Testing/observability   | Partial                      | 87 unit + 31 integration + 7 worker + 19 E2E        | Centralize scraping, alerts, tracing and CI |
-| Deployment              | Partial, local only          | PostgreSQL + Redis + fixture AI Compose health      | Create repeatable shared test environment   |
+| Module                  | Status                       | Current evidence                                                    | Next gate                                   |
+| ----------------------- | ---------------------------- | ------------------------------------------------------------------- | ------------------------------------------- |
+| Product scope           | Done for MVP baseline        | `docs/product/PRODUCT_BRIEF.md`                                     | Validate with target-user interviews        |
+| Delivery roadmap        | Done for planning baseline   | `docs/product/ROADMAP.md`                                           | Execute iteration 14                        |
+| Design language         | Partial, ten flows validated | Core flows + 20 reviewed screenshots                                | Large text, keyboard and remaining states   |
+| Client: Mini Program/H5 | Partial                      | Product loop plus tested Taro dependency floors                     | Add production identity and release polish  |
+| Admin console           | Pending                      | Access boundary and operator risks now documented                   | Implement identity/RBAC/audit/support slice |
+| Business API            | Partial                      | Product flows plus shared Redis operational edge                    | Add admin/audit, then durable jobs          |
+| Domain rules            | Partial                      | Safety validators + strict privacy action contracts                 | Add release policy enforcement              |
+| AI service              | Partial                      | Text/vision fixture/OpenAI adapters + 15 eval cases                 | Approved real-provider canary               |
+| Native App/devices      | Deferred                     | Phase-two decision                                                  | MVP retention gate reached                  |
+| Privacy/compliance      | Partial, primary store done  | Inventory/export/revocation/erasure exercised                       | Backups/providers, policy and legal review  |
+| Testing/observability   | Partial                      | 87 unit + 31 integration + 7 worker + 19 E2E; high-risk audit clear | Centralize scraping, alerts, tracing and CI |
+| Deployment              | Partial, local only          | PostgreSQL + Redis + fixture AI Compose health                      | Create repeatable shared test environment   |
 
 Status vocabulary: `Done` means validated for the present stage, `Partial` means usable but missing a named gate, `Pending` means not implemented, and `Deferred` means intentionally outside the current release.
 
@@ -33,6 +33,7 @@ Status vocabulary: `Done` means validated for the present stage, `Partial` means
 
 - Taro 4 + React + TypeScript for Mini Program and H5.
 - pnpm workspace with checked-in lockfile and a shared CSS/TypeScript design-token package.
+- Parent-qualified pnpm security floors isolate the Taro client on Vite 6.4.3/webpack 5.104.1 while Vitest remains on Vite 8.1.5; critical/high production audit findings are zero and six moderate build-chain findings remain registered.
 - Separate `dist-h5` and `dist-weapp` production roots prevent one platform build from deleting the other.
 - NestJS 11 modular API with Zod 4 contracts rendered into a committed OpenAPI 3.0 document.
 - Provider-neutral users/identities plus opaque Bearer sessions; raw tokens never enter the database and the development issuer is production-disabled.
@@ -57,7 +58,7 @@ Status vocabulary: `Done` means validated for the present stage, `Partial` means
 
 | Risk                                                                | Level  | Mitigation / next evidence                                                                 |
 | ------------------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------ |
-| Production audit reports critical/high Taro-chain advisories        | High   | Upgrade/override only with full dual-build and E2E proof; require zero critical/high audit |
+| Production audit retains six moderate Taro build-chain advisories   | Medium | Remove through a supported Taro/build-chain upgrade; rerun graph, dual-build and E2E proof |
 | GitHub Git transport is unavailable in the current environment      | High   | Keep local commits; later fetch authenticated remote and replay commits without force-push |
 | Scope may expand before the recording loop is proven                | High   | Enforce MVP exclusions and one-scope iteration archives                                    |
 | Food-photo portion estimates can be misleading                      | High   | Catalog-bound ranges/confidence, user edit, no auto-write; broaden real-image evaluation   |
@@ -93,4 +94,4 @@ The MVP cannot enter public beta until all of the following are reproducible:
 
 ## Primary next step
 
-Iteration 13: remediate the production dependency audit as one controlled compatibility change—resolve the critical/high Taro-chain advisories, document unavoidable residual findings, and require typecheck, unit/integration tests, both client builds and all E2E flows before moving to administrator access.
+Iteration 14: build one narrow administrator trust boundary—verified operator identity, least-privilege RBAC, append-only administrator audit, read-only user lookup and a restrained support console—without exposing direct database mutation or bypassing user-data ownership rules.
