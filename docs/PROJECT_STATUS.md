@@ -2,7 +2,7 @@
 
 Last reviewed: 2026-07-20
 
-Stage: first service candidate published; exact tag/main/CI release-source qualification, deterministic client release, combined admission, recoverable erasure receipts, crash-safe AI lifecycle, adversarial output validation and reproducible evaluation artifacts are locally green before the next candidate and external shared infrastructure
+Stage: first service candidate published; immutable workflow dependencies, exact tag/main/CI release-source qualification, deterministic client release, combined admission, recoverable erasure receipts, crash-safe AI lifecycle, adversarial output validation and reproducible evaluation artifacts are locally green before the next candidate and external shared infrastructure
 
 Primary release target: WeChat Mini Program + responsive H5
 
@@ -12,20 +12,20 @@ MyFitness / 衡迹 turns body, training, nutrition, and recovery records into sa
 
 ## Module status
 
-| Module                  | Status                          | Current evidence                                                      | Next gate                                   |
-| ----------------------- | ------------------------------- | --------------------------------------------------------------------- | ------------------------------------------- |
-| Product scope           | Done for MVP baseline           | `docs/product/PRODUCT_BRIEF.md`                                       | Validate with target-user interviews        |
-| Delivery roadmap        | Done for planning baseline      | `docs/product/ROADMAP.md`                                             | Execute iteration 27 managed shared test    |
-| Design language         | Partial, eleven flows tested    | Core flows + recovery state + 23 reviewed screenshots                 | Large text, keyboard and remaining states   |
-| Client: Mini Program/H5 | Partial                         | Source-bound WeApp candidate + preview-only H5 deterministic TARs     | Publish next candidate; device/H5 identity  |
-| Admin console           | Partial, local slice done       | OIDC BFF, exact lookup, role split and Evidence Rail exercised        | Select IdP, owner, retention and deployment |
-| Business API            | Partial                         | Verified identity plus non-root self-contained OCI runtime            | Shared deployment and real credential proof |
-| Domain rules            | Partial                         | Safety validators + strict privacy action contracts                   | Add release policy enforcement              |
-| AI service              | Partial                         | Crash-safe runs + adversarial text/vision validators + 23 evals       | Expert corpus + approved provider canary    |
-| Native App/devices      | Deferred                        | Phase-two decision                                                    | MVP retention gate reached                  |
-| Privacy/compliance      | Partial, durable local proof    | Recoverable erasure, identity suppression and restore replay tested   | Production retention/provider/legal review  |
-| Testing/observability   | Partial                         | 152 unit, 46 integration, 22 browser tests + eval drift gate          | Green implementing CI; centralize telemetry |
-| Deployment              | Partial, source/admission ready | Exact tag/main/CI gate + service/client bytes + environment admission | Approve dossier, provision and canary       |
+| Module                  | Status                          | Current evidence                                                     | Next gate                                   |
+| ----------------------- | ------------------------------- | -------------------------------------------------------------------- | ------------------------------------------- |
+| Product scope           | Done for MVP baseline           | `docs/product/PRODUCT_BRIEF.md`                                      | Validate with target-user interviews        |
+| Delivery roadmap        | Done for planning baseline      | `docs/product/ROADMAP.md`                                            | Execute iteration 28 managed shared test    |
+| Design language         | Partial, eleven flows tested    | Core flows + recovery state + 23 reviewed screenshots                | Large text, keyboard and remaining states   |
+| Client: Mini Program/H5 | Partial                         | Source-bound WeApp candidate + preview-only H5 deterministic TARs    | Publish next candidate; device/H5 identity  |
+| Admin console           | Partial, local slice done       | OIDC BFF, exact lookup, role split and Evidence Rail exercised       | Select IdP, owner, retention and deployment |
+| Business API            | Partial                         | Verified identity plus non-root self-contained OCI runtime           | Shared deployment and real credential proof |
+| Domain rules            | Partial                         | Safety validators + strict privacy action contracts                  | Add release policy enforcement              |
+| AI service              | Partial                         | Crash-safe runs + adversarial text/vision validators + 23 evals      | Expert corpus + approved provider canary    |
+| Native App/devices      | Deferred                        | Phase-two decision                                                   | MVP retention gate reached                  |
+| Privacy/compliance      | Partial, durable local proof    | Recoverable erasure, identity suppression and restore replay tested  | Production retention/provider/legal review  |
+| Testing/observability   | Partial                         | 155 unit, 46 integration, 22 browser tests + eval/action drift gates | Green implementing CI; centralize telemetry |
+| Deployment              | Partial, source/admission ready | Immutable actions + tag/main/CI + service/client/environment gates   | Approve dossier, provision and canary       |
 
 Status vocabulary: `Done` means validated for the present stage, `Partial` means usable but missing a named gate, `Pending` means not implemented, and `Deferred` means intentionally outside the current release.
 
@@ -64,6 +64,7 @@ Status vocabulary: `Done` means validated for the present stage, `Partial` means
 - Pinned-base, non-root OCI images for API, administrator and AI; API uses a self-contained pnpm deployment closure and administrator uses Next.js standalone output.
 - A disposable pinned Compose topology runs a one-shot migration before traffic and black-box verifies image health, dependency readiness, request correlation and administrator security headers. GitHub Actions defines full quality/image smoke plus multi-architecture GHCR publication with provenance.
 - The Nest API has typed `runtime` and `metadata` startup policies: production/integration retain dependency checks and maintenance workers, while OpenAPI/CORS inspection and contract generation assemble the real graph without external startup I/O.
+- Both GitHub workflows pin every external action to a reviewed full commit recorded in `myfitness-github-actions-lock/v1`; an offline discovery test rejects mutable/unknown refs and weekly Dependabot proposals expose upgrades without automatic trust.
 - A dependency-free `myfitness-release-qualification/v1` gate resolves lightweight or annotated remote tags, proves the exact commit remains in current `main` and selects that SHA's successful `main` push CI before registry login or client packaging. The strict record is rechecked against the release workflow and retained as an immutable Release asset.
 - A dependency-free `myfitness-release/v1` control plane binds API, administrator and AI digests to one qualified SemVer tag, full source revision and workflow run; the tag workflow rejects mixed fragments and publishes checksummed, non-overwritable GitHub Release assets.
 - A dependency-free `myfitness-client-release/v1` control plane packages sorted, fixed-metadata USTAR H5/WeApp roots, verifies canonical bytes and tree digests, and binds both platforms to one source/workflow/API base. H5 is explicitly `preview-only` with development identity; WeApp is a `candidate` with WeChat identity.
@@ -76,6 +77,7 @@ Status vocabulary: `Done` means validated for the present stage, `Partial` means
 | Production audit retains six moderate Taro build-chain advisories                      | Medium | Remove through a supported Taro/build-chain upgrade; rerun graph, dual-build and E2E proof               |
 | Offline admission cannot prove external references exist or were genuinely approved    | High   | Create/dereference the dossier inside a protected change system; never deploy from local success alone   |
 | The published `v0.1.0-rc.1` predates client release and source-qualification assets    | Medium | Set an approved client API URL and publish/verify a new qualified tag; never mutate the existing release |
+| Pinned GitHub Actions can age after their reviewed upstream releases                   | Medium | Review weekly Dependabot proposals, upstream tags/source and the synchronized lock; require complete CI  |
 | Scope may expand before the recording loop is proven                                   | High   | Enforce MVP exclusions and one-scope iteration archives                                                  |
 | Food-photo portion estimates can be misleading                                         | High   | Catalog-bound ranges/confidence, user edit, no auto-write; broaden real-image evaluation                 |
 | AI may generate unsafe training or diet changes                                        | High   | Deterministic constraints and validators precede model output                                            |
@@ -113,4 +115,4 @@ The MVP cannot enter public beta until all of the following are reproducible:
 
 ## Primary next step
 
-Iteration 27: obtain the approved client API URL plus owner-approved account/region/budget and protected references, publish a new source-qualified immutable service/client candidate, provision the managed shared test environment, inject real WeChat/OIDC secrets, deploy admitted services without general traffic, upload the exact WeApp TAR to private preview, and exercise identity, custody, telemetry, canary and no-traffic rollback. H5 public delivery remains held until iteration 28 selects a production identity adapter.
+Iteration 28: obtain the approved client API URL plus owner-approved account/region/budget and protected references, publish a new source-qualified immutable service/client candidate, provision the managed shared test environment, inject real WeChat/OIDC secrets, deploy admitted services without general traffic, upload the exact WeApp TAR to private preview, and exercise identity, custody, telemetry, canary and no-traffic rollback. H5 public delivery remains held until iteration 29 selects a production identity adapter.

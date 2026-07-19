@@ -1,6 +1,6 @@
 # Product risk register
 
-Last reviewed: 2026-07-20, iteration 026
+Last reviewed: 2026-07-20, iteration 027
 
 This register tracks release-affecting uncertainty. A mitigation is evidence to collect, not a claim that the risk is gone.
 
@@ -29,5 +29,6 @@ This register tracks release-affecting uncertainty. A mitigation is evidence to 
 | R-023 | Offline admission cannot prove external references exist or were genuinely approved    | High   | Create, dereference and approve the dossier inside a protected change workflow; never grant credentials or traffic from local verifier success alone         |
 | R-024 | The published `v0.1.0-rc.1` has no H5/WeApp or source-qualification asset              | Medium | Configure the approved client API URL, publish a new qualified immutable candidate, then independently verify all service/client/qualification assets        |
 | R-025 | A receipt bearer secret remains in client application storage until explicit removal   | Medium | Keep it masked and no-store over HTTP; review secure platform storage, shared-device behavior and expiry/removal policy before closed beta                   |
+| R-026 | Reviewed GitHub Action pins can age or miss upstream security/compatibility fixes      | Medium | Dependabot proposes weekly; verify exact upstream tag/source, update lock and every use together, then require complete hosted CI before merge               |
 
 Resolved implementation defects remain documented in their iteration archive rather than removed from history. Product-level risks close only when the named release evidence exists.

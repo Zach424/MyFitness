@@ -1,14 +1,26 @@
 # Deployment and image runbook
 
-Status: OCI packaging, hosted CI and service-only `v0.1.0-rc.1` publication are green; exact tag/main/CI source qualification, deterministic client packaging and combined service/client admission are locally accepted while the next candidate, real shared infrastructure, external approvals and public traffic remain unconfigured
+Status: OCI packaging, hosted CI and service-only `v0.1.0-rc.1` publication are green; immutable workflow dependencies, exact tag/main/CI source qualification, deterministic client packaging and combined service/client admission are locally accepted while the next candidate, real shared infrastructure, external approvals and public traffic remain unconfigured
 
 ## Source and lifecycle qualification
 
-Before image acceptance, stop local MyFitness dependencies and run `pnpm test`. The current 37-file/152-test unit gate must pass without PostgreSQL, Redis or MinIO. OpenAPI tests and generation use the explicit API `metadata` startup mode, which assembles the shipped application graph and HTTP policy but does not run background jobs or verify external dependencies.
+Before image acceptance, stop local MyFitness dependencies and run `pnpm test`. The current 38-file/155-test unit gate must pass without PostgreSQL, Redis or MinIO. OpenAPI tests and generation use the explicit API `metadata` startup mode, which assembles the shipped application graph and HTTP policy but does not run background jobs or verify external dependencies.
 
 Production, integration, restore, E2E and deployment processes use the default `runtime` mode. It retains object-storage startup verification, photo-expiry reconciliation and durable data-operation workers. Do not select metadata mode for a traffic-serving process, and do not treat its successful initialization as readiness evidence; `/v1/health` and the black-box deployment verifier own that proof.
 
 The hosted source gate must complete before `deployment-smoke` starts. A skipped smoke after a source failure is expected fail-closed behavior, not image evidence.
+
+## Workflow dependency qualification
+
+Every external `uses:` in `.github/workflows` must select the full commit recorded in `infra/ci/github-actions.lock.json` and retain its exact SemVer comment. Repository-local actions may use `./`; a future container action must use a `sha256` digest. The repository Actions setting `sha_pinning_required` must remain enabled. A branch, tag, abbreviated SHA or unregistered revision is not an acceptable emergency workaround.
+
+Run the offline gate after any workflow or action update:
+
+```bash
+pnpm exec vitest run scripts/github-actions-lock.test.ts
+```
+
+Dependabot checks the `github-actions` ecosystem weekly, but its pull request is only an update signal. Resolve both the proposed exact tag and corresponding major tag from `https://github.com/<owner>/<action>.git`, require the same peeled commit, review upstream source/release notes, then update every workflow use, version comment and lock entry together. Require full local validation and the implementing hosted `quality` plus `deployment-smoke` run before merge. Do not auto-merge an action update or edit only the comment/lock.
 
 ## Artifact acceptance
 

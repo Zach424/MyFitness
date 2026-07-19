@@ -230,7 +230,7 @@ describe('hosted release qualification', () => {
       'utf8',
     )
     const qualificationIndex = workflow.indexOf('node scripts/release-qualification.mjs verify')
-    const registryLoginIndex = workflow.indexOf('docker/login-action@v3')
+    const registryLoginIndex = workflow.indexOf('docker/login-action@')
 
     expect(qualificationIndex).toBeGreaterThan(0)
     expect(registryLoginIndex).toBeGreaterThan(qualificationIndex)

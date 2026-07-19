@@ -2,7 +2,7 @@
 
 Date: 2026-07-19
 
-Status: accepted for deployment packaging; managed shared infrastructure and public traffic remain pending
+Status: accepted for deployment packaging; workflow dependency identity is extended by ADR-0026, while managed shared infrastructure and public traffic remain pending
 
 ## Context
 

@@ -1,6 +1,6 @@
 # Architecture baseline
 
-Status: accepted and implemented through the iteration-026 qualified-release-source boundary; changes require an ADR.
+Status: accepted and implemented through the iteration-027 immutable-workflow-supply-chain boundary; changes require an ADR.
 
 ## System shape
 
@@ -63,6 +63,7 @@ Implemented foundation:
 - API, administrator and AI runtime boundaries have non-root OCI images with pinned base manifests, health checks and source/revision labels. API production output is a pruned pnpm deploy directory; administrator output is Next.js standalone; Python runtime dependencies are fully pinned.
 - A one-shot API-image migration task gates container traffic. The disposable deployment topology proves container networking, migrations, PostgreSQL/Redis/object readiness, AI health and administrator security headers, while remaining explicitly non-production.
 - API binding defaults to loopback outside production and all interfaces in production, with an explicit IP-only override. GitHub Actions defines source gates, image smoke, multi-architecture GHCR publishing and provenance attestations; managed infrastructure remains vendor-neutral.
+- Every external GitHub Action is selected by a reviewed full commit in a strict lock rather than a branch or tag. Offline workflow discovery rejects drift, exact SemVer comments preserve review intent, weekly Dependabot proposals expose updates and repository policy requires SHA pins after the baseline reaches `main`.
 - Candidate publication begins with dependency-free hosted qualification: the remote lightweight/annotated tag must resolve to the workflow commit, that commit must remain in current `main`, and the exact SHA must have a completed successful `main` push run of `.github/workflows/ci.yml`. The strict qualification record is checked again before manifest assembly and retained with the immutable Release.
 - Parent-qualified pnpm overrides place audited floors only on affected Taro 4.2.1 edges: client Vite 6.4.3, webpack 5.104.1, Swiper 12.1.2 and lodash-es 4.18.1. Root Vite 8.1.5 stays isolated for Vitest; frozen install, peer checks, dual builds, E2E and the zero-critical/high audit gate control every graph change.
 
