@@ -44,6 +44,6 @@ export default defineConfig({
       reporter: ['text', 'html'],
     },
     exclude: ['**/*.integration.spec.ts', '**/node_modules/**', '**/dist/**'],
-    include: ['packages/**/*.test.ts', 'apps/**/*.test.ts'],
+    include: ['packages/**/*.test.ts', 'apps/**/*.test.ts', 'scripts/**/*.test.ts'],
   },
 })

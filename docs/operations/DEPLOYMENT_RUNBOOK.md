@@ -1,6 +1,6 @@
 # Deployment and image runbook
 
-Status: OCI packaging and disposable topology are exercised locally; shared managed infrastructure and public traffic are not configured
+Status: OCI packaging and disposable topology are green locally and in hosted CI; strict release promotion is locally accepted while shared managed infrastructure and public traffic remain unconfigured
 
 ## Source and lifecycle qualification
 
@@ -39,24 +39,49 @@ docker run --rm --env-file production.env \
 
 ## Publish and identify images
 
-GitHub Actions publishes `myfitness-api`, `myfitness-admin` and `myfitness-ai` to GHCR on a deliberate workflow dispatch or `vX.Y.Z` tag. Release only after the commit CI is green. Record all three returned image digests in the change ticket; the tag is discovery metadata, while the digest is the deployment identity.
+GitHub Actions publishes `myfitness-api`, `myfitness-admin` and `myfitness-ai` to GHCR from an existing `v`-prefixed SemVer tag. Release only after that commit's complete main CI is green. A manual dispatch must select the tag as the workflow ref and repeat the exact tag in `release_tag`; a branch dispatch fails closed.
 
-Do not deploy mutable tags. Keep the previous verified digest set available for rollback. Registry provenance attestations must name the repository revision used by the release.
+The normal candidate sequence is:
+
+```bash
+git tag -a v0.1.0-rc.1 -m "MyFitness v0.1.0-rc.1"
+git push origin v0.1.0-rc.1
+```
+
+Each image job publishes linux/amd64 and linux/arm64, records its registry digest and pushes a provenance attestation. The dependent release job accepts exactly one API, Admin and AI fragment from the same repository, full source revision, tag and workflow attempt. It publishes these GitHub Release assets:
+
+- `release-manifest.json`: `myfitness-release/v1` with the three digest-qualified references;
+- `release-manifest.sha256`: transport checksum;
+- `release-verification.json`: redacted binding summary.
+
+Download all three assets into one directory, then verify transport and semantic bindings before opening a deployment change:
+
+```bash
+sha256sum --check release-manifest.sha256
+pnpm release:verify -- \
+  --file release-manifest.json \
+  --expected-repository Zach424/MyFitness \
+  --expected-revision <full-40-character-commit> \
+  --expected-version <v-prefixed-semver-tag>
+```
+
+Require `status: ok`, the intended source revision and exactly three `image@sha256:...` references. Copy the accepted files into the environment's independently protected change record. Do not deploy version or `sha-*` tags; they are discovery metadata. Do not replace or move an existing tag/release. Keep the complete previous verified manifest available for rollback and verify that all registry provenance attestations name the same repository revision.
 
 ## Deployment order
 
 1. Confirm managed PostgreSQL/Redis/object storage backups, encryption, network policy, capacity and named owners.
 2. Load secrets and run the production configuration preflight.
-3. Run one API-image migration job with `node dist/database/migrate.js`; stop on checksum drift or any non-zero exit.
-4. Deploy AI privately and verify `/health` without exposing its service token.
-5. Deploy API with no public traffic; verify `/v1/health/live`, then dependency readiness and private operations evidence.
-6. Deploy administrator BFF behind the approved OIDC/edge boundary. Verify CSP, frame denial and a real least-privilege login.
-7. Shift a small canary cohort, verify request correlation/logs/metrics and exercise record, privacy, erasure and restore controls before broader traffic.
-8. Run `node scripts/verify-deployment.mjs` against the shared endpoints and attach its redacted JSON plus image digests to the deployment record.
+3. Verify the release checksum/manifest and resolve all three services from its digest-qualified references; reject handwritten or tag-only substitutions.
+4. Run one API-image migration job with `node dist/database/migrate.js`; stop on checksum drift or any non-zero exit.
+5. Deploy AI privately and verify `/health` without exposing its service token.
+6. Deploy API with no public traffic; verify `/v1/health/live`, then dependency readiness and private operations evidence.
+7. Deploy administrator BFF behind the approved OIDC/edge boundary. Verify CSP, frame denial and a real least-privilege login.
+8. Shift a small canary cohort, verify request correlation/logs/metrics and exercise record, privacy, erasure and restore controls before broader traffic.
+9. Run `node scripts/verify-deployment.mjs` against the shared endpoints and attach its redacted JSON plus the accepted release manifest to the deployment record.
 
 ## Rollback
 
-Stop the rollout on failed migration, readiness, error/latency threshold, auth boundary, custody check or missing telemetry. Select the previously recorded image digests; never restore the database or delete migration history for an application rollback. Before shifting traffic, confirm the previous API understands the current schema, erasure ledger and outstanding durable jobs. After rollback, repeat liveness/readiness/correlation, administrator security headers, metrics/job evidence and deletion/restore checks.
+Stop the rollout on failed migration, manifest/provenance verification, readiness, error/latency threshold, auth boundary, custody check or missing telemetry. Select all three references from the previously accepted manifest; never mix manifest versions, restore the database or delete migration history for an application rollback. Before shifting traffic, confirm the previous API understands the current schema, erasure ledger and outstanding durable jobs. After rollback, repeat liveness/readiness/correlation, administrator security headers, metrics/job evidence and deletion/restore checks.
 
 ## Inputs still required for a shared environment
 

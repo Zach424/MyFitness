@@ -27,6 +27,7 @@
     "ops:verify-production-config": "pnpm --filter @myfitness/api ops:verify-production-config",
     "deploy:verify": "node scripts/verify-deployment.mjs",
     "deploy:smoke": "node scripts/run-deployment-smoke.mjs",
+    "release:verify": "node scripts/release-manifest.mjs verify",
     "test": "vitest run",
     "test:ai": "python -m pytest services/ai/tests -q",
     "eval:ai": "pnpm --filter @myfitness/contracts build && pnpm --filter @myfitness/domain build && node scripts/run-ai-evals.mjs",
