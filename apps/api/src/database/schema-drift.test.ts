@@ -5,8 +5,8 @@ import {
   aiExplanationProviders,
   aiExplanationContentSchema,
   aiExplanationSources,
-  aiPlanPromptVersion,
-  aiPlanValidatorVersion,
+  aiPlanPromptVersions,
+  aiPlanValidatorVersions,
   aiWorkerFailureCodes,
   ageBands,
   dietaryPreferenceOptions,
@@ -14,11 +14,11 @@ import {
   exerciseCategories,
   foodCategories,
   foodPhotoConsentPurpose,
-  foodPhotoPromptVersion,
+  foodPhotoPromptVersions,
   foodPhotoProviders,
   foodPhotoSources,
   foodPhotoStatuses,
-  foodPhotoValidatorVersion,
+  foodPhotoValidatorVersions,
   foodPortionUnits,
   loadUnits,
   experienceLevels,
@@ -106,6 +106,10 @@ const aiRecoveryMigrationPath = path.resolve(
   __dirname,
   '../../../../infra/postgres/migrations/0017_reconcile_ai_explanation_runs.sql',
 )
+const adversarialAiSafetyMigrationPath = path.resolve(
+  __dirname,
+  '../../../../infra/postgres/migrations/0018_version_adversarial_ai_safety.sql',
+)
 
 describe('health-record migration drift', () => {
   it('contains every contract metric, unit and source kind', async () => {
@@ -184,13 +188,16 @@ describe('health-record migration drift', () => {
   })
 
   it('contains every AI explanation provenance and failure enum', async () => {
-    const migration = await readFile(aiMigrationPath, 'utf8')
+    const migration = `${await readFile(aiMigrationPath, 'utf8')}\n${await readFile(
+      adversarialAiSafetyMigrationPath,
+      'utf8',
+    )}`
     for (const value of [
       ...aiExplanationSources,
       ...aiExplanationProviders,
       ...aiWorkerFailureCodes,
-      aiPlanPromptVersion,
-      aiPlanValidatorVersion,
+      ...aiPlanPromptVersions,
+      ...aiPlanValidatorVersions,
     ]) {
       expect(migration, `${value} is missing from the AI migration`).toContain(`'${value}'`)
     }
@@ -214,14 +221,17 @@ describe('health-record migration drift', () => {
   })
 
   it('contains every food-photo lifecycle, provenance and contract version', async () => {
-    const migration = await readFile(foodPhotoMigrationPath, 'utf8')
+    const migration = `${await readFile(foodPhotoMigrationPath, 'utf8')}\n${await readFile(
+      adversarialAiSafetyMigrationPath,
+      'utf8',
+    )}`
     for (const value of [
       ...foodPhotoStatuses,
       ...foodPhotoSources,
       ...foodPhotoProviders,
       foodPhotoConsentPurpose,
-      foodPhotoPromptVersion,
-      foodPhotoValidatorVersion,
+      ...foodPhotoPromptVersions,
+      ...foodPhotoValidatorVersions,
     ]) {
       expect(migration, `${value} is missing from the food-photo migration`).toContain(`'${value}'`)
     }

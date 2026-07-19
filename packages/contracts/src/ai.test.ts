@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest'
 
 import {
   aiExplanationContentSchema,
+  aiExplanationSchema,
   aiPlanConsentVersion,
+  aiPlanPromptVersion,
+  aiPlanPromptVersions,
+  aiPlanValidatorVersion,
+  aiPlanValidatorVersions,
   aiWorkerResponseSchema,
   generateAiExplanationSchema,
 } from './ai'
@@ -26,6 +31,11 @@ const content = {
 }
 
 describe('AI explanation contracts', () => {
+  it('keeps each current provenance version inside its readable history', () => {
+    expect(aiPlanPromptVersions).toContain(aiPlanPromptVersion)
+    expect(aiPlanValidatorVersions).toContain(aiPlanValidatorVersion)
+  })
+
   it('requires explicit current-version consent', () => {
     expect(
       generateAiExplanationSchema.parse({
@@ -75,5 +85,24 @@ describe('AI explanation contracts', () => {
         latencyMs: 20_000,
       }).success,
     ).toBe(false)
+  })
+
+  it('reads historical validator provenance without using it for new worker calls', () => {
+    expect(
+      aiExplanationSchema.parse({
+        id: '11111111-1111-4111-8111-111111111111',
+        planId: '22222222-2222-4222-8222-222222222222',
+        planRevision: 2,
+        source: 'fixture',
+        provider: 'fixture',
+        model: 'fixture-plan-explainer-v1',
+        promptVersion: 'plan-explanation-v1',
+        validatorVersion: 'plan-explanation-safety-v1',
+        failureCode: null,
+        content,
+        safetyNote: '这是对既有计划的辅助解释，不是医疗诊断或处方；计划内容没有被 AI 自动修改。',
+        createdAt: '2026-07-19T08:00:00.000Z',
+      }).validatorVersion,
+    ).toBe('plan-explanation-safety-v1')
   })
 })

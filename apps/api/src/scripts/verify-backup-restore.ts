@@ -189,7 +189,7 @@ const main = async () => {
       backupDisposition: receipt.rows[0]?.backup_status,
     }
     if (
-      proof.restoredMigrationCount !== 17 ||
+      proof.restoredMigrationCount !== 18 ||
       proof.restoredUserBeforeLedger !== 1 ||
       proof.restoredSuppressionsBeforeLedger !== 0 ||
       proof.restoredIdentitySuppressions !== 1 ||

@@ -5,6 +5,10 @@ import {
   foodPhotoAnalysisSchema,
   foodPhotoCandidateContentSchema,
   foodPhotoConsentVersion,
+  foodPhotoPromptVersion,
+  foodPhotoPromptVersions,
+  foodPhotoValidatorVersion,
+  foodPhotoValidatorVersions,
 } from './food-photo'
 
 const content = {
@@ -23,6 +27,11 @@ const content = {
 }
 
 describe('food photo contracts', () => {
+  it('keeps current prompt and validator provenance inside readable history', () => {
+    expect(foodPhotoPromptVersions).toContain(foodPhotoPromptVersion)
+    expect(foodPhotoValidatorVersions).toContain(foodPhotoValidatorVersion)
+  })
+
   it('accepts bounded catalog candidate content', () => {
     expect(foodPhotoCandidateContentSchema.parse(content).candidates).toHaveLength(1)
   })

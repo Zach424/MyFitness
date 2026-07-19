@@ -8,7 +8,7 @@ def worker_request() -> WorkerRequest:
         {
             "requestId": "11111111-1111-4111-8111-111111111111",
             "promptVersion": "plan-explanation-v1",
-            "validatorVersion": "plan-explanation-safety-v1",
+            "validatorVersion": "plan-explanation-safety-v2",
             "context": {
                 "planId": "22222222-2222-4222-8222-222222222222",
                 "planRevision": 1,
@@ -59,8 +59,8 @@ def food_photo_worker_request() -> FoodPhotoWorkerRequest:
     return FoodPhotoWorkerRequest.model_validate(
         {
             "requestId": "33333333-3333-4333-8333-333333333333",
-            "promptVersion": "food-photo-candidates-v1",
-            "validatorVersion": "food-photo-catalog-safety-v1",
+            "promptVersion": "food-photo-candidates-v2",
+            "validatorVersion": "food-photo-catalog-safety-v2",
             "imageDataUrl": "data:image/jpeg;base64,/9j/2Q==",
             "allowedFoods": [
                 {"catalogKey": "rice_cooked", "label": "熟米饭", "category": "staple"},

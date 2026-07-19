@@ -1,6 +1,6 @@
 # Food-photo candidate model
 
-Status: durable private-media lifecycle implemented locally through iteration 015; production storage/provider approval remains gated
+Status: durable private-media lifecycle implemented through iteration 015; adversarial prompt/output boundary v2 implemented in iteration 024; production storage/provider approval remains gated
 
 ## Authority boundary
 
@@ -24,9 +24,11 @@ The model receives only the sanitized JPEG and an allow-list of versioned catalo
 
 ## Candidate contract and validation
 
-Prompt `food-photo-candidates-v1` returns 0–5 candidates with an exact catalog key/label, `low | medium | high` confidence word, broad integer gram range and short visual basis. It may request manual entry or reject an unsuitable image. It cannot output calories, macros, diagnosis, identity inference or food outside the supplied catalog.
+Prompt `food-photo-candidates-v2` returns 0–5 candidates with an exact catalog key/label, `low | medium | high` confidence word, broad integer gram range and short visual basis. It treats every word visible in the image as untrusted visual data: it must not follow, repeat or reveal image instructions/system messages, and an instruction-dominant image is rejected with no candidates and a manual path. It may otherwise request manual entry or reject an unsuitable image. It cannot output calories, macros, diagnosis, identity inference or food outside the supplied catalog.
 
-Validator `food-photo-catalog-safety-v1` rejects schema drift, duplicate/unknown keys, label mismatch, extreme catalog-relative portions, candidates attached to rejected content and empty responses without a manual path. Confirmation must select displayed catalog keys and integer grams inside the displayed ranges. There is deliberately no deterministic visual fallback: provider or validation failure deletes media and returns a typed failure rather than invented candidates.
+Validator `food-photo-catalog-safety-v2` rejects schema drift, duplicate/unknown keys, label mismatch, extreme catalog-relative portions, candidates attached to rejected content and empty responses without a manual path. It also applies the shared NFKC/format-character/separator policy to the displayed summary and visual basis, rejecting medical/prescriptive language and Chinese/English control-instruction leakage even when split by zero-width/full-width characters. Confirmation must select displayed catalog keys and integer grams inside the displayed ranges. There is deliberately no deterministic visual fallback: provider or validation failure deletes media and returns a typed failure rather than invented candidates.
+
+The public read contract accepts v1 and v2 provenance so a candidate created during a rolling deployment remains readable. New worker requests require prompt/validator v2. Migration 0018 widens the append-only provenance constraints rather than rewriting old rows.
 
 ## Media and consent lifecycle
 
@@ -65,3 +67,5 @@ Local Compose defaults to `fixture-food-photo-v1`, visibly labeled as a non-visu
 - `DELETE /v1/nutrition/photo-candidates/:id`: delete media and derived content.
 
 The committed OpenAPI document describes these contracts. Cross-origin uploads retain an explicit origin allow-list and enable credentials because Taro H5 `uploadFile` uses credentialed XHR; wildcard CORS is not allowed.
+
+The v2 deterministic corpus contains 11 exact-reason cases, including image-instruction leakage, zero-width medical claims and spaced full-width calorie prescriptions. It proves those encoded outputs are rejected, not that arbitrary real-world image attacks or visual quality are solved; expert-reviewed real/obfuscated images remain a release gate.

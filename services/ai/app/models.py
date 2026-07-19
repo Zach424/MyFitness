@@ -96,7 +96,7 @@ class PlanContext(ContractModel):
 class WorkerRequest(ContractModel):
     request_id: str
     prompt_version: Literal["plan-explanation-v1"]
-    validator_version: Literal["plan-explanation-safety-v1"]
+    validator_version: Literal["plan-explanation-safety-v2"]
     context: PlanContext
 
 
@@ -158,8 +158,8 @@ class FoodPhotoContent(ContractModel):
 
 class FoodPhotoWorkerRequest(ContractModel):
     request_id: str
-    prompt_version: Literal["food-photo-candidates-v1"]
-    validator_version: Literal["food-photo-catalog-safety-v1"]
+    prompt_version: Literal["food-photo-candidates-v2"]
+    validator_version: Literal["food-photo-catalog-safety-v2"]
     image_data_url: str = Field(pattern=r"^data:image/jpeg;base64,", max_length=12_000_000)
     allowed_foods: list[AllowedFood] = Field(min_length=1, max_length=100)
 

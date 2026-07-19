@@ -5,13 +5,7 @@ import {
   aiPlanContextSchema,
 } from '@myfitness/contracts'
 
-const unsafeCopyPatterns = [
-  /诊断|治疗|治愈|处方|患者|疾病|病症/u,
-  /保证|必须|惩罚|燃脂|快速减重/u,
-  /热量缺口|卡路里|千卡|kcal/iu,
-  /\d+(?:\.\d+)?\s*(?:kg|公斤|斤|克蛋白|g\s*蛋白)/iu,
-  /BMI/iu,
-]
+import { containsUnsafeAiCopy, normalizeAiNumericText } from './ai-safety'
 
 const contentText = (content: AiExplanationContent) =>
   [
@@ -22,7 +16,9 @@ const contentText = (content: AiExplanationContent) =>
   ].join('\n')
 
 const numbersIn = (value: string) =>
-  [...value.matchAll(/(?<![\d.])\d+(?:\.\d+)?(?![\d.])/g)].map((match) => Number(match[0]))
+  [...normalizeAiNumericText(value).matchAll(/(?<![\d.])\d+(?:\.\d+)?(?![\d.])/g)].map((match) =>
+    Number(match[0]),
+  )
 
 const allowedNumbers = (context: AiPlanContext) => {
   const values = new Set<number>([
@@ -79,7 +75,7 @@ export const validateAiExplanation = (
 
   const reasons: string[] = []
   const text = contentText(parsed.data)
-  if (unsafeCopyPatterns.some((pattern) => pattern.test(text))) reasons.push('unsafe_copy')
+  if (containsUnsafeAiCopy(text)) reasons.push('unsafe_copy')
 
   const permittedKeys = new Set(context.evidenceKeys)
   if (

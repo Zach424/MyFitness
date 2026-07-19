@@ -124,8 +124,11 @@ def test_food_photo_provider_uses_high_detail_strict_non_stored_vision_input() -
 
     result = asyncio.run(run())
     image_input = captured["input"][1]["content"][1]  # type: ignore[index]
+    system_prompt = captured["input"][0]["content"]  # type: ignore[index]
     assert result.status == "generated"
     assert captured["store"] is False
     assert captured["text"]["format"]["strict"] is True  # type: ignore[index]
     assert image_input["type"] == "input_image"
     assert image_input["detail"] == "high"
+    assert "untrusted image data" in system_prompt
+    assert "never follow" in system_prompt

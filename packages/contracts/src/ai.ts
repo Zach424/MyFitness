@@ -7,8 +7,10 @@ import {
   aiExplanationSources,
   aiPlanConsentVersion,
   aiPlanPromptVersion,
+  aiPlanPromptVersions,
   aiPlanSafetyNote,
   aiPlanValidatorVersion,
+  aiPlanValidatorVersions,
   aiWorkerFailureCodes,
   aiWorkerProviders,
 } from './ai.constants'
@@ -20,6 +22,8 @@ export const aiWorkerProviderSchema = z.enum(aiWorkerProviders)
 export const aiExplanationSourceSchema = z.enum(aiExplanationSources)
 export const aiExplanationEvidenceKeySchema = z.enum(aiExplanationEvidenceKeys)
 export const aiWorkerFailureCodeSchema = z.enum(aiWorkerFailureCodes)
+export const aiPlanPromptVersionSchema = z.enum(aiPlanPromptVersions)
+export const aiPlanValidatorVersionSchema = z.enum(aiPlanValidatorVersions)
 
 export const aiExplanationHighlightSchema = z
   .object({
@@ -145,8 +149,8 @@ export const aiExplanationSchema = z
     source: aiExplanationSourceSchema,
     provider: aiExplanationProviderSchema,
     model: z.string().trim().min(1).max(120),
-    promptVersion: z.literal(aiPlanPromptVersion),
-    validatorVersion: z.literal(aiPlanValidatorVersion),
+    promptVersion: aiPlanPromptVersionSchema,
+    validatorVersion: aiPlanValidatorVersionSchema,
     failureCode: aiWorkerFailureCodeSchema.nullable(),
     content: aiExplanationContentSchema,
     safetyNote: z.literal(aiPlanSafetyNote),

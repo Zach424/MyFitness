@@ -1,6 +1,6 @@
 # AI plan-explanation model
 
-Status: review-only explanations implemented in iteration 009; crash-safe pending-run recovery implemented in iteration 023
+Status: review-only explanations implemented in iteration 009; crash-safe pending-run recovery in iteration 023; adversarial output validator v2 in iteration 024
 
 ## Boundary
 
@@ -69,11 +69,15 @@ No billable production-model call was made in iteration 009. The HTTP adapter an
 
 ## Deterministic safety validation
 
-Validator version `plan-explanation-safety-v1` accepts only the shared Zod schema and then rejects:
+Validator version `plan-explanation-safety-v2` accepts only the shared Zod schema and then rejects:
 
 - medical, prescription, guarantee, punishment, rapid-loss, calorie, macro-target, or BMI phrases;
 - evidence keys outside the allow-list supplied with the request;
 - numeric claims not already present in the minimized context.
+
+Before policy matching, v2 applies Unicode NFKC, removes `Cf` format characters such as zero-width separators, lowercases Latin text and compacts whitespace/punctuation/symbol separators. This catches full-width or split `k c a l`, hidden Chinese medical phrases and Chinese/English instruction leakage such as “ignore previous instructions” or “system prompt”. Numeric grounding uses a separate normalized view: it converts full-width digits and joins separators only between digits, so an allowed `３５` remains grounded while a split `１ ２ ０ ０` is still an unsupported claim. Stored/displayed prose is never rewritten by normalization.
+
+The response contract accepts historical validator v1 or v2 provenance, while a new worker request requires v2. Migration 0018 widens only the database provenance constraint and preserves existing rows; it does not relabel historical results.
 
 Schema failure, refusal, provider failure, timeout, unsafe language, unknown evidence, or invented numbers all result in a deterministic explanation assembled from the same structured context. The fallback is visibly labeled and preserves the failure reason for operations.
 
@@ -81,8 +85,8 @@ The initial fixture used the harmless negation “不生成能量处方”. The 
 
 ## Evaluation and remaining gates
 
-The checked-in `plan-explanation-v1.json` evaluation set covers grounded output, an allowed plan number, calorie prescription, diagnosis, invented number, unknown evidence, and missing schema fields. `pnpm eval:ai` writes the reproducible report under `output/evals/`.
+The checked-in `plan-explanation-safety-v2.json` set contains 12 cases covering grounded output, ASCII/full-width allowed numbers, calorie prescription, diagnosis, invented numbers, schema/evidence failures, zero-width medical text, spaced full-width calorie targets and Chinese/English instruction leakage. Every case declares exact expected reasons, and `pnpm eval:ai` fails when output validity or the reason vector drifts. The reproducible report is `output/evals/iteration-024-plan-explanation-evaluation.json`.
 
 Private operations routes report only pending/expired/reconciled counts and oldest-pending time, and can run one bounded reconciliation pass. They require the independent operations token, return `no-store`, and expose no run ID, user ID, plan ID, prompt, context or explanation content.
 
-Before shared beta, add expert-reviewed Chinese cases, multilingual/obfuscated unsafe text, prompt-injection inputs, cost/latency budgets, route-specific rate limits, centralized lifecycle alerts, consent revocation/export review, provider data-processing review, and a real-provider canary approved by the project owner.
+Before shared beta, add expert-reviewed Chinese and multilingual cases, real/obfuscated prompt-injection inputs, homoglyph and semantic attacks beyond deterministic phrase matching, cost/latency budgets, route-specific rate limits, centralized lifecycle alerts, consent revocation/export review, provider data-processing review, and a real-provider canary approved by the project owner.

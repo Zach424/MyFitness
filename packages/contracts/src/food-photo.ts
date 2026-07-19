@@ -7,10 +7,12 @@ import {
   foodPhotoContentTypes,
   foodPhotoMaxBytes,
   foodPhotoPromptVersion,
+  foodPhotoPromptVersions,
   foodPhotoProviders,
   foodPhotoSources,
   foodPhotoStatuses,
   foodPhotoValidatorVersion,
+  foodPhotoValidatorVersions,
 } from './food-photo.constants'
 import { foodCategories } from './nutrition.constants'
 
@@ -21,6 +23,8 @@ export const foodPhotoConfidenceSchema = z.enum(foodPhotoConfidences)
 export const foodPhotoSourceSchema = z.enum(foodPhotoSources)
 export const foodPhotoProviderSchema = z.enum(foodPhotoProviders)
 export const foodPhotoContentTypeSchema = z.enum(foodPhotoContentTypes)
+export const foodPhotoPromptVersionSchema = z.enum(foodPhotoPromptVersions)
+export const foodPhotoValidatorVersionSchema = z.enum(foodPhotoValidatorVersions)
 
 export const foodPhotoConsentSchema = z
   .object({
@@ -93,8 +97,8 @@ export const foodPhotoAnalysisSchema = z
     source: foodPhotoSourceSchema.nullable(),
     provider: foodPhotoProviderSchema.nullable(),
     model: z.string().trim().min(1).max(120).nullable(),
-    promptVersion: z.literal(foodPhotoPromptVersion),
-    validatorVersion: z.literal(foodPhotoValidatorVersion),
+    promptVersion: foodPhotoPromptVersionSchema,
+    validatorVersion: foodPhotoValidatorVersionSchema,
     failureCode: z.enum(aiWorkerFailureCodes).nullable(),
     mediaDeleted: z.boolean(),
     mediaDeletionStatus: z.enum(['not_required', 'pending', 'deleted']),

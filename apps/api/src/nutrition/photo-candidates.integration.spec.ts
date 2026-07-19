@@ -97,6 +97,8 @@ describe('private food-photo candidates with PostgreSQL and fixture worker', () 
       status: 'ready',
       source: 'fixture',
       provider: 'fixture',
+      promptVersion: 'food-photo-candidates-v2',
+      validatorVersion: 'food-photo-catalog-safety-v2',
       mediaDeleted: false,
     })
     expect(

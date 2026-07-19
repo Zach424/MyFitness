@@ -5,6 +5,8 @@ import {
   type FoodPhotoCandidateContent,
 } from '@myfitness/contracts'
 
+import { containsUnsafeAiCopy } from './ai-safety'
+
 const catalogByKey = new Map<string, (typeof starterFoodCatalog)[number]>(
   starterFoodCatalog.map((food) => [food.foodKey, food]),
 )
@@ -16,6 +18,11 @@ export const validateFoodPhotoCandidates = (value: unknown): FoodPhotoValidation
   const parsed = foodPhotoCandidateContentSchema.safeParse(value)
   if (!parsed.success) return { valid: false, reason: 'schema_invalid' }
   const content = parsed.data
+  const displayCopy = [
+    content.summary,
+    ...content.candidates.map((candidate) => candidate.visualBasis),
+  ].join('\n')
+  if (containsUnsafeAiCopy(displayCopy)) return { valid: false, reason: 'unsafe_copy' }
 
   if (content.safetyStatus === 'rejected') {
     return content.candidates.length === 0 && content.needsManualEntry

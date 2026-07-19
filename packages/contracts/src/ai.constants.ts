@@ -19,8 +19,13 @@ export const aiWorkerFailureCodes = [
   'safety_validation_failed',
 ] as const
 
+export const aiPlanPromptVersions = ['plan-explanation-v1'] as const
+export const aiPlanValidatorVersions = [
+  'plan-explanation-safety-v1',
+  'plan-explanation-safety-v2',
+] as const
 export const aiPlanPromptVersion = 'plan-explanation-v1' as const
-export const aiPlanValidatorVersion = 'plan-explanation-safety-v1' as const
+export const aiPlanValidatorVersion = 'plan-explanation-safety-v2' as const
 export const aiPlanConsentVersion = 'ai-plan-explanation-2026-07-19.v1' as const
 export const aiRunRecoveryModel = 'orchestrator-recovery-v1' as const
 export const aiPlanSafetyNote =

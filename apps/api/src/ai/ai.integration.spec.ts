@@ -116,7 +116,7 @@ describe('AI plan explanations with PostgreSQL and fixture worker', () => {
       provider: 'fixture',
       model: 'fixture-plan-explainer-v1',
       promptVersion: 'plan-explanation-v1',
-      validatorVersion: 'plan-explanation-safety-v1',
+      validatorVersion: 'plan-explanation-safety-v2',
       failureCode: null,
     })
     expect(generated.body.content.highlights).toHaveLength(3)

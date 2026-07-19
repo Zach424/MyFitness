@@ -529,7 +529,7 @@
                     "promptVersion": { "type": "string", "enum": ["plan-explanation-v1"] },
                     "validatorVersion": {
                       "type": "string",
-                      "enum": ["plan-explanation-safety-v1"]
+                      "enum": ["plan-explanation-safety-v1", "plan-explanation-safety-v2"]
                     },
                     "failureCode": {
                       "nullable": true,
@@ -681,7 +681,7 @@
                           "promptVersion": { "type": "string", "enum": ["plan-explanation-v1"] },
                           "validatorVersion": {
                             "type": "string",
-                            "enum": ["plan-explanation-safety-v1"]
+                            "enum": ["plan-explanation-safety-v1", "plan-explanation-safety-v2"]
                           },
                           "failureCode": {
                             "nullable": true,
@@ -3807,11 +3807,11 @@
                           },
                           "promptVersion": {
                             "type": "string",
-                            "enum": ["food-photo-candidates-v1"]
+                            "enum": ["food-photo-candidates-v1", "food-photo-candidates-v2"]
                           },
                           "validatorVersion": {
                             "type": "string",
-                            "enum": ["food-photo-catalog-safety-v1"]
+                            "enum": ["food-photo-catalog-safety-v1", "food-photo-catalog-safety-v2"]
                           },
                           "failureCode": {
                             "nullable": true,
@@ -3969,10 +3969,13 @@
                       "minLength": 1,
                       "maxLength": 120
                     },
-                    "promptVersion": { "type": "string", "enum": ["food-photo-candidates-v1"] },
+                    "promptVersion": {
+                      "type": "string",
+                      "enum": ["food-photo-candidates-v1", "food-photo-candidates-v2"]
+                    },
                     "validatorVersion": {
                       "type": "string",
-                      "enum": ["food-photo-catalog-safety-v1"]
+                      "enum": ["food-photo-catalog-safety-v1", "food-photo-catalog-safety-v2"]
                     },
                     "failureCode": {
                       "nullable": true,
