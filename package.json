@@ -28,6 +28,7 @@
     "deploy:verify": "node scripts/verify-deployment.mjs",
     "deploy:smoke": "node scripts/run-deployment-smoke.mjs",
     "deploy:admit": "node scripts/deployment-admission.mjs verify",
+    "release:client": "node scripts/client-release.mjs",
     "release:verify": "node scripts/release-manifest.mjs verify",
     "test": "vitest run",
     "test:ai": "python -m pytest services/ai/tests -q",

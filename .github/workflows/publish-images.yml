@@ -1,4 +1,4 @@
-name: Publish OCI images
+name: Publish immutable release
 
 on:
   push:
@@ -18,10 +18,35 @@ permissions:
   contents: read
 
 env:
+  CLIENT_API_BASE_URL: ${{ vars.MYFITNESS_CLIENT_API_BASE_URL }}
   RELEASE_TAG: ${{ github.event_name == 'push' && github.ref_name || inputs.release_tag }}
 
 jobs:
+  qualify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24.13.0
+      - name: Validate immutable release inputs
+        env:
+          EXPECTED_REF: refs/tags/${{ env.RELEASE_TAG }}
+        run: |
+          set -euo pipefail
+          node scripts/release-manifest.mjs qualify --version "${RELEASE_TAG}"
+          node scripts/client-release.mjs qualify \
+            --version "${RELEASE_TAG}" \
+            --api-base-url "${CLIENT_API_BASE_URL}"
+          if [[ "${GITHUB_REF}" != "${EXPECTED_REF}" ]]; then
+            echo "Workflow ref ${GITHUB_REF} must equal ${EXPECTED_REF}." >&2
+            exit 1
+          fi
+          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+
   publish:
+    needs: qualify
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     permissions:
@@ -47,17 +72,6 @@ jobs:
             image: ghcr.io/zach424/myfitness-ai
     steps:
       - uses: actions/checkout@v6
-      - name: Validate immutable release ref
-        env:
-          EXPECTED_REF: refs/tags/${{ env.RELEASE_TAG }}
-        run: |
-          set -euo pipefail
-          node scripts/release-manifest.mjs qualify --version "${RELEASE_TAG}"
-          if [[ "${GITHUB_REF}" != "${EXPECTED_REF}" ]]; then
-            echo "Workflow ref ${GITHUB_REF} must equal ${EXPECTED_REF}." >&2
-            exit 1
-          fi
-          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
@@ -119,8 +133,83 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  package-clients:
+    needs: qualify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      MYFITNESS_CLIENT_RELEASE_VERSION: ${{ github.event_name == 'push' && github.ref_name || inputs.release_tag }}
+      MYFITNESS_CLIENT_SOURCE_REPOSITORY: ${{ github.repository }}
+      MYFITNESS_CLIENT_SOURCE_REVISION: ${{ github.sha }}
+      MYFITNESS_CLIENT_WORKFLOW_RUN_ATTEMPT: ${{ github.run_attempt }}
+      MYFITNESS_CLIENT_WORKFLOW_RUN_ID: ${{ github.run_id }}
+      TARO_APP_API_BASE_URL: ${{ vars.MYFITNESS_CLIENT_API_BASE_URL }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.9.0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24.13.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build and package H5 preview
+        env:
+          TARO_APP_AUTH_MODE: dev
+        run: |
+          set -euo pipefail
+          pnpm build:h5
+          node scripts/client-release.mjs package \
+            --platform h5 \
+            --build-root apps/client/dist-h5 \
+            --artifact "${RUNNER_TEMP}/client-release/myfitness-client-h5.tar" \
+            --fragment "${RUNNER_TEMP}/client-release/client-release-fragment-h5.json" \
+            --repository "${GITHUB_REPOSITORY}" \
+            --revision "${GITHUB_SHA}" \
+            --version "${RELEASE_TAG}" \
+            --run-id "${GITHUB_RUN_ID}" \
+            --run-attempt "${GITHUB_RUN_ATTEMPT}"
+      - name: Build and package WeApp candidate
+        env:
+          TARO_APP_AUTH_MODE: wechat
+        run: |
+          set -euo pipefail
+          pnpm build:weapp
+          node scripts/client-release.mjs package \
+            --platform weapp \
+            --build-root apps/client/dist-weapp \
+            --artifact "${RUNNER_TEMP}/client-release/myfitness-client-weapp.tar" \
+            --fragment "${RUNNER_TEMP}/client-release/client-release-fragment-weapp.json" \
+            --repository "${GITHUB_REPOSITORY}" \
+            --revision "${GITHUB_SHA}" \
+            --version "${RELEASE_TAG}" \
+            --run-id "${GITHUB_RUN_ID}" \
+            --run-attempt "${GITHUB_RUN_ATTEMPT}"
+      - name: Assemble immutable client release manifest
+        run: |
+          set -euo pipefail
+          node scripts/client-release.mjs assemble \
+            --input-dir "${RUNNER_TEMP}/client-release" \
+            --published-at "$(date -u +'%Y-%m-%dT%H:%M:%S.000Z')" \
+            --output "${RUNNER_TEMP}/client-release/client-release-manifest.json"
+          (
+            cd "${RUNNER_TEMP}/client-release"
+            sha256sum client-release-manifest.json > client-release-manifest.sha256
+          )
+      - uses: actions/upload-artifact@v7
+        with:
+          name: client-release-bundle
+          path: |
+            ${{ runner.temp }}/client-release/myfitness-client-h5.tar
+            ${{ runner.temp }}/client-release/myfitness-client-weapp.tar
+            ${{ runner.temp }}/client-release/client-release-manifest.json
+            ${{ runner.temp }}/client-release/client-release-manifest.sha256
+          if-no-files-found: error
+          retention-days: 7
+
   release-record:
-    needs: publish
+    needs: [publish, package-clients]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -132,7 +221,11 @@ jobs:
           pattern: release-fragment-*
           path: ${{ runner.temp }}/release-fragments
           merge-multiple: true
-      - name: Assemble and verify release manifest
+      - uses: actions/download-artifact@v8
+        with:
+          name: client-release-bundle
+          path: ${{ runner.temp }}/release-record
+      - name: Assemble and verify release manifests
         env:
           INPUT_DIRECTORY: ${{ runner.temp }}/release-fragments
           OUTPUT_DIRECTORY: ${{ runner.temp }}/release-record
@@ -155,12 +248,28 @@ jobs:
             > "${OUTPUT_DIRECTORY}/release-verification.json"
           (
             cd "${OUTPUT_DIRECTORY}"
+            sha256sum --check client-release-manifest.sha256
+          )
+          node scripts/client-release.mjs verify \
+            --file "${OUTPUT_DIRECTORY}/client-release-manifest.json" \
+            --artifact-dir "${OUTPUT_DIRECTORY}" \
+            --service-release "${OUTPUT_DIRECTORY}/release-manifest.json" \
+            --expected-repository "${SOURCE_REPOSITORY}" \
+            --expected-revision "${SOURCE_REVISION}" \
+            --expected-version "${RELEASE_TAG}" \
+            > "${OUTPUT_DIRECTORY}/client-release-verification.json"
+          (
+            cd "${OUTPUT_DIRECTORY}"
             sha256sum release-manifest.json > release-manifest.sha256
           )
           {
             echo '### Immutable release record'
             echo '```json'
             cat "${OUTPUT_DIRECTORY}/release-verification.json"
+            echo '```'
+            echo '### Immutable client release record'
+            echo '```json'
+            cat "${OUTPUT_DIRECTORY}/client-release-verification.json"
             echo '```'
           } >> "${GITHUB_STEP_SUMMARY}"
       - uses: actions/upload-artifact@v7
@@ -170,6 +279,11 @@ jobs:
             ${{ runner.temp }}/release-record/release-manifest.json
             ${{ runner.temp }}/release-record/release-manifest.sha256
             ${{ runner.temp }}/release-record/release-verification.json
+            ${{ runner.temp }}/release-record/client-release-manifest.json
+            ${{ runner.temp }}/release-record/client-release-manifest.sha256
+            ${{ runner.temp }}/release-record/client-release-verification.json
+            ${{ runner.temp }}/release-record/myfitness-client-h5.tar
+            ${{ runner.temp }}/release-record/myfitness-client-weapp.tar
           if-no-files-found: error
           retention-days: 90
       - name: Publish immutable GitHub release assets
@@ -190,6 +304,11 @@ jobs:
             "${RECORD_DIRECTORY}/release-manifest.json" \
             "${RECORD_DIRECTORY}/release-manifest.sha256" \
             "${RECORD_DIRECTORY}/release-verification.json" \
+            "${RECORD_DIRECTORY}/client-release-manifest.json" \
+            "${RECORD_DIRECTORY}/client-release-manifest.sha256" \
+            "${RECORD_DIRECTORY}/client-release-verification.json" \
+            "${RECORD_DIRECTORY}/myfitness-client-h5.tar" \
+            "${RECORD_DIRECTORY}/myfitness-client-weapp.tar" \
             --verify-tag \
             --title "MyFitness ${RELEASE_TAG}" \
             --generate-notes \

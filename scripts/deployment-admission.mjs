@@ -4,10 +4,16 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
+import {
+  assertClientMatchesServiceRelease,
+  clientPlatforms,
+  validateClientReleaseManifest,
+  verifyClientReleaseArtifacts,
+} from './client-release.mjs'
 import { releaseServices, validateReleaseManifest } from './release-manifest.mjs'
 
 export const environmentSchemaVersion = 'myfitness-managed-environment/v1'
-export const admissionSchemaVersion = 'myfitness-deployment-admission/v1'
+export const admissionSchemaVersion = 'myfitness-deployment-admission/v2'
 
 const projectRepository = 'Zach424/MyFitness'
 const runtimeSecretNames = [
@@ -344,14 +350,30 @@ const validateManifestDigest = (value, name) => {
   return exact
 }
 
-const releaseSummary = (release, manifestSha256) => ({
+const releaseSummary = (release, manifestSha256, clientRelease, clientManifestSha256) => ({
   version: release.version,
   source: release.source,
   workflow: release.workflow,
   publishedAt: release.publishedAt,
   manifestSha256: validateManifestDigest(manifestSha256, 'release manifest digest'),
+  clientPublishedAt: clientRelease.publishedAt,
+  clientManifestSha256: validateManifestDigest(
+    clientManifestSha256,
+    'client release manifest digest',
+  ),
   images: Object.fromEntries(
     releaseServices.map((service) => [service, release.images[service].reference]),
+  ),
+  clients: Object.fromEntries(
+    clientPlatforms.map((platform) => [
+      platform,
+      {
+        runtime: clientRelease.clients[platform].runtime,
+        deliveryClass: clientRelease.clients[platform].deliveryClass,
+        adapter: clientRelease.clients[platform].adapter,
+        artifact: clientRelease.clients[platform].artifact,
+      },
+    ]),
   ),
 })
 
@@ -359,15 +381,27 @@ export const createDeploymentAdmission = ({
   environment,
   release,
   releaseManifestSha256,
+  clientRelease,
+  clientReleaseManifestSha256,
   rollbackMode,
   previousRelease,
   previousReleaseManifestSha256,
+  previousClientRelease,
+  previousClientReleaseManifestSha256,
   evaluatedAt,
 }) => {
   const checkedEnvironment = validateManagedEnvironment(environment)
   const checkedRelease = validateReleaseManifest(release, {
     expectedRepository: projectRepository,
   })
+  const checkedClientRelease = validateClientReleaseManifest(clientRelease, {
+    expectedRepository: projectRepository,
+  })
+  assertClientMatchesServiceRelease(checkedClientRelease, checkedRelease)
+  const expectedApiBaseUrl = `${checkedEnvironment.endpoints.apiOrigin}/v1`
+  if (checkedClientRelease.clients.h5.runtime.apiBaseUrl !== expectedApiBaseUrl) {
+    fail(`client release API base URL must match the managed API origin ${expectedApiBaseUrl}`)
+  }
   if (!['no-traffic', 'previous-release'].includes(rollbackMode)) {
     fail('rollback mode must be no-traffic or previous-release')
   }
@@ -377,20 +411,39 @@ export const createDeploymentAdmission = ({
     if (checkedEnvironment.deployment.stage !== 'shared-test') {
       fail('no-traffic rollback is allowed only for a first shared-test deployment')
     }
-    if (previousRelease || previousReleaseManifestSha256) {
-      fail('no-traffic rollback must not include a previous release')
+    if (
+      previousRelease ||
+      previousReleaseManifestSha256 ||
+      previousClientRelease ||
+      previousClientReleaseManifestSha256
+    ) {
+      fail('no-traffic rollback must not include a previous service or client release')
     }
     rollback = {
       mode: 'no-traffic',
       action: 'withdraw-public-traffic-and-scale-application-services-to-zero',
     }
   } else {
-    if (!previousRelease || !previousReleaseManifestSha256) {
-      fail('previous-release rollback requires a verified previous release and digest')
+    if (
+      !previousRelease ||
+      !previousReleaseManifestSha256 ||
+      !previousClientRelease ||
+      !previousClientReleaseManifestSha256
+    ) {
+      fail('previous-release rollback requires verified previous service and client releases')
     }
     const checkedPrevious = validateReleaseManifest(previousRelease, {
       expectedRepository: projectRepository,
     })
+    const checkedPreviousClient = validateClientReleaseManifest(previousClientRelease, {
+      expectedRepository: projectRepository,
+    })
+    assertClientMatchesServiceRelease(checkedPreviousClient, checkedPrevious)
+    if (checkedPreviousClient.clients.h5.runtime.apiBaseUrl !== expectedApiBaseUrl) {
+      fail(
+        `previous client release API base URL must match the managed API origin ${expectedApiBaseUrl}`,
+      )
+    }
     if (
       checkedPrevious.version === checkedRelease.version ||
       checkedPrevious.source.revision === checkedRelease.source.revision
@@ -402,11 +455,21 @@ export const createDeploymentAdmission = ({
     }
     rollback = {
       mode: 'previous-release',
-      release: releaseSummary(checkedPrevious, previousReleaseManifestSha256),
+      release: releaseSummary(
+        checkedPrevious,
+        previousReleaseManifestSha256,
+        checkedPreviousClient,
+        previousClientReleaseManifestSha256,
+      ),
     }
   }
 
-  const releaseRecord = releaseSummary(checkedRelease, releaseManifestSha256)
+  const releaseRecord = releaseSummary(
+    checkedRelease,
+    releaseManifestSha256,
+    checkedClientRelease,
+    clientReleaseManifestSha256,
+  )
   return {
     schemaVersion: admissionSchemaVersion,
     status: 'admitted',
@@ -448,6 +511,36 @@ export const createDeploymentAdmission = ({
       { sequence: 6, action: 'verify-health-identity-custody-and-telemetry' },
       { sequence: 7, action: 'shift-bounded-canary-traffic' },
     ],
+    clientDeliveryOrder: [
+      {
+        sequence: 1,
+        action: 'verify-client-artifact-bytes-before-upload',
+        artifacts: Object.fromEntries(
+          clientPlatforms.map((platform) => [
+            platform,
+            {
+              fileName: releaseRecord.clients[platform].artifact.fileName,
+              digest: releaseRecord.clients[platform].artifact.digest,
+            },
+          ]),
+        ),
+      },
+      {
+        sequence: 2,
+        action: 'hold-h5-preview-from-public-traffic',
+        reason: 'preview-only-dev-authentication-is-not-a-production-identity',
+      },
+      {
+        sequence: 3,
+        action: 'upload-weapp-candidate-to-private-preview',
+        artifact: releaseRecord.clients.weapp.artifact.fileName,
+        digest: releaseRecord.clients.weapp.artifact.digest,
+      },
+      {
+        sequence: 4,
+        action: 'require-real-device-identity-and-data-custody-evidence-before-weapp-submission',
+      },
+    ],
     rollback,
   }
 }
@@ -469,11 +562,12 @@ const parseArguments = (values) => {
 
 const sha256 = (value) => `sha256:${createHash('sha256').update(value).digest('hex')}`
 
-const readJsonWithChecksum = async (jsonPath, checksumPath, name) => {
+const readJsonWithChecksum = async (jsonPath, checksumPath, name, expectedFileName) => {
   const bytes = await readFile(resolve(jsonPath))
   const checksum = (await readFile(resolve(checksumPath), 'utf8')).trim()
-  const match = /^([0-9a-f]{64})  release-manifest\.json$/.exec(checksum)
-  if (!match) fail(`${name} checksum must use sha256sum release-manifest.json format`)
+  const escapedFileName = expectedFileName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const match = new RegExp(`^([0-9a-f]{64})  ${escapedFileName}$`).exec(checksum)
+  if (!match) fail(`${name} checksum must use sha256sum ${expectedFileName} format`)
   const actual = sha256(bytes)
   const expected = `sha256:${match[1]}`
   if (actual !== expected) fail(`${name} checksum does not match its release manifest`)
@@ -491,11 +585,20 @@ const commandVerify = async (args) => {
     'environment',
     'release',
     'release-checksum',
+    'client-release',
+    'client-release-checksum',
+    'client-artifact-dir',
     'rollback-mode',
     'evaluated-at',
     'output',
   ]
-  const previous = ['previous-release', 'previous-release-checksum']
+  const previous = [
+    'previous-release',
+    'previous-release-checksum',
+    'previous-client-release',
+    'previous-client-release-checksum',
+    'previous-client-artifact-dir',
+  ]
   const expected = args['rollback-mode'] === 'previous-release' ? [...common, ...previous] : common
   const actual = Object.keys(args).sort()
   if (actual.join('\n') !== expected.sort().join('\n')) {
@@ -507,22 +610,60 @@ const commandVerify = async (args) => {
     args.release,
     args['release-checksum'],
     'target release',
+    'release-manifest.json',
   )
+  const clientRelease = await readJsonWithChecksum(
+    args['client-release'],
+    args['client-release-checksum'],
+    'target client release',
+    'client-release-manifest.json',
+  )
+  await verifyClientReleaseArtifacts(clientRelease.value, args['client-artifact-dir'], {
+    expectedRepository: projectRepository,
+    expectedRevision: release.value.source?.revision,
+    expectedVersion: release.value.version,
+  })
+  assertClientMatchesServiceRelease(clientRelease.value, release.value)
   const previousRelease = args['previous-release']
     ? await readJsonWithChecksum(
         args['previous-release'],
         args['previous-release-checksum'],
         'previous release',
+        'release-manifest.json',
       )
     : undefined
+  const previousClientRelease = args['previous-client-release']
+    ? await readJsonWithChecksum(
+        args['previous-client-release'],
+        args['previous-client-release-checksum'],
+        'previous client release',
+        'client-release-manifest.json',
+      )
+    : undefined
+  if (previousClientRelease) {
+    await verifyClientReleaseArtifacts(
+      previousClientRelease.value,
+      args['previous-client-artifact-dir'],
+      {
+        expectedRepository: projectRepository,
+        expectedRevision: previousRelease?.value.source?.revision,
+        expectedVersion: previousRelease?.value.version,
+      },
+    )
+    assertClientMatchesServiceRelease(previousClientRelease.value, previousRelease.value)
+  }
 
   const admission = createDeploymentAdmission({
     environment,
     release: release.value,
     releaseManifestSha256: release.digest,
+    clientRelease: clientRelease.value,
+    clientReleaseManifestSha256: clientRelease.digest,
     rollbackMode: args['rollback-mode'],
     previousRelease: previousRelease?.value,
     previousReleaseManifestSha256: previousRelease?.digest,
+    previousClientRelease: previousClientRelease?.value,
+    previousClientReleaseManifestSha256: previousClientRelease?.digest,
     evaluatedAt: args['evaluated-at'],
   })
   await writeJson(args.output, admission)
@@ -536,6 +677,7 @@ const commandVerify = async (args) => {
           version: admission.release.version,
           revision: admission.release.source.revision,
           manifestSha256: admission.release.manifestSha256,
+          clientManifestSha256: admission.release.clientManifestSha256,
         },
         rollbackMode: admission.rollback.mode,
         output: resolve(args.output),

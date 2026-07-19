@@ -2,7 +2,7 @@
 
 The roadmap is organized as controlled iterations. A round may take several working sessions, but it ends only after implementation, validation, archive update, and a commit.
 
-Progress snapshot (2026-07-19): iterations 0–19 are complete, including green hosted quality/smoke and the verified `v0.1.0-rc.1` GHCR/GitHub prerelease. Iteration 20 adds a strict non-secret managed-environment admission record before any cloud credential or traffic is involved. Production audit critical/high findings are zero; actual managed infrastructure, owner approvals, real WeChat credentials/device/domain proof, H5 release identity, cloud custody, centralized alerting and model/provider approval remain gated.
+Progress snapshot (2026-07-19): iterations 0–20 are complete, including green hosted quality/smoke, verified service-only `v0.1.0-rc.1` assets and strict managed-environment admission. Iteration 21 implements deterministic source-bound H5/WeApp TARs and upgrades admission to verify both client archives alongside the service release. A new tag is intentionally not published until an owner-approved client API URL exists. Managed infrastructure, owner approvals, real WeChat credentials/device/domain proof, H5 production identity, cloud custody, centralized alerting and model/provider approval remain gated.
 
 | Iteration | Primary scope                                       | Exit evidence                                                                                    |
 | --------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
@@ -27,7 +27,7 @@ Progress snapshot (2026-07-19): iterations 0–19 are complete, including green 
 | 18        | Hermetic CI bootstrap                               | Dependency-free unit/contract generation, Node 24 actions and green hosted quality/image smoke   |
 | 19        | Immutable OCI release promotion                     | One strict digest manifest, provenance, candidate GHCR/GitHub Release and pull proof             |
 | 20        | Managed environment admission                       | Strict non-secret inventory, release/checksum binding, ordered plan and explicit rollback        |
-| 21        | Immutable client delivery artifacts                 | Deterministic H5/WeApp bundles, checksums, source binding and admission integration              |
+| 21        | Immutable client delivery artifacts                 | Deterministic H5/WeApp TARs, checksums, source/API binding and byte-level admission integration  |
 | 22        | Managed shared test deployment                      | Managed services/secrets, real WeChat proof, telemetry, calibrated limits and rollback           |
 | 23        | Beta hardening and release                          | H5 identity, security review, budgets, accessibility, filing artifacts and staged rollout        |
 | 24        | Native App feasibility and device sync              | Retention gate reviewed; HealthKit/Health Connect/Huawei proof of concept                        |

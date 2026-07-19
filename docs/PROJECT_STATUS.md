@@ -2,7 +2,7 @@
 
 Last reviewed: 2026-07-19
 
-Stage: first immutable candidate published and verified; managed-environment admission is locally green before external shared infrastructure
+Stage: first service candidate published; deterministic client release and combined admission are locally green before the next candidate and external shared infrastructure
 
 Primary release target: WeChat Mini Program + responsive H5
 
@@ -12,20 +12,20 @@ MyFitness / 衡迹 turns body, training, nutrition, and recovery records into sa
 
 ## Module status
 
-| Module                  | Status                       | Current evidence                                                    | Next gate                                   |
-| ----------------------- | ---------------------------- | ------------------------------------------------------------------- | ------------------------------------------- |
-| Product scope           | Done for MVP baseline        | `docs/product/PRODUCT_BRIEF.md`                                     | Validate with target-user interviews        |
-| Delivery roadmap        | Done for planning baseline   | `docs/product/ROADMAP.md`                                           | Package iteration 21 client artifacts       |
-| Design language         | Partial, eleven flows tested | Core flows + 22 reviewed screenshots                                | Large text, keyboard and remaining states   |
-| Client: Mini Program/H5 | Partial                      | WeChat-mode WeApp + development H5 build and product loop           | Real-device WeChat proof and H5 identity    |
-| Admin console           | Partial, local slice done    | OIDC BFF, exact lookup, role split and Evidence Rail exercised      | Select IdP, owner, retention and deployment |
-| Business API            | Partial                      | Verified identity plus non-root self-contained OCI runtime          | Shared deployment and real credential proof |
-| Domain rules            | Partial                      | Safety validators + strict privacy action contracts                 | Add release policy enforcement              |
-| AI service              | Partial                      | Text/vision fixture/OpenAI adapters + 15 eval cases                 | Approved real-provider canary               |
-| Native App/devices      | Deferred                     | Phase-two decision                                                  | MVP retention gate reached                  |
-| Privacy/compliance      | Partial, durable local proof | Erasure, identity suppression and backup-ledger replay exercised    | Production retention/provider/legal review  |
-| Testing/observability   | Partial                      | 122 unit tests; hosted quality/smoke/release green                  | Centralize alerts/tracing                   |
-| Deployment              | Partial, admission ready     | Remote immutable release + local strict non-secret environment gate | Approve dossier, provision and canary       |
+| Module                  | Status                       | Current evidence                                                   | Next gate                                   |
+| ----------------------- | ---------------------------- | ------------------------------------------------------------------ | ------------------------------------------- |
+| Product scope           | Done for MVP baseline        | `docs/product/PRODUCT_BRIEF.md`                                    | Validate with target-user interviews        |
+| Delivery roadmap        | Done for planning baseline   | `docs/product/ROADMAP.md`                                          | Execute iteration 22 managed shared test    |
+| Design language         | Partial, eleven flows tested | Core flows + 22 reviewed screenshots                               | Large text, keyboard and remaining states   |
+| Client: Mini Program/H5 | Partial                      | Source-bound WeApp candidate + preview-only H5 deterministic TARs  | Publish next candidate; device/H5 identity  |
+| Admin console           | Partial, local slice done    | OIDC BFF, exact lookup, role split and Evidence Rail exercised     | Select IdP, owner, retention and deployment |
+| Business API            | Partial                      | Verified identity plus non-root self-contained OCI runtime         | Shared deployment and real credential proof |
+| Domain rules            | Partial                      | Safety validators + strict privacy action contracts                | Add release policy enforcement              |
+| AI service              | Partial                      | Text/vision fixture/OpenAI adapters + 15 eval cases                | Approved real-provider canary               |
+| Native App/devices      | Deferred                     | Phase-two decision                                                 | MVP retention gate reached                  |
+| Privacy/compliance      | Partial, durable local proof | Erasure, identity suppression and backup-ledger replay exercised   | Production retention/provider/legal review  |
+| Testing/observability   | Partial                      | 132 unit tests; hosted quality/smoke/release baseline green        | Green implementing CI; centralize telemetry |
+| Deployment              | Partial, admission ready     | Service/client byte gate + strict non-secret environment admission | Approve dossier, provision and canary       |
 
 Status vocabulary: `Done` means validated for the present stage, `Partial` means usable but missing a named gate, `Pending` means not implemented, and `Deferred` means intentionally outside the current release.
 
@@ -64,7 +64,8 @@ Status vocabulary: `Done` means validated for the present stage, `Partial` means
 - A disposable pinned Compose topology runs a one-shot migration before traffic and black-box verifies image health, dependency readiness, request correlation and administrator security headers. GitHub Actions defines full quality/image smoke plus multi-architecture GHCR publication with provenance.
 - The Nest API has typed `runtime` and `metadata` startup policies: production/integration retain dependency checks and maintenance workers, while OpenAPI/CORS inspection and contract generation assemble the real graph without external startup I/O.
 - A dependency-free `myfitness-release/v1` control plane binds API, administrator and AI digests to one SemVer tag, full source revision and workflow run; the tag workflow rejects mixed fragments and publishes checksummed, non-overwritable GitHub Release assets.
-- A dependency-free `myfitness-managed-environment/v1` admission boundary requires explicit account/budget, distinct public origins, secret-manager references, data-custody owners, telemetry and AI policy evidence before binding the verified release to migration/private-service/canary order and an explicit rollback mode.
+- A dependency-free `myfitness-client-release/v1` control plane packages sorted, fixed-metadata USTAR H5/WeApp roots, verifies canonical bytes and tree digests, and binds both platforms to one source/workflow/API base. H5 is explicitly `preview-only` with development identity; WeApp is a `candidate` with WeChat identity.
+- `myfitness-managed-environment/v1` plus `myfitness-deployment-admission/v2` require explicit account/budget, distinct public origins, secret-manager references, data-custody owners, telemetry and AI policy evidence before binding both verified release planes to migration/private-service/canary order, guarded client delivery and an explicit rollback mode.
 
 ## Current risks
 
@@ -72,7 +73,7 @@ Status vocabulary: `Done` means validated for the present stage, `Partial` means
 | -------------------------------------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------ |
 | Production audit retains six moderate Taro build-chain advisories                      | Medium | Remove through a supported Taro/build-chain upgrade; rerun graph, dual-build and E2E proof             |
 | Offline admission cannot prove external references exist or were genuinely approved    | High   | Create/dereference the dossier inside a protected change system; never deploy from local success alone |
-| H5 and WeApp build outputs are not bound into the immutable release record             | High   | Package deterministic client artifacts, checksums and source provenance before managed client delivery |
+| The published `v0.1.0-rc.1` predates client release assets                             | Medium | Set an approved client API URL and publish/verify a new tag; never mutate the existing release         |
 | Scope may expand before the recording loop is proven                                   | High   | Enforce MVP exclusions and one-scope iteration archives                                                |
 | Food-photo portion estimates can be misleading                                         | High   | Catalog-bound ranges/confidence, user edit, no auto-write; broaden real-image evaluation               |
 | AI may generate unsafe training or diet changes                                        | High   | Deterministic constraints and validators precede model output                                          |
@@ -111,4 +112,4 @@ The MVP cannot enter public beta until all of the following are reproducible:
 
 ## Primary next step
 
-Iteration 21: package H5 and WeApp outputs as deterministic, checksummed, source-bound client release artifacts and extend deployment admission to consume them without weakening the immutable `v0.1.0-rc.1` service record. Iteration 22 then obtains owner-approved account/region/budget and protected references, provisions the managed shared test environment, injects real WeChat/OIDC secrets, deploys all admitted artifacts without general traffic, and exercises custody, telemetry, canary and no-traffic rollback.
+Iteration 22: obtain the approved client API URL plus owner-approved account/region/budget and protected references, publish a new immutable service/client candidate, provision the managed shared test environment, inject real WeChat/OIDC secrets, deploy admitted services without general traffic, upload the exact WeApp TAR to private preview, and exercise identity, custody, telemetry, canary and no-traffic rollback. H5 public delivery remains held until iteration 23 selects a production identity adapter.

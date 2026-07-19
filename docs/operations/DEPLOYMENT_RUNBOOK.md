@@ -1,6 +1,6 @@
 # Deployment and image runbook
 
-Status: OCI packaging, hosted CI and `v0.1.0-rc.1` immutable publication are green; managed-environment admission is locally accepted while real shared infrastructure, external approvals and public traffic remain unconfigured
+Status: OCI packaging, hosted CI and service-only `v0.1.0-rc.1` publication are green; deterministic client packaging and combined service/client admission are locally accepted while the next candidate, real shared infrastructure, external approvals and public traffic remain unconfigured
 
 ## Source and lifecycle qualification
 
@@ -39,33 +39,45 @@ docker run --rm --env-file production.env \
 
 ## Publish and identify images
 
-GitHub Actions publishes `myfitness-api`, `myfitness-admin` and `myfitness-ai` to GHCR from an existing `v`-prefixed SemVer tag. Release only after that commit's complete main CI is green. A manual dispatch must select the tag as the workflow ref and repeat the exact tag in `release_tag`; a branch dispatch fails closed.
+GitHub Actions publishes `myfitness-api`, `myfitness-admin` and `myfitness-ai` to GHCR and packages the H5/WeApp clients from an existing `v`-prefixed SemVer tag. Release only after that commit's complete main CI is green. Before creating the tag, set the repository variable `MYFITNESS_CLIENT_API_BASE_URL` to the approved canonical external `https://<host>/v1` address. Empty, HTTP, IP, local/test/internal, credential-bearing, port, query and non-`/v1` values fail before any image is published. A manual dispatch must select the tag as the workflow ref and repeat the exact tag in `release_tag`; a branch dispatch fails closed.
 
 The normal candidate sequence is:
 
 ```bash
-git tag -a v0.1.0-rc.1 -m "MyFitness v0.1.0-rc.1"
-git push origin v0.1.0-rc.1
+git tag -a v0.1.0-rc.2 -m "MyFitness v0.1.0-rc.2"
+git push origin v0.1.0-rc.2
 ```
 
-Each image job publishes linux/amd64 and linux/arm64, records its registry digest and pushes a provenance attestation. The dependent release job accepts exactly one API, Admin and AI fragment from the same repository, full source revision, tag and workflow attempt. It publishes these GitHub Release assets:
+Each image job publishes linux/amd64 and linux/arm64, records its registry digest and pushes a provenance attestation. In parallel, Taro builds H5 with its current development identity as `preview-only` and WeApp with WeChat identity as a private-preview `candidate`. The packager sorts paths and emits canonical USTAR with mode `0644`, UID/GID `0`, mtime `0`, no symlinks and an embedded `myfitness-client-build/v1` record. The dependent release job accepts exactly one API, Admin, AI, H5 and WeApp record from the same repository, full source revision, tag and workflow attempt. It publishes these GitHub Release assets:
 
 - `release-manifest.json`: `myfitness-release/v1` with the three digest-qualified references;
 - `release-manifest.sha256`: transport checksum;
 - `release-verification.json`: redacted binding summary.
+- `client-release-manifest.json`: `myfitness-client-release/v1` with runtime/delivery class plus TAR/tree digests;
+- `client-release-manifest.sha256`: client-manifest transport checksum;
+- `client-release-verification.json`: service/client source and workflow binding summary;
+- `myfitness-client-h5.tar` and `myfitness-client-weapp.tar`: the exact immutable client roots.
 
-Download all three assets into one directory, then verify transport and semantic bindings before opening a deployment change:
+Download all eight assets into one directory, then verify transport and semantic bindings before opening a deployment change:
 
 ```bash
 sha256sum --check release-manifest.sha256
+sha256sum --check client-release-manifest.sha256
 pnpm release:verify -- \
   --file release-manifest.json \
   --expected-repository Zach424/MyFitness \
   --expected-revision <full-40-character-commit> \
   --expected-version <v-prefixed-semver-tag>
+pnpm release:client -- verify \
+  --file client-release-manifest.json \
+  --artifact-dir . \
+  --service-release release-manifest.json \
+  --expected-repository Zach424/MyFitness \
+  --expected-revision <full-40-character-commit> \
+  --expected-version <v-prefixed-semver-tag>
 ```
 
-Require `status: ok`, the intended source revision and exactly three `image@sha256:...` references. Copy the accepted files into the environment's independently protected change record. Do not deploy version or `sha-*` tags; they are discovery metadata. Do not replace or move an existing tag/release. Keep the complete previous verified manifest available for rollback and verify that all registry provenance attestations name the same repository revision.
+Require both commands to report `status: ok`, the intended source revision, exactly three `image@sha256:...` references, H5 `preview-only/dev`, WeApp `candidate/wechat`, and the approved API base. The client verifier hashes the actual TAR bytes, parses canonical headers, checks required entrypoints and embedded metadata, and recomputes the unpacked tree digest. Copy every accepted file into the environment's independently protected change record. Do not deploy version or `sha-*` image tags, rebuild clients during deployment, or replace/move an existing tag/release. `v0.1.0-rc.1` remains valid immutable history but cannot satisfy admission v2 because it predates client assets. Keep complete previous service and client bundles for rollback and verify that all registry attestations name the same revision.
 
 ## Managed environment admission
 
@@ -78,19 +90,22 @@ pnpm deploy:admit -- \
   --environment managed-environment.json \
   --release release-manifest.json \
   --release-checksum release-manifest.sha256 \
+  --client-release client-release-manifest.json \
+  --client-release-checksum client-release-manifest.sha256 \
+  --client-artifact-dir . \
   --rollback-mode no-traffic \
   --evaluated-at 2026-07-19T12:30:00.000Z \
   --output deployment-admission.json
 ```
 
-`no-traffic` is valid only for a first `shared-test` deployment. It means withdraw public traffic and scale API, administrator and AI application services to zero; it does not delete managed data, reverse migrations or restore a backup. A production admission must instead add `--previous-release` and `--previous-release-checksum` and select `--rollback-mode previous-release`. The previous manifest must belong to this repository, have a different version and revision, and predate the target.
+`no-traffic` is valid only for a first `shared-test` deployment. It means withdraw public traffic and scale API, administrator and AI application services to zero; it does not delete managed data, reverse migrations or restore a backup. A production admission must instead add `--previous-release`, `--previous-release-checksum`, `--previous-client-release`, `--previous-client-release-checksum`, `--previous-client-artifact-dir` and select `--rollback-mode previous-release`. The previous service/client pair must belong to this repository, share one version/revision/workflow, differ from the target and predate it.
 
-Require `schemaVersion: myfitness-deployment-admission/v1`, `status: admitted`, the expected environment/change reference, the downloaded release checksum and exactly seven ordered actions. The tool validates reference syntax and completeness but does not contact the external change/evidence systems. A successful local command is not owner approval; retain the environment, release bundle and output inside the protected change record and obtain the platform approval there.
+Require `schemaVersion: myfitness-deployment-admission/v2`, `status: admitted`, the expected environment/change reference, both downloaded manifest checksums, exactly seven service actions and four client actions. Admission requires the client API base to equal `<managed apiOrigin>/v1`. The client order re-verifies bytes, holds H5 from public traffic because development identity is production-disabled, uploads only the exact WeApp TAR to private preview, and requires real-device identity/custody evidence before submission. The tool validates reference syntax and completeness but does not contact external change/evidence systems. Local success is not owner approval; retain the environment and both complete release bundles inside the protected change record and obtain platform approval there.
 
 ## Deployment order
 
 1. Approve and retain one complete managed-environment dossier in the external change system.
-2. Run `pnpm deploy:admit` and require the exact target/rollback release binding before loading platform credentials.
+2. Run `pnpm deploy:admit` and require exact target/rollback service and client bindings before loading platform credentials.
 3. Confirm managed PostgreSQL/Redis/object storage backups, encryption, network policy, capacity and named owners against the admitted references.
 4. Load secrets and run the production configuration preflight; compare origins and `TRUST_PROXY_HOPS` with the admission record.
 5. Run one admitted API-image migration job with `node dist/database/migrate.js`; stop on checksum drift or any non-zero exit.
@@ -99,10 +114,12 @@ Require `schemaVersion: myfitness-deployment-admission/v1`, `status: admitted`, 
 8. Deploy the admitted administrator digest behind the approved OIDC/edge boundary. Verify CSP, frame denial and a real least-privilege login.
 9. Verify request correlation/logs/metrics and exercise record, privacy, erasure and restore controls before shifting a bounded canary cohort.
 10. Run `node scripts/verify-deployment.mjs` against the shared endpoints and attach its redacted JSON plus the admission/release records to the protected change.
+11. Keep the H5 TAR off public hosting while its manifest says `preview-only`; selecting a production H5 identity requires a new source commit and candidate.
+12. Upload the admitted WeApp TAR unchanged to a private developer/experience build, verify a real-device login and privacy/erasure custody, then obtain the explicit submission decision.
 
 ## Rollback
 
-Stop the rollout on failed migration, manifest/provenance verification, readiness, error/latency threshold, auth boundary, custody check or missing telemetry. Select all three references from the previously accepted manifest; never mix manifest versions, restore the database or delete migration history for an application rollback. Before shifting traffic, confirm the previous API understands the current schema, erasure ledger and outstanding durable jobs. After rollback, repeat liveness/readiness/correlation, administrator security headers, metrics/job evidence and deletion/restore checks.
+Stop the rollout on failed migration, manifest/provenance/client-byte verification, readiness, error/latency threshold, auth boundary, custody check or missing telemetry. Select all three images and both client TARs from one previously accepted service/client pair; never mix versions, rebuild from source, restore the database or delete migration history for an application rollback. Before shifting traffic, confirm the previous API understands the current schema, erasure ledger and outstanding durable jobs. Withdraw H5/WeApp delivery when the matching service plane is withdrawn. After rollback, repeat liveness/readiness/correlation, administrator security headers, metrics/job evidence and deletion/restore checks.
 
 ## Inputs still required for a shared environment
 

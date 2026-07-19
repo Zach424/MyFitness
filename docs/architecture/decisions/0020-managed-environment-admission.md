@@ -2,7 +2,7 @@
 
 Date: 2026-07-19
 
-Status: Accepted
+Status: Accepted; the admission output is extended by ADR-0021
 
 ## Context
 
@@ -41,7 +41,7 @@ An `admitted` result proves structural completeness and release binding. It does
 - The real `v0.1.0-rc.1` candidate can be bound to one ordered plan before a cloud credential is granted.
 - A syntactically valid but dishonest reference is still possible outside a protected change system. Approval, evidence dereferencing and platform IAM remain necessary and must not be inferred from local tests.
 - The admission record plans deployment; it does not provision infrastructure, configure DNS, validate a real WeChat device or open traffic.
-- The current release input covers the API, administrator and AI service plane only. H5 and WeApp build outputs need their own deterministic checksums/source binding and admission integration before client delivery can use this gate.
+- ADR-0021 closes the client-plane gap with a separate immutable client release and `myfitness-deployment-admission/v2`; the environment schema and external-authority boundary remain unchanged.
 
 ## Rollback
 
