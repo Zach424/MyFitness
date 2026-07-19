@@ -2,7 +2,7 @@
 
 Date: 2026-07-19
 
-Status: Accepted
+Status: Accepted; source qualification is extended by ADR-0025
 
 ## Context
 

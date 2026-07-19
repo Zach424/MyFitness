@@ -2,7 +2,7 @@
 
 面向普通健身人群的多端记录与 AI 规划产品。产品把身体、训练、饮食和恢复数据整理为可解释、可调整、可持续执行的个人计划。
 
-> 当前阶段：首个服务候选 `v0.1.0-rc.1` 已发布验证；H5/WeApp 的确定性 TAR、来源绑定、实际字节校验、部署准入、删除回执恢复、AI 解释崩溃恢复、v2 对抗性输出验证与可重现评测工件已完成本地验收。现有候选仍是“仅服务”记录，下一候选必须先配置经批准的客户端 API 地址才能发布客户端制品。托管账号、真实微信/OIDC 凭据、域名/TLS、集中遥测和责任人仍是上线门槛。
+> 当前阶段：首个服务候选 `v0.1.0-rc.1` 已发布验证；下一候选的远端标签、当前 `main` 祖先关系与同提交成功 CI 已成为镜像发布前的强制资格门。H5/WeApp 的确定性 TAR、来源绑定、实际字节校验、部署准入、删除回执恢复、AI 解释崩溃恢复、v2 对抗性输出验证与可重现评测工件已完成本地验收。现有候选仍是“仅服务”记录，下一候选必须先配置经批准的客户端 API 地址才能发布客户端制品。托管账号、真实微信/OIDC 凭据、域名/TLS、集中遥测和责任人仍是上线门槛。
 
 ## 产品边界
 
@@ -26,7 +26,7 @@ packages/
   design-tokens/   颜色、字体、间距、动效和图表变量
 docs/              产品、设计、架构、运营手册和每轮迭代档案
 infra/             PostgreSQL 迁移、本地依赖 Compose 与一次性部署验收拓扑
-scripts/           评测、部署黑盒验证与不可变 OCI 发布清单工具
+scripts/           评测、发布源资格、部署黑盒验证与不可变发布清单工具
 output/evals/      可重复的 AI 离线安全评测报告
 output/playwright/ 浏览器视觉验收证据
 ```
@@ -92,7 +92,7 @@ pnpm test:e2e
 
 Playwright 会复用或启动 API、H5 与管理员预览服务。`pnpm db:down` 会停止本地容器并保留数据卷。`apps/admin` 的 `start` 命令面向 Linux standalone 产物；Windows 本地验收使用 `start:preview`，避免 standalone 符号链接权限差异。
 
-完整镜像验收使用 `pnpm deploy:smoke`：顺序构建三个最终镜像，运行一次性迁移，等待 API/AI/管理员端与 PostgreSQL/Redis/MinIO 健康，执行外部黑盒检查，最后自动删除容器和测试卷。该命令使用 fixture AI、开发身份和本地 MinIO，只证明部署制品，不代表共享或生产上线。候选版本标签触发 GHCR 多架构发布与 H5/WeApp 构建后，工作流分别生成 `myfitness-release/v1` 服务清单和 `myfitness-client-release/v1` 客户端清单；客户端 TAR 使用排序路径、固定权限/UID/GID/时间戳并绑定完整提交、工作流、API 地址和身份模式。
+完整镜像验收使用 `pnpm deploy:smoke`：顺序构建三个最终镜像，运行一次性迁移，等待 API/AI/管理员端与 PostgreSQL/Redis/MinIO 健康，执行外部黑盒检查，最后自动删除容器和测试卷。该命令使用 fixture AI、开发身份和本地 MinIO，只证明部署制品，不代表共享或生产上线。候选版本标签触发发布工作流后，`myfitness-release-qualification/v1` 会先把远端标签、当前 `main` 祖先关系和同一提交的成功 push CI 绑定到发布运行；失败时不会登录镜像仓库或构建客户端。资格通过后才进行 GHCR 多架构发布与 H5/WeApp 构建，并分别生成 `myfitness-release/v1` 服务清单和 `myfitness-client-release/v1` 客户端清单；客户端 TAR 使用排序路径、固定权限/UID/GID/时间戳并绑定完整提交、工作流、API 地址和身份模式。
 
 托管环境必须先从 `infra/deploy/managed-environment.example.json` 创建一份受变更系统保护、只包含逻辑引用而没有密钥值的环境清单，再用 `pnpm deploy:admit -- ...` 同时校验环境、服务/客户端清单、两个清单校验和及两个实际客户端 TAR。模板本身故意不可准入；完整账号/预算、域名、所有者、数据托管、告警和 AI 策略引用才能生成 `myfitness-deployment-admission/v2`。当前 H5 仍使用生产禁用的开发身份，因此准入记录会明确保持 `preview-only` 且禁止公网流量；生产配置、准入命令、发布顺序和回滚规则见[部署运行手册](docs/operations/DEPLOYMENT_RUNBOOK.md)。
 
@@ -140,6 +140,7 @@ Playwright 会复用或启动 API、H5 与管理员预览服务。`pnpm db:down`
 - [架构决策 0022](docs/architecture/decisions/0022-recoverable-account-erasure-receipts.md)
 - [架构决策 0023](docs/architecture/decisions/0023-crash-safe-ai-explanation-lifecycle.md)
 - [架构决策 0024](docs/architecture/decisions/0024-versioned-adversarial-ai-output-safety.md)
+- [架构决策 0025](docs/architecture/decisions/0025-qualified-main-ci-release-promotion.md)
 - [健康记录数据模型](docs/architecture/HEALTH_RECORD_MODEL.md)
 - [训练记录数据模型](docs/architecture/WORKOUT_MODEL.md)
 - [饮食记录数据模型](docs/architecture/NUTRITION_MODEL.md)
@@ -182,6 +183,7 @@ Playwright 会复用或启动 API、H5 与管理员预览服务。`pnpm db:down`
 - [第 23 轮档案](docs/iterations/023-crash-safe-ai-explanation-lifecycle.md)
 - [第 24 轮档案](docs/iterations/024-adversarial-ai-output-safety.md)
 - [第 25 轮档案](docs/iterations/025-reproducible-ai-evaluation-artifacts.md)
+- [第 26 轮档案](docs/iterations/026-qualified-release-source.md)
 - [移动端视觉证据](output/playwright/iteration-001-mobile.png)
 - [宽屏视觉证据](output/playwright/iteration-001-wide.png)
 - [建档移动端证据](output/playwright/iteration-003-onboarding-mobile.png)

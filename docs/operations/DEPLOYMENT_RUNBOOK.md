@@ -1,10 +1,10 @@
 # Deployment and image runbook
 
-Status: OCI packaging, hosted CI and service-only `v0.1.0-rc.1` publication are green; deterministic client packaging and combined service/client admission are locally accepted while the next candidate, real shared infrastructure, external approvals and public traffic remain unconfigured
+Status: OCI packaging, hosted CI and service-only `v0.1.0-rc.1` publication are green; exact tag/main/CI source qualification, deterministic client packaging and combined service/client admission are locally accepted while the next candidate, real shared infrastructure, external approvals and public traffic remain unconfigured
 
 ## Source and lifecycle qualification
 
-Before image acceptance, stop local MyFitness dependencies and run `pnpm test`. The current 34-file/122-test unit gate must pass without PostgreSQL, Redis or MinIO. OpenAPI tests and generation use the explicit API `metadata` startup mode, which assembles the shipped application graph and HTTP policy but does not run background jobs or verify external dependencies.
+Before image acceptance, stop local MyFitness dependencies and run `pnpm test`. The current 37-file/152-test unit gate must pass without PostgreSQL, Redis or MinIO. OpenAPI tests and generation use the explicit API `metadata` startup mode, which assembles the shipped application graph and HTTP policy but does not run background jobs or verify external dependencies.
 
 Production, integration, restore, E2E and deployment processes use the default `runtime` mode. It retains object-storage startup verification, photo-expiry reconciliation and durable data-operation workers. Do not select metadata mode for a traffic-serving process, and do not treat its successful initialization as readiness evidence; `/v1/health` and the black-box deployment verifier own that proof.
 
@@ -39,7 +39,7 @@ docker run --rm --env-file production.env \
 
 ## Publish and identify images
 
-GitHub Actions publishes `myfitness-api`, `myfitness-admin` and `myfitness-ai` to GHCR and packages the H5/WeApp clients from an existing `v`-prefixed SemVer tag. Release only after that commit's complete main CI is green. Before creating the tag, set the repository variable `MYFITNESS_CLIENT_API_BASE_URL` to the approved canonical external `https://<host>/v1` address. Empty, HTTP, IP, local/test/internal, credential-bearing, port, query and non-`/v1` values fail before any image is published. A manual dispatch must select the tag as the workflow ref and repeat the exact tag in `release_tag`; a branch dispatch fails closed.
+GitHub Actions publishes `myfitness-api`, `myfitness-admin` and `myfitness-ai` to GHCR and packages the H5/WeApp clients from an existing `v`-prefixed SemVer tag. Before registry login or client build, the qualification job resolves the remote tag to the exact workflow commit, proves that commit is current or ancestral `main`, and selects a completed successful `main` push run of `.github/workflows/ci.yml` with the same `head_sha`. Missing, failed or mismatched evidence stops both publication paths. Before creating the tag, set the repository variable `MYFITNESS_CLIENT_API_BASE_URL` to the approved canonical external `https://<host>/v1` address. Empty, HTTP, IP, local/test/internal, credential-bearing, port, query and non-`/v1` values fail before any image is published. A manual dispatch must select the tag as the workflow ref and repeat the exact tag in `release_tag`; a branch dispatch fails closed.
 
 The normal candidate sequence is:
 
@@ -50,6 +50,7 @@ git push origin v0.1.0-rc.2
 
 Each image job publishes linux/amd64 and linux/arm64, records its registry digest and pushes a provenance attestation. In parallel, Taro builds H5 with its current development identity as `preview-only` and WeApp with WeChat identity as a private-preview `candidate`. The packager sorts paths and emits canonical USTAR with mode `0644`, UID/GID `0`, mtime `0`, no symlinks and an embedded `myfitness-client-build/v1` record. The dependent release job accepts exactly one API, Admin, AI, H5 and WeApp record from the same repository, full source revision, tag and workflow attempt. It publishes these GitHub Release assets:
 
+- `release-qualification.json`: `myfitness-release-qualification/v1` with remote tag resolution, current-main relation and exact CI identity;
 - `release-manifest.json`: `myfitness-release/v1` with the three digest-qualified references;
 - `release-manifest.sha256`: transport checksum;
 - `release-verification.json`: redacted binding summary.
@@ -58,11 +59,21 @@ Each image job publishes linux/amd64 and linux/arm64, records its registry diges
 - `client-release-verification.json`: service/client source and workflow binding summary;
 - `myfitness-client-h5.tar` and `myfitness-client-weapp.tar`: the exact immutable client roots.
 
-Download all eight assets into one directory, then verify transport and semantic bindings before opening a deployment change:
+Download all nine assets into one directory, then verify transport and semantic bindings before opening a deployment change:
 
 ```bash
 sha256sum --check release-manifest.sha256
 sha256sum --check client-release-manifest.sha256
+node scripts/release-qualification.mjs check \
+  --file release-qualification.json \
+  --repository Zach424/MyFitness \
+  --revision <full-40-character-commit> \
+  --version <v-prefixed-semver-tag> \
+  --tag-ref refs/tags/<v-prefixed-semver-tag> \
+  --default-branch main \
+  --ci-workflow ci.yml \
+  --current-run-id <release-workflow-run-id> \
+  --current-run-attempt <release-workflow-run-attempt>
 pnpm release:verify -- \
   --file release-manifest.json \
   --expected-repository Zach424/MyFitness \
@@ -77,7 +88,7 @@ pnpm release:client -- verify \
   --expected-version <v-prefixed-semver-tag>
 ```
 
-Require both commands to report `status: ok`, the intended source revision, exactly three `image@sha256:...` references, H5 `preview-only/dev`, WeApp `candidate/wechat`, and the approved API base. The client verifier hashes the actual TAR bytes, parses canonical headers, checks required entrypoints and embedded metadata, and recomputes the unpacked tree digest. Copy every accepted file into the environment's independently protected change record. Do not deploy version or `sha-*` image tags, rebuild clients during deployment, or replace/move an existing tag/release. `v0.1.0-rc.1` remains valid immutable history but cannot satisfy admission v2 because it predates client assets. Keep complete previous service and client bundles for rollback and verify that all registry attestations name the same revision.
+Require all three commands to report `status: ok`; the qualification must name the intended tag/revision, current `main`, exact successful push CI and release workflow. Then require exactly three `image@sha256:...` references, H5 `preview-only/dev`, WeApp `candidate/wechat`, and the approved API base. The client verifier hashes the actual TAR bytes, parses canonical headers, checks required entrypoints and embedded metadata, and recomputes the unpacked tree digest. Copy every accepted file into the environment's independently protected change record. Do not deploy version or `sha-*` image tags, rebuild clients during deployment, or replace/move an existing tag/release. `v0.1.0-rc.1` remains valid immutable history but cannot satisfy admission v2 or the new qualification-asset requirement because it predates both. Keep complete previous service and client bundles for rollback and verify that all registry attestations name the same revision.
 
 ## Managed environment admission
 

@@ -2,7 +2,7 @@
 
 Last reviewed: 2026-07-20
 
-Stage: first service candidate published; deterministic client release, combined admission, recoverable erasure receipts, crash-safe AI lifecycle, adversarial output validation and reproducible evaluation artifacts are locally green before the next candidate and external shared infrastructure
+Stage: first service candidate published; exact tag/main/CI release-source qualification, deterministic client release, combined admission, recoverable erasure receipts, crash-safe AI lifecycle, adversarial output validation and reproducible evaluation artifacts are locally green before the next candidate and external shared infrastructure
 
 Primary release target: WeChat Mini Program + responsive H5
 
@@ -12,20 +12,20 @@ MyFitness / 衡迹 turns body, training, nutrition, and recovery records into sa
 
 ## Module status
 
-| Module                  | Status                       | Current evidence                                                    | Next gate                                   |
-| ----------------------- | ---------------------------- | ------------------------------------------------------------------- | ------------------------------------------- |
-| Product scope           | Done for MVP baseline        | `docs/product/PRODUCT_BRIEF.md`                                     | Validate with target-user interviews        |
-| Delivery roadmap        | Done for planning baseline   | `docs/product/ROADMAP.md`                                           | Execute iteration 26 managed shared test    |
-| Design language         | Partial, eleven flows tested | Core flows + recovery state + 23 reviewed screenshots               | Large text, keyboard and remaining states   |
-| Client: Mini Program/H5 | Partial                      | Source-bound WeApp candidate + preview-only H5 deterministic TARs   | Publish next candidate; device/H5 identity  |
-| Admin console           | Partial, local slice done    | OIDC BFF, exact lookup, role split and Evidence Rail exercised      | Select IdP, owner, retention and deployment |
-| Business API            | Partial                      | Verified identity plus non-root self-contained OCI runtime          | Shared deployment and real credential proof |
-| Domain rules            | Partial                      | Safety validators + strict privacy action contracts                 | Add release policy enforcement              |
-| AI service              | Partial                      | Crash-safe runs + adversarial text/vision validators + 23 evals     | Expert corpus + approved provider canary    |
-| Native App/devices      | Deferred                     | Phase-two decision                                                  | MVP retention gate reached                  |
-| Privacy/compliance      | Partial, durable local proof | Recoverable erasure, identity suppression and restore replay tested | Production retention/provider/legal review  |
-| Testing/observability   | Partial                      | 144 unit, 46 integration, 22 browser tests + eval drift gate        | Green implementing CI; centralize telemetry |
-| Deployment              | Partial, admission ready     | Service/client byte gate + strict non-secret environment admission  | Approve dossier, provision and canary       |
+| Module                  | Status                          | Current evidence                                                      | Next gate                                   |
+| ----------------------- | ------------------------------- | --------------------------------------------------------------------- | ------------------------------------------- |
+| Product scope           | Done for MVP baseline           | `docs/product/PRODUCT_BRIEF.md`                                       | Validate with target-user interviews        |
+| Delivery roadmap        | Done for planning baseline      | `docs/product/ROADMAP.md`                                             | Execute iteration 27 managed shared test    |
+| Design language         | Partial, eleven flows tested    | Core flows + recovery state + 23 reviewed screenshots                 | Large text, keyboard and remaining states   |
+| Client: Mini Program/H5 | Partial                         | Source-bound WeApp candidate + preview-only H5 deterministic TARs     | Publish next candidate; device/H5 identity  |
+| Admin console           | Partial, local slice done       | OIDC BFF, exact lookup, role split and Evidence Rail exercised        | Select IdP, owner, retention and deployment |
+| Business API            | Partial                         | Verified identity plus non-root self-contained OCI runtime            | Shared deployment and real credential proof |
+| Domain rules            | Partial                         | Safety validators + strict privacy action contracts                   | Add release policy enforcement              |
+| AI service              | Partial                         | Crash-safe runs + adversarial text/vision validators + 23 evals       | Expert corpus + approved provider canary    |
+| Native App/devices      | Deferred                        | Phase-two decision                                                    | MVP retention gate reached                  |
+| Privacy/compliance      | Partial, durable local proof    | Recoverable erasure, identity suppression and restore replay tested   | Production retention/provider/legal review  |
+| Testing/observability   | Partial                         | 152 unit, 46 integration, 22 browser tests + eval drift gate          | Green implementing CI; centralize telemetry |
+| Deployment              | Partial, source/admission ready | Exact tag/main/CI gate + service/client bytes + environment admission | Approve dossier, provision and canary       |
 
 Status vocabulary: `Done` means validated for the present stage, `Partial` means usable but missing a named gate, `Pending` means not implemented, and `Deferred` means intentionally outside the current release.
 
@@ -64,41 +64,42 @@ Status vocabulary: `Done` means validated for the present stage, `Partial` means
 - Pinned-base, non-root OCI images for API, administrator and AI; API uses a self-contained pnpm deployment closure and administrator uses Next.js standalone output.
 - A disposable pinned Compose topology runs a one-shot migration before traffic and black-box verifies image health, dependency readiness, request correlation and administrator security headers. GitHub Actions defines full quality/image smoke plus multi-architecture GHCR publication with provenance.
 - The Nest API has typed `runtime` and `metadata` startup policies: production/integration retain dependency checks and maintenance workers, while OpenAPI/CORS inspection and contract generation assemble the real graph without external startup I/O.
-- A dependency-free `myfitness-release/v1` control plane binds API, administrator and AI digests to one SemVer tag, full source revision and workflow run; the tag workflow rejects mixed fragments and publishes checksummed, non-overwritable GitHub Release assets.
+- A dependency-free `myfitness-release-qualification/v1` gate resolves lightweight or annotated remote tags, proves the exact commit remains in current `main` and selects that SHA's successful `main` push CI before registry login or client packaging. The strict record is rechecked against the release workflow and retained as an immutable Release asset.
+- A dependency-free `myfitness-release/v1` control plane binds API, administrator and AI digests to one qualified SemVer tag, full source revision and workflow run; the tag workflow rejects mixed fragments and publishes checksummed, non-overwritable GitHub Release assets.
 - A dependency-free `myfitness-client-release/v1` control plane packages sorted, fixed-metadata USTAR H5/WeApp roots, verifies canonical bytes and tree digests, and binds both platforms to one source/workflow/API base. H5 is explicitly `preview-only` with development identity; WeApp is a `candidate` with WeChat identity.
 - `myfitness-managed-environment/v1` plus `myfitness-deployment-admission/v2` require explicit account/budget, distinct public origins, secret-manager references, data-custody owners, telemetry and AI policy evidence before binding both verified release planes to migration/private-service/canary order, guarded client delivery and an explicit rollback mode.
 
 ## Current risks
 
-| Risk                                                                                   | Level  | Mitigation / next evidence                                                                             |
-| -------------------------------------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------ |
-| Production audit retains six moderate Taro build-chain advisories                      | Medium | Remove through a supported Taro/build-chain upgrade; rerun graph, dual-build and E2E proof             |
-| Offline admission cannot prove external references exist or were genuinely approved    | High   | Create/dereference the dossier inside a protected change system; never deploy from local success alone |
-| The published `v0.1.0-rc.1` predates client release assets                             | Medium | Set an approved client API URL and publish/verify a new tag; never mutate the existing release         |
-| Scope may expand before the recording loop is proven                                   | High   | Enforce MVP exclusions and one-scope iteration archives                                                |
-| Food-photo portion estimates can be misleading                                         | High   | Catalog-bound ranges/confidence, user edit, no auto-write; broaden real-image evaluation               |
-| AI may generate unsafe training or diet changes                                        | High   | Deterministic constraints and validators precede model output                                          |
-| Production AI retention/region/cost/quality are unverified                             | High   | Keep fixture default and provider receipts `policy_bound`; require approved real canary                |
-| Twenty-three deterministic AI cases do not establish real-world safety                 | High   | Add expert-reviewed real/obfuscated/injection image and text cases plus slice thresholds               |
-| Local MinIO does not prove production object controls                                  | High   | Configure cloud bucket/KMS/IAM/lifecycle/versioning/replication and exercise outage/restore            |
-| Domestic Android health data is fragmented                                             | Medium | Defer device sync; start HealthKit/Health Connect/Huawei feasibility after retention gate              |
-| Brand name “衡迹” is unverified                                                        | Medium | Treat as working name; perform trademark/domain review before public launch                            |
-| H5 entry is 305 KiB/largest chunk 589 KiB; WeApp vendor is 417 KiB                     | Medium | Set budgets and split route/provider code before beta                                                  |
-| Taro emits non-blocking webpack cache serialization warnings                           | Low    | Track upstream/package compatibility; clean builds and artifacts currently pass                        |
-| WeChat identity lacks real credentials/device/domain proof; H5 lacks a release adapter | High   | Exercise a real Mini Program in shared test; select H5 identity and explicit re-registration policy    |
-| Enterprise operator OIDC tenant/client and access owner are absent                     | High   | Select provider; exercise provisioning, recertification, disablement and shared login                  |
-| Administrator audit lacks independent retention/export and alerts                      | High   | Define retention/owner; ship immutable copy and alert review before real operator access               |
-| Local restore replay works; backup/provider operations are unowned                     | High   | Automate backup/retention, independently retain ledger and approve provider controls                   |
-| A receipt bearer secret remains in client application storage until explicit removal   | Medium | Review secure platform storage/shared-device handling and expiry policy before closed beta             |
-| Dead-letter recovery has no alert owner or safe service endpoint                       | High   | Centralize alerts; require audited exact-job runbook until a least-privilege tool exists               |
-| Process metrics are not centrally scraped and alerts have no owner                     | High   | Deploy private aggregation, dashboards, paging and named incident ownership before beta                |
-| Rate limits use uncalibrated fixed windows and exact proxy topology                    | Medium | Load-test policy boundaries and verify `TRUST_PROXY_HOPS` in the shared environment                    |
-| Workout status can diverge from set completion in non-client use                       | Medium | Make server derivation authoritative before exposing imports                                           |
-| Starter exercise catalog lacks custom/equipment semantics                              | Medium | Model additions only after the manual workout loop informs actual needs                                |
-| Starter food values are demonstration data, not release catalog                        | High   | Select licensed/localized versioned provider and attribution before beta                               |
-| Energy/macro UI can be harmful for eating-disorder risk                                | High   | Maintain scope exclusion; add screening/content review before adaptive nutrition planning              |
-| Deterministic-v1 is explainable but not clinically validated                           | High   | Keep general-guidance claims; add offline evaluation and expert/content review                         |
-| A changed plan may look current until the next server action                           | Medium | Server blocks stale accept/modify; add proactive client stale-state refresh                            |
+| Risk                                                                                   | Level  | Mitigation / next evidence                                                                               |
+| -------------------------------------------------------------------------------------- | ------ | -------------------------------------------------------------------------------------------------------- |
+| Production audit retains six moderate Taro build-chain advisories                      | Medium | Remove through a supported Taro/build-chain upgrade; rerun graph, dual-build and E2E proof               |
+| Offline admission cannot prove external references exist or were genuinely approved    | High   | Create/dereference the dossier inside a protected change system; never deploy from local success alone   |
+| The published `v0.1.0-rc.1` predates client release and source-qualification assets    | Medium | Set an approved client API URL and publish/verify a new qualified tag; never mutate the existing release |
+| Scope may expand before the recording loop is proven                                   | High   | Enforce MVP exclusions and one-scope iteration archives                                                  |
+| Food-photo portion estimates can be misleading                                         | High   | Catalog-bound ranges/confidence, user edit, no auto-write; broaden real-image evaluation                 |
+| AI may generate unsafe training or diet changes                                        | High   | Deterministic constraints and validators precede model output                                            |
+| Production AI retention/region/cost/quality are unverified                             | High   | Keep fixture default and provider receipts `policy_bound`; require approved real canary                  |
+| Twenty-three deterministic AI cases do not establish real-world safety                 | High   | Add expert-reviewed real/obfuscated/injection image and text cases plus slice thresholds                 |
+| Local MinIO does not prove production object controls                                  | High   | Configure cloud bucket/KMS/IAM/lifecycle/versioning/replication and exercise outage/restore              |
+| Domestic Android health data is fragmented                                             | Medium | Defer device sync; start HealthKit/Health Connect/Huawei feasibility after retention gate                |
+| Brand name “衡迹” is unverified                                                        | Medium | Treat as working name; perform trademark/domain review before public launch                              |
+| H5 entry is 305 KiB/largest chunk 589 KiB; WeApp vendor is 417 KiB                     | Medium | Set budgets and split route/provider code before beta                                                    |
+| Taro emits non-blocking webpack cache serialization warnings                           | Low    | Track upstream/package compatibility; clean builds and artifacts currently pass                          |
+| WeChat identity lacks real credentials/device/domain proof; H5 lacks a release adapter | High   | Exercise a real Mini Program in shared test; select H5 identity and explicit re-registration policy      |
+| Enterprise operator OIDC tenant/client and access owner are absent                     | High   | Select provider; exercise provisioning, recertification, disablement and shared login                    |
+| Administrator audit lacks independent retention/export and alerts                      | High   | Define retention/owner; ship immutable copy and alert review before real operator access                 |
+| Local restore replay works; backup/provider operations are unowned                     | High   | Automate backup/retention, independently retain ledger and approve provider controls                     |
+| A receipt bearer secret remains in client application storage until explicit removal   | Medium | Review secure platform storage/shared-device handling and expiry policy before closed beta               |
+| Dead-letter recovery has no alert owner or safe service endpoint                       | High   | Centralize alerts; require audited exact-job runbook until a least-privilege tool exists                 |
+| Process metrics are not centrally scraped and alerts have no owner                     | High   | Deploy private aggregation, dashboards, paging and named incident ownership before beta                  |
+| Rate limits use uncalibrated fixed windows and exact proxy topology                    | Medium | Load-test policy boundaries and verify `TRUST_PROXY_HOPS` in the shared environment                      |
+| Workout status can diverge from set completion in non-client use                       | Medium | Make server derivation authoritative before exposing imports                                             |
+| Starter exercise catalog lacks custom/equipment semantics                              | Medium | Model additions only after the manual workout loop informs actual needs                                  |
+| Starter food values are demonstration data, not release catalog                        | High   | Select licensed/localized versioned provider and attribution before beta                                 |
+| Energy/macro UI can be harmful for eating-disorder risk                                | High   | Maintain scope exclusion; add screening/content review before adaptive nutrition planning                |
+| Deterministic-v1 is explainable but not clinically validated                           | High   | Keep general-guidance claims; add offline evaluation and expert/content review                           |
+| A changed plan may look current until the next server action                           | Medium | Server blocks stale accept/modify; add proactive client stale-state refresh                              |
 
 ## Quality gates
 
@@ -112,4 +113,4 @@ The MVP cannot enter public beta until all of the following are reproducible:
 
 ## Primary next step
 
-Iteration 26: obtain the approved client API URL plus owner-approved account/region/budget and protected references, publish a new immutable service/client candidate, provision the managed shared test environment, inject real WeChat/OIDC secrets, deploy admitted services without general traffic, upload the exact WeApp TAR to private preview, and exercise identity, custody, telemetry, canary and no-traffic rollback. H5 public delivery remains held until iteration 27 selects a production identity adapter.
+Iteration 27: obtain the approved client API URL plus owner-approved account/region/budget and protected references, publish a new source-qualified immutable service/client candidate, provision the managed shared test environment, inject real WeChat/OIDC secrets, deploy admitted services without general traffic, upload the exact WeApp TAR to private preview, and exercise identity, custody, telemetry, canary and no-traffic rollback. H5 public delivery remains held until iteration 28 selects a production identity adapter.
