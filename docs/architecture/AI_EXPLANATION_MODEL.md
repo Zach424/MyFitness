@@ -85,7 +85,7 @@ The initial fixture used the harmless negation “不生成能量处方”. The 
 
 ## Evaluation and remaining gates
 
-The checked-in `plan-explanation-safety-v2.json` set contains 12 cases covering grounded output, ASCII/full-width allowed numbers, calorie prescription, diagnosis, invented numbers, schema/evidence failures, zero-width medical text, spaced full-width calorie targets and Chinese/English instruction leakage. Every case declares exact expected reasons, and `pnpm eval:ai` fails when output validity or the reason vector drifts. The reproducible report is `output/evals/iteration-024-plan-explanation-evaluation.json`.
+The checked-in `plan-explanation-safety-v2.json` set contains 12 cases covering grounded output, ASCII/full-width allowed numbers, calorie prescription, diagnosis, invented numbers, schema/evidence failures, zero-width medical text, spaced full-width calorie targets and Chinese/English instruction leakage. Every case declares exact expected reasons, and `pnpm eval:ai` fails when output validity or the reason vector drifts. The runner formats the report through the repository-pinned Prettier implementation before writing `output/evals/iteration-024-plan-explanation-evaluation.json`; hosted CI then checks the evaluation directory's formatting and requires a zero Git diff after both evaluators run.
 
 Private operations routes report only pending/expired/reconciled counts and oldest-pending time, and can run one bounded reconciliation pass. They require the independent operations token, return `no-store`, and expose no run ID, user ID, plan ID, prompt, context or explanation content.
 

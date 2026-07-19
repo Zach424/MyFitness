@@ -88,3 +88,7 @@ The next controlled step is iteration 025: use owner-provided account/region/bud
 - [Plan evaluation report](../../output/evals/iteration-024-plan-explanation-evaluation.json)
 - [Food-photo evaluation report](../../output/evals/iteration-024-food-photo-evaluation.json)
 - [Iteration 023 archive](023-crash-safe-ai-explanation-lifecycle.md)
+
+## 8. Post-commit evidence
+
+Commit `d28235d3bca0b8a029395ec2ca2e7fc81953d432` reached remote `main` without history rewrite. GitHub Actions run `29700019537` failed at the initial `pnpm format:check`; `quality` stopped there and `deployment-smoke` was skipped. The exact local reproduction surfaced `output/evals/iteration-024-plan-explanation-evaluation.json`: the final evaluator run had rewritten valid 12/12 content after the formatter, but raw `JSON.stringify` report layout was not owned by the repository formatter. No product, schema, migration or safety assertion failed. Iteration 025 preserves this failure as evidence and fixes both generators plus CI reproducibility in a separate commit; it supersedes section 6's next-step numbering and moves managed deployment to iteration 026.

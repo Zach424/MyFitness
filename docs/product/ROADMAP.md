@@ -2,7 +2,7 @@
 
 The roadmap is organized as controlled iterations. A round may take several working sessions, but it ends only after implementation, validation, archive update, and a commit.
 
-Progress snapshot (2026-07-20): iterations 0–24 are complete locally, including green hosted quality/smoke through iteration 23, verified service-only `v0.1.0-rc.1` assets, strict managed-environment admission, deterministic source-bound H5/WeApp TARs, recoverable account-erasure receipts, crash-safe AI explanation reconciliation and v2 adversarial output validation. The externally gated managed deployment moved to iteration 25 because no owner-approved account, budget, domain, client API URL or protected credential references exist yet; this risk-reduction round did not invent them. Managed infrastructure, real WeChat credentials/device/domain proof, H5 production identity, cloud custody, centralized alerting, expert review and model/provider approval remain gated.
+Progress snapshot (2026-07-20): iterations 0–25 are complete locally, including green hosted quality/smoke through iteration 23, verified service-only `v0.1.0-rc.1` assets, strict managed-environment admission, deterministic source-bound H5/WeApp TARs, recoverable account-erasure receipts, crash-safe AI explanation reconciliation, v2 adversarial output validation and byte-reproducible evaluation reports. Iteration 24's hosted formatting failure is preserved in its archive and corrected by iteration 25 instead of rewriting history. The externally gated managed deployment moved to iteration 26 because no owner-approved account, budget, domain, client API URL or protected credential references exist yet; this risk-reduction round did not invent them. Managed infrastructure, real WeChat credentials/device/domain proof, H5 production identity, cloud custody, centralized alerting, expert review and model/provider approval remain gated.
 
 | Iteration | Primary scope                                       | Exit evidence                                                                                    |
 | --------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
@@ -31,9 +31,10 @@ Progress snapshot (2026-07-20): iterations 0–24 are complete locally, includin
 | 22        | Recoverable account-erasure receipts                | Single-use intent, hashed secret, lost-response/reload recovery and restore-safe proof           |
 | 23        | Crash-safe AI explanation lifecycle                 | Durable deadline/fallback, startup/interval recovery, aggregate operations and race proof        |
 | 24        | Adversarial AI output safety                        | Versioned normalization, instruction-image boundary and exact-reason 23-case regression corpus   |
-| 25        | Managed shared test deployment                      | Managed services/secrets, real WeChat proof, telemetry, calibrated limits and rollback           |
-| 26        | Beta hardening and release                          | H5 identity, security review, budgets, accessibility, filing artifacts and staged rollout        |
-| 27        | Native App feasibility and device sync              | Retention gate reviewed; HealthKit/Health Connect/Huawei proof of concept                        |
+| 25        | Reproducible AI evaluation artifacts                | Formatter-owned reports plus post-eval format and zero-diff CI gates                             |
+| 26        | Managed shared test deployment                      | Managed services/secrets, real WeChat proof, telemetry, calibrated limits and rollback           |
+| 27        | Beta hardening and release                          | H5 identity, security review, budgets, accessibility, filing artifacts and staged rollout        |
+| 28        | Native App feasibility and device sync              | Retention gate reviewed; HealthKit/Health Connect/Huawei proof of concept                        |
 
 ## Release gates
 
@@ -45,14 +46,14 @@ Progress snapshot (2026-07-20): iterations 0–24 are complete locally, includin
 
 ### Closed beta
 
-- Iterations 9–25 complete.
+- Iterations 9–26 complete.
 - AI evaluation set is versioned and safety validators block known high-risk cases.
 - Data export and deletion are exercised end to end.
 - Support, monitoring, cost limits, rollback, and incident ownership are assigned.
 
 ### Public release
 
-- Iteration 26 complete.
+- Iteration 27 complete.
 - Applicable ICP/APP/Mini Program privacy/AI registration and content-labeling work is reviewed.
 - Store materials match actual data practices and product claims.
 - Release starts with a small cohort and automatic rollback thresholds.

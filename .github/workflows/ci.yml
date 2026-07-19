@@ -39,6 +39,8 @@ jobs:
       - run: pnpm test:ai
       - run: pnpm eval:ai
       - run: pnpm eval:food-photo
+      - run: pnpm exec prettier --check output/evals
+      - run: git diff --exit-code -- output/evals
       - run: pnpm build
       - run: pnpm build:weapp
       - run: pnpm db:up

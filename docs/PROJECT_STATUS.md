@@ -2,7 +2,7 @@
 
 Last reviewed: 2026-07-20
 
-Stage: first service candidate published; deterministic client release, combined admission, recoverable erasure receipts, crash-safe AI lifecycle and adversarial output validation are locally green before the next candidate and external shared infrastructure
+Stage: first service candidate published; deterministic client release, combined admission, recoverable erasure receipts, crash-safe AI lifecycle, adversarial output validation and reproducible evaluation artifacts are locally green before the next candidate and external shared infrastructure
 
 Primary release target: WeChat Mini Program + responsive H5
 
@@ -15,7 +15,7 @@ MyFitness / 衡迹 turns body, training, nutrition, and recovery records into sa
 | Module                  | Status                       | Current evidence                                                    | Next gate                                   |
 | ----------------------- | ---------------------------- | ------------------------------------------------------------------- | ------------------------------------------- |
 | Product scope           | Done for MVP baseline        | `docs/product/PRODUCT_BRIEF.md`                                     | Validate with target-user interviews        |
-| Delivery roadmap        | Done for planning baseline   | `docs/product/ROADMAP.md`                                           | Execute iteration 25 managed shared test    |
+| Delivery roadmap        | Done for planning baseline   | `docs/product/ROADMAP.md`                                           | Execute iteration 26 managed shared test    |
 | Design language         | Partial, eleven flows tested | Core flows + recovery state + 23 reviewed screenshots               | Large text, keyboard and remaining states   |
 | Client: Mini Program/H5 | Partial                      | Source-bound WeApp candidate + preview-only H5 deterministic TARs   | Publish next candidate; device/H5 identity  |
 | Admin console           | Partial, local slice done    | OIDC BFF, exact lookup, role split and Evidence Rail exercised      | Select IdP, owner, retention and deployment |
@@ -24,7 +24,7 @@ MyFitness / 衡迹 turns body, training, nutrition, and recovery records into sa
 | AI service              | Partial                      | Crash-safe runs + adversarial text/vision validators + 23 evals     | Expert corpus + approved provider canary    |
 | Native App/devices      | Deferred                     | Phase-two decision                                                  | MVP retention gate reached                  |
 | Privacy/compliance      | Partial, durable local proof | Recoverable erasure, identity suppression and restore replay tested | Production retention/provider/legal review  |
-| Testing/observability   | Partial                      | 144 unit, 46 integration and 22 browser tests locally green         | Green implementing CI; centralize telemetry |
+| Testing/observability   | Partial                      | 144 unit, 46 integration, 22 browser tests + eval drift gate        | Green implementing CI; centralize telemetry |
 | Deployment              | Partial, admission ready     | Service/client byte gate + strict non-secret environment admission  | Approve dossier, provision and canary       |
 
 Status vocabulary: `Done` means validated for the present stage, `Partial` means usable but missing a named gate, `Pending` means not implemented, and `Deferred` means intentionally outside the current release.
@@ -112,4 +112,4 @@ The MVP cannot enter public beta until all of the following are reproducible:
 
 ## Primary next step
 
-Iteration 25: obtain the approved client API URL plus owner-approved account/region/budget and protected references, publish a new immutable service/client candidate, provision the managed shared test environment, inject real WeChat/OIDC secrets, deploy admitted services without general traffic, upload the exact WeApp TAR to private preview, and exercise identity, custody, telemetry, canary and no-traffic rollback. H5 public delivery remains held until iteration 26 selects a production identity adapter.
+Iteration 26: obtain the approved client API URL plus owner-approved account/region/budget and protected references, publish a new immutable service/client candidate, provision the managed shared test environment, inject real WeChat/OIDC secrets, deploy admitted services without general traffic, upload the exact WeApp TAR to private preview, and exercise identity, custody, telemetry, canary and no-traffic rollback. H5 public delivery remains held until iteration 27 selects a production identity adapter.

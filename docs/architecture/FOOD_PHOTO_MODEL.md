@@ -68,4 +68,4 @@ Local Compose defaults to `fixture-food-photo-v1`, visibly labeled as a non-visu
 
 The committed OpenAPI document describes these contracts. Cross-origin uploads retain an explicit origin allow-list and enable credentials because Taro H5 `uploadFile` uses credentialed XHR; wildcard CORS is not allowed.
 
-The v2 deterministic corpus contains 11 exact-reason cases, including image-instruction leakage, zero-width medical claims and spaced full-width calorie prescriptions. It proves those encoded outputs are rejected, not that arbitrary real-world image attacks or visual quality are solved; expert-reviewed real/obfuscated images remain a release gate.
+The v2 deterministic corpus contains 11 exact-reason cases, including image-instruction leakage, zero-width medical claims and spaced full-width calorie prescriptions. Its runner writes the committed report with the repository-pinned formatter, and hosted CI requires post-evaluation format and zero-diff evidence. The corpus proves those encoded outputs are rejected, not that arbitrary real-world image attacks or visual quality are solved; expert-reviewed real/obfuscated images remain a release gate.

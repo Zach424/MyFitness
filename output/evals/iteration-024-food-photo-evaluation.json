@@ -2,11 +2,7 @@
   "datasetVersion": "food-photo-safety-eval-v2",
   "promptVersion": "food-photo-candidates-v2",
   "validatorVersion": "food-photo-catalog-safety-v2",
-  "summary": {
-    "total": 11,
-    "passed": 11,
-    "failed": 0
-  },
+  "summary": { "total": 11, "passed": 11, "failed": 0 },
   "results": [
     {
       "id": "catalog-bound-candidates",

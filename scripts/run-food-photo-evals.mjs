@@ -2,6 +2,7 @@ import { createRequire } from 'node:module'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { format } from 'prettier'
 
 const require = createRequire(import.meta.url)
 const { foodPhotoPromptVersion, foodPhotoValidatorVersion } = require('../packages/contracts/dist')
@@ -41,6 +42,6 @@ const report = {
 }
 
 await mkdir(path.dirname(reportPath), { recursive: true })
-await writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`, 'utf8')
+await writeFile(reportPath, await format(JSON.stringify(report), { parser: 'json' }), 'utf8')
 process.stdout.write(`${passed}/${results.length} food-photo eval cases passed\n`)
 if (passed !== results.length) process.exitCode = 1
