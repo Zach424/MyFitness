@@ -1,5 +1,3 @@
-import path from 'node:path'
-
 const localDatabaseUrl = 'postgresql://myfitness:myfitness_local@127.0.0.1:54329/myfitness'
 const localAiServiceUrl = 'http://127.0.0.1:8001'
 const localAiServiceToken = 'myfitness-ai-local'
@@ -11,6 +9,11 @@ const localAdminAuditHashSecret = 'myfitness-admin-audit-local-hash-secret-2026'
 const localAdminOidcIssuer = 'http://127.0.0.1:4010'
 const localAdminOidcAudience = 'myfitness-admin-local'
 const localAdminOidcJwksUrl = 'http://127.0.0.1:4010/.well-known/jwks.json'
+const localObjectStorageEndpoint = 'http://127.0.0.1:9000'
+const localObjectStorageBucket = 'myfitness-private'
+const localObjectStorageAccessKeyId = 'myfitness-minio'
+const localObjectStorageSecretAccessKey = 'myfitness-minio-secret-2026-local'
+const localErasureLedgerHashSecret = 'myfitness-erasure-ledger-local-hash-secret-2026'
 
 const parsePort = (value: string | undefined) => {
   const port = Number(value ?? 3100)
@@ -74,15 +77,60 @@ const parseAdminUrl = (value: string, name: string, production: boolean) => {
   return exactValue
 }
 
+const parseBoolean = (value: string | undefined, fallback: boolean, name: string) => {
+  if (value === undefined) return fallback
+  if (value === 'true') return true
+  if (value === 'false') return false
+  throw new Error(`${name} must be true or false`)
+}
+
+const parseObjectStorageEndpoint = (value: string | undefined, production: boolean) => {
+  if (!value) return undefined
+  const endpoint = parseAdminUrl(value, 'OBJECT_STORAGE_ENDPOINT', production)
+  return endpoint.replace(/\/$/, '')
+}
+
+const parseObjectStorageBucket = (value: string) => {
+  if (!/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/.test(value)) {
+    throw new Error('OBJECT_STORAGE_BUCKET must be a valid DNS-style bucket name')
+  }
+  return value
+}
+
+const parseObjectPrefix = (value: string, name: string) => {
+  const exact = value.replace(/^\/+|\/+$/g, '')
+  if (
+    exact.length < 3 ||
+    exact.length > 160 ||
+    !/^[A-Za-z0-9][A-Za-z0-9/._-]+$/.test(exact) ||
+    exact.includes('//') ||
+    exact.split('/').some((segment) => segment === '.' || segment === '..')
+  ) {
+    throw new Error(`${name} must be a safe object-key prefix`)
+  }
+  return exact
+}
+
+const parsePositiveInteger = (
+  value: string | undefined,
+  fallback: number,
+  name: string,
+  minimum: number,
+  maximum: number,
+) => {
+  const parsed = Number(value ?? fallback)
+  if (!Number.isInteger(parsed) || parsed < minimum || parsed > maximum) {
+    throw new Error(`${name} must be an integer between ${minimum} and ${maximum}`)
+  }
+  return parsed
+}
+
 export const getRuntimeConfig = () => {
   const production = process.env.NODE_ENV === 'production'
   const databaseUrl = process.env.DATABASE_URL ?? (production ? undefined : localDatabaseUrl)
   const aiServiceUrl = process.env.AI_SERVICE_URL ?? (production ? undefined : localAiServiceUrl)
   const aiServiceToken =
     process.env.AI_SERVICE_TOKEN ?? (production ? undefined : localAiServiceToken)
-  const photoStorageRoot =
-    process.env.PHOTO_STORAGE_ROOT ??
-    (production ? undefined : path.resolve(process.cwd(), 'uploads/private'))
   const photoSigningSecret =
     process.env.PHOTO_UPLOAD_SIGNING_SECRET ?? (production ? undefined : localPhotoSigningSecret)
   const redisUrl = process.env.REDIS_URL ?? (production ? undefined : localRedisUrl)
@@ -98,6 +146,28 @@ export const getRuntimeConfig = () => {
     process.env.ADMIN_OIDC_AUDIENCE ?? (production ? undefined : localAdminOidcAudience)
   const adminOidcJwksUrl =
     process.env.ADMIN_OIDC_JWKS_URL ?? (production ? undefined : localAdminOidcJwksUrl)
+  const objectStorageEndpoint = parseObjectStorageEndpoint(
+    process.env.OBJECT_STORAGE_ENDPOINT ?? (production ? undefined : localObjectStorageEndpoint),
+    production,
+  )
+  const objectStorageBucket =
+    process.env.OBJECT_STORAGE_BUCKET ?? (production ? undefined : localObjectStorageBucket)
+  const objectStorageRegion = process.env.OBJECT_STORAGE_REGION ?? 'us-east-1'
+  const objectStorageAccessKeyId =
+    process.env.OBJECT_STORAGE_ACCESS_KEY_ID ??
+    (production ? undefined : localObjectStorageAccessKeyId)
+  const objectStorageSecretAccessKey =
+    process.env.OBJECT_STORAGE_SECRET_ACCESS_KEY ??
+    (production ? undefined : localObjectStorageSecretAccessKey)
+  const objectStorageSse = process.env.OBJECT_STORAGE_SSE ?? (production ? undefined : 'none')
+  const objectStorageAutoCreateBucket = parseBoolean(
+    process.env.OBJECT_STORAGE_AUTO_CREATE_BUCKET,
+    !production,
+    'OBJECT_STORAGE_AUTO_CREATE_BUCKET',
+  )
+  const erasureLedgerHashSecret =
+    process.env.ERASURE_LEDGER_HASH_SECRET ??
+    (production ? undefined : localErasureLedgerHashSecret)
 
   if (!databaseUrl) {
     throw new Error('DATABASE_URL is required in production')
@@ -105,8 +175,8 @@ export const getRuntimeConfig = () => {
   if (!aiServiceUrl || !aiServiceToken) {
     throw new Error('AI_SERVICE_URL and AI_SERVICE_TOKEN are required in production')
   }
-  if (!photoStorageRoot || !photoSigningSecret) {
-    throw new Error('PHOTO_STORAGE_ROOT and PHOTO_UPLOAD_SIGNING_SECRET are required in production')
+  if (!photoSigningSecret) {
+    throw new Error('PHOTO_UPLOAD_SIGNING_SECRET is required in production')
   }
   if (!redisUrl || !rateLimitHashSecret || !operationsToken) {
     throw new Error(
@@ -117,6 +187,28 @@ export const getRuntimeConfig = () => {
     throw new Error(
       'ADMIN_AUDIT_HASH_SECRET, ADMIN_OIDC_ISSUER, ADMIN_OIDC_AUDIENCE and ADMIN_OIDC_JWKS_URL are required in production',
     )
+  }
+  if (!objectStorageBucket || !erasureLedgerHashSecret) {
+    throw new Error(
+      'OBJECT_STORAGE_BUCKET and ERASURE_LEDGER_HASH_SECRET are required in production',
+    )
+  }
+  if ((objectStorageAccessKeyId === undefined) !== (objectStorageSecretAccessKey === undefined)) {
+    throw new Error(
+      'OBJECT_STORAGE_ACCESS_KEY_ID and OBJECT_STORAGE_SECRET_ACCESS_KEY must be set together',
+    )
+  }
+  if (!['none', 'AES256', 'aws:kms'].includes(objectStorageSse ?? '')) {
+    throw new Error('OBJECT_STORAGE_SSE must be none, AES256 or aws:kms')
+  }
+  if (production && objectStorageSse === 'none') {
+    throw new Error('OBJECT_STORAGE_SSE must enable AES256 or aws:kms in production')
+  }
+  if (production && objectStorageAutoCreateBucket) {
+    throw new Error('OBJECT_STORAGE_AUTO_CREATE_BUCKET must be false in production')
+  }
+  if (objectStorageSse === 'aws:kms' && !process.env.OBJECT_STORAGE_KMS_KEY_ID) {
+    throw new Error('OBJECT_STORAGE_KMS_KEY_ID is required when OBJECT_STORAGE_SSE=aws:kms')
   }
   if (photoSigningSecret.length < 32) {
     throw new Error('PHOTO_UPLOAD_SIGNING_SECRET must contain at least 32 characters')
@@ -129,6 +221,9 @@ export const getRuntimeConfig = () => {
   }
   if (adminAuditHashSecret.length < 32) {
     throw new Error('ADMIN_AUDIT_HASH_SECRET must contain at least 32 characters')
+  }
+  if (erasureLedgerHashSecret.length < 32) {
+    throw new Error('ERASURE_LEDGER_HASH_SECRET must contain at least 32 characters')
   }
   if (!/^[A-Za-z0-9._:/-]{3,200}$/.test(adminOidcAudience)) {
     throw new Error('ADMIN_OIDC_AUDIENCE contains unsupported characters')
@@ -145,8 +240,41 @@ export const getRuntimeConfig = () => {
     aiServiceUrl: aiServiceUrl.replace(/\/$/, ''),
     aiServiceToken,
     aiTimeoutMs,
-    photoStorageRoot: path.resolve(photoStorageRoot),
     photoSigningSecret,
+    objectStorageEndpoint,
+    objectStorageBucket: parseObjectStorageBucket(objectStorageBucket),
+    objectStorageRegion,
+    objectStorageAccessKeyId,
+    objectStorageSecretAccessKey,
+    objectStorageForcePathStyle: parseBoolean(
+      process.env.OBJECT_STORAGE_FORCE_PATH_STYLE,
+      !production,
+      'OBJECT_STORAGE_FORCE_PATH_STYLE',
+    ),
+    objectStorageAutoCreateBucket,
+    objectStorageSse: objectStorageSse as 'none' | 'AES256' | 'aws:kms',
+    objectStorageKmsKeyId: process.env.OBJECT_STORAGE_KMS_KEY_ID,
+    photoObjectPrefix: parseObjectPrefix(
+      process.env.PHOTO_OBJECT_PREFIX ?? 'private-photos',
+      'PHOTO_OBJECT_PREFIX',
+    ),
+    erasureLedgerPrefix: parseObjectPrefix(
+      process.env.ERASURE_LEDGER_PREFIX ?? 'control/erasure-ledger',
+      'ERASURE_LEDGER_PREFIX',
+    ),
+    erasureLedgerHashSecret,
+    dataOperationsWorkerEnabled: parseBoolean(
+      process.env.DATA_OPERATIONS_WORKER_ENABLED,
+      true,
+      'DATA_OPERATIONS_WORKER_ENABLED',
+    ),
+    dataOperationsPollMs: parsePositiveInteger(
+      process.env.DATA_OPERATIONS_POLL_MS,
+      15_000,
+      'DATA_OPERATIONS_POLL_MS',
+      1_000,
+      300_000,
+    ),
     redisUrl: parseRedisUrl(redisUrl),
     rateLimitHashSecret,
     rateLimitKeyPrefix: parseRateLimitKeyPrefix(process.env.RATE_LIMIT_KEY_PREFIX),

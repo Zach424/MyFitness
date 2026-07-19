@@ -3,6 +3,7 @@ import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger'
 
 import { DatabaseService } from '../database/database.service'
 import { RedisService } from '../operations/redis.service'
+import { ObjectStorageService } from '../operations/object-storage.service'
 import { SkipRateLimit } from '../operations/rate-limit.decorator'
 
 @ApiTags('system')
@@ -12,6 +13,7 @@ export class HealthController {
   constructor(
     private readonly database: DatabaseService,
     private readonly redis: RedisService,
+    private readonly objectStorage: ObjectStorageService,
   ) {}
 
   @Get('live')
@@ -40,24 +42,26 @@ export class HealthController {
   @ApiOkResponse({
     schema: {
       type: 'object',
-      required: ['status', 'service', 'database', 'redis', 'timestamp'],
+      required: ['status', 'service', 'database', 'redis', 'objectStorage', 'timestamp'],
       properties: {
         status: { type: 'string', enum: ['ok'] },
         service: { type: 'string', example: 'myfitness-api' },
         database: { type: 'string', enum: ['up'] },
         redis: { type: 'string', enum: ['up'] },
+        objectStorage: { type: 'string', enum: ['up'] },
         timestamp: { type: 'string', format: 'date-time' },
       },
     },
   })
   async readiness() {
     try {
-      await Promise.all([this.database.ping(), this.redis.ping()])
+      await Promise.all([this.database.ping(), this.redis.ping(), this.objectStorage.ping()])
       return {
         status: 'ok' as const,
         service: 'myfitness-api',
         database: 'up' as const,
         redis: 'up' as const,
+        objectStorage: 'up' as const,
         timestamp: new Date().toISOString(),
       }
     } catch {

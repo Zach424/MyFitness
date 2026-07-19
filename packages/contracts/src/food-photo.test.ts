@@ -64,4 +64,25 @@ describe('food photo contracts', () => {
     ).toThrow()
     expect(foodPhotoConsentVersion).toContain('2026-07-19')
   })
+
+  it('makes pending deletion explicit without claiming that media is already gone', () => {
+    expect(
+      foodPhotoAnalysisSchema.parse({
+        id: '7f568918-1141-4cc4-ae9e-f700c5239608',
+        status: 'failed',
+        previewPath: null,
+        content: null,
+        source: null,
+        provider: null,
+        model: null,
+        promptVersion: 'food-photo-candidates-v1',
+        validatorVersion: 'food-photo-catalog-safety-v1',
+        failureCode: 'provider_unavailable',
+        mediaDeleted: false,
+        mediaDeletionStatus: 'pending',
+        createdAt: '2026-07-19T08:00:00.000Z',
+        expiresAt: '2026-07-20T08:00:00.000Z',
+      }),
+    ).toMatchObject({ mediaDeleted: false, mediaDeletionStatus: 'pending' })
+  })
 })

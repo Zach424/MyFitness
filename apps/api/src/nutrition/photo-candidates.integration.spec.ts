@@ -1,6 +1,4 @@
-import { randomUUID } from 'node:crypto'
-import { access, readFile } from 'node:fs/promises'
-import path from 'node:path'
+import { createHash, randomUUID } from 'node:crypto'
 
 import type { INestApplication } from '@nestjs/common'
 import { foodPhotoConsentVersion } from '@myfitness/contracts'
@@ -12,6 +10,9 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createApplication } from '../bootstrap'
 import { getRuntimeConfig } from '../config'
 import { runMigrations } from '../database/migrate'
+import { DataOperationsService } from '../operations/data-operations.service'
+import { ObjectStorageService } from '../operations/object-storage.service'
+import { PhotoStorageService } from './photo-storage.service'
 
 describe('private food-photo candidates with PostgreSQL and fixture worker', () => {
   const config = getRuntimeConfig()
@@ -21,6 +22,10 @@ describe('private food-photo candidates with PostgreSQL and fixture worker', () 
   let userId = ''
   let otherToken = ''
   let otherUserId = ''
+  let storage: PhotoStorageService
+  let dataOperations: DataOperationsService
+  let objectStorage: ObjectStorageService
+  let operationJobCutoff: Date
 
   const reserve = async () =>
     request(app.getHttpServer())
@@ -32,8 +37,13 @@ describe('private food-photo candidates with PostgreSQL and fixture worker', () 
 
   beforeAll(async () => {
     await runMigrations(config.databaseUrl)
+    operationJobCutoff = (await pool.query<{ cutoff: Date }>('SELECT clock_timestamp() AS cutoff'))
+      .rows[0]!.cutoff
     app = await createApplication(false)
     await app.init()
+    storage = app.get(PhotoStorageService)
+    dataOperations = app.get(DataOperationsService)
+    objectStorage = app.get(ObjectStorageService)
     const session = await request(app.getHttpServer())
       .post('/v1/auth/dev/session')
       .send({ subject: `food-photo-${randomUUID()}` })
@@ -49,6 +59,9 @@ describe('private food-photo candidates with PostgreSQL and fixture worker', () 
   })
 
   afterAll(async () => {
+    await storage.removeUserDirectory(userId)
+    await storage.removeUserDirectory(otherUserId)
+    await pool.query('DELETE FROM data_operation_jobs WHERE created_at >= $1', [operationJobCutoff])
     await pool.query('DELETE FROM users WHERE id = ANY($1::uuid[])', [[userId, otherUserId]])
     await pool.end()
     await app.close()
@@ -90,11 +103,27 @@ describe('private food-photo candidates with PostgreSQL and fixture worker', () 
       upload.body.content.candidates.map((item: { catalogKey: string }) => item.catalogKey),
     ).toEqual(['rice_cooked', 'chicken_breast_cooked'])
 
-    const storedPath = path.join(config.photoStorageRoot, userId, `${photoId}.jpg`)
-    const sanitized = await readFile(storedPath)
+    const storageKey = `${userId}/${photoId}.jpg`
+    const sanitized = await storage.read(storageKey)
     const metadata = await sharp(sanitized).metadata()
     expect(sanitized.includes(Buffer.from('Exif'))).toBe(false)
     expect(Math.max(metadata.width ?? 0, metadata.height ?? 0)).toBe(1600)
+    const storedHash = createHash('sha256').update(sanitized).digest('hex')
+    const replacement = await sharp({
+      create: { width: 80, height: 80, channels: 3, background: '#111111' },
+    })
+      .jpeg()
+      .toBuffer()
+    await request(app.getHttpServer())
+      .post(String(ticket.body.upload.path))
+      .set('Authorization', `Bearer ${token}`)
+      .attach('file', replacement, { filename: 'replacement.jpg', contentType: 'image/jpeg' })
+      .expect(409)
+    expect(
+      createHash('sha256')
+        .update(await storage.read(storageKey))
+        .digest('hex'),
+    ).toBe(storedHash)
     await request(app.getHttpServer()).get(String(upload.body.previewPath)).expect(200)
     await request(app.getHttpServer())
       .delete(`/v1/nutrition/photo-candidates/${photoId}`)
@@ -117,7 +146,7 @@ describe('private food-photo candidates with PostgreSQL and fixture worker', () 
       })
       .expect(200)
     expect(confirmed.body).toMatchObject({ status: 'confirmed', mediaDeleted: true })
-    await expect(access(storedPath)).rejects.toMatchObject({ code: 'ENOENT' })
+    expect(await storage.exists(storageKey)).toBe(false)
 
     const meals = await request(app.getHttpServer())
       .get('/v1/nutrition/meals')
@@ -184,6 +213,61 @@ describe('private food-photo candidates with PostgreSQL and fixture worker', () 
     })
   })
 
+  it('persists and retries an object deletion after an injected storage outage', async () => {
+    const image = await sharp({
+      create: { width: 240, height: 180, channels: 3, background: '#775c86' },
+    })
+      .jpeg()
+      .toBuffer()
+    const ticket = await reserve()
+    const photoId = String(ticket.body.id)
+    await request(app.getHttpServer())
+      .post(String(ticket.body.upload.path))
+      .set('Authorization', `Bearer ${token}`)
+      .attach('file', image, { filename: 'retry.jpg', contentType: 'image/jpeg' })
+      .expect(201)
+    const storageKey = `${userId}/${photoId}.jpg`
+
+    objectStorage.failNextForTest('delete')
+    await request(app.getHttpServer())
+      .delete(`/v1/nutrition/photo-candidates/${photoId}`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(204)
+
+    expect(await storage.exists(storageKey)).toBe(true)
+    const pending = await pool.query<{
+      id: string
+      status: string
+      attempt_count: number
+      media_deletion_status: string
+    }>(
+      `SELECT job.id, job.status, job.attempt_count, photo.media_deletion_status
+       FROM data_operation_jobs AS job
+       JOIN nutrition_photo_candidates AS photo ON photo.id = $1
+       WHERE job.dedupe_key = $2`,
+      [photoId, `photo-delete:${storageKey}`],
+    )
+    expect(pending.rows[0]).toMatchObject({
+      status: 'retry_wait',
+      attempt_count: 1,
+      media_deletion_status: 'pending',
+    })
+
+    await pool.query('UPDATE data_operation_jobs SET available_at = NOW() WHERE id = $1', [
+      pending.rows[0]!.id,
+    ])
+    expect(await dataOperations.drain()).toMatchObject({ claimed: 1, succeeded: 1 })
+    expect(await storage.exists(storageKey)).toBe(false)
+    const recovered = await pool.query<{ status: string; media_deletion_status: string }>(
+      `SELECT job.status, photo.media_deletion_status
+       FROM data_operation_jobs AS job
+       JOIN nutrition_photo_candidates AS photo ON photo.id = $1
+       WHERE job.id = $2`,
+      [photoId, pending.rows[0]!.id],
+    )
+    expect(recovered.rows[0]).toEqual({ status: 'succeeded', media_deletion_status: 'deleted' })
+  })
+
   it('expires ready media and derived content through the retention reconciler', async () => {
     const image = await sharp({
       create: { width: 120, height: 90, channels: 3, background: '#a96821' },
@@ -197,7 +281,7 @@ describe('private food-photo candidates with PostgreSQL and fixture worker', () 
       .set('Authorization', `Bearer ${token}`)
       .attach('file', image, { filename: 'meal.webp', contentType: 'image/webp' })
       .expect(201)
-    const storedPath = path.join(config.photoStorageRoot, userId, `${photoId}.jpg`)
+    const storageKey = `${userId}/${photoId}.jpg`
     await pool.query(
       "UPDATE nutrition_photo_candidates SET expires_at = NOW() - INTERVAL '1 minute' WHERE id = $1",
       [photoId],
@@ -208,7 +292,7 @@ describe('private food-photo candidates with PostgreSQL and fixture worker', () 
       .set('Authorization', `Bearer ${token}`)
       .expect(200)
     expect(list.body.items).toHaveLength(0)
-    await expect(access(storedPath)).rejects.toMatchObject({ code: 'ENOENT' })
+    expect(await storage.exists(storageKey)).toBe(false)
     const row = await pool.query<{
       status: string
       storage_key: string | null

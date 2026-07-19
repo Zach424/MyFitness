@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   accountDeletionConfirmationPhrase,
+  accountDeletionResultSchema,
   accountDeletionRequestSchema,
   consentRevocationRequestSchema,
   privacyDataCategories,
@@ -32,6 +33,25 @@ describe('privacy contracts', () => {
         understandsPermanent: true,
       }).success,
     ).toBe(false)
+  })
+
+  it('separates queued primary, media, provider and backup deletion evidence', () => {
+    expect(
+      accountDeletionResultSchema.parse({
+        receiptId: '7f568918-1141-4cc4-ae9e-f700c5239608',
+        statusToken: 'x'.repeat(43),
+        status: 'queued',
+        deleted: false,
+        scopeVersion: 'durable-erasure-v2',
+        primaryStoreStatus: 'pending',
+        mediaStatus: 'pending',
+        providerStatus: 'pending',
+        backupStatus: 'pending',
+        requestedAt: '2026-07-19T08:00:00.000Z',
+        deletedAt: null,
+        lastErrorCode: 'object_storage_unavailable',
+      }),
+    ).toMatchObject({ deleted: false, backupStatus: 'pending' })
   })
 
   it('rejects incomplete inventory responses', () => {

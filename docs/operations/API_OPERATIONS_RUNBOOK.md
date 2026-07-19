@@ -4,12 +4,13 @@ Status: local implementation evidence; production ownership and alert delivery a
 
 ## Deployment preflight
 
-1. Provide `DATABASE_URL`, `REDIS_URL`, `RATE_LIMIT_HASH_SECRET`, `OPERATIONS_TOKEN`, AI/photo secrets and the exact `TRUST_PROXY_HOPS` through a secret manager.
+1. Provide `DATABASE_URL`, `REDIS_URL`, `RATE_LIMIT_HASH_SECRET`, `OPERATIONS_TOKEN`, AI/photo secrets, object-store credentials/SSE settings, erasure-ledger HMAC secret and the exact `TRUST_PROXY_HOPS` through a secret manager.
 2. Require TLS plus ACL credentials in the production Redis URL. Keep the rate key prefix isolated from queues or application caches.
 3. Apply checksum-verified database migrations before shifting traffic.
-4. Verify `/v1/health/live` returns `200`, then `/v1/health` returns PostgreSQL and Redis `up`.
+4. Verify `/v1/health/live` returns `200`, then `/v1/health` returns PostgreSQL, Redis and object storage `up`.
 5. Scrape `/v1/internal/metrics` through a private network path. Never put the operations token in H5, Mini Program code or a browser admin bundle.
 6. Send a canary request with a UUIDv4 `x-request-id` and verify the same value in response headers and structured logs.
+7. Verify aggregate `/v1/internal/data-operations` access and complete the [data custody preflight](DATA_CUSTODY_RUNBOOK.md) before accepting photo/account-erasure traffic.
 
 ## Minimum dashboard
 
@@ -18,6 +19,7 @@ Status: local implementation evidence; production ownership and alert delivery a
 - `myfitness_rate_limit_rejections_total` split by policy.
 - Any increase in `myfitness_rate_limit_backend_failures_total`.
 - PostgreSQL/Redis readiness and process/container restarts.
+- Object-storage readiness plus durable-job counts and oldest outstanding age.
 - Redis memory, connections, command latency and rejected writes under `noeviction`.
 
 Suggested initial review thresholds—not production-certified SLOs:
@@ -51,4 +53,4 @@ Suggested initial review thresholds—not production-certified SLOs:
 
 ## Rollback verification
 
-After an application rollback, rerun liveness/readiness, verify migration compatibility, make one correlated business request, inspect rate headers, scrape metrics and run the current privacy deletion smoke test. A rollback is incomplete if it restores HTTP traffic by bypassing Redis, weakens auth, or loses request correlation.
+After an application rollback, rerun liveness/readiness, verify migration compatibility, make one correlated business request, inspect rate headers, scrape metrics, inspect outstanding durable jobs and run the current privacy deletion/restore smoke tests. Do not roll back to a version that cannot understand migrations 0013/0014 while deletion work is pending. A rollback is incomplete if it bypasses Redis/object custody, weakens auth, loses request correlation or strands erasure jobs.

@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { DeleteObjectsCommand, ListObjectsV2Command, S3Client } from '@aws-sdk/client-s3'
 import { Pool } from 'pg'
 
 const subjectStorageKey = 'myfitness.dev.subject'
@@ -6,10 +7,25 @@ const database = new Pool({
   connectionString:
     process.env.DATABASE_URL ?? 'postgresql://myfitness:myfitness_local@127.0.0.1:54329/myfitness',
 })
+const objectStorage = new S3Client({
+  region: process.env.OBJECT_STORAGE_REGION ?? 'us-east-1',
+  endpoint: process.env.OBJECT_STORAGE_ENDPOINT ?? 'http://127.0.0.1:9000',
+  forcePathStyle: true,
+  credentials: {
+    accessKeyId: process.env.OBJECT_STORAGE_ACCESS_KEY_ID ?? 'myfitness-minio',
+    secretAccessKey:
+      process.env.OBJECT_STORAGE_SECRET_ACCESS_KEY ?? 'myfitness-minio-secret-2026-local',
+  },
+})
 let trackedSubject: string | undefined
+let testStartedAt: Date
 
 test.beforeEach(async ({ page }) => {
   trackedSubject = undefined
+  const result = await database.query<{ started_at: Date }>(
+    'SELECT clock_timestamp() AS started_at',
+  )
+  testStartedAt = result.rows[0]!.started_at
   page.on('request', (request) => {
     if (!request.url().endsWith('/v1/auth/dev/session') || request.method() !== 'POST') return
     try {
@@ -36,17 +52,40 @@ test.afterEach(async ({ page }) => {
         }
       }, subjectStorageKey)
       .catch(() => null))
-  if (!subject) return
-  await database.query(
-    `DELETE FROM users
-      WHERE id IN (
-        SELECT user_id FROM auth_identities WHERE provider = 'dev' AND provider_subject = $1
-      )`,
-    [subject],
-  )
+  let userId: string | undefined
+  if (subject) {
+    const identity = await database.query<{ user_id: string }>(
+      `SELECT user_id FROM auth_identities
+       WHERE provider = 'dev' AND provider_subject = $1`,
+      [subject],
+    )
+    userId = identity.rows[0]?.user_id
+    if (userId) await database.query('DELETE FROM users WHERE id = $1', [userId])
+  }
+  await database.query('DELETE FROM data_operation_jobs WHERE created_at >= $1', [testStartedAt])
+  if (userId) {
+    const listed = await objectStorage.send(
+      new ListObjectsV2Command({
+        Bucket: process.env.OBJECT_STORAGE_BUCKET ?? 'myfitness-private',
+        Prefix: `${process.env.PHOTO_OBJECT_PREFIX ?? 'private-photos'}/${userId}/`,
+      }),
+    )
+    const keys = (listed.Contents ?? []).flatMap((object) => (object.Key ? [object.Key] : []))
+    if (keys.length) {
+      await objectStorage.send(
+        new DeleteObjectsCommand({
+          Bucket: process.env.OBJECT_STORAGE_BUCKET ?? 'myfitness-private',
+          Delete: { Quiet: true, Objects: keys.map((Key) => ({ Key })) },
+        }),
+      )
+    }
+  }
 })
 
-test.afterAll(async () => database.end())
+test.afterAll(async () => {
+  objectStorage.destroy()
+  await database.end()
+})
 
 const openNutrition = async (page: Page) => {
   await page.goto('/')

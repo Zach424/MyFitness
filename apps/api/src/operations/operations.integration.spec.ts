@@ -7,6 +7,9 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { createApplication } from '../bootstrap'
 import { DatabaseService } from '../database/database.service'
+import { PhotoStorageService } from '../nutrition/photo-storage.service'
+import { ErasureLedgerService } from '../privacy/erasure-ledger.service'
+import { DataOperationsService } from './data-operations.service'
 import type { RateLimitPolicy } from './operations.types'
 import { rateLimitPolicies } from './rate-limit.policies'
 import { RateLimitService } from './rate-limit.service'
@@ -30,12 +33,14 @@ describe('operations perimeter integration', () => {
     operationsToken: process.env.OPERATIONS_TOKEN,
     keyPrefix: process.env.RATE_LIMIT_KEY_PREFIX,
     trustProxyHops: process.env.TRUST_PROXY_HOPS,
+    dataOperationsWorkerEnabled: process.env.DATA_OPERATIONS_WORKER_ENABLED,
   }
 
   beforeAll(async () => {
     process.env.OPERATIONS_TOKEN = operationsToken
     process.env.RATE_LIMIT_KEY_PREFIX = keyPrefix
     process.env.TRUST_PROXY_HOPS = '1'
+    process.env.DATA_OPERATIONS_WORKER_ENABLED = 'false'
     await cleanupClient.connect()
     app = await createApplication(false)
     await app.init()
@@ -59,6 +64,10 @@ describe('operations perimeter integration', () => {
     restoreEnvironment('OPERATIONS_TOKEN', previousEnvironment.operationsToken)
     restoreEnvironment('RATE_LIMIT_KEY_PREFIX', previousEnvironment.keyPrefix)
     restoreEnvironment('TRUST_PROXY_HOPS', previousEnvironment.trustProxyHops)
+    restoreEnvironment(
+      'DATA_OPERATIONS_WORKER_ENABLED',
+      previousEnvironment.dataOperationsWorkerEnabled,
+    )
   })
 
   it('echoes only valid request IDs and reports PostgreSQL plus Redis readiness', async () => {
@@ -69,7 +78,12 @@ describe('operations perimeter integration', () => {
       .expect(200)
 
     expect(ready.headers['x-request-id']).toBe(requestId)
-    expect(ready.body).toMatchObject({ status: 'ok', database: 'up', redis: 'up' })
+    expect(ready.body).toMatchObject({
+      status: 'ok',
+      database: 'up',
+      redis: 'up',
+      objectStorage: 'up',
+    })
     expect(ready.headers['ratelimit-limit']).toBeUndefined()
 
     const alive = await request(app.getHttpServer())
@@ -168,6 +182,62 @@ describe('operations perimeter integration', () => {
     expect(metrics.text).toContain('myfitness_rate_limit_rejections_total{policy="auth_session"} 1')
     expect(metrics.text).not.toContain('203.0.113.17')
     expect(metrics.text).not.toContain(subjects[0])
+  })
+
+  it('exposes only aggregate durable-job health and a bounded manual drain', async () => {
+    await request(app.getHttpServer()).get('/v1/internal/data-operations').expect(401)
+    const status = await request(app.getHttpServer())
+      .get('/v1/internal/data-operations')
+      .set('x-operations-token', operationsToken)
+      .expect(200)
+    expect(status.headers['cache-control']).toBe('no-store')
+    expect(status.body).toEqual(
+      expect.objectContaining({ counts: expect.any(Object), oldestOutstandingAt: null }),
+    )
+    expect(JSON.stringify(status.body)).not.toMatch(/[0-9a-f]{8}-[0-9a-f-]{27}/)
+
+    await request(app.getHttpServer())
+      .post('/v1/internal/data-operations/drain')
+      .set('x-operations-token', operationsToken)
+      .expect(200)
+      .expect({ claimed: 0, succeeded: 0 })
+  })
+
+  it('lets independent workers claim distinct durable jobs without duplicate execution', async () => {
+    const jobIds = [randomUUID(), randomUUID()]
+    const userIds = [randomUUID(), randomUUID()]
+    for (let index = 0; index < jobIds.length; index += 1) {
+      await database.query(
+        `INSERT INTO data_operation_jobs (id, kind, payload, dedupe_key)
+         VALUES ($1, 'photo_prefix_delete', $2::jsonb, $3)`,
+        [
+          jobIds[index],
+          JSON.stringify({ userId: userIds[index], cause: 'independent_worker_test' }),
+          `independent-worker-test:${jobIds[index]}`,
+        ],
+      )
+    }
+
+    const createWorker = () =>
+      new DataOperationsService(
+        database,
+        app.get(PhotoStorageService),
+        app.get(ErasureLedgerService),
+      )
+    const results = await Promise.all([createWorker().drain(1), createWorker().drain(1)])
+    expect(results.reduce((sum, result) => sum + result.claimed, 0)).toBe(2)
+    expect(results.reduce((sum, result) => sum + result.succeeded, 0)).toBe(2)
+
+    const jobs = await database.query<{ id: string; status: string; attempt_count: number }>(
+      `SELECT id, status, attempt_count FROM data_operation_jobs
+       WHERE id = ANY($1::uuid[]) ORDER BY id`,
+      [jobIds],
+    )
+    expect(jobs.rows).toHaveLength(2)
+    expect(jobs.rows.every((job) => job.status === 'succeeded' && job.attempt_count === 1)).toBe(
+      true,
+    )
+    await database.query('DELETE FROM data_operation_jobs WHERE id = ANY($1::uuid[])', [jobIds])
   })
 
   it('fails business traffic closed while keeping liveness available when Redis is down', async () => {

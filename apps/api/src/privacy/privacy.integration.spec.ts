@@ -1,6 +1,4 @@
 import { randomUUID } from 'node:crypto'
-import { access } from 'node:fs/promises'
-import path from 'node:path'
 
 import type { INestApplication } from '@nestjs/common'
 import {
@@ -17,6 +15,9 @@ import { createApplication } from '../bootstrap'
 import { getRuntimeConfig } from '../config'
 import { runMigrations } from '../database/migrate'
 import { PhotoStorageService } from '../nutrition/photo-storage.service'
+import { DataOperationsService } from '../operations/data-operations.service'
+import { ObjectStorageService } from '../operations/object-storage.service'
+import { ErasureLedgerService } from './erasure-ledger.service'
 
 describe('privacy ownership API with PostgreSQL and private media', () => {
   const config = getRuntimeConfig()
@@ -24,6 +25,11 @@ describe('privacy ownership API with PostgreSQL and private media', () => {
   const users = new Set<string>()
   const receipts = new Set<string>()
   let app: INestApplication
+  let storage: PhotoStorageService
+  let erasureLedger: ErasureLedgerService
+  let dataOperations: DataOperationsService
+  let objectStorage: ObjectStorageService
+  let operationJobCutoff: Date
 
   const onboarding = {
     adultConfirmed: true,
@@ -104,20 +110,30 @@ describe('privacy ownership API with PostgreSQL and private media', () => {
       .expect(201)
     return {
       photoId,
-      storedPath: path.join(config.photoStorageRoot, userId, `${photoId}.jpg`),
+      storageKey: `${userId}/${photoId}.jpg`,
     }
   }
 
   beforeAll(async () => {
     await runMigrations(config.databaseUrl)
+    operationJobCutoff = (await pool.query<{ cutoff: Date }>('SELECT clock_timestamp() AS cutoff'))
+      .rows[0]!.cutoff
     app = await createApplication(false)
     await app.init()
+    storage = app.get(PhotoStorageService)
+    erasureLedger = app.get(ErasureLedgerService)
+    dataOperations = app.get(DataOperationsService)
+    objectStorage = app.get(ObjectStorageService)
   })
 
   afterAll(async () => {
     for (const userId of users) {
-      await app.get(PhotoStorageService).removeUserDirectory(userId)
+      await storage.removeUserDirectory(userId)
     }
+    for (const receiptId of receipts) {
+      await erasureLedger.removeForVerification(receiptId)
+    }
+    await pool.query('DELETE FROM data_operation_jobs WHERE created_at >= $1', [operationJobCutoff])
     await pool.query('DELETE FROM users WHERE id = ANY($1::uuid[])', [[...users]])
     await pool.query('DELETE FROM privacy_erasure_receipts WHERE receipt_id = ANY($1::uuid[])', [
       [...receipts],
@@ -187,7 +203,7 @@ describe('privacy ownership API with PostgreSQL and private media', () => {
       status: 'revoked',
       removedPhotoAnalyses: 1,
     })
-    await expect(access(first.storedPath)).rejects.toMatchObject({ code: 'ENOENT' })
+    expect(await storage.exists(first.storageKey)).toBe(false)
     const afterRevoke = await request(app.getHttpServer())
       .get('/v1/me/privacy')
       .set('Authorization', `Bearer ${token}`)
@@ -216,7 +232,7 @@ describe('privacy ownership API with PostgreSQL and private media', () => {
   it('requires deliberate confirmation, erases the account graph and invalidates its session', async () => {
     const { token, userId } = await createUser()
     await createHealthRecord(token)
-    await createPhoto(token, userId)
+    const photo = await createPhoto(token, userId)
 
     await request(app.getHttpServer())
       .delete('/v1/me/privacy/account')
@@ -236,11 +252,32 @@ describe('privacy ownership API with PostgreSQL and private media', () => {
         exportChoice: 'skip',
         understandsPermanent: true,
       })
-      .expect(200)
-    expect(deleted.body).toMatchObject({ deleted: true })
-    expect(deleted.body.scopeVersion).toBe('primary-store-v1')
+      .expect(202)
+    expect(deleted.body).toMatchObject({
+      deleted: true,
+      status: 'completed',
+      primaryStoreStatus: 'deleted',
+      mediaStatus: 'deleted',
+      providerStatus: 'fixture_only',
+      backupStatus: 'ledger_published',
+    })
+    expect(deleted.body.scopeVersion).toBe('durable-erasure-v2')
     expect(deleted.body.receiptId).toMatch(/^[0-9a-f-]{36}$/)
+    expect(deleted.body.statusToken).toMatch(/^[A-Za-z0-9_-]{43}$/)
     receipts.add(String(deleted.body.receiptId))
+
+    await request(app.getHttpServer())
+      .get(`/v1/privacy/erasure-receipts/${deleted.body.receiptId}`)
+      .set('X-Erasure-Receipt-Token', deleted.body.statusToken)
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body).toMatchObject({ status: 'completed', deleted: true })
+        expect(body).not.toHaveProperty('statusToken')
+      })
+    await request(app.getHttpServer())
+      .get(`/v1/privacy/erasure-receipts/${deleted.body.receiptId}`)
+      .set('X-Erasure-Receipt-Token', 'x'.repeat(43))
+      .expect(401)
 
     await request(app.getHttpServer())
       .get('/v1/me/privacy')
@@ -258,10 +295,68 @@ describe('privacy ownership API with PostgreSQL and private media', () => {
       'SELECT scope_version FROM privacy_erasure_receipts WHERE receipt_id = $1',
       [deleted.body.receiptId],
     )
-    expect(receipt.rows[0]?.scope_version).toBe('primary-store-v1')
-    await expect(access(path.join(config.photoStorageRoot, userId))).rejects.toMatchObject({
-      code: 'ENOENT',
+    expect(receipt.rows[0]?.scope_version).toBe('durable-erasure-v2')
+    expect(await storage.exists(photo.storageKey)).toBe(false)
+    users.delete(userId)
+  })
+
+  it('keeps a deletion receipt recoverable while object storage is temporarily unavailable', async () => {
+    const { token, userId } = await createUser()
+    const photo = await createPhoto(token, userId)
+    objectStorage.failNextForTest('delete')
+
+    const accepted = await request(app.getHttpServer())
+      .delete('/v1/me/privacy/account')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        confirmationPhrase: accountDeletionConfirmationPhrase,
+        exportChoice: 'skip',
+        understandsPermanent: true,
+      })
+      .expect(202)
+    expect(accepted.body).toMatchObject({
+      status: 'queued',
+      deleted: false,
+      primaryStoreStatus: 'pending',
+      mediaStatus: 'pending',
+      backupStatus: 'pending',
+      lastErrorCode: 'object_storage_unavailable',
     })
+    receipts.add(String(accepted.body.receiptId))
+    expect(await storage.exists(photo.storageKey)).toBe(true)
+
+    await request(app.getHttpServer())
+      .get('/v1/me/privacy')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(401)
+    const pending = await pool.query<{ id: string; status: string; attempt_count: number }>(
+      `SELECT id, status, attempt_count FROM data_operation_jobs
+       WHERE receipt_id = $1`,
+      [accepted.body.receiptId],
+    )
+    expect(pending.rows[0]).toMatchObject({ status: 'retry_wait', attempt_count: 1 })
+    await pool.query('UPDATE data_operation_jobs SET available_at = NOW() WHERE id = $1', [
+      pending.rows[0]!.id,
+    ])
+    expect(await dataOperations.drain()).toMatchObject({ claimed: 1, succeeded: 1 })
+
+    const completed = await request(app.getHttpServer())
+      .get(`/v1/privacy/erasure-receipts/${accepted.body.receiptId}`)
+      .set('X-Erasure-Receipt-Token', accepted.body.statusToken)
+      .expect(200)
+    expect(completed.body).toMatchObject({
+      status: 'completed',
+      deleted: true,
+      primaryStoreStatus: 'deleted',
+      mediaStatus: 'deleted',
+      backupStatus: 'ledger_published',
+    })
+    expect(await storage.exists(photo.storageKey)).toBe(false)
+    const remaining = await pool.query<{ count: string }>(
+      'SELECT COUNT(*)::text AS count FROM users WHERE id = $1',
+      [userId],
+    )
+    expect(remaining.rows[0]?.count).toBe('0')
     users.delete(userId)
   })
 })

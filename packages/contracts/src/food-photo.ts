@@ -97,6 +97,7 @@ export const foodPhotoAnalysisSchema = z
     validatorVersion: z.literal(foodPhotoValidatorVersion),
     failureCode: z.enum(aiWorkerFailureCodes).nullable(),
     mediaDeleted: z.boolean(),
+    mediaDeletionStatus: z.enum(['not_required', 'pending', 'deleted']),
     createdAt: z.string().datetime({ offset: true }),
     expiresAt: z.string().datetime({ offset: true }),
   })
@@ -112,7 +113,7 @@ export const foodPhotoAnalysisSchema = z
       ) {
         ctx.addIssue({ code: 'custom', message: 'ready analyses require content and provenance' })
       }
-      if (value.failureCode || value.mediaDeleted) {
+      if (value.failureCode || value.mediaDeleted || value.mediaDeletionStatus !== 'not_required') {
         ctx.addIssue({
           code: 'custom',
           message: 'ready analyses must retain media without a failure',
@@ -120,8 +121,15 @@ export const foodPhotoAnalysisSchema = z
       }
       return
     }
-    if (value.previewPath || !value.mediaDeleted) {
-      ctx.addIssue({ code: 'custom', message: 'failed or rejected analyses must delete media' })
+    if (
+      value.previewPath ||
+      value.mediaDeletionStatus === 'not_required' ||
+      value.mediaDeleted !== (value.mediaDeletionStatus === 'deleted')
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'failed or rejected analyses must queue or complete media deletion',
+      })
     }
   })
 
@@ -155,10 +163,15 @@ export const foodPhotoConfirmationSchema = z
     photoCandidateId: z.string().uuid(),
     status: z.literal('confirmed'),
     items: confirmFoodPhotoCandidateSchema.shape.items,
-    mediaDeleted: z.literal(true),
+    mediaDeleted: z.boolean(),
+    mediaDeletionStatus: z.enum(['pending', 'deleted']),
     confirmedAt: z.string().datetime({ offset: true }),
   })
   .strict()
+  .refine((value) => value.mediaDeleted === (value.mediaDeletionStatus === 'deleted'), {
+    message: 'mediaDeleted must match mediaDeletionStatus',
+    path: ['mediaDeleted'],
+  })
 
 export const allowedFoodSchema = z
   .object({

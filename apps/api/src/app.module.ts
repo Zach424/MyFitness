@@ -29,15 +29,19 @@ import { PhotoStorageService } from './nutrition/photo-storage.service'
 import { OnboardingController } from './onboarding/onboarding.controller'
 import { OnboardingService } from './onboarding/onboarding.service'
 import { InternalOperationsGuard } from './operations/internal-operations.guard'
+import { DataOperationsService } from './operations/data-operations.service'
 import { IngressRateLimitGuard } from './operations/ingress-rate-limit.guard'
 import { OperationalMetricsService } from './operations/operational-metrics.service'
 import { OperationsController } from './operations/operations.controller'
+import { ObjectStorageService } from './operations/object-storage.service'
 import { RateLimitInterceptor } from './operations/rate-limit.interceptor'
 import { RateLimitService } from './operations/rate-limit.service'
 import { RedisService } from './operations/redis.service'
 import { PlansController } from './plans/plans.controller'
 import { PlansService } from './plans/plans.service'
 import { PrivacyController } from './privacy/privacy.controller'
+import { ErasureReceiptsController } from './privacy/erasure-receipts.controller'
+import { ErasureLedgerService } from './privacy/erasure-ledger.service'
 import { PrivacyService } from './privacy/privacy.service'
 import { WorkoutsController } from './workouts/workouts.controller'
 import { WorkoutsService } from './workouts/workouts.service'
@@ -49,6 +53,7 @@ import { WorkoutsService } from './workouts/workouts.service'
     AdminSupportController,
     AiController,
     AuthController,
+    ErasureReceiptsController,
     HealthController,
     HealthRecordsController,
     InsightsController,
@@ -70,6 +75,8 @@ import { WorkoutsService } from './workouts/workouts.service'
     AiService,
     AuthService,
     DatabaseService,
+    DataOperationsService,
+    ErasureLedgerService,
     HealthRecordsService,
     InsightsService,
     NutritionService,
@@ -78,6 +85,7 @@ import { WorkoutsService } from './workouts/workouts.service'
     OnboardingService,
     InternalOperationsGuard,
     OperationalMetricsService,
+    ObjectStorageService,
     PlansService,
     PrivacyService,
     RateLimitService,

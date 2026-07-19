@@ -1,11 +1,11 @@
-import { randomUUID } from 'node:crypto'
+import { createHash, randomBytes, randomUUID } from 'node:crypto'
 
 import {
   ConflictException,
   Injectable,
   Logger,
   NotFoundException,
-  ServiceUnavailableException,
+  UnauthorizedException,
 } from '@nestjs/common'
 import {
   accountDeletionConfirmationPhrase,
@@ -28,6 +28,8 @@ import type { PoolClient, QueryResultRow } from 'pg'
 import { DatabaseService } from '../database/database.service'
 import { PhotoCandidatesService } from '../nutrition/photo-candidates.service'
 import { PhotoStorageService } from '../nutrition/photo-storage.service'
+import { DataOperationsService } from '../operations/data-operations.service'
+import { ErasureLedgerService } from './erasure-ledger.service'
 
 type InventoryRow = QueryResultRow & {
   category: PrivacyInventoryItem['category']
@@ -69,6 +71,8 @@ export class PrivacyService {
     private readonly database: DatabaseService,
     private readonly photos: PhotoCandidatesService,
     private readonly photoStorage: PhotoStorageService,
+    private readonly dataOperations: DataOperationsService,
+    private readonly erasureLedger: ErasureLedgerService,
   ) {}
 
   private async account(userId: string) {
@@ -426,50 +430,95 @@ export class PrivacyService {
     }
   }
 
+  private receiptResult(row: {
+    receipt_id: string
+    status: 'queued' | 'running' | 'completed' | 'dead_letter'
+    scope_version: typeof privacyErasureScopeVersion
+    primary_store_status: 'pending' | 'deleted'
+    media_status: 'pending' | 'deleted'
+    provider_status: 'pending' | 'not_applicable' | 'fixture_only' | 'policy_bound'
+    backup_status: 'pending' | 'ledger_published'
+    requested_at: Date
+    completed_at: Date | null
+    last_error_code:
+      | 'object_storage_unavailable'
+      | 'database_unavailable'
+      | 'invalid_job_payload'
+      | 'unexpected_error'
+      | null
+  }) {
+    return {
+      receiptId: row.receipt_id,
+      status: row.status,
+      deleted: row.status === 'completed',
+      scopeVersion: row.scope_version,
+      primaryStoreStatus: row.primary_store_status,
+      mediaStatus: row.media_status,
+      providerStatus: row.provider_status,
+      backupStatus: row.backup_status,
+      requestedAt: row.requested_at.toISOString(),
+      deletedAt: row.completed_at?.toISOString() ?? null,
+      lastErrorCode: row.last_error_code,
+    }
+  }
+
+  private async receipt(receiptId: string, statusTokenHash: string) {
+    const result = await this.database.query<
+      Parameters<PrivacyService['receiptResult']>[0] & { status_token_hash: string }
+    >(
+      `SELECT receipt_id, status, scope_version, primary_store_status, media_status,
+              provider_status, backup_status, requested_at, completed_at, last_error_code,
+              status_token_hash
+       FROM privacy_erasure_receipts
+       WHERE receipt_id = $1 AND status_token_hash = $2
+         AND scope_version = $3`,
+      [receiptId, statusTokenHash, privacyErasureScopeVersion],
+    )
+    const row = result.rows[0]
+    if (!row) throw new UnauthorizedException('erasure receipt token is invalid')
+    return this.receiptResult(row)
+  }
+
+  async erasureReceipt(receiptId: string, statusToken: string) {
+    return this.receipt(receiptId, createHash('sha256').update(statusToken).digest('hex'))
+  }
+
   async deleteAccount(userId: string, _input: AccountDeletionRequest) {
     const receiptId = randomUUID()
-    const marked = await this.database.withTransaction(async (client) => {
+    const statusToken = randomBytes(32).toString('base64url')
+    const statusTokenHash = createHash('sha256').update(statusToken).digest('hex')
+    const jobId = await this.database.withTransaction(async (client) => {
       const account = await client.query<{ id: string }>(
         "SELECT id FROM users WHERE id = $1 AND status = 'active' FOR UPDATE",
         [userId],
       )
       if (!account.rows[0]) throw new ConflictException('account is not active')
-      return client.query(
+      await client.query(
         "UPDATE users SET status = 'deletion_pending', updated_at = NOW() WHERE id = $1 RETURNING id",
         [userId],
       )
-    })
-    if (!marked.rows[0]) throw new ConflictException('account deletion could not start')
-
-    try {
-      await this.photos.purgeForUser(userId)
-      const completedAt = await this.database.withTransaction(async (client) => {
-        const deleted = await client.query<{ id: string }>(
-          "DELETE FROM users WHERE id = $1 AND status = 'deletion_pending' RETURNING id",
-          [userId],
-        )
-        if (!deleted.rows[0]) throw new ConflictException('account deletion state changed')
-        const receipt = await client.query<{ completed_at: Date }>(
-          `INSERT INTO privacy_erasure_receipts (receipt_id, scope_version)
-           VALUES ($1, $2) RETURNING completed_at`,
-          [receiptId, privacyErasureScopeVersion],
-        )
-        return receipt.rows[0]!.completed_at
-      })
-      return {
-        receiptId,
-        deleted: true as const,
-        scopeVersion: privacyErasureScopeVersion,
-        deletedAt: completedAt.toISOString(),
-      }
-    } catch (error) {
-      await this.database.query(
-        "UPDATE users SET status = 'active', updated_at = NOW() WHERE id = $1 AND status = 'deletion_pending'",
-        [userId],
+      await client.query(
+        `INSERT INTO privacy_erasure_receipts (
+           receipt_id, scope_version, status, status_token_hash,
+           requested_user_id, subject_ref, primary_store_status,
+           media_status, provider_status, backup_status
+         ) VALUES ($1, $2, 'queued', $3, $4, $5, 'pending', 'pending', 'pending', 'pending')`,
+        [
+          receiptId,
+          privacyErasureScopeVersion,
+          statusTokenHash,
+          userId,
+          this.erasureLedger.subjectRef(userId),
+        ],
       )
-      this.logger.error('account erasure failed before completion')
-      if (error instanceof ConflictException) throw error
-      throw new ServiceUnavailableException('account deletion could not complete safely')
+      return this.dataOperations.enqueueAccountErasure(client, receiptId, userId)
+    })
+    await this.dataOperations.runById(jobId).catch(() => {
+      this.logger.error('account erasure was persisted but immediate execution failed')
+    })
+    return {
+      ...(await this.receipt(receiptId, statusTokenHash)),
+      statusToken,
     }
   }
 }

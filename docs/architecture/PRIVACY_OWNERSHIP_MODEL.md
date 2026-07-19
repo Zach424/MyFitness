@@ -1,6 +1,6 @@
 # Privacy ownership model
 
-Status: implemented locally for the iteration-011 primary-store boundary
+Status: durable local ownership/erasure boundary implemented through iteration 015
 
 ## User-owned surface
 
@@ -32,7 +32,7 @@ revoked + new explicit request → new accepted event → active
 
 `terms`, `privacy` and `health_data` are required to operate the current account. They cannot be withdrawn independently in the UI; account erasure stops that processing. `ai_plan_explanation` and `food_photo_analysis` are optional and revocable.
 
-Consent rows remain append-oriented: dropping the old purpose/version uniqueness allows a new event after withdrawal instead of erasing the prior acceptance/revocation interval. AI and photo idempotency locks ensure one consent receipt is created for one unique request. Food-photo withdrawal removes every photo-analysis row and user-scoped private-media directory; AI withdrawal removes pending work while completed user-visible explanations remain exportable until account erasure.
+Consent rows remain append-oriented: dropping the old purpose/version uniqueness allows a new event after withdrawal instead of erasing the prior acceptance/revocation interval. AI and photo idempotency locks ensure one consent receipt is created for one unique request. Food-photo withdrawal removes every photo-analysis row and transactionally enqueues exact-object plus user-prefix deletion; AI withdrawal removes pending work while completed user-visible explanations remain exportable until account erasure. Media deletion can remain `pending` during a storage outage without being misreported as completed.
 
 ## Account erasure
 
@@ -43,26 +43,40 @@ sequenceDiagram
   participant U as User
   participant C as Client
   participant A as API
-  participant F as Private media
   participant P as PostgreSQL
+  participant J as Durable worker
+  participant O as Private object storage
+  participant L as Restore erasure ledger
   U->>C: exact phrase + export choice + acknowledgement
   C->>A: DELETE /me/privacy/account
-  A->>P: lock active user; mark deletion_pending
-  A->>F: remove exact legacy keys and user UUID directory
-  A->>P: delete user graph + write unlinkable receipt (one transaction)
-  P-->>A: primary-store-v1 completion time
-  A-->>C: receipt ID; old session is gone
-  C-->>U: completion state; no automatic new account
+  A->>P: lock active user; mark deletion_pending; create receipt + job
+  A-->>C: 202 + receipt ID + status token
+  C-->>U: access closed; show/poll receipt
+  J->>P: atomically claim leased account-erasure job
+  J->>L: publish HMAC subject restore control
+  J->>O: delete exact legacy keys + user prefix
+  J->>P: cascade user graph; complete receipt; clear subject fields
+  C->>A: GET receipt with UUID + token
+  A-->>C: primary/media/provider/backup disposition
 ```
 
-All product tables reference `users` with cascades, while the media adapter stores new files under `<user UUID>/<photo UUID>.jpg`. Marking the user `deletion_pending` stops new authentication; uploads that began earlier must still pass an active-user check before entering processing and remove their own file if that check fails. Account purge removes both known storage keys and the whole validated user directory.
+All product tables reference `users` with cascades, while new private objects use `private-photos/<user UUID>/<photo UUID>.jpg`. Marking the user `deletion_pending` stops session authorization immediately; storage failure never reopens access. The database transaction also creates a `durable-erasure-v2` receipt and `account_erasure` job. Account work allows 20 leased/retry attempts and becomes `dead_letter` only after exhaustion or invalid payload.
 
-The completion receipt stores only a random receipt UUID, `primary-store-v1` scope and completion time—no user ID, identity hash or deleted-content counts. It proves the implemented primary PostgreSQL/private-media boundary, not backups, logs or external-provider deletion. Those require the next operations runbook and production-infrastructure review.
+The client receives a random receipt UUID and separate 256-bit base64url token; only the token hash is stored. `GET /v1/privacy/erasure-receipts/:receiptId` requires `X-Erasure-Receipt-Token`, is rate-limited/no-store and exposes queued/running/completed/dead-letter plus independent primary, media, provider and backup dispositions. Keeping the secret out of the URL avoids browser-history and proxy-query leakage. Completion clears `requested_user_id` and the HMAC subject field, so the primary receipt cannot identify the deleted account.
+
+Provider semantics are deliberately bounded: `not_applicable`, `fixture_only` or `policy_bound`. OpenAI usage is `policy_bound` because `store:false` does not remove default abuse-monitoring/contractual retention; it is never reported as remote deletion.
+
+Before the main graph is deleted, the worker writes `control/erasure-ledger/<receipt>.json` containing receipt ID, request time and `HMAC-SHA256(secret, user UUID)`. The secret remains outside PostgreSQL. Any restored backup must replay this independently retained ledger before accepting traffic and cascade matching resurrected users. `backupStatus=ledger_published` proves this control exists; it does not mean all backup copies have expired.
+
+The status token is shown once. The current client cannot recover it if the deletion transaction committed but the response was lost or after the page is discarded; request idempotency and safe receipt recovery are required before closed beta.
 
 ## Known limits
 
-- Production identity, recovery and linked-account deletion are not implemented.
-- Database backups, centralized logs and external provider retention are not yet covered by an exercised erasure schedule.
+- Production identity, account recovery and linked-account deletion are not implemented.
+- A real local `pg_dump → pg_restore → ledger replay` drill passes, but production backup schedule/retention, independent ledger replication, HMAC-secret recovery and isolated restore ownership are not configured.
 - Export is generated in API memory and the Mini Program download API has a 50 MiB practical boundary.
-- Anonymous erasure receipts have no public verification endpoint; support/audit access belongs to the admin-operations iteration.
-- Shared object storage, durable reconciliation, fault injection and incident rollback are still required before beta.
+- Receipt status has a public secret-gated endpoint, but lost-response/reload recovery is unresolved.
+- Dead-letter recovery is a restricted exact-job runbook action; centralized alert delivery and least-privilege recovery tooling are absent.
+- Local MinIO, fault injection and restore proof do not establish production bucket encryption/IAM/lifecycle/versioning/replication or provider/legal approval.
+
+Operational detail is in the [data custody runbook](../operations/DATA_CUSTODY_RUNBOOK.md); ADR-0015 records the cross-system ordering and restore-ledger decision.

@@ -2,29 +2,29 @@
 
 The roadmap is organized as controlled iterations. A round may take several working sessions, but it ends only after implementation, validation, archive update, and a commit.
 
-Progress snapshot (2026-07-19): iterations 0–14 are complete locally; iteration 15 is next. The product now covers authenticated records, Today/trends, versioned deterministic plans, consented review-only AI/photo assistance, user-owned inventory/export/revocation/erasure, a Redis-backed API operational perimeter, compatibility-tested Taro security floors and an independent read-only operator/audit boundary. Production audit critical/high findings are zero; six moderate Taro build-chain findings, production user/operator identity, durable storage/retention, centralized alerting, model/provider approval and shared deployment remain gated.
+Progress snapshot (2026-07-19): iterations 0–15 are complete locally; iteration 16 is next. The product now covers authenticated records, Today/trends, versioned deterministic plans, consented review-only AI/photo assistance, user-owned inventory/export/revocation, durable asynchronous erasure with restore-ledger proof, a Redis-backed API operational perimeter, compatibility-tested Taro security floors and an independent read-only operator/audit boundary. Production audit critical/high findings are zero; six moderate Taro build-chain findings, verified production user/operator identity, cloud storage/backup ownership, centralized alerting, model/provider approval and shared deployment remain gated.
 
-| Iteration | Primary scope                                       | Exit evidence                                                                               |
-| --------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| 0         | Product, design, architecture, iteration governance | Baseline documents cross-link, repository status reviewed, local commit created             |
-| 1         | Multi-end client foundation and Today shell         | H5 boots; Mini Program build is checked; screenshot reviewed; token tests pass              |
-| 2         | API foundation and health-record contract           | PostgreSQL migration, OpenAPI contract, provenance/unit tests, local stack health check     |
-| 3         | Adult onboarding and goals                          | Profile flow persists through API; consent version recorded; E2E happy/error paths pass     |
-| 4         | Body and recovery recording                         | Create/edit/delete/history flows; trends use correct time/unit semantics                    |
-| 5         | Workout recording                                   | Exercise/set model, repeat-last-workout flow, volume calculations and E2E tests             |
-| 6         | Nutrition recording                                 | Search/favorites/manual portions; macro totals and revision history verified                |
-| 7         | Today and trend loop                                | Plan-vs-actual rail uses real API data; empty/loading/offline/error states tested           |
-| 8         | Deterministic plan engine                           | Structured plan contract, substitutions, load constraints and versioning                    |
-| 9         | AI explanation and plan orchestration               | Model gateway, prompt/version logs, validators, offline fixtures and evaluation report      |
-| 10        | Food-photo assistance                               | EXIF removal, signed upload, uncertainty/confirmation, retention deletion tests             |
-| 11        | User privacy ownership                              | Inventory, portable export, optional-consent revocation and primary-store erasure exercised |
-| 12        | API operational perimeter                           | Correlation, Redis abuse limits, health/metrics, outage tests and incident runbook          |
-| 13        | Production dependency remediation                   | Zero critical/high audit findings plus full type/test/dual-build/E2E compatibility evidence |
-| 14        | Administrator access and support                    | Operator identity, RBAC, immutable audit and read-only support workflow exercised           |
-| 15        | Durable data operations                             | Reconciliation jobs, private object storage, retention, restore and provider deletion proof |
-| 16        | Production identity and shared test deployment      | Verified user identity, centralized telemetry, calibrated limits and rollback exercised     |
-| 17        | Beta hardening and release                          | Security review, performance budget, accessibility, store/filing artifacts, staged rollout  |
-| 18        | Native App feasibility and device sync              | Retention gate reviewed; HealthKit/Health Connect/Huawei proof of concept                   |
+| Iteration | Primary scope                                       | Exit evidence                                                                                |
+| --------- | --------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| 0         | Product, design, architecture, iteration governance | Baseline documents cross-link, repository status reviewed, local commit created              |
+| 1         | Multi-end client foundation and Today shell         | H5 boots; Mini Program build is checked; screenshot reviewed; token tests pass               |
+| 2         | API foundation and health-record contract           | PostgreSQL migration, OpenAPI contract, provenance/unit tests, local stack health check      |
+| 3         | Adult onboarding and goals                          | Profile flow persists through API; consent version recorded; E2E happy/error paths pass      |
+| 4         | Body and recovery recording                         | Create/edit/delete/history flows; trends use correct time/unit semantics                     |
+| 5         | Workout recording                                   | Exercise/set model, repeat-last-workout flow, volume calculations and E2E tests              |
+| 6         | Nutrition recording                                 | Search/favorites/manual portions; macro totals and revision history verified                 |
+| 7         | Today and trend loop                                | Plan-vs-actual rail uses real API data; empty/loading/offline/error states tested            |
+| 8         | Deterministic plan engine                           | Structured plan contract, substitutions, load constraints and versioning                     |
+| 9         | AI explanation and plan orchestration               | Model gateway, prompt/version logs, validators, offline fixtures and evaluation report       |
+| 10        | Food-photo assistance                               | EXIF removal, signed upload, uncertainty/confirmation, retention deletion tests              |
+| 11        | User privacy ownership                              | Inventory, portable export, optional-consent revocation and primary-store erasure exercised  |
+| 12        | API operational perimeter                           | Correlation, Redis abuse limits, health/metrics, outage tests and incident runbook           |
+| 13        | Production dependency remediation                   | Zero critical/high audit findings plus full type/test/dual-build/E2E compatibility evidence  |
+| 14        | Administrator access and support                    | Operator identity, RBAC, immutable audit and read-only support workflow exercised            |
+| 15        | Durable data operations                             | Durable jobs, private object storage, fault retries, restore ledger and provider disposition |
+| 16        | Production identity and shared test deployment      | Verified user identity, centralized telemetry, calibrated limits and rollback exercised      |
+| 17        | Beta hardening and release                          | Security review, performance budget, accessibility, store/filing artifacts, staged rollout   |
+| 18        | Native App feasibility and device sync              | Retention gate reviewed; HealthKit/Health Connect/Huawei proof of concept                    |
 
 ## Release gates
 

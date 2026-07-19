@@ -1,8 +1,6 @@
 import { createHash } from 'node:crypto'
-import { mkdir, readFile, rm, unlink, writeFile } from 'node:fs/promises'
-import path from 'node:path'
 
-import { BadRequestException, Injectable } from '@nestjs/common'
+import { BadRequestException, ConflictException, Injectable } from '@nestjs/common'
 import {
   foodPhotoContentTypes,
   foodPhotoMaxBytes,
@@ -12,6 +10,10 @@ import {
 import sharp, { type Metadata } from 'sharp'
 
 import { getRuntimeConfig } from '../config'
+import {
+  ObjectAlreadyExistsError,
+  ObjectStorageService,
+} from '../operations/object-storage.service'
 
 type UploadedPhoto = {
   buffer: Buffer
@@ -30,34 +32,28 @@ export type StoredPhoto = {
 
 @Injectable()
 export class PhotoStorageService {
-  private readonly root = getRuntimeConfig().photoStorageRoot
+  private readonly prefix = getRuntimeConfig().photoObjectPrefix
   private readonly uuidPattern =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
 
-  private resolveKey(key: string) {
+  constructor(private readonly objects: ObjectStorageService) {}
+
+  private validateStorageKey(key: string) {
     const validLegacy = /^[0-9a-f-]{36}\.jpg$/.test(key)
     const validScoped = /^[0-9a-f-]{36}\/[0-9a-f-]{36}\.jpg$/.test(key)
-    const segments = key.split('/')
-    const target = path.resolve(this.root, ...segments)
-    const relative = path.relative(this.root, target)
-    if (
-      (!validLegacy && !validScoped) ||
-      relative.startsWith('..') ||
-      path.isAbsolute(relative) ||
-      relative.split(path.sep).join('/') !== key
-    ) {
+    if (!validLegacy && !validScoped) {
       throw new BadRequestException('invalid private photo key')
     }
-    return target
+    return key
   }
 
-  private userDirectory(userId: string) {
+  private validateUserId(userId: string) {
     if (!this.uuidPattern.test(userId)) throw new BadRequestException('invalid private photo owner')
-    const target = path.resolve(this.root, userId)
-    if (path.dirname(target) !== this.root) {
-      throw new BadRequestException('invalid private photo owner')
-    }
-    return target
+    return userId
+  }
+
+  private objectKey(storageKey: string) {
+    return `${this.prefix}/${this.validateStorageKey(storageKey)}`
   }
 
   async sanitizeAndStore(userId: string, id: string, upload: UploadedPhoto): Promise<StoredPhoto> {
@@ -111,33 +107,47 @@ export class PhotoStorageService {
     }
 
     if (!this.uuidPattern.test(id)) throw new BadRequestException('invalid private photo id')
+    this.validateUserId(userId)
     const key = `${userId}/${id}.jpg`
-    const target = this.resolveKey(key)
-    await mkdir(path.dirname(target), { recursive: true })
-    await writeFile(target, output.data, { flag: 'wx', mode: 0o600 })
+    const sha256 = createHash('sha256').update(output.data).digest('hex')
+    try {
+      await this.objects.putPrivateObject({
+        key: this.objectKey(key),
+        body: output.data,
+        contentType: 'image/jpeg',
+        sha256Base64: Buffer.from(sha256, 'hex').toString('base64'),
+        metadata: { mediaSha256: sha256 },
+        ifAbsent: true,
+      })
+    } catch (error) {
+      if (error instanceof ObjectAlreadyExistsError) {
+        throw new ConflictException('photo upload was already stored')
+      }
+      throw error
+    }
     return {
       storageKey: key,
       buffer: output.data,
       byteSize: output.data.length,
       width: output.info.width,
       height: output.info.height,
-      sha256: createHash('sha256').update(output.data).digest('hex'),
+      sha256,
     }
   }
 
   async read(storageKey: string) {
-    return readFile(this.resolveKey(storageKey))
+    return this.objects.getPrivateObject(this.objectKey(storageKey))
   }
 
   async remove(storageKey: string) {
-    try {
-      await unlink(this.resolveKey(storageKey))
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
-    }
+    await this.objects.deletePrivateObject(this.objectKey(storageKey))
   }
 
   async removeUserDirectory(userId: string) {
-    await rm(this.userDirectory(userId), { recursive: true, force: true })
+    return this.objects.deletePrivatePrefix(`${this.prefix}/${this.validateUserId(userId)}`)
+  }
+
+  async exists(storageKey: string) {
+    return this.objects.hasPrivateObject(this.objectKey(storageKey))
   }
 }

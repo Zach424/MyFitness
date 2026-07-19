@@ -1,6 +1,6 @@
 # Architecture baseline
 
-Status: accepted and implemented through the iteration-014 administrator-access loop; changes require an ADR.
+Status: accepted and implemented through the iteration-015 durable-data-operations loop; changes require an ADR.
 
 ## System shape
 
@@ -11,7 +11,7 @@ flowchart TB
   M["Native App<br/>phase two"] --> G
   G --> P[("PostgreSQL")]
   G --> R[("Redis<br/>shared abuse state")]
-  G --> O[("Private object storage")]
+  G --> O[("Private S3-compatible storage<br/>photos + erasure ledger")]
   G --> W["AI worker boundary<br/>FastAPI"]
   W --> V["Model gateway"]
   W --> K["Versioned knowledge and validators"]
@@ -51,9 +51,11 @@ Implemented foundation:
 - A deterministic weekly-plan aggregate snapshots onboarding revision and evidence, stores the current JSONB plan plus immutable revisions, and re-checks current eligibility before an accept/modify transition.
 - A FastAPI worker exposes an authenticated provider-neutral explanation endpoint. Local fixture and OpenAI Responses adapters share a strict schema; the business API owns consent, authorization, idempotency, validation, fallback and persistence.
 - AI explanation runs are minimized, fingerprinted and bound to the exact plan revision plus prompt/model/validator/consent provenance. Raw prompts and input payloads are not persisted.
-- Food-photo reservations keep the raw upload in memory, sanitize to a private expiring JPEG, send only that JPEG plus a catalog allow-list to the worker, validate candidates deterministically and delete media on confirm/failure/reject/delete/expiry.
-- The authenticated privacy boundary inventories owned data, creates a no-store repeatable-read portable JSON export, records renewed consent cycles, revokes optional processing and erases the primary account graph plus user-scoped private media.
-- Outer request middleware validates UUIDv4 correlation and records final status/duration from stable route templates. A Redis-backed IP guard runs before authentication; a second actor/route limiter runs after authentication. HMAC actor keys expire atomically, business traffic fails closed without Redis, and liveness stays separate from PostgreSQL+Redis readiness.
+- Food-photo reservations keep the raw upload in memory, sanitize to a private expiring JPEG, write it conditionally with a checksum to S3-compatible storage, send only that JPEG plus a catalog allow-list to the worker, validate candidates deterministically and enqueue media deletion on confirm/failure/reject/delete/expiry.
+- PostgreSQL data-operation jobs are transactionally enqueued with lifecycle changes and claimed atomically using `FOR UPDATE SKIP LOCKED`, leases, bounded exponential retry, attempt evidence and dead-letter state. Successful jobs clear payload and sensitive dedupe material.
+- The authenticated privacy boundary inventories owned data, creates a no-store repeatable-read portable JSON export, records renewed consent cycles, revokes optional processing and closes account access before asynchronous media/primary erasure.
+- `durable-erasure-v2` receipts require a separate status token and expose independent primary/media/provider/backup dispositions. An external HMAC erasure ledger is replayed before a restored database can serve traffic, preventing known deleted accounts from being resurrected by an older backup.
+- Outer request middleware validates UUIDv4 correlation and records final status/duration from stable route templates. A Redis-backed IP guard runs before authentication; a second actor/route limiter runs after authentication. HMAC actor keys expire atomically, business traffic fails closed without Redis, and liveness stays separate from PostgreSQL+Redis+object-storage readiness.
 - Exact administrator support lookup requires an account UUID, bounded ticket and enumerated reason, then returns lifecycle/aggregate evidence only. Every accepted/not-found lookup and authorization decision is correlated into an append-only audit table whose target identifiers are HMAC references and whose update/delete trigger fails closed.
 - `apps/admin` is a Next.js 16 App Router BFF/UI. Authorization Code + PKCE/state/nonce remains server-side, administrator API tokens stay in secure-by-default HttpOnly cookies, and the Evidence Rail renders only the bounded support/audit contract.
 - Parent-qualified pnpm overrides place audited floors only on affected Taro 4.2.1 edges: client Vite 6.4.3, webpack 5.104.1, Swiper 12.1.2 and lodash-es 4.18.1. Root Vite 8.1.5 stays isolated for Vitest; frozen install, peer checks, dual builds, E2E and the zero-critical/high audit gate control every graph change.
@@ -95,12 +97,14 @@ ADR-0013 records the parent-qualified Taro security floors, separate compiler/te
 
 The independent operator identity, evidence-only lookup and immutable audit boundary is documented in [ADMIN_SUPPORT_MODEL.md](ADMIN_SUPPORT_MODEL.md). ADR-0014 records why it cannot reuse end-user identity or expose generic administration.
 
+The S3-compatible media boundary, durable deletion jobs, status-token receipt and restore ledger are documented in [PRIVACY_OWNERSHIP_MODEL.md](PRIVACY_OWNERSHIP_MODEL.md), [FOOD_PHOTO_MODEL.md](FOOD_PHOTO_MODEL.md) and the [data custody runbook](../operations/DATA_CUSTODY_RUNBOOK.md). ADR-0015 records why cross-system erasure uses transactional enqueue plus an external HMAC restore control.
+
 ## API and event conventions
 
 - HTTP JSON contracts are defined in `packages/contracts` and exposed as OpenAPI.
 - Client-generated idempotency keys protect record creation and photo reservation.
 - Mutations use optimistic concurrency or revision numbers where edits can conflict.
-- Background jobs carry opaque media IDs, never public object URLs.
+- Background jobs carry validated logical storage keys or scoped user IDs, never public object URLs; successful jobs clear their payload.
 - Logs exclude raw health payloads, images, access tokens, full prompts, and direct identifiers.
 - Every routed response carries a bounded request ID. Metrics/logs use stable route templates and actor class, never raw URLs, queries, IPs, users or request bodies.
 - Domain events use past tense and versioned payloads, for example `workout.recorded.v1`.
@@ -120,16 +124,16 @@ Provider outages fall back to manual recording and deterministic summaries; core
 ## Security and privacy baseline
 
 - TLS in transit; managed key encryption at rest; field-level or envelope encryption for selected sensitive values.
-- Private object storage with short-lived signed access and isolated retention policies.
+- Private object storage with short-lived signed access, checksummed conditional writes and production-required encryption; lifecycle/versioning/replication remain provider configuration gates.
 - Purpose-specific consent versions and revocation state.
 - Tenant/user authorization enforced in the API, never inferred from client filters.
 - Independent administrator identity, least-privilege RBAC, exact support purpose and primary-database immutable audit events; just-in-time approval and external retention remain release gates.
-- Export, correction, deletion, retention expiry, backup handling, and provider deletion are explicit workflows.
+- Export, correction, durable deletion, retention expiry, restore-ledger replay and conservative provider disposition are explicit workflows. `policy_bound` is not a remote-delete claim.
 - China-region deployment is the default for China-user health data; any cross-border provider use requires a separate architecture and legal decision.
 
 ## Initial local and production targets
 
-- Local: Node 24 runtime, pnpm 11, Docker Compose, PostgreSQL 18.4, Redis 8.8 and the fixture AI provider.
+- Local: Node 24 runtime, pnpm 11, Docker Compose, PostgreSQL 18.4, Redis 8.8, pinned MinIO and the fixture AI provider.
 - CI: install lockfile, format check, lint, typecheck, unit/integration tests, H5 build, Mini Program build, dependency audit, artifact upload.
 - Production candidate: managed container/runtime, managed PostgreSQL and Redis, private object storage, KMS/secrets manager, CDN only for public static assets, centralized metrics and alerts.
 

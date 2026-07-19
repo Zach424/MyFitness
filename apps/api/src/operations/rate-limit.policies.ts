@@ -28,4 +28,10 @@ export const rateLimitPolicies = {
     windowSeconds: 3_600,
     scope: 'user',
   },
+  erasureReceipt: {
+    name: 'erasure_receipt',
+    limit: 30,
+    windowSeconds: 60,
+    scope: 'ip',
+  },
 } as const satisfies Record<string, RateLimitPolicy>

@@ -13,6 +13,7 @@ import { buttonA11yProps, checkboxA11yProps } from '../../lib/accessibility'
 import {
   deletePrivacyAccount,
   downloadPrivacyExport,
+  getErasureReceiptStatus,
   getPrivacyOverview,
   revokeOptionalConsent,
 } from '../../lib/api'
@@ -52,6 +53,18 @@ const PrivacyPage = () => {
   const [understandsPermanent, setUnderstandsPermanent] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [deleted, setDeleted] = useState<AccountDeletionResult | null>(null)
+
+  useEffect(() => {
+    if (!deleted || deleted.status === 'completed' || deleted.status === 'dead_letter') return
+    const timer = setTimeout(() => {
+      void getErasureReceiptStatus(deleted.receiptId, deleted.statusToken)
+        .then((status) => setDeleted({ ...status, statusToken: deleted.statusToken }))
+        .catch((statusError) => {
+          setError(statusError instanceof Error ? statusError.message : '删除凭据状态读取失败')
+        })
+    }, 1_500)
+    return () => clearTimeout(timer)
+  }, [deleted])
 
   const loadOverview = async () => {
     setLoading(true)
@@ -132,29 +145,45 @@ const PrivacyPage = () => {
   }
 
   if (deleted) {
+    const complete = deleted.status === 'completed'
+    const needsOperations = deleted.status === 'dead_letter'
     return (
       <View className="privacy-page privacy-page--complete">
         <View className="deletion-complete" role="status">
           <Text className="deletion-complete__eyebrow">ERASURE RECEIPT</Text>
           <Text className="deletion-complete__mark" aria-hidden="true">
-            ✓
+            {complete ? '✓' : needsOperations ? '!' : '…'}
           </Text>
-          <Text className="deletion-complete__title">账户数据已删除</Text>
+          <Text className="deletion-complete__title">
+            {complete
+              ? '账户数据已删除'
+              : needsOperations
+                ? '删除任务需要运维处理'
+                : '正在安全删除账户'}
+          </Text>
           <Text className="deletion-complete__body">
-            旧会话已经失效，数据库记录与私有照片已清除。此页面不会自动创建新账户。
+            {complete
+              ? '旧会话已失效，主数据库与私有照片已清除，恢复删除日志已发布。'
+              : needsOperations
+                ? '账户访问仍保持关闭。请保存此凭据，运维人员可在不查看健康数据的情况下恢复删除任务。'
+                : '账户访问已关闭；系统正在删除私有照片、发布恢复删除日志并清除主数据库记录。此页面会自动更新。'}
           </Text>
           <View className="deletion-complete__receipt">
             <Text>凭据 {deleted.receiptId}</Text>
+            <Text>查询密钥 {deleted.statusToken}</Text>
             <Text>清除范围 {deleted.scopeVersion}</Text>
-            <Text>{formatDate(deleted.deletedAt)}</Text>
+            <Text>状态 {deleted.status}</Text>
+            <Text>{formatDate(deleted.deletedAt ?? deleted.requestedAt)}</Text>
           </View>
-          <Button
-            {...buttonA11yProps}
-            className="primary-action"
-            onClick={() => void Taro.reLaunch({ url: '/pages/onboarding/index' })}
-          >
-            重新开始
-          </Button>
+          {complete ? (
+            <Button
+              {...buttonA11yProps}
+              className="primary-action"
+              onClick={() => void Taro.reLaunch({ url: '/pages/onboarding/index' })}
+            >
+              重新开始
+            </Button>
+          ) : null}
         </View>
       </View>
     )

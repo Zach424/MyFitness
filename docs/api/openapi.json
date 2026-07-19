@@ -840,6 +840,95 @@
         "tags": ["authentication"]
       }
     },
+    "/v1/privacy/erasure-receipts/{receiptId}": {
+      "get": {
+        "operationId": "ErasureReceiptsController_status",
+        "parameters": [
+          {
+            "name": "receiptId",
+            "required": true,
+            "in": "path",
+            "schema": { "format": "uuid", "type": "string" }
+          },
+          {
+            "name": "X-Erasure-Receipt-Token",
+            "in": "header",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "receiptId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": ["queued", "running", "completed", "dead_letter"]
+                    },
+                    "deleted": { "type": "boolean" },
+                    "scopeVersion": { "type": "string", "enum": ["durable-erasure-v2"] },
+                    "primaryStoreStatus": { "type": "string", "enum": ["pending", "deleted"] },
+                    "mediaStatus": { "type": "string", "enum": ["pending", "deleted"] },
+                    "providerStatus": {
+                      "type": "string",
+                      "enum": ["pending", "not_applicable", "fixture_only", "policy_bound"]
+                    },
+                    "backupStatus": { "type": "string", "enum": ["pending", "ledger_published"] },
+                    "requestedAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "deletedAt": {
+                      "nullable": true,
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "lastErrorCode": {
+                      "nullable": true,
+                      "type": "string",
+                      "enum": [
+                        "object_storage_unavailable",
+                        "database_unavailable",
+                        "invalid_job_payload",
+                        "unexpected_error"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "receiptId",
+                    "status",
+                    "deleted",
+                    "scopeVersion",
+                    "primaryStoreStatus",
+                    "mediaStatus",
+                    "providerStatus",
+                    "backupStatus",
+                    "requestedAt",
+                    "deletedAt",
+                    "lastErrorCode"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": { "description": "Receipt identifier or secret is invalid." }
+        },
+        "summary": "Read minimal erasure progress using the one-time receipt secret",
+        "tags": ["privacy"]
+      }
+    },
     "/v1/health/live": {
       "get": {
         "operationId": "HealthController_liveness",
@@ -877,12 +966,20 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": ["status", "service", "database", "redis", "timestamp"],
+                  "required": [
+                    "status",
+                    "service",
+                    "database",
+                    "redis",
+                    "objectStorage",
+                    "timestamp"
+                  ],
                   "properties": {
                     "status": { "type": "string", "enum": ["ok"] },
                     "service": { "type": "string", "example": "myfitness-api" },
                     "database": { "type": "string", "enum": ["up"] },
                     "redis": { "type": "string", "enum": ["up"] },
+                    "objectStorage": { "type": "string", "enum": ["up"] },
                     "timestamp": { "type": "string", "format": "date-time" }
                   }
                 }
@@ -3588,6 +3685,10 @@
                             ]
                           },
                           "mediaDeleted": { "type": "boolean" },
+                          "mediaDeletionStatus": {
+                            "type": "string",
+                            "enum": ["not_required", "pending", "deleted"]
+                          },
                           "createdAt": {
                             "type": "string",
                             "format": "date-time",
@@ -3611,6 +3712,7 @@
                           "validatorVersion",
                           "failureCode",
                           "mediaDeleted",
+                          "mediaDeletionStatus",
                           "createdAt",
                           "expiresAt"
                         ],
@@ -3744,6 +3846,10 @@
                       ]
                     },
                     "mediaDeleted": { "type": "boolean" },
+                    "mediaDeletionStatus": {
+                      "type": "string",
+                      "enum": ["not_required", "pending", "deleted"]
+                    },
                     "createdAt": {
                       "type": "string",
                       "format": "date-time",
@@ -3767,6 +3873,7 @@
                     "validatorVersion",
                     "failureCode",
                     "mediaDeleted",
+                    "mediaDeletionStatus",
                     "createdAt",
                     "expiresAt"
                   ],
@@ -3867,7 +3974,8 @@
                         "additionalProperties": false
                       }
                     },
-                    "mediaDeleted": { "type": "boolean", "enum": [true] },
+                    "mediaDeleted": { "type": "boolean" },
+                    "mediaDeletionStatus": { "type": "string", "enum": ["pending", "deleted"] },
                     "confirmedAt": {
                       "type": "string",
                       "format": "date-time",
@@ -3879,6 +3987,7 @@
                     "status",
                     "items",
                     "mediaDeleted",
+                    "mediaDeletionStatus",
                     "confirmedAt"
                   ],
                   "additionalProperties": false
@@ -4482,6 +4591,44 @@
           "401": { "description": "Operations token is missing or invalid." }
         },
         "summary": "Read process-local Prometheus metrics using the operations token",
+        "tags": ["operations"]
+      }
+    },
+    "/v1/internal/data-operations": {
+      "get": {
+        "operationId": "OperationsController_dataOperationStatus",
+        "parameters": [
+          {
+            "name": "x-operations-token",
+            "in": "header",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Aggregate counts without object keys or user identifiers." },
+          "401": { "description": "Operations token is missing or invalid." }
+        },
+        "summary": "Read aggregate durable data-operation queue health",
+        "tags": ["operations"]
+      }
+    },
+    "/v1/internal/data-operations/drain": {
+      "post": {
+        "operationId": "OperationsController_drainDataOperations",
+        "parameters": [
+          {
+            "name": "x-operations-token",
+            "in": "header",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Bounded claim and success counts." },
+          "401": { "description": "Operations token is missing or invalid." }
+        },
+        "summary": "Run one bounded durable data-operation drain pass",
         "tags": ["operations"]
       }
     },
@@ -6053,7 +6200,7 @@
         "operationId": "PrivacyController_deleteAccount",
         "parameters": [],
         "responses": {
-          "200": {
+          "202": {
             "description": "",
             "content": {
               "application/json": {
@@ -6065,15 +6212,56 @@
                       "format": "uuid",
                       "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                     },
-                    "deleted": { "type": "boolean", "enum": [true] },
-                    "scopeVersion": { "type": "string", "enum": ["primary-store-v1"] },
-                    "deletedAt": {
+                    "status": {
+                      "type": "string",
+                      "enum": ["queued", "running", "completed", "dead_letter"]
+                    },
+                    "deleted": { "type": "boolean" },
+                    "scopeVersion": { "type": "string", "enum": ["durable-erasure-v2"] },
+                    "primaryStoreStatus": { "type": "string", "enum": ["pending", "deleted"] },
+                    "mediaStatus": { "type": "string", "enum": ["pending", "deleted"] },
+                    "providerStatus": {
+                      "type": "string",
+                      "enum": ["pending", "not_applicable", "fixture_only", "policy_bound"]
+                    },
+                    "backupStatus": { "type": "string", "enum": ["pending", "ledger_published"] },
+                    "requestedAt": {
                       "type": "string",
                       "format": "date-time",
                       "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
-                    }
+                    },
+                    "deletedAt": {
+                      "nullable": true,
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "lastErrorCode": {
+                      "nullable": true,
+                      "type": "string",
+                      "enum": [
+                        "object_storage_unavailable",
+                        "database_unavailable",
+                        "invalid_job_payload",
+                        "unexpected_error"
+                      ]
+                    },
+                    "statusToken": { "type": "string", "pattern": "^[A-Za-z0-9_-]{43}$" }
                   },
-                  "required": ["receiptId", "deleted", "scopeVersion", "deletedAt"],
+                  "required": [
+                    "receiptId",
+                    "status",
+                    "deleted",
+                    "scopeVersion",
+                    "primaryStoreStatus",
+                    "mediaStatus",
+                    "providerStatus",
+                    "backupStatus",
+                    "requestedAt",
+                    "deletedAt",
+                    "lastErrorCode",
+                    "statusToken"
+                  ],
                   "additionalProperties": false
                 }
               }
@@ -6084,7 +6272,7 @@
           "409": { "description": "The account is not active or deletion state changed." }
         },
         "security": [{ "bearer": [] }],
-        "summary": "Permanently erase the authenticated account and private photo media",
+        "summary": "Queue durable account, media and restore-ledger erasure",
         "tags": ["privacy"]
       }
     },

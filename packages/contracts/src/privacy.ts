@@ -2,7 +2,7 @@ import * as z from 'zod'
 
 export const privacyExportSchemaVersion = 'myfitness-portable-export-v1' as const
 export const privacyExportContentType = 'application/json' as const
-export const privacyErasureScopeVersion = 'primary-store-v1' as const
+export const privacyErasureScopeVersion = 'durable-erasure-v2' as const
 export const accountDeletionConfirmationPhrase = '删除我的衡迹账户' as const
 
 export const consentPurposes = [
@@ -95,14 +95,34 @@ export const accountDeletionRequestSchema = z
   })
   .strict()
 
-export const accountDeletionResultSchema = z
+export const erasureReceiptStatusSchema = z
   .object({
     receiptId: z.string().uuid(),
-    deleted: z.literal(true),
+    status: z.enum(['queued', 'running', 'completed', 'dead_letter']),
+    deleted: z.boolean(),
     scopeVersion: z.literal(privacyErasureScopeVersion),
-    deletedAt: z.string().datetime({ offset: true }),
+    primaryStoreStatus: z.enum(['pending', 'deleted']),
+    mediaStatus: z.enum(['pending', 'deleted']),
+    providerStatus: z.enum(['pending', 'not_applicable', 'fixture_only', 'policy_bound']),
+    backupStatus: z.enum(['pending', 'ledger_published']),
+    requestedAt: z.string().datetime({ offset: true }),
+    deletedAt: z.string().datetime({ offset: true }).nullable(),
+    lastErrorCode: z
+      .enum([
+        'object_storage_unavailable',
+        'database_unavailable',
+        'invalid_job_payload',
+        'unexpected_error',
+      ])
+      .nullable(),
   })
   .strict()
+
+export const accountDeletionResultSchema = erasureReceiptStatusSchema
+  .extend({ statusToken: z.string().regex(/^[A-Za-z0-9_-]{43}$/) })
+  .strict()
+
+export const erasureReceiptTokenSchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/)
 
 const jsonObjectSchema = z.record(z.string(), z.json())
 
@@ -140,4 +160,5 @@ export type ConsentRevocationRequest = z.infer<typeof consentRevocationRequestSc
 export type ConsentRevocationResult = z.infer<typeof consentRevocationResultSchema>
 export type AccountDeletionRequest = z.infer<typeof accountDeletionRequestSchema>
 export type AccountDeletionResult = z.infer<typeof accountDeletionResultSchema>
+export type ErasureReceiptStatus = z.infer<typeof erasureReceiptStatusSchema>
 export type PrivacyExport = z.infer<typeof privacyExportSchema>

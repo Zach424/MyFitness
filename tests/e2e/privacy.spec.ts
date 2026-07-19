@@ -1,4 +1,5 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test'
+import { DeleteObjectCommand, S3Client } from '@aws-sdk/client-s3'
 import { Pool } from 'pg'
 
 import {
@@ -13,7 +14,19 @@ const database = new Pool({
   connectionString:
     process.env.DATABASE_URL ?? 'postgresql://myfitness:myfitness_local@127.0.0.1:54329/myfitness',
 })
+const objectStorage = new S3Client({
+  region: process.env.OBJECT_STORAGE_REGION ?? 'us-east-1',
+  endpoint: process.env.OBJECT_STORAGE_ENDPOINT ?? 'http://127.0.0.1:9000',
+  forcePathStyle: true,
+  credentials: {
+    accessKeyId: process.env.OBJECT_STORAGE_ACCESS_KEY_ID ?? 'myfitness-minio',
+    secretAccessKey:
+      process.env.OBJECT_STORAGE_SECRET_ACCESS_KEY ?? 'myfitness-minio-secret-2026-local',
+  },
+})
 let trackedSubject: string | undefined
+let trackedReceiptId: string | undefined
+let testStartedAt: Date
 
 const onboarding = {
   adultConfirmed: true,
@@ -112,18 +125,42 @@ const collectBrowserErrors = (page: Page) => {
   return browserErrors
 }
 
-test.afterEach(async () => {
-  if (!trackedSubject) return
-  await database.query(
-    `DELETE FROM users WHERE id IN (
-       SELECT user_id FROM auth_identities WHERE provider = 'dev' AND provider_subject = $1
-     )`,
-    [trackedSubject],
+test.beforeEach(async () => {
+  const result = await database.query<{ started_at: Date }>(
+    'SELECT clock_timestamp() AS started_at',
   )
-  trackedSubject = undefined
+  testStartedAt = result.rows[0]!.started_at
 })
 
-test.afterAll(async () => database.end())
+test.afterEach(async () => {
+  if (trackedSubject) {
+    await database.query(
+      `DELETE FROM users WHERE id IN (
+         SELECT user_id FROM auth_identities WHERE provider = 'dev' AND provider_subject = $1
+       )`,
+      [trackedSubject],
+    )
+  }
+  await database.query('DELETE FROM data_operation_jobs WHERE created_at >= $1', [testStartedAt])
+  if (trackedReceiptId) {
+    await database.query('DELETE FROM privacy_erasure_receipts WHERE receipt_id = $1', [
+      trackedReceiptId,
+    ])
+    await objectStorage.send(
+      new DeleteObjectCommand({
+        Bucket: process.env.OBJECT_STORAGE_BUCKET ?? 'myfitness-private',
+        Key: `${process.env.ERASURE_LEDGER_PREFIX ?? 'control/erasure-ledger'}/${trackedReceiptId}.json`,
+      }),
+    )
+  }
+  trackedSubject = undefined
+  trackedReceiptId = undefined
+})
+
+test.afterAll(async () => {
+  objectStorage.destroy()
+  await database.end()
+})
 
 test('mobile privacy ledger inventories and downloads an owned-data export', async ({
   page,
@@ -176,21 +213,26 @@ test('wide privacy controls revoke optional processing and permanently erase the
     (response) =>
       response.url().endsWith('/v1/me/privacy/account') &&
       response.request().method() === 'DELETE' &&
-      response.status() === 200,
+      response.status() === 202,
   )
   await page.getByRole('button', { name: '永久删除账户' }).click()
-  const deletionReceipt = (await (await deletionResponse).json()) as { receiptId: string }
+  const deletionReceipt = (await (await deletionResponse).json()) as {
+    receiptId: string
+    statusToken: string
+  }
+  trackedReceiptId = deletionReceipt.receiptId
 
   await expect(page.getByText('账户数据已删除')).toBeVisible()
-  await expect(page.getByText(/旧会话已经失效/)).toBeVisible()
-  const account = await database.query<{ count: string }>(
-    'SELECT COUNT(*)::text AS count FROM users WHERE id = $1',
-    [session.userId],
-  )
-  expect(account.rows[0]?.count).toBe('0')
-  await database.query('DELETE FROM privacy_erasure_receipts WHERE receipt_id = $1', [
-    deletionReceipt.receiptId,
-  ])
+  await expect(page.getByText(/旧会话已失效/)).toBeVisible()
+  await expect
+    .poll(async () => {
+      const account = await database.query<{ count: string }>(
+        'SELECT COUNT(*)::text AS count FROM users WHERE id = $1',
+        [session.userId],
+      )
+      return account.rows[0]?.count
+    })
+    .toBe('0')
   expect(browserErrors).toEqual([])
   trackedSubject = undefined
 })

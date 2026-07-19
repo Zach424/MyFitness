@@ -13,6 +13,7 @@ Local routes after `pnpm db:up`, `pnpm db:migrate`, and `pnpm dev:api`:
 - API readiness: `GET http://127.0.0.1:3100/v1/health`
 - API liveness: `GET http://127.0.0.1:3100/v1/health/live`
 - Private Prometheus metrics: `GET http://127.0.0.1:3100/v1/internal/metrics`
+- Durable-job aggregate status/drain: `GET/POST http://127.0.0.1:3100/v1/internal/data-operations[/drain]`
 - Local-only session: `POST http://127.0.0.1:3100/v1/auth/dev/session`
 - Local-only administrator session: `POST http://127.0.0.1:3100/v1/admin/auth/dev/session`
 - Administrator OIDC exchange: `POST http://127.0.0.1:3100/v1/admin/auth/oidc/exchange`
@@ -24,6 +25,7 @@ Local routes after `pnpm db:up`, `pnpm db:migrate`, and `pnpm dev:api`:
 - Portable data export: `GET http://127.0.0.1:3100/v1/me/privacy/export`
 - Optional consent withdrawal: `POST http://127.0.0.1:3100/v1/me/privacy/consents/:purpose/revoke`
 - Permanent account erasure: `DELETE http://127.0.0.1:3100/v1/me/privacy/account`
+- Secret-gated erasure receipt: `GET http://127.0.0.1:3100/v1/privacy/erasure-receipts/:receiptId` with `X-Erasure-Receipt-Token`
 - Measurements: `GET/POST http://127.0.0.1:3100/v1/health-records`
 - Measurement lifecycle: `PUT/DELETE http://127.0.0.1:3100/v1/health-records/:recordId`
 - Measurement history: `GET http://127.0.0.1:3100/v1/health-records/:recordId/history`
@@ -54,7 +56,7 @@ Administrator routes use the independent OpenAPI `adminBearer` scheme and `mf_ad
 
 Every routed response exposes `X-Request-ID`. A caller UUIDv4 is preserved and normalized; missing or invalid values are replaced. Redis applies an IP ingress window before authentication and then a standard or sensitive route window after authentication. Rate responses expose `RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset` and, on `429`, `Retry-After`. If Redis is unavailable, business routes return a request-correlated `503`; `/health/live` remains available while `/health` reports dependency failure.
 
-`/internal/metrics` requires `x-operations-token`, returns `Cache-Control: no-store` Prometheus text and is not an administrator API. Series contain stable method/route/status/policy dimensions only. Direct users, IPs, request IDs, query values, tokens and health payloads are excluded. Production requires private scraping plus Redis TLS/ACL configuration and exact reverse-proxy hop trust.
+`/internal/metrics` and `/internal/data-operations` require `x-operations-token` and are not administrator APIs. Metrics return no-store Prometheus text; data operations return aggregate state/age or a bounded drain result only. Direct users, job payloads, object keys, receipt secrets, IPs, request IDs, query values, tokens and health payloads are excluded. Production requires private scraping/control paths plus Redis TLS/ACL configuration and exact reverse-proxy hop trust.
 
 Measurement creation also requires `x-idempotency-key`. Replacement sends `expectedRevision` in its JSON body; deletion sends the same concurrency value as `x-expected-revision`. A `409` means the client must reload instead of silently overwriting a newer state.
 
@@ -66,6 +68,8 @@ Weekly-plan generation requires `x-idempotency-key` and a Monday `weekStart`. An
 
 AI explanation generation also requires `x-idempotency-key`, the exact `expectedPlanRevision`, and affirmative purpose/version consent. It re-checks ownership, current onboarding and risk eligibility, then sends only a minimized structured plan summary to the internal worker. The response always identifies `model`, `fixture`, or `fallback` source plus prompt/validator/model provenance; it never mutates the weekly plan. Local Compose defaults to `AI_PROVIDER=fixture`. Enabling `openai` additionally requires `OPENAI_API_KEY` and release approval for provider privacy, region, cost, latency and quality gates.
 
-Food-photo reservation requires `x-idempotency-key` and current affirmative purpose/version consent. The signed upload accepts one bounded JPEG/PNG/still WebP multipart `file`; the API re-encodes it before private storage or worker access. Candidates expose ranges and provenance, never create a meal, and confirmation accepts only displayed catalog keys/grams before deleting media and returning unsaved draft inputs. The signed preview is short-lived and is not a public asset URL.
+Food-photo reservation requires `x-idempotency-key` and current affirmative purpose/version consent. The signed upload accepts one bounded JPEG/PNG/still WebP multipart `file`; the API re-encodes it before private S3-compatible storage or worker access. Candidates expose ranges and provenance, never create a meal, and confirmation accepts only displayed catalog keys/grams before transactionally enqueueing media deletion and returning unsaved draft inputs. Logical deletion and `mediaDeletionStatus` are separate. The signed preview is short-lived and is not a public asset URL.
 
-The privacy inventory reports stable user-facing categories and current consent state. Its versioned JSON export runs from a repeatable-read snapshot, includes revision history and retained sanitized photo bytes, and responds as a no-store attachment; session tokens, hashes, idempotency keys and private storage keys are excluded. Only AI-plan and food-photo purposes can be withdrawn independently. Account erasure requires the exact shared-contract phrase, an export choice and permanent acknowledgement; success deletes the user cascade and private-media directory, invalidates every session and returns an unlinkable `primary-store-v1` receipt.
+The privacy inventory reports stable user-facing categories and current consent state. Its versioned JSON export runs from a repeatable-read snapshot, includes revision history and retained sanitized photo bytes, and responds as a no-store attachment; session tokens, hashes, idempotency keys and private storage keys are excluded. Only AI-plan and food-photo purposes can be withdrawn independently.
+
+Account erasure requires the exact shared-contract phrase, an export choice and permanent acknowledgement. The `202` response closes access and returns a `durable-erasure-v2` receipt UUID plus one-time status token. A PostgreSQL worker then publishes the HMAC restore ledger, deletes exact/owner-prefix media and cascades the user graph with leased retry/dead-letter evidence. The secret-gated public status separates primary, media, provider and backup dispositions. `providerStatus=policy_bound` is not a remote-delete claim; `backupStatus=ledger_published` is not backup expiry. Production restore must replay the independently retained ledger before serving traffic.

@@ -93,6 +93,10 @@ const adminMigrationPath = path.resolve(
   __dirname,
   '../../../../infra/postgres/migrations/0012_admin_support_boundary.sql',
 )
+const durableDataOperationsMigrationPath = path.resolve(
+  __dirname,
+  '../../../../infra/postgres/migrations/0013_durable_data_operations.sql',
+)
 
 describe('health-record migration drift', () => {
   it('contains every contract metric, unit and source kind', async () => {
@@ -209,6 +213,24 @@ describe('health-record migration drift', () => {
     expect(migration).toContain('CREATE TABLE privacy_erasure_receipts')
     expect(migration).toContain("scope_version = 'primary-store-v1'")
     expect(migration).not.toContain('user_id')
+  })
+
+  it('adds leased durable deletion jobs and a restore-safe erasure scope', async () => {
+    const migration = await readFile(durableDataOperationsMigrationPath, 'utf8')
+    for (const value of [
+      'durable-erasure-v2',
+      'photo_object_delete',
+      'photo_prefix_delete',
+      'account_erasure',
+      'retry_wait',
+      'dead_letter',
+      'lease_expires_at',
+      'data_operation_attempts',
+      'ledger_published',
+      'policy_bound',
+    ]) {
+      expect(migration).toContain(value)
+    }
   })
 
   it('contains every administrator enum and rejects audit mutation', async () => {

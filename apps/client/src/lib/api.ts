@@ -25,6 +25,7 @@ import type {
   ConsentRevocationResult,
   AccountDeletionRequest,
   AccountDeletionResult,
+  ErasureReceiptStatus,
   UpdateHealthRecord,
   UpdateMeal,
   UpdateWorkout,
@@ -356,6 +357,21 @@ export const deletePrivacyAccount = async (payload: AccountDeletionRequest) => {
   Taro.removeStorageSync(TOKEN_KEY)
   Taro.removeStorageSync(SUBJECT_KEY)
   return result
+}
+
+export const getErasureReceiptStatus = async (
+  receiptId: string,
+  statusToken: string,
+): Promise<ErasureReceiptStatus> => {
+  const response = await Taro.request<ErasureReceiptStatus>({
+    url: `${API_BASE_URL}/privacy/erasure-receipts/${encodeURIComponent(receiptId)}`,
+    method: 'GET',
+    header: { 'X-Erasure-Receipt-Token': statusToken },
+  })
+  if (response.statusCode < 200 || response.statusCode >= 300) {
+    throw new ApiError(response.statusCode, response.data as ApiErrorBody)
+  }
+  return response.data
 }
 
 export const apiBaseUrl = API_BASE_URL

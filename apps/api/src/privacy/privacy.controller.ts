@@ -13,6 +13,7 @@ import {
 import {
   ApiBadRequestResponse,
   ApiConflictResponse,
+  ApiAcceptedResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
@@ -108,9 +109,9 @@ export class PrivacyController {
 
   @Delete('account')
   @RateLimit(rateLimitPolicies.accountErasure)
-  @HttpCode(200)
-  @ApiOperation({ summary: 'Permanently erase the authenticated account and private photo media' })
-  @ApiOkResponse({ schema: openApiSchema(accountDeletionResultSchema) })
+  @HttpCode(202)
+  @ApiOperation({ summary: 'Queue durable account, media and restore-ledger erasure' })
+  @ApiAcceptedResponse({ schema: openApiSchema(accountDeletionResultSchema) })
   @ApiBadRequestResponse({
     description: 'The exact deletion phrase and acknowledgement are required.',
   })

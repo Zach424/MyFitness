@@ -68,22 +68,24 @@ These are conservative engineering defaults, not traffic-tested product quotas. 
 ## Health and metrics
 
 - `GET /v1/health/live` checks only that the Node process can answer.
-- `GET /v1/health` is readiness and requires both PostgreSQL and Redis.
+- `GET /v1/health` is readiness and requires PostgreSQL, Redis and private object storage.
 - `GET /v1/internal/metrics` requires `x-operations-token`, is not browser administration, and returns Prometheus text with request counts, duration histograms, rejection counts and limiter-backend failures.
+- `GET /v1/internal/data-operations` and bounded `POST .../drain` require the same private operations token and expose aggregate durable-job evidence only. They never return payloads, object keys, receipt secrets or user identifiers.
 - Metric route labels come from registered route templates. Process-local series must be scraped and aggregated across replicas before alert evidence can be claimed.
 
 The internal token is separate from end-user sessions and must be delivered through a secret manager. The endpoint intentionally exposes no user search, mutation, support or audit capability; those require verified operator identity and RBAC in the next boundary.
 
 ## Failure matrix
 
-| Condition                    | Liveness | Readiness | Business request   | Operator evidence                     |
-| ---------------------------- | -------- | --------- | ------------------ | ------------------------------------- |
-| PostgreSQL unavailable       | `200`    | `503`     | handler dependent  | correlated 5xx and readiness failure  |
-| Redis unavailable            | `200`    | `503`     | `503`, fail closed | backend-failure counter and log event |
-| Ingress quota exceeded       | `200`    | `200`     | `429`              | ingress rejection counter             |
-| Authenticated quota exceeded | `200`    | `200`     | `429`              | named route-policy counter            |
-| Metrics token invalid        | `200`    | unchanged | metrics `401`      | bounded 401 route metric              |
+| Condition                    | Liveness | Readiness | Business request                    | Operator evidence                     |
+| ---------------------------- | -------- | --------- | ----------------------------------- | ------------------------------------- |
+| PostgreSQL unavailable       | `200`    | `503`     | handler dependent                   | correlated 5xx and readiness failure  |
+| Redis unavailable            | `200`    | `503`     | `503`, fail closed                  | backend-failure counter and log event |
+| Object storage unavailable   | `200`    | `503`     | uploads fail; durable deletes retry | job counts/age and readiness failure  |
+| Ingress quota exceeded       | `200`    | `200`     | `429`                               | ingress rejection counter             |
+| Authenticated quota exceeded | `200`    | `200`     | `429`                               | named route-policy counter            |
+| Operations token invalid     | `200`    | unchanged | internal endpoints `401`            | bounded 401 route metric              |
 
 ## Remaining boundary
 
-This implementation does not provide centralized scraping, alert delivery, distributed tracing, operator identity, RBAC, immutable administrator audit events, support case workflows or policy calibration from production traffic. Fixed windows also allow a boundary burst. Those are explicit release gates, not implied by the presence of a metrics endpoint.
+Independent operator identity/RBAC/audit and durable data jobs now exist, but this implementation still does not provide centralized scraping, alert delivery, distributed tracing, dead-letter paging/recovery ownership, production provider calibration or policy calibration from real traffic. Fixed windows also allow a boundary burst. Those are explicit release gates, not implied by the presence of metrics/job endpoints.

@@ -1,4 +1,4 @@
-import { Controller, Get, Header, UseGuards } from '@nestjs/common'
+import { Controller, Get, Header, HttpCode, Post, UseGuards } from '@nestjs/common'
 import {
   ApiHeader,
   ApiOkResponse,
@@ -8,6 +8,7 @@ import {
 } from '@nestjs/swagger'
 
 import { InternalOperationsGuard } from './internal-operations.guard'
+import { DataOperationsService } from './data-operations.service'
 import { OperationalMetricsService } from './operational-metrics.service'
 import { SkipRateLimit } from './rate-limit.decorator'
 
@@ -16,7 +17,10 @@ import { SkipRateLimit } from './rate-limit.decorator'
 @SkipRateLimit()
 @UseGuards(InternalOperationsGuard)
 export class OperationsController {
-  constructor(private readonly metrics: OperationalMetricsService) {}
+  constructor(
+    private readonly metrics: OperationalMetricsService,
+    private readonly dataOperations: DataOperationsService,
+  ) {}
 
   @Get('metrics')
   @Header('Cache-Control', 'no-store')
@@ -27,5 +31,26 @@ export class OperationsController {
   @ApiUnauthorizedResponse({ description: 'Operations token is missing or invalid.' })
   metricsText() {
     return this.metrics.render()
+  }
+
+  @Get('data-operations')
+  @Header('Cache-Control', 'no-store')
+  @ApiOperation({ summary: 'Read aggregate durable data-operation queue health' })
+  @ApiHeader({ name: 'x-operations-token', required: true })
+  @ApiOkResponse({ description: 'Aggregate counts without object keys or user identifiers.' })
+  @ApiUnauthorizedResponse({ description: 'Operations token is missing or invalid.' })
+  dataOperationStatus() {
+    return this.dataOperations.snapshot()
+  }
+
+  @Post('data-operations/drain')
+  @HttpCode(200)
+  @Header('Cache-Control', 'no-store')
+  @ApiOperation({ summary: 'Run one bounded durable data-operation drain pass' })
+  @ApiHeader({ name: 'x-operations-token', required: true })
+  @ApiOkResponse({ description: 'Bounded claim and success counts.' })
+  @ApiUnauthorizedResponse({ description: 'Operations token is missing or invalid.' })
+  drainDataOperations() {
+    return this.dataOperations.drain()
   }
 }

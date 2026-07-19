@@ -35,6 +35,7 @@ import type { QueryResultRow } from 'pg'
 
 import { getRuntimeConfig } from '../config'
 import { DatabaseService } from '../database/database.service'
+import { DataOperationsService } from '../operations/data-operations.service'
 import { PhotoStorageService, type StoredPhoto } from './photo-storage.service'
 
 type PhotoStatus =
@@ -57,6 +58,7 @@ type PhotoRow = QueryResultRow & {
   confirmed_at: Date | null
   deleted_at: Date | null
   input_fingerprint: string
+  media_deletion_status: 'not_required' | 'pending' | 'deleted'
 }
 
 type UploadedPhoto = { buffer: Buffer; mimetype: string; size: number }
@@ -70,6 +72,7 @@ export class PhotoCandidatesService implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly database: DatabaseService,
     private readonly storage: PhotoStorageService,
+    private readonly dataOperations: DataOperationsService,
   ) {}
 
   async onModuleInit() {
@@ -160,7 +163,8 @@ export class PhotoCandidatesService implements OnModuleInit, OnModuleDestroy {
       promptVersion: foodPhotoPromptVersion,
       validatorVersion: foodPhotoValidatorVersion,
       failureCode: row.failure_code,
-      mediaDeleted: row.status !== 'ready',
+      mediaDeleted: row.media_deletion_status === 'deleted',
+      mediaDeletionStatus: row.media_deletion_status,
       createdAt: row.created_at.toISOString(),
       expiresAt: row.expires_at.toISOString(),
     })
@@ -257,6 +261,26 @@ export class PhotoCandidatesService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  private async runDeletionJobs(jobIds: string[]) {
+    const outcomes = await Promise.allSettled(
+      jobIds.map((jobId) => this.dataOperations.runById(jobId)),
+    )
+    if (outcomes.some((outcome) => outcome.status === 'rejected')) {
+      this.logger.error('durable photo deletion was persisted but immediate execution failed')
+    }
+  }
+
+  private async removeDetachedObject(storageKey: string, cause: string) {
+    try {
+      await this.storage.remove(storageKey)
+    } catch {
+      const jobId = await this.database.withTransaction((client) =>
+        this.dataOperations.enqueuePhotoDeletion(client, storageKey, cause),
+      )
+      await this.dataOperations.runById(jobId)
+    }
+  }
+
   private async markProcessing(userId: string, id: string, stored: StoredPhoto) {
     let result
     try {
@@ -280,11 +304,11 @@ export class PhotoCandidatesService implements OnModuleInit, OnModuleDestroy {
         ],
       )
     } catch (error) {
-      await this.storage.remove(stored.storageKey)
+      await this.removeDetachedObject(stored.storageKey, 'processing_transition_failed')
       throw error
     }
     if (!result.rows[0]) {
-      await this.storage.remove(stored.storageKey)
+      await this.removeDetachedObject(stored.storageKey, 'reservation_inactive')
       throw new ConflictException('photo reservation is no longer uploadable')
     }
   }
@@ -294,36 +318,54 @@ export class PhotoCandidatesService implements OnModuleInit, OnModuleDestroy {
     worker: FoodPhotoWorkerResponse | null,
     failureCode: NonNullable<FoodPhotoWorkerResponse['failureCode']>,
   ) {
-    const current = await this.database.query<{ storage_key: string | null }>(
-      "SELECT storage_key FROM nutrition_photo_candidates WHERE id = $1 AND status = 'processing'",
+    const { row, jobIds } = await this.database.withTransaction(async (client) => {
+      const current = await client.query<PhotoRow>(
+        "SELECT * FROM nutrition_photo_candidates WHERE id = $1 AND status = 'processing' FOR UPDATE",
+        [id],
+      )
+      const existing = current.rows[0]
+      if (!existing) throw new ConflictException('photo analysis state changed')
+      const jobIds = existing.storage_key
+        ? [
+            await this.dataOperations.enqueuePhotoDeletion(
+              client,
+              existing.storage_key,
+              'analysis_failed',
+              id,
+            ),
+          ]
+        : []
+      const result = await client.query<PhotoRow>(
+        `UPDATE nutrition_photo_candidates
+         SET status = 'failed', storage_key = NULL, content_type = NULL, byte_size = NULL,
+             width = NULL, height = NULL, media_sha256 = NULL,
+             media_deletion_status = $9,
+             provider = $2, model = $3, failure_code = $4,
+             provider_response_id = $5, latency_ms = $6,
+             input_tokens = $7, output_tokens = $8,
+             completed_at = NOW(), deleted_at = NOW()
+         WHERE id = $1 AND status = 'processing'
+         RETURNING *`,
+        [
+          id,
+          worker?.provider ?? null,
+          worker?.model ?? null,
+          failureCode,
+          worker?.providerResponseId ?? null,
+          worker?.latencyMs ?? 0,
+          worker?.usage?.inputTokens ?? null,
+          worker?.usage?.outputTokens ?? null,
+          existing.storage_key ? 'pending' : 'deleted',
+        ],
+      )
+      return { row: result.rows[0]!, jobIds }
+    })
+    await this.runDeletionJobs(jobIds)
+    const refreshed = await this.database.query<PhotoRow>(
+      'SELECT * FROM nutrition_photo_candidates WHERE id = $1',
       [id],
     )
-    if (current.rows[0]?.storage_key) await this.storage.remove(current.rows[0].storage_key)
-    const result = await this.database.query<PhotoRow>(
-      `
-        UPDATE nutrition_photo_candidates
-        SET status = 'failed', storage_key = NULL, content_type = NULL, byte_size = NULL,
-            width = NULL, height = NULL, media_sha256 = NULL,
-            provider = $2, model = $3, failure_code = $4,
-            provider_response_id = $5, latency_ms = $6,
-            input_tokens = $7, output_tokens = $8,
-            completed_at = NOW(), deleted_at = NOW()
-        WHERE id = $1 AND status = 'processing'
-        RETURNING *
-      `,
-      [
-        id,
-        worker?.provider ?? null,
-        worker?.model ?? null,
-        failureCode,
-        worker?.providerResponseId ?? null,
-        worker?.latencyMs ?? 0,
-        worker?.usage?.inputTokens ?? null,
-        worker?.usage?.outputTokens ?? null,
-      ],
-    )
-    if (!result.rows[0]) throw new ConflictException('photo analysis state changed')
-    return this.analysis(result.rows[0])
+    return this.analysis(refreshed.rows[0] ?? row)
   }
 
   async upload(userId: string, id: string, token: string, upload: UploadedPhoto) {
@@ -340,41 +382,64 @@ export class PhotoCandidatesService implements OnModuleInit, OnModuleDestroy {
     if (!validation.valid) return this.fail(id, worker, 'safety_validation_failed')
 
     const rejected = validation.content.safetyStatus === 'rejected'
-    if (rejected) await this.storage.remove(stored.storageKey)
-    const result = await this.database.query<PhotoRow>(
-      `
-        UPDATE nutrition_photo_candidates
-        SET status = $2, storage_key = CASE WHEN $2 = 'rejected' THEN NULL ELSE storage_key END,
-            content_type = CASE WHEN $2 = 'rejected' THEN NULL ELSE content_type END,
-            byte_size = CASE WHEN $2 = 'rejected' THEN NULL ELSE byte_size END,
-            width = CASE WHEN $2 = 'rejected' THEN NULL ELSE width END,
-            height = CASE WHEN $2 = 'rejected' THEN NULL ELSE height END,
-            media_sha256 = CASE WHEN $2 = 'rejected' THEN NULL ELSE media_sha256 END,
-            source = $3, provider = $4, model = $5, content = $6::jsonb,
-            provider_response_id = $7, latency_ms = $8,
-            input_tokens = $9, output_tokens = $10, completed_at = NOW(),
-            deleted_at = CASE WHEN $2 = 'rejected' THEN NOW() ELSE NULL END
-        WHERE id = $1 AND status = 'processing'
-        RETURNING *
-      `,
-      [
-        id,
-        rejected ? 'rejected' : 'ready',
-        worker.provider === 'openai' ? 'model' : 'fixture',
-        worker.provider,
-        worker.model,
-        JSON.stringify(validation.content),
-        worker.providerResponseId,
-        worker.latencyMs,
-        worker.usage?.inputTokens ?? null,
-        worker.usage?.outputTokens ?? null,
-      ],
-    )
-    if (!result.rows[0]) {
-      await this.storage.remove(stored.storageKey)
-      throw new ConflictException('photo analysis state changed')
+    let transition: { row: PhotoRow; jobIds: string[] }
+    try {
+      transition = await this.database.withTransaction(async (client) => {
+        const current = await client.query<PhotoRow>(
+          "SELECT * FROM nutrition_photo_candidates WHERE id = $1 AND status = 'processing' FOR UPDATE",
+          [id],
+        )
+        if (!current.rows[0]) throw new ConflictException('photo analysis state changed')
+        const jobIds = rejected
+          ? [
+              await this.dataOperations.enqueuePhotoDeletion(
+                client,
+                stored.storageKey,
+                'analysis_rejected',
+                id,
+              ),
+            ]
+          : []
+        const result = await client.query<PhotoRow>(
+          `UPDATE nutrition_photo_candidates
+           SET status = $2, storage_key = CASE WHEN $2 = 'rejected' THEN NULL ELSE storage_key END,
+               content_type = CASE WHEN $2 = 'rejected' THEN NULL ELSE content_type END,
+               byte_size = CASE WHEN $2 = 'rejected' THEN NULL ELSE byte_size END,
+               width = CASE WHEN $2 = 'rejected' THEN NULL ELSE width END,
+               height = CASE WHEN $2 = 'rejected' THEN NULL ELSE height END,
+               media_sha256 = CASE WHEN $2 = 'rejected' THEN NULL ELSE media_sha256 END,
+               media_deletion_status = CASE WHEN $2 = 'rejected' THEN 'pending' ELSE 'not_required' END,
+               source = $3, provider = $4, model = $5, content = $6::jsonb,
+               provider_response_id = $7, latency_ms = $8,
+               input_tokens = $9, output_tokens = $10, completed_at = NOW(),
+               deleted_at = CASE WHEN $2 = 'rejected' THEN NOW() ELSE NULL END
+           WHERE id = $1 AND status = 'processing'
+           RETURNING *`,
+          [
+            id,
+            rejected ? 'rejected' : 'ready',
+            worker.provider === 'openai' ? 'model' : 'fixture',
+            worker.provider,
+            worker.model,
+            JSON.stringify(validation.content),
+            worker.providerResponseId,
+            worker.latencyMs,
+            worker.usage?.inputTokens ?? null,
+            worker.usage?.outputTokens ?? null,
+          ],
+        )
+        return { row: result.rows[0]!, jobIds }
+      })
+    } catch (error) {
+      await this.removeDetachedObject(stored.storageKey, 'analysis_transition_failed')
+      throw error
     }
-    return this.analysis(result.rows[0])
+    await this.runDeletionJobs(transition.jobIds)
+    const refreshed = await this.database.query<PhotoRow>(
+      'SELECT * FROM nutrition_photo_candidates WHERE id = $1',
+      [id],
+    )
+    return this.analysis(refreshed.rows[0] ?? transition.row)
   }
 
   async list(userId: string) {
@@ -415,89 +480,153 @@ export class PhotoCandidatesService implements OnModuleInit, OnModuleDestroy {
     }
 
     if (!row.storage_key) throw new NotFoundException('private photo is unavailable')
-    await this.storage.remove(row.storage_key)
-    const updated = await this.database.query<PhotoRow>(
-      `
-        UPDATE nutrition_photo_candidates
-        SET status = 'confirmed', storage_key = NULL, content_type = NULL, byte_size = NULL,
-            width = NULL, height = NULL, media_sha256 = NULL, content = NULL,
-            selection = $3::jsonb, confirmed_at = NOW(), deleted_at = NOW()
-        WHERE id = $1 AND user_id = $2 AND status = 'ready'
-        RETURNING *
-      `,
-      [id, userId, JSON.stringify(input.items)],
-    )
-    if (!updated.rows[0]) throw new ConflictException('photo candidate state changed')
+    const jobId = await this.database.withTransaction(async (client) => {
+      const locked = await client.query<PhotoRow>(
+        `SELECT * FROM nutrition_photo_candidates
+         WHERE id = $1 AND user_id = $2 AND status = 'ready' AND expires_at > NOW()
+         FOR UPDATE`,
+        [id, userId],
+      )
+      const current = locked.rows[0]
+      if (!current?.storage_key) throw new ConflictException('photo candidate state changed')
+      const jobId = await this.dataOperations.enqueuePhotoDeletion(
+        client,
+        current.storage_key,
+        'candidate_confirmed',
+        id,
+      )
+      const updated = await client.query<PhotoRow>(
+        `UPDATE nutrition_photo_candidates
+         SET status = 'confirmed', storage_key = NULL, content_type = NULL, byte_size = NULL,
+             width = NULL, height = NULL, media_sha256 = NULL, content = NULL,
+             media_deletion_status = 'pending',
+             selection = $3::jsonb, confirmed_at = NOW(), deleted_at = NOW()
+         WHERE id = $1 AND user_id = $2 AND status = 'ready'
+         RETURNING *`,
+        [id, userId, JSON.stringify(input.items)],
+      )
+      if (!updated.rows[0]) throw new ConflictException('photo candidate state changed')
+      return jobId
+    })
+    await this.dataOperations.runById(jobId)
+    const deletion = await this.database.query<{
+      media_deletion_status: PhotoRow['media_deletion_status']
+      confirmed_at: Date
+    }>('SELECT media_deletion_status, confirmed_at FROM nutrition_photo_candidates WHERE id = $1', [
+      id,
+    ])
+    const deletionRow = deletion.rows[0]!
     return {
       photoCandidateId: id,
       status: 'confirmed' as const,
       items: input.items,
-      mediaDeleted: true as const,
-      confirmedAt: updated.rows[0].confirmed_at!.toISOString(),
+      mediaDeleted: deletionRow.media_deletion_status === 'deleted',
+      mediaDeletionStatus: deletionRow.media_deletion_status,
+      confirmedAt: deletionRow.confirmed_at.toISOString(),
     }
   }
 
   async remove(userId: string, id: string) {
-    const owned = await this.database.query<{ id: string; storage_key: string | null }>(
-      `SELECT id, storage_key FROM nutrition_photo_candidates
-       WHERE id = $1 AND user_id = $2
-         AND status IN ('reserved', 'processing', 'ready', 'failed', 'rejected')`,
-      [id, userId],
-    )
-    if (!owned.rows[0]) throw new NotFoundException('photo candidate is unavailable')
-    if (owned.rows[0].storage_key) await this.storage.remove(owned.rows[0].storage_key)
-    const result = await this.database.query<PhotoRow>(
-      `
-        UPDATE nutrition_photo_candidates
-        SET status = 'deleted', storage_key = NULL, content_type = NULL, byte_size = NULL,
-            width = NULL, height = NULL, media_sha256 = NULL, content = NULL,
-            selection = NULL, deleted_at = NOW()
-        WHERE id = $1 AND user_id = $2 AND status IN ('reserved', 'processing', 'ready', 'failed', 'rejected')
-        RETURNING *
-      `,
-      [id, userId],
-    )
-    if (!result.rows[0]) throw new NotFoundException('photo candidate is unavailable')
+    const jobIds = await this.database.withTransaction(async (client) => {
+      const owned = await client.query<PhotoRow>(
+        `SELECT * FROM nutrition_photo_candidates
+         WHERE id = $1 AND user_id = $2
+           AND status IN ('reserved', 'processing', 'ready', 'failed', 'rejected')
+         FOR UPDATE`,
+        [id, userId],
+      )
+      const current = owned.rows[0]
+      if (!current) throw new NotFoundException('photo candidate is unavailable')
+      const jobIds = current.storage_key
+        ? [
+            await this.dataOperations.enqueuePhotoDeletion(
+              client,
+              current.storage_key,
+              'candidate_deleted',
+              id,
+            ),
+          ]
+        : []
+      const result = await client.query<PhotoRow>(
+        `UPDATE nutrition_photo_candidates
+         SET status = 'deleted', storage_key = NULL, content_type = NULL, byte_size = NULL,
+             width = NULL, height = NULL, media_sha256 = NULL, content = NULL,
+             media_deletion_status = $3, selection = NULL, deleted_at = NOW()
+         WHERE id = $1 AND user_id = $2
+           AND status IN ('reserved', 'processing', 'ready', 'failed', 'rejected')
+         RETURNING *`,
+        [id, userId, current.storage_key ? 'pending' : 'deleted'],
+      )
+      if (!result.rows[0]) throw new NotFoundException('photo candidate is unavailable')
+      return jobIds
+    })
+    await this.runDeletionJobs(jobIds)
   }
 
   async expireOld() {
-    const expired = await this.database.query<{ id: string; storage_key: string | null }>(
-      `SELECT id, storage_key FROM nutrition_photo_candidates
-       WHERE status IN ('reserved', 'processing', 'ready') AND expires_at <= NOW()`,
-    )
-    await Promise.all(
-      expired.rows.map((row) =>
-        row.storage_key ? this.storage.remove(row.storage_key) : Promise.resolve(),
-      ),
-    )
-    if (!expired.rows.length) return
-    await this.database.query(
-      `
-        UPDATE nutrition_photo_candidates
-        SET status = 'expired', storage_key = NULL, content_type = NULL, byte_size = NULL,
-            width = NULL, height = NULL, media_sha256 = NULL, content = NULL,
-            selection = NULL, deleted_at = NOW()
-        WHERE id = ANY($1::uuid[]) AND status IN ('reserved', 'processing', 'ready')
-      `,
-      [expired.rows.map((row) => row.id)],
-    )
+    const jobIds = await this.database.withTransaction(async (client) => {
+      const expired = await client.query<PhotoRow>(
+        `SELECT * FROM nutrition_photo_candidates
+         WHERE status IN ('reserved', 'processing', 'ready') AND expires_at <= NOW()
+         ORDER BY expires_at
+         FOR UPDATE SKIP LOCKED
+         LIMIT 100`,
+      )
+      const jobIds: string[] = []
+      for (const row of expired.rows) {
+        if (row.storage_key) {
+          jobIds.push(
+            await this.dataOperations.enqueuePhotoDeletion(
+              client,
+              row.storage_key,
+              'retention_expired',
+              row.id,
+            ),
+          )
+        }
+      }
+      if (expired.rows.length) {
+        await client.query(
+          `UPDATE nutrition_photo_candidates
+           SET status = 'expired', storage_key = NULL, content_type = NULL, byte_size = NULL,
+               width = NULL, height = NULL, media_sha256 = NULL, content = NULL,
+               media_deletion_status = CASE WHEN storage_key IS NULL THEN 'deleted' ELSE 'pending' END,
+               selection = NULL, deleted_at = NOW()
+           WHERE id = ANY($1::uuid[]) AND status IN ('reserved', 'processing', 'ready')`,
+          [expired.rows.map((row) => row.id)],
+        )
+      }
+      return jobIds
+    })
+    await this.runDeletionJobs(jobIds)
   }
 
   async purgeForUser(userId: string) {
-    const owned = await this.database.query<{ storage_key: string | null }>(
-      'SELECT storage_key FROM nutrition_photo_candidates WHERE user_id = $1',
-      [userId],
-    )
-    await Promise.all(
-      owned.rows.map((row) =>
-        row.storage_key ? this.storage.remove(row.storage_key) : Promise.resolve(),
-      ),
-    )
-    await this.storage.removeUserDirectory(userId)
-    const deleted = await this.database.query(
-      'DELETE FROM nutrition_photo_candidates WHERE user_id = $1',
-      [userId],
-    )
-    return deleted.rowCount ?? 0
+    const { count, jobIds } = await this.database.withTransaction(async (client) => {
+      const owned = await client.query<{ id: string; storage_key: string | null }>(
+        `SELECT id, storage_key FROM nutrition_photo_candidates
+         WHERE user_id = $1 FOR UPDATE`,
+        [userId],
+      )
+      const jobIds: string[] = []
+      for (const row of owned.rows) {
+        if (row.storage_key) {
+          jobIds.push(
+            await this.dataOperations.enqueuePhotoDeletion(
+              client,
+              row.storage_key,
+              'consent_revoked_known_object',
+            ),
+          )
+        }
+      }
+      jobIds.push(
+        await this.dataOperations.enqueuePhotoPrefixDeletion(client, userId, 'consent_revoked'),
+      )
+      await client.query('DELETE FROM nutrition_photo_candidates WHERE user_id = $1', [userId])
+      return { count: owned.rowCount ?? 0, jobIds }
+    })
+    await this.runDeletionJobs(jobIds)
+    return count
   }
 }
