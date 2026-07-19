@@ -2,6 +2,7 @@ import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto
 
 import {
   ConflictException,
+  Inject,
   Injectable,
   Logger,
   NotFoundException,
@@ -33,6 +34,10 @@ import {
 import { validateFoodPhotoCandidates, validateFoodPhotoConfirmation } from '@myfitness/domain'
 import type { QueryResultRow } from 'pg'
 
+import {
+  APPLICATION_LIFECYCLE_POLICY,
+  type ApplicationLifecyclePolicy,
+} from '../application-lifecycle'
 import { getRuntimeConfig } from '../config'
 import { DatabaseService } from '../database/database.service'
 import { DataOperationsService } from '../operations/data-operations.service'
@@ -73,9 +78,12 @@ export class PhotoCandidatesService implements OnModuleInit, OnModuleDestroy {
     private readonly database: DatabaseService,
     private readonly storage: PhotoStorageService,
     private readonly dataOperations: DataOperationsService,
+    @Inject(APPLICATION_LIFECYCLE_POLICY)
+    private readonly lifecycle: ApplicationLifecyclePolicy,
   ) {}
 
   async onModuleInit() {
+    if (!this.lifecycle.runBackgroundJobs) return
     await this.expireOld()
     this.cleanupTimer = setInterval(
       () => {

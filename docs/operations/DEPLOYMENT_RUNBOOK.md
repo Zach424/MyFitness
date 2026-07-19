@@ -2,6 +2,14 @@
 
 Status: OCI packaging and disposable topology are exercised locally; shared managed infrastructure and public traffic are not configured
 
+## Source and lifecycle qualification
+
+Before image acceptance, stop local MyFitness dependencies and run `pnpm test`. The 32-file/103-test unit gate must pass without PostgreSQL, Redis or MinIO. OpenAPI tests and generation use the explicit API `metadata` startup mode, which assembles the shipped application graph and HTTP policy but does not run background jobs or verify external dependencies.
+
+Production, integration, restore, E2E and deployment processes use the default `runtime` mode. It retains object-storage startup verification, photo-expiry reconciliation and durable data-operation workers. Do not select metadata mode for a traffic-serving process, and do not treat its successful initialization as readiness evidence; `/v1/health` and the black-box deployment verifier own that proof.
+
+The hosted source gate must complete before `deployment-smoke` starts. A skipped smoke after a source failure is expected fail-closed behavior, not image evidence.
+
 ## Artifact acceptance
 
 Run from the repository root:

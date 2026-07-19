@@ -2,7 +2,7 @@
 
 The roadmap is organized as controlled iterations. A round may take several working sessions, but it ends only after implementation, validation, archive update, and a commit.
 
-Progress snapshot (2026-07-19): iterations 0–17 are complete locally; iteration 18 is next. The product now adds pinned non-root OCI artifacts, migration-before-traffic topology, black-box deployment verification and CI/GHCR workflow definitions to the verified identity and record/planning/privacy loop. Production audit critical/high findings are zero; remote CI evidence, managed shared infrastructure, real WeChat credentials/device/domain proof, H5 release identity, cloud custody ownership, centralized alerting and model/provider approval remain gated.
+Progress snapshot (2026-07-19): iterations 0–17 are complete; iteration 18 is active after the first hosted CI run exposed a non-hermetic API bootstrap. The remediation now passes all 103 unit tests with local services stopped and awaits its post-commit hosted run. Production audit critical/high findings are zero; remote green CI/image publication, managed shared infrastructure, real WeChat credentials/device/domain proof, H5 release identity, cloud custody ownership, centralized alerting and model/provider approval remain gated.
 
 | Iteration | Primary scope                                       | Exit evidence                                                                                    |
 | --------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
@@ -24,9 +24,10 @@ Progress snapshot (2026-07-19): iterations 0–17 are complete locally; iteratio
 | 15        | Durable data operations                             | Durable jobs, private object storage, fault retries, restore ledger and provider disposition     |
 | 16        | Verified WeChat user identity                       | Server code exchange, provider-bound sessions, erasure suppression and WeApp build proof         |
 | 17        | Reproducible deployment artifacts                   | Non-root OCI images, migration gate, local topology proof, CI/release workflow and rollback unit |
-| 18        | Managed shared test deployment                      | Managed services/secrets, real WeChat proof, telemetry, calibrated limits and rollback           |
-| 19        | Beta hardening and release                          | H5 identity, security review, budgets, accessibility, filing artifacts and staged rollout        |
-| 20        | Native App feasibility and device sync              | Retention gate reviewed; HealthKit/Health Connect/Huawei proof of concept                        |
+| 18        | Hermetic CI bootstrap                               | Dependency-free unit/contract generation, Node 24 actions and green hosted quality/image smoke   |
+| 19        | Managed shared test deployment                      | Managed services/secrets, real WeChat proof, telemetry, calibrated limits and rollback           |
+| 20        | Beta hardening and release                          | H5 identity, security review, budgets, accessibility, filing artifacts and staged rollout        |
+| 21        | Native App feasibility and device sync              | Retention gate reviewed; HealthKit/Health Connect/Huawei proof of concept                        |
 
 ## Release gates
 
@@ -38,14 +39,14 @@ Progress snapshot (2026-07-19): iterations 0–17 are complete locally; iteratio
 
 ### Closed beta
 
-- Iterations 9–18 complete.
+- Iterations 9–19 complete.
 - AI evaluation set is versioned and safety validators block known high-risk cases.
 - Data export and deletion are exercised end to end.
 - Support, monitoring, cost limits, rollback, and incident ownership are assigned.
 
 ### Public release
 
-- Iteration 19 complete.
+- Iteration 20 complete.
 - Applicable ICP/APP/Mini Program privacy/AI registration and content-labeling work is reviewed.
 - Store materials match actual data practices and product claims.
 - Release starts with a small cohort and automatic rollback thresholds.

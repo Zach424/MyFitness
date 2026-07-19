@@ -1,6 +1,6 @@
 # Product risk register
 
-Last reviewed: 2026-07-19, iteration 017
+Last reviewed: 2026-07-19, iteration 018
 
 This register tracks release-affecting uncertainty. A mitigation is evidence to collect, not a claim that the risk is gone.
 
@@ -26,6 +26,6 @@ This register tracks release-affecting uncertainty. A mitigation is evidence to 
 | R-019 | Erasure ledger/secret loss would invalidate user and provider-identity suppression     | High   | Independently retain/replicate ledger and recover HMAC secret; implement dual-read version rotation and exercise loss scenarios                        |
 | R-020 | Dead-letter jobs lack named alerts and a least-privilege recovery service              | High   | Use exact-job audited runbook locally; add centralized paging, owner and safe recovery workflow before shared beta                                     |
 | R-021 | MVP erased-identity suppression currently prevents a new account for the same identity | High   | Confirm product/legal policy; if return is allowed, require an explicit fresh-account consent flow without reconnecting erased data before beta        |
-| R-022 | OCI/CI release definitions lack remote-run and managed-environment proof               | Medium | Observe main CI, retain registry digest/attestation evidence, then exercise managed canary and immutable-digest rollback before any beta traffic       |
+| R-022 | OCI/CI release definitions lack green remote-run and managed-environment proof         | Medium | First main CI exposed non-hermetic startup; require the lifecycle-fix run green, retain registry attestations, then exercise managed canary/rollback   |
 
 Resolved implementation defects remain documented in their iteration archive rather than removed from history. Product-level risks close only when the named release evidence exists.

@@ -10,8 +10,12 @@ import {
   S3Client,
   type ServerSideEncryption,
 } from '@aws-sdk/client-s3'
-import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common'
+import { Inject, Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common'
 
+import {
+  APPLICATION_LIFECYCLE_POLICY,
+  type ApplicationLifecyclePolicy,
+} from '../application-lifecycle'
 import { getRuntimeConfig } from '../config'
 
 export class ObjectNotFoundError extends Error {
@@ -53,6 +57,11 @@ export class ObjectStorageService implements OnModuleInit, OnModuleDestroy {
         : undefined,
   })
   private injectedFailure: 'delete' | 'put' | 'get' | null = null
+
+  constructor(
+    @Inject(APPLICATION_LIFECYCLE_POLICY)
+    private readonly lifecycle: ApplicationLifecyclePolicy,
+  ) {}
 
   private validateKey(key: string) {
     if (
@@ -102,6 +111,7 @@ export class ObjectStorageService implements OnModuleInit, OnModuleDestroy {
   }
 
   async onModuleInit() {
+    if (!this.lifecycle.verifyExternalDependencies) return
     try {
       await this.ping()
     } catch (error) {

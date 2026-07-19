@@ -9,7 +9,7 @@ describe('OpenAPI document', () => {
   let app: INestApplication
 
   beforeAll(async () => {
-    app = await createApplication(false)
+    app = await createApplication(false, 'metadata')
     await app.init()
   })
 

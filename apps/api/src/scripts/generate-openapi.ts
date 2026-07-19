@@ -9,7 +9,7 @@ import { buildOpenApiDocument } from '../openapi'
 const outputDirectory = path.resolve(__dirname, '../../../../docs/api')
 
 const generate = async () => {
-  const app = await createApplication(false)
+  const app = await createApplication(false, 'metadata')
   await app.init()
   const document = buildOpenApiDocument(app)
   await mkdir(outputDirectory, { recursive: true })

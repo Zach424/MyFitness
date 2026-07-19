@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common'
+import { type DynamicModule, Module } from '@nestjs/common'
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core'
 
 import { AdminAuditController } from './admin/admin-audit.controller'
@@ -12,6 +12,11 @@ import { AdminSupportController } from './admin/admin-support.controller'
 import { AdminSupportService } from './admin/admin-support.service'
 import { AiController } from './ai/ai.controller'
 import { AiService } from './ai/ai.service'
+import {
+  APPLICATION_LIFECYCLE_POLICY,
+  applicationLifecyclePolicies,
+  type ApplicationStartupMode,
+} from './application-lifecycle'
 import { AuthController } from './auth/auth.controller'
 import { AuthService } from './auth/auth.service'
 import { SessionAuthGuard } from './auth/session-auth.guard'
@@ -102,4 +107,16 @@ import { WorkoutsService } from './workouts/workouts.service'
     WorkoutsService,
   ],
 })
-export class AppModule {}
+export class AppModule {
+  static register(startupMode: ApplicationStartupMode = 'runtime'): DynamicModule {
+    return {
+      module: AppModule,
+      providers: [
+        {
+          provide: APPLICATION_LIFECYCLE_POLICY,
+          useValue: applicationLifecyclePolicies[startupMode],
+        },
+      ],
+    }
+  }
+}

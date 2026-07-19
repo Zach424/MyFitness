@@ -2,7 +2,7 @@
 
 面向普通健身人群的多端记录与 AI 规划产品。产品把身体、训练、饮食和恢复数据整理为可解释、可调整、可持续执行的个人计划。
 
-> 当前阶段：reproducible deployment artifacts / 第 17 轮已完成。本地已形成 API、管理员端和 AI 的非 root OCI 镜像、迁移先于流量的容器拓扑、黑盒部署验收、生产配置预检以及 CI/GHCR 发布定义。下一轮进入托管共享测试环境；云账号、真实微信/OIDC 凭据、域名/TLS、集中遥测和责任人仍是上线门槛。
+> 当前阶段：hermetic CI bootstrap / 第 18 轮本地修复已完成。首次远端 CI 暴露并复现了 API 启动期依赖污染；现在 OpenAPI/契约装配可在无 PostgreSQL、Redis、MinIO 时运行，生产运行模式仍保留依赖校验和后台维护。必须先观察本提交远端质量与镜像冒烟全绿，再进入托管共享环境；云账号、真实微信/OIDC 凭据、域名/TLS、集中遥测和责任人仍是上线门槛。
 
 ## 产品边界
 
@@ -130,6 +130,7 @@ Playwright 会复用或启动 API、H5 与管理员预览服务。`pnpm db:down`
 - [架构决策 0015](docs/architecture/decisions/0015-durable-data-erasure-and-restore-ledger.md)
 - [架构决策 0016](docs/architecture/decisions/0016-verified-wechat-identity-and-erasure-suppression.md)
 - [架构决策 0017](docs/architecture/decisions/0017-reproducible-oci-deployment-boundary.md)
+- [架构决策 0018](docs/architecture/decisions/0018-explicit-api-startup-lifecycle.md)
 - [健康记录数据模型](docs/architecture/HEALTH_RECORD_MODEL.md)
 - [训练记录数据模型](docs/architecture/WORKOUT_MODEL.md)
 - [饮食记录数据模型](docs/architecture/NUTRITION_MODEL.md)
@@ -164,6 +165,7 @@ Playwright 会复用或启动 API、H5 与管理员预览服务。`pnpm db:down`
 - [第 15 轮档案](docs/iterations/015-durable-data-operations.md)
 - [第 16 轮档案](docs/iterations/016-verified-wechat-identity.md)
 - [第 17 轮档案](docs/iterations/017-reproducible-deployment-artifacts.md)
+- [第 18 轮档案](docs/iterations/018-hermetic-ci-bootstrap.md)
 - [移动端视觉证据](output/playwright/iteration-001-mobile.png)
 - [宽屏视觉证据](output/playwright/iteration-001-wide.png)
 - [建档移动端证据](output/playwright/iteration-003-onboarding-mobile.png)

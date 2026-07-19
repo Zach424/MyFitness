@@ -2,6 +2,7 @@ import { type INestApplication, type LogLevel } from '@nestjs/common'
 import { NestFactory } from '@nestjs/core'
 
 import { AppModule } from './app.module'
+import type { ApplicationStartupMode } from './application-lifecycle'
 import { getRuntimeConfig } from './config'
 import { mountOpenApi } from './openapi'
 import { OperationalMetricsService } from './operations/operational-metrics.service'
@@ -44,7 +45,10 @@ const configureApplication = (app: INestApplication) => {
   return app
 }
 
-export const createApplication = async (logger: false | LogLevel[] = ['error', 'warn', 'log']) => {
-  const app = await NestFactory.create(AppModule, { logger })
+export const createApplication = async (
+  logger: false | LogLevel[] = ['error', 'warn', 'log'],
+  startupMode: ApplicationStartupMode = 'runtime',
+) => {
+  const app = await NestFactory.create(AppModule.register(startupMode), { logger })
   return configureApplication(app)
 }

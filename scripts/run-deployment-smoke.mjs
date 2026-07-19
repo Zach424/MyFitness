@@ -14,10 +14,27 @@ const run = (command, args, { allowFailure = false } = {}) =>
     })
   })
 
+const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds))
+
+const withRetry = async (description, operation, delays = [5_000, 15_000]) => {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await operation()
+    } catch (error) {
+      const delay = delays[attempt - 1]
+      if (delay === undefined) throw error
+      process.stderr.write(
+        `${description} failed on attempt ${attempt}; retrying in ${delay / 1_000}s\n`,
+      )
+      await wait(delay)
+    }
+  }
+}
+
 let failed = false
 try {
   for (const service of ['ai', 'api', 'admin']) {
-    await run('docker', [...compose, 'build', service])
+    await withRetry(`image build (${service})`, () => run('docker', [...compose, 'build', service]))
   }
   await run('docker', [
     ...compose,

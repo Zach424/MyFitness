@@ -1,9 +1,13 @@
 import { randomUUID } from 'node:crypto'
 
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common'
+import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common'
 import { userAuthProviderSchema, type UserAuthProvider } from '@myfitness/contracts'
 import type { PoolClient, QueryResultRow } from 'pg'
 
+import {
+  APPLICATION_LIFECYCLE_POLICY,
+  type ApplicationLifecyclePolicy,
+} from '../application-lifecycle'
 import { getRuntimeConfig } from '../config'
 import { DatabaseService } from '../database/database.service'
 import { PhotoStorageService } from '../nutrition/photo-storage.service'
@@ -49,10 +53,12 @@ export class DataOperationsService implements OnModuleInit, OnModuleDestroy {
     private readonly database: DatabaseService,
     private readonly photos: PhotoStorageService,
     private readonly erasureLedger: ErasureLedgerService,
+    @Inject(APPLICATION_LIFECYCLE_POLICY)
+    private readonly lifecycle: ApplicationLifecyclePolicy,
   ) {}
 
   async onModuleInit() {
-    if (!this.config.dataOperationsWorkerEnabled) return
+    if (!this.lifecycle.runBackgroundJobs || !this.config.dataOperationsWorkerEnabled) return
     await this.drain().catch(() => this.logger.error('initial durable data-operation drain failed'))
     this.workerTimer = setInterval(() => {
       void this.drain().catch(() => this.logger.error('durable data-operation drain failed'))
