@@ -7,6 +7,8 @@ import {
 } from '@myfitness/contracts'
 
 import { openApiSchema } from '../openapi-schema'
+import { RateLimit } from '../operations/rate-limit.decorator'
+import { rateLimitPolicies } from '../operations/rate-limit.policies'
 import { AuthService } from './auth.service'
 
 const parseRequest = (body: unknown): DevSessionRequest => {
@@ -21,6 +23,7 @@ export class AuthController {
   constructor(private readonly auth: AuthService) {}
 
   @Post('dev/session')
+  @RateLimit(rateLimitPolicies.authSession)
   @HttpCode(200)
   @ApiOperation({
     summary: 'Create a local-only opaque session',

@@ -1,6 +1,6 @@
 # Architecture baseline
 
-Status: accepted and implemented through the iteration-011 user privacy ownership loop; changes require an ADR.
+Status: accepted and implemented through the iteration-012 API operational-perimeter loop; changes require an ADR.
 
 ## System shape
 
@@ -10,7 +10,7 @@ flowchart TB
   A["Admin<br/>Next.js"] --> G
   M["Native App<br/>phase two"] --> G
   G --> P[("PostgreSQL")]
-  G --> R[("Redis / jobs")]
+  G --> R[("Redis<br/>shared abuse state")]
   G --> O[("Private object storage")]
   G --> W["AI worker boundary<br/>FastAPI"]
   W --> V["Model gateway"]
@@ -52,6 +52,7 @@ Implemented foundation:
 - AI explanation runs are minimized, fingerprinted and bound to the exact plan revision plus prompt/model/validator/consent provenance. Raw prompts and input payloads are not persisted.
 - Food-photo reservations keep the raw upload in memory, sanitize to a private expiring JPEG, send only that JPEG plus a catalog allow-list to the worker, validate candidates deterministically and delete media on confirm/failure/reject/delete/expiry.
 - The authenticated privacy boundary inventories owned data, creates a no-store repeatable-read portable JSON export, records renewed consent cycles, revokes optional processing and erases the primary account graph plus user-scoped private media.
+- Outer request middleware validates UUIDv4 correlation and records final status/duration from stable route templates. A Redis-backed IP guard runs before authentication; a second actor/route limiter runs after authentication. HMAC actor keys expire atomically, business traffic fails closed without Redis, and liveness stays separate from PostgreSQL+Redis readiness.
 
 ## Data rules
 
@@ -84,6 +85,8 @@ The private media lifecycle, candidate contract, vision provider boundary and no
 
 The inventory/export/consent/erasure boundary is documented in [PRIVACY_OWNERSHIP_MODEL.md](PRIVACY_OWNERSHIP_MODEL.md). ADR-0011 records the user-scoped media, renewed consent and unlinkable primary-store receipt decisions.
 
+The request-correlation, shared-rate-limit, health and metric boundary is documented in [OPERATIONS_PERIMETER.md](OPERATIONS_PERIMETER.md). ADR-0012 records why ingress protection precedes authentication and administrator access.
+
 ## API and event conventions
 
 - HTTP JSON contracts are defined in `packages/contracts` and exposed as OpenAPI.
@@ -91,6 +94,7 @@ The inventory/export/consent/erasure boundary is documented in [PRIVACY_OWNERSHI
 - Mutations use optimistic concurrency or revision numbers where edits can conflict.
 - Background jobs carry opaque media IDs, never public object URLs.
 - Logs exclude raw health payloads, images, access tokens, full prompts, and direct identifiers.
+- Every routed response carries a bounded request ID. Metrics/logs use stable route templates and actor class, never raw URLs, queries, IPs, users or request bodies.
 - Domain events use past tense and versioned payloads, for example `workout.recorded.v1`.
 
 ## AI execution path
@@ -117,7 +121,7 @@ Provider outages fall back to manual recording and deterministic summaries; core
 
 ## Initial local and production targets
 
-- Local: Node 24 runtime, pnpm 11, Docker Compose and PostgreSQL 18.4 today; Redis, mock object storage and fixture AI provider enter only with their consuming features.
+- Local: Node 24 runtime, pnpm 11, Docker Compose, PostgreSQL 18.4, Redis 8.8 and the fixture AI provider.
 - CI: install lockfile, format check, lint, typecheck, unit/integration tests, H5 build, Mini Program build, dependency audit, artifact upload.
 - Production candidate: managed container/runtime, managed PostgreSQL and Redis, private object storage, KMS/secrets manager, CDN only for public static assets, centralized metrics and alerts.
 

@@ -2,7 +2,7 @@
 
 The roadmap is organized as controlled iterations. A round may take several working sessions, but it ends only after implementation, validation, archive update, and a commit.
 
-Progress snapshot (2026-07-19): iterations 0–11 are complete locally; iteration 12 is next. The product now covers authenticated records, Today/trends, versioned deterministic plans, consented review-only AI/photo assistance, and user-owned inventory/export/revocation/erasure on H5/WeApp. Production identity/model/provider and shared deployment remain gated.
+Progress snapshot (2026-07-19): iterations 0–12 are complete locally; iteration 13 is next. The product now covers authenticated records, Today/trends, versioned deterministic plans, consented review-only AI/photo assistance, user-owned inventory/export/revocation/erasure, and a Redis-backed API operational perimeter on H5/WeApp. A critical production dependency audit finding now blocks deployment; production user/operator identity, centralized alerting, model/provider approval and shared deployment also remain gated.
 
 | Iteration | Primary scope                                       | Exit evidence                                                                               |
 | --------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------- |
@@ -18,9 +18,13 @@ Progress snapshot (2026-07-19): iterations 0–11 are complete locally; iteratio
 | 9         | AI explanation and plan orchestration               | Model gateway, prompt/version logs, validators, offline fixtures and evaluation report      |
 | 10        | Food-photo assistance                               | EXIF removal, signed upload, uncertainty/confirmation, retention deletion tests             |
 | 11        | User privacy ownership                              | Inventory, portable export, optional-consent revocation and primary-store erasure exercised |
-| 12        | Admin and operations                                | RBAC/audit/support, tracing/rate limits, durable jobs and retention/incident runbooks       |
-| 13        | Beta hardening and release                          | Security review, performance budget, accessibility, store/filing artifacts, staged rollout  |
-| 14        | Native App feasibility and device sync              | Retention gate reviewed; HealthKit/Health Connect/Huawei proof of concept                   |
+| 12        | API operational perimeter                           | Correlation, Redis abuse limits, health/metrics, outage tests and incident runbook          |
+| 13        | Production dependency remediation                   | Zero critical/high audit findings plus full type/test/dual-build/E2E compatibility evidence |
+| 14        | Administrator access and support                    | Operator identity, RBAC, immutable audit and read-only support workflow exercised           |
+| 15        | Durable data operations                             | Reconciliation jobs, private object storage, retention, restore and provider deletion proof |
+| 16        | Production identity and shared test deployment      | Verified user identity, centralized telemetry, calibrated limits and rollback exercised     |
+| 17        | Beta hardening and release                          | Security review, performance budget, accessibility, store/filing artifacts, staged rollout  |
+| 18        | Native App feasibility and device sync              | Retention gate reviewed; HealthKit/Health Connect/Huawei proof of concept                   |
 
 ## Release gates
 
@@ -32,14 +36,14 @@ Progress snapshot (2026-07-19): iterations 0–11 are complete locally; iteratio
 
 ### Closed beta
 
-- Iterations 9–12 complete.
+- Iterations 9–16 complete.
 - AI evaluation set is versioned and safety validators block known high-risk cases.
 - Data export and deletion are exercised end to end.
 - Support, monitoring, cost limits, rollback, and incident ownership are assigned.
 
 ### Public release
 
-- Iteration 13 complete.
+- Iteration 17 complete.
 - Applicable ICP/APP/Mini Program privacy/AI registration and content-labeling work is reviewed.
 - Store materials match actual data practices and product claims.
 - Release starts with a small cohort and automatic rollback thresholds.

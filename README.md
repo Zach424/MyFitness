@@ -2,7 +2,7 @@
 
 面向普通健身人群的多端记录与 AI 规划产品。产品把身体、训练、饮食和恢复数据整理为可解释、可调整、可持续执行的个人计划。
 
-> 当前阶段：User privacy ownership / 第 11 轮已完成。用户可以核对数据清单、下载含历史与在保留期净化照片的 JSON 副本、撤回可选 AI/照片授权，并通过三段确认永久清除主数据库账户图和私有媒体。下一轮进入管理、审计与运营治理。
+> 当前阶段：API operational perimeter / 第 12 轮已完成。本地 API 已具备请求关联、Redis 共享双层限流、依赖就绪、无直接标识指标和显式故障策略。生产依赖审计仍有 Taro 传递依赖告警，下一轮先完成依赖安全修复与全量回归，再进入管理员身份、RBAC、审计与支持工作台。
 
 ## 产品边界
 
@@ -16,15 +16,15 @@
 ```text
 apps/
   client/          Taro + React：微信小程序与 H5、记录/计划/隐私所有权流程
-  api/             NestJS：身份、记录、洞察、计划、AI/隐私编排、OpenAPI 与迁移入口
+  api/             NestJS：身份、记录、计划、AI/隐私编排、运营入口、OpenAPI 与迁移
 services/
   ai/              FastAPI：本地 fixture、OpenAI 适配、严格结构化输出与提供方失败处理
 packages/
   contracts/       Zod：跨端请求、响应、来源与版本契约
   domain/          单位归一化、记录汇总、周计划与确定性安全规则
   design-tokens/   颜色、字体、间距、动效和图表变量
-docs/              产品、设计、架构和每轮迭代档案
-infra/             PostgreSQL 迁移与本地 Docker Compose
+docs/              产品、设计、架构、运营手册和每轮迭代档案
+infra/             PostgreSQL 迁移与 PostgreSQL/Redis/AI 本地 Compose
 output/evals/      可重复的 AI 离线安全评测报告
 output/playwright/ 浏览器视觉验收证据
 ```
@@ -49,7 +49,7 @@ pnpm typecheck
 
 H5 和微信小程序产物分别生成到 `apps/client/dist-h5` 与 `apps/client/dist-weapp`，两次构建不会互相清理。
 
-启动本地 API、PostgreSQL 与 AI worker：
+启动本地 API、PostgreSQL、Redis 与 AI worker：
 
 ```bash
 pnpm db:up
@@ -58,7 +58,9 @@ pnpm test:integration
 pnpm dev:api
 ```
 
-随后可访问 `http://127.0.0.1:3100/v1/health` 与 `http://127.0.0.1:3100/docs`。开发身份通过 `POST /v1/auth/dev/session` 获取不透明 Bearer 令牌；该签发器在 `NODE_ENV=production` 时关闭，数据库只保存 SHA-256 哈希。生产身份提供商仍需在发布前接入。
+随后可访问 liveness `http://127.0.0.1:3100/v1/health/live`、PostgreSQL+Redis readiness `http://127.0.0.1:3100/v1/health` 与 `http://127.0.0.1:3100/docs`。开发身份通过 `POST /v1/auth/dev/session` 获取不透明 Bearer 令牌；该签发器在 `NODE_ENV=production` 时关闭，数据库只保存 SHA-256 哈希。生产身份提供商仍需在发布前接入。
+
+每个业务请求会收到 `X-Request-ID` 和限流头。生产环境还必须配置 `REDIS_URL`、`RATE_LIMIT_HASH_SECRET`、`OPERATIONS_TOKEN` 与准确的 `TRUST_PROXY_HOPS`。受独立令牌保护的 `GET /v1/internal/metrics` 只用于私网 Prometheus 抓取，令牌不得进入客户端代码。Redis 故障时业务流量按设计返回可关联的 `503`，不会退化为单进程或 fail-open 限流；具体见 [API 运营手册](docs/operations/API_OPERATIONS_RUNBOOK.md)。
 
 AI worker 健康地址是 `http://127.0.0.1:8001/health`。本地默认使用无费用的 `fixture`，不会读取 `OPENAI_API_KEY`；切换 `AI_PROVIDER=openai` 前必须完成隐私、地域、费用、限额和质量审批。计划解释只使用精简计划摘要。照片路径只向 worker 提供服务端重编码 JPEG 和食物目录允许清单；`store:false` 不等于零留存协议。
 
@@ -113,6 +115,8 @@ Playwright 会复用或启动 API 与 H5 预览服务。`pnpm db:down` 会停止
 - [AI 计划解释模型](docs/architecture/AI_EXPLANATION_MODEL.md)
 - [餐食照片候选模型](docs/architecture/FOOD_PHOTO_MODEL.md)
 - [隐私所有权模型](docs/architecture/PRIVACY_OWNERSHIP_MODEL.md)
+- [API 运营边界](docs/architecture/OPERATIONS_PERIMETER.md)
+- [API 运营手册](docs/operations/API_OPERATIONS_RUNBOOK.md)
 - [API 契约与 OpenAPI](docs/api/README.md)
 - [第 0 轮档案](docs/iterations/000-foundation.md)
 - [第 1 轮档案](docs/iterations/001-client-foundation.md)
@@ -126,6 +130,7 @@ Playwright 会复用或启动 API 与 H5 预览服务。`pnpm db:down` 会停止
 - [第 9 轮档案](docs/iterations/009-ai-explanation-orchestration.md)
 - [第 10 轮档案](docs/iterations/010-food-photo-candidates.md)
 - [第 11 轮档案](docs/iterations/011-privacy-ownership.md)
+- [第 12 轮档案](docs/iterations/012-api-operational-perimeter.md)
 - [移动端视觉证据](output/playwright/iteration-001-mobile.png)
 - [宽屏视觉证据](output/playwright/iteration-001-wide.png)
 - [建档移动端证据](output/playwright/iteration-003-onboarding-mobile.png)

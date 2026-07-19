@@ -49,6 +49,8 @@ import { Auth } from '../auth/auth.decorator'
 import { CurrentUser } from '../auth/current-user.decorator'
 import type { AuthPrincipal } from '../auth/auth.types'
 import { openApiSchema } from '../openapi-schema'
+import { RateLimit } from '../operations/rate-limit.decorator'
+import { rateLimitPolicies } from '../operations/rate-limit.policies'
 import { PhotoCandidatesService } from './photo-candidates.service'
 
 type MemoryUpload = { buffer: Buffer; mimetype: string; size: number }
@@ -74,6 +76,7 @@ export class PhotoCandidatesController {
 
   @Post()
   @Auth()
+  @RateLimit(rateLimitPolicies.photoReservation)
   @ApiOperation({ summary: 'Reserve a private, expiring food-photo analysis upload' })
   @ApiHeader({ name: 'x-idempotency-key', required: true })
   @ApiBody({ schema: openApiSchema(createFoodPhotoCandidateSchema) })
@@ -92,6 +95,7 @@ export class PhotoCandidatesController {
 
   @Post(':photoId/upload')
   @Auth()
+  @RateLimit(rateLimitPolicies.photoUpload)
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: foodPhotoMaxBytes, files: 1 } }))
   @ApiOperation({ summary: 'Upload, sanitize and analyze one private food photo' })
   @ApiParam({ name: 'photoId', schema: { type: 'string', format: 'uuid' } })

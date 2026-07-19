@@ -47,7 +47,7 @@ Reviewed evidence:
 - Taro H5's custom input was not exposed to Playwright through the expected textbox role, while the same visible label correctly appeared in inventory and consent sections. Stable tests use region-scoped text assertions and the user-visible input placeholder rather than weakening strict mode.
 - Visual review caught an orphaned final title character on wide H5 that functional tests could not detect. The headline width was adjusted without changing the mobile reading order.
 - Moving “我的” from onboarding to privacy exposed that the wide layout had hidden its only remaining profile editor. The desktop profile mark is now visible beside the wordmark and outside the fixed navigation hit area; navigation ownership must be checked across every breakpoint when a destination changes.
-- Taro's H5 and WeApp builds write to the same `apps/client/dist` directory. Target builds must be serialized, the H5 build must run last, and browser tests must not overlap either build, or the served assets can change target mid-suite.
+- Taro already writes H5 and WeApp to the separate `apps/client/dist-h5` and `apps/client/dist-weapp` roots established in iteration 001. A later evidence review corrected the initial suspicion of cross-target asset replacement; the actual wide-browser failure was the hidden/overlapped profile entry described above.
 
 ## 6. Remaining risks and next step
 

@@ -35,6 +35,8 @@ import { Auth } from '../auth/auth.decorator'
 import { CurrentUser } from '../auth/current-user.decorator'
 import type { AuthPrincipal } from '../auth/auth.types'
 import { openApiSchema } from '../openapi-schema'
+import { RateLimit } from '../operations/rate-limit.decorator'
+import { rateLimitPolicies } from '../operations/rate-limit.policies'
 import { PrivacyService } from './privacy.service'
 
 const parseBody = <T>(schema: ZodType<T>, body: unknown, message: string) => {
@@ -65,6 +67,7 @@ export class PrivacyController {
   }
 
   @Get('export')
+  @RateLimit(rateLimitPolicies.privacyExport)
   @ApiOperation({ summary: 'Download a versioned portable JSON export without session secrets' })
   @ApiProduces('application/json')
   @ApiOkResponse({ description: 'Versioned JSON attachment containing account-owned data.' })
@@ -80,6 +83,7 @@ export class PrivacyController {
   }
 
   @Post('consents/:purpose/revoke')
+  @RateLimit(rateLimitPolicies.privacyRevocation)
   @HttpCode(200)
   @ApiOperation({ summary: 'Revoke an optional AI or food-photo consent and stop pending work' })
   @ApiOkResponse({ schema: openApiSchema(consentRevocationResultSchema) })
@@ -103,6 +107,7 @@ export class PrivacyController {
   }
 
   @Delete('account')
+  @RateLimit(rateLimitPolicies.accountErasure)
   @HttpCode(200)
   @ApiOperation({ summary: 'Permanently erase the authenticated account and private photo media' })
   @ApiOkResponse({ schema: openApiSchema(accountDeletionResultSchema) })

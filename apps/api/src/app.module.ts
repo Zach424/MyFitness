@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common'
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core'
 
 import { AiController } from './ai/ai.controller'
 import { AiService } from './ai/ai.service'
@@ -18,6 +19,13 @@ import { PhotoCandidatesService } from './nutrition/photo-candidates.service'
 import { PhotoStorageService } from './nutrition/photo-storage.service'
 import { OnboardingController } from './onboarding/onboarding.controller'
 import { OnboardingService } from './onboarding/onboarding.service'
+import { InternalOperationsGuard } from './operations/internal-operations.guard'
+import { IngressRateLimitGuard } from './operations/ingress-rate-limit.guard'
+import { OperationalMetricsService } from './operations/operational-metrics.service'
+import { OperationsController } from './operations/operations.controller'
+import { RateLimitInterceptor } from './operations/rate-limit.interceptor'
+import { RateLimitService } from './operations/rate-limit.service'
+import { RedisService } from './operations/redis.service'
 import { PlansController } from './plans/plans.controller'
 import { PlansService } from './plans/plans.service'
 import { PrivacyController } from './privacy/privacy.controller'
@@ -35,6 +43,7 @@ import { WorkoutsService } from './workouts/workouts.service'
     NutritionController,
     PhotoCandidatesController,
     OnboardingController,
+    OperationsController,
     PlansController,
     PrivacyController,
     WorkoutsController,
@@ -49,8 +58,20 @@ import { WorkoutsService } from './workouts/workouts.service'
     PhotoCandidatesService,
     PhotoStorageService,
     OnboardingService,
+    InternalOperationsGuard,
+    OperationalMetricsService,
     PlansService,
     PrivacyService,
+    RateLimitService,
+    RedisService,
+    {
+      provide: APP_GUARD,
+      useClass: IngressRateLimitGuard,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: RateLimitInterceptor,
+    },
     SessionAuthGuard,
     WorkoutsService,
   ],

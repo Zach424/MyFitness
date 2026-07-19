@@ -21,6 +21,8 @@ describe('OpenAPI document', () => {
     const document = buildOpenApiDocument(app)
 
     expect(document.paths['/v1/health']?.get).toBeDefined()
+    expect(document.paths['/v1/health/live']?.get).toBeDefined()
+    expect(document.paths['/v1/internal/metrics']?.get).toBeDefined()
     expect(document.paths['/v1/health-records']?.post).toBeDefined()
     expect(document.paths['/v1/health-records']?.get).toBeDefined()
     expect(document.paths['/v1/health-records/{recordId}']?.put).toBeDefined()
@@ -61,10 +63,12 @@ describe('OpenAPI document', () => {
       .options('/v1/health-records/00000000-0000-4000-8000-000000000000')
       .set('Origin', 'http://127.0.0.1:4173')
       .set('Access-Control-Request-Method', 'DELETE')
-      .set('Access-Control-Request-Headers', 'authorization,x-expected-revision')
+      .set('Access-Control-Request-Headers', 'authorization,x-expected-revision,x-request-id')
       .expect(204)
 
     expect(response.headers['access-control-allow-origin']).toBe('http://127.0.0.1:4173')
     expect(response.headers['access-control-allow-headers']).toContain('x-expected-revision')
+    expect(response.headers['access-control-allow-headers']).toContain('x-request-id')
+    expect(response.headers['access-control-expose-headers']).toContain('x-request-id')
   })
 })

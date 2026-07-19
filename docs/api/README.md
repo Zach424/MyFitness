@@ -11,6 +11,8 @@ pnpm --filter @myfitness/api openapi:generate
 Local routes after `pnpm db:up`, `pnpm db:migrate`, and `pnpm dev:api`:
 
 - API readiness: `GET http://127.0.0.1:3100/v1/health`
+- API liveness: `GET http://127.0.0.1:3100/v1/health/live`
+- Private Prometheus metrics: `GET http://127.0.0.1:3100/v1/internal/metrics`
 - Local-only session: `POST http://127.0.0.1:3100/v1/auth/dev/session`
 - Current onboarding: `GET/PUT http://127.0.0.1:3100/v1/me/onboarding`
 - Privacy inventory: `GET http://127.0.0.1:3100/v1/me/privacy`
@@ -42,6 +44,10 @@ Local routes after `pnpm db:up`, `pnpm db:migrate`, and `pnpm dev:api`:
 - OpenAPI JSON: `http://127.0.0.1:3100/docs/openapi.json`
 
 Protected routes require `Authorization: Bearer <opaque-token>`. The local session issuer accepts a stable development subject, returns a seven-day token, stores only its SHA-256 hash, and is disabled when `NODE_ENV=production`. It exercises the same server-side principal and user-ownership boundary as a future verified WeChat/phone adapter, but is not production authentication.
+
+Every routed response exposes `X-Request-ID`. A caller UUIDv4 is preserved and normalized; missing or invalid values are replaced. Redis applies an IP ingress window before authentication and then a standard or sensitive route window after authentication. Rate responses expose `RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset` and, on `429`, `Retry-After`. If Redis is unavailable, business routes return a request-correlated `503`; `/health/live` remains available while `/health` reports dependency failure.
+
+`/internal/metrics` requires `x-operations-token`, returns `Cache-Control: no-store` Prometheus text and is not an administrator API. Series contain stable method/route/status/policy dimensions only. Direct users, IPs, request IDs, query values, tokens and health payloads are excluded. Production requires private scraping plus Redis TLS/ACL configuration and exact reverse-proxy hop trust.
 
 Measurement creation also requires `x-idempotency-key`. Replacement sends `expectedRevision` in its JSON body; deletion sends the same concurrency value as `x-expected-revision`. A `409` means the client must reload instead of silently overwriting a newer state.
 

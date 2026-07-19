@@ -26,6 +26,8 @@ import { Auth } from '../auth/auth.decorator'
 import type { AuthPrincipal } from '../auth/auth.types'
 import { CurrentUser } from '../auth/current-user.decorator'
 import { openApiSchema } from '../openapi-schema'
+import { RateLimit } from '../operations/rate-limit.decorator'
+import { rateLimitPolicies } from '../operations/rate-limit.policies'
 import { AiService } from './ai.service'
 
 const parse = <T>(schema: z.ZodType<T>, value: unknown, message: string): T => {
@@ -49,6 +51,7 @@ export class AiController {
   constructor(private readonly ai: AiService) {}
 
   @Post(':planId/explanation')
+  @RateLimit(rateLimitPolicies.aiExplanation)
   @ApiOperation({ summary: 'Generate a review-only explanation for the current plan revision' })
   @ApiParam({ name: 'planId', schema: { type: 'string', format: 'uuid' } })
   @ApiHeader({ name: 'x-idempotency-key', required: true })

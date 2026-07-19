@@ -392,6 +392,32 @@
         "tags": ["authentication"]
       }
     },
+    "/v1/health/live": {
+      "get": {
+        "operationId": "HealthController_liveness",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["status", "service", "timestamp"],
+                  "properties": {
+                    "status": { "type": "string", "enum": ["alive"] },
+                    "service": { "type": "string", "example": "myfitness-api" },
+                    "timestamp": { "type": "string", "format": "date-time" }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Check whether the API process is alive without dependencies",
+        "tags": ["system"]
+      }
+    },
     "/v1/health": {
       "get": {
         "operationId": "HealthController_readiness",
@@ -403,11 +429,12 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": ["status", "service", "database", "timestamp"],
+                  "required": ["status", "service", "database", "redis", "timestamp"],
                   "properties": {
                     "status": { "type": "string", "enum": ["ok"] },
                     "service": { "type": "string", "example": "myfitness-api" },
                     "database": { "type": "string", "enum": ["up"] },
+                    "redis": { "type": "string", "enum": ["up"] },
                     "timestamp": { "type": "string", "format": "date-time" }
                   }
                 }
@@ -3989,6 +4016,25 @@
         "security": [{ "bearer": [] }],
         "summary": "Get the authenticated user profile, goals and consent receipts",
         "tags": ["onboarding"]
+      }
+    },
+    "/v1/internal/metrics": {
+      "get": {
+        "operationId": "OperationsController_metricsText",
+        "parameters": [
+          {
+            "name": "x-operations-token",
+            "in": "header",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Prometheus text exposition without user identifiers." },
+          "401": { "description": "Operations token is missing or invalid." }
+        },
+        "summary": "Read process-local Prometheus metrics using the operations token",
+        "tags": ["operations"]
       }
     },
     "/v1/plans/weekly": {

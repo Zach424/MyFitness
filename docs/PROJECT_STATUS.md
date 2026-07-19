@@ -2,7 +2,7 @@
 
 Last reviewed: 2026-07-19
 
-Stage: user privacy ownership complete locally; admin and operations next
+Stage: API operational perimeter complete locally; administrator access and audit next
 
 Primary release target: WeChat Mini Program + responsive H5
 
@@ -15,17 +15,17 @@ MyFitness / 衡迹 turns body, training, nutrition, and recovery records into sa
 | Module                  | Status                       | Current evidence                                    | Next gate                                   |
 | ----------------------- | ---------------------------- | --------------------------------------------------- | ------------------------------------------- |
 | Product scope           | Done for MVP baseline        | `docs/product/PRODUCT_BRIEF.md`                     | Validate with target-user interviews        |
-| Delivery roadmap        | Done for planning baseline   | `docs/product/ROADMAP.md`                           | Execute iteration 12                        |
+| Delivery roadmap        | Done for planning baseline   | `docs/product/ROADMAP.md`                           | Execute iteration 13                        |
 | Design language         | Partial, ten flows validated | Core flows + 20 reviewed screenshots                | Large text, keyboard and remaining states   |
-| Client: Mini Program/H5 | Partial                      | Record/plan loop + AI/photo + privacy custody       | Add production identity and operations      |
-| Admin console           | Pending                      | Architecture only                                   | Content and support requirements frozen     |
-| Business API            | Partial                      | Records, plans, AI plus export/revoke/erasure       | Add admin/audit and durable jobs            |
+| Client: Mini Program/H5 | Partial                      | Record/plan loop + AI/photo + privacy custody       | Add production identity and release polish  |
+| Admin console           | Pending                      | Access boundary and operator risks now documented   | Implement identity/RBAC/audit/support slice |
+| Business API            | Partial                      | Product flows plus shared Redis operational edge    | Add admin/audit, then durable jobs          |
 | Domain rules            | Partial                      | Safety validators + strict privacy action contracts | Add release policy enforcement              |
 | AI service              | Partial                      | Text/vision fixture/OpenAI adapters + 15 eval cases | Approved real-provider canary               |
 | Native App/devices      | Deferred                     | Phase-two decision                                  | MVP retention gate reached                  |
 | Privacy/compliance      | Partial, primary store done  | Inventory/export/revocation/erasure exercised       | Backups/providers, policy and legal review  |
-| Testing/observability   | Partial                      | 81 unit + 25 integration + 7 worker + 19 E2E        | Add lint, CI, metrics and trace correlation |
-| Deployment              | Partial, local only          | PostgreSQL + FastAPI Compose health                 | Create repeatable shared test environment   |
+| Testing/observability   | Partial                      | 87 unit + 31 integration + 7 worker + 19 E2E        | Centralize scraping, alerts, tracing and CI |
+| Deployment              | Partial, local only          | PostgreSQL + Redis + fixture AI Compose health      | Create repeatable shared test environment   |
 
 Status vocabulary: `Done` means validated for the present stage, `Partial` means usable but missing a named gate, `Pending` means not implemented, and `Deferred` means intentionally outside the current release.
 
@@ -49,12 +49,15 @@ Status vocabulary: `Done` means validated for the present stage, `Partial` means
 - Review-only AI runs with explicit versioned consent, minimized context, prompt/model/validator provenance, owner-scoped idempotency, deterministic validation/fallback and exact plan-revision binding.
 - Revocable food-photo proposals with per-request consent, signed upload/preview, Sharp metadata stripping, 24-hour expiry, catalog-bound validation, immediate deletion paths and confirmation into an unsaved draft only.
 - User-owned privacy custody with inventory counts, repeatable-read no-store JSON export, append-oriented consent cycles, optional AI/photo withdrawal, user-scoped media purge, cascaded account erasure and an unlinkable `primary-store-v1` receipt.
+- UUIDv4 request correlation, stable-route completion logs, a pre-authentication IP gate and post-authentication policy limits backed by HMAC-keyed Redis counters.
+- Dependency-free liveness, PostgreSQL+Redis readiness and independently token-protected bounded Prometheus process metrics; business traffic fails closed when Redis is unavailable.
 - Shared contracts, domain rules, and design tokens in a pnpm monorepo.
 
 ## Current risks
 
 | Risk                                                                | Level  | Mitigation / next evidence                                                                 |
 | ------------------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------ |
+| Production audit reports critical/high Taro-chain advisories        | High   | Upgrade/override only with full dual-build and E2E proof; require zero critical/high audit |
 | GitHub Git transport is unavailable in the current environment      | High   | Keep local commits; later fetch authenticated remote and replay commits without force-push |
 | Scope may expand before the recording loop is proven                | High   | Enforce MVP exclusions and one-scope iteration archives                                    |
 | Food-photo portion estimates can be misleading                      | High   | Catalog-bound ranges/confidence, user edit, no auto-write; broaden real-image evaluation   |
@@ -69,7 +72,8 @@ Status vocabulary: `Done` means validated for the present stage, `Partial` means
 | Taro emits non-blocking webpack cache serialization warnings        | Low    | Track upstream/package compatibility; clean builds and artifacts currently pass            |
 | Development session issuer is not production authentication         | High   | Production mode disables it; add verified WeChat/phone adapters before shared deployment   |
 | Primary-store privacy works but backups/providers are not exercised | High   | Freeze retention map and run backup/provider deletion evidence before beta                 |
-| API has no production rate limiting or observability yet            | Medium | Add request IDs, metrics, abuse limits and alerting before shared deployment               |
+| Process metrics are not centrally scraped and alerts have no owner  | High   | Deploy private aggregation, dashboards, paging and named incident ownership before beta    |
+| Rate limits use uncalibrated fixed windows and exact proxy topology | Medium | Load-test policy boundaries and verify `TRUST_PROXY_HOPS` in the shared environment        |
 | Workout status can diverge from set completion in non-client use    | Medium | Make server derivation authoritative before exposing imports                               |
 | Starter exercise catalog lacks custom/equipment semantics           | Medium | Model additions only after the manual workout loop informs actual needs                    |
 | Starter food values are demonstration data, not release catalog     | High   | Select licensed/localized versioned provider and attribution before beta                   |
@@ -85,8 +89,8 @@ The MVP cannot enter public beta until all of the following are reproducible:
 - AI-derived values never silently become confirmed records.
 - Plan output passes schema, training-load, energy-intake, and risk-phrase validation.
 - Permissions, account deletion, photo retention, audit logging, backups, and incident rollback are exercised.
-- CI passes formatting, linting, type checks, unit tests, integration tests, and production builds.
+- CI passes formatting, linting, type checks, unit tests, integration tests, zero critical/high production dependency audit, and production builds.
 
 ## Primary next step
 
-Iteration 12: implement administration and operations—request correlation, rate limits, RBAC/audit/support boundaries, durable reconciliation, retention/backup/provider-deletion evidence and incident rollback—before a shared test deployment.
+Iteration 13: remediate the production dependency audit as one controlled compatibility change—resolve the critical/high Taro-chain advisories, document unavoidable residual findings, and require typecheck, unit/integration tests, both client builds and all E2E flows before moving to administrator access.

@@ -18,6 +18,29 @@ services:
       retries: 30
       start_period: 5s
 
+  redis:
+    image: redis:8.8.0-alpine
+    command:
+      [
+        'redis-server',
+        '--save',
+        '',
+        '--appendonly',
+        'no',
+        '--maxmemory',
+        '64mb',
+        '--maxmemory-policy',
+        'noeviction',
+      ]
+    ports:
+      - '127.0.0.1:63799:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 3s
+
   ai:
     build:
       context: ../../services/ai
