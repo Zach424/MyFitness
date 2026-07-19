@@ -3,11 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "main": "dist/main.js",
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "db:migrate": "ts-node src/database/migrate.ts",
     "openapi:generate": "ts-node src/scripts/generate-openapi.ts",
     "ops:verify-backup-restore": "ts-node src/scripts/verify-backup-restore.ts",
+    "ops:verify-production-config": "ts-node src/scripts/verify-production-config.ts",
     "preopenapi:generate": "pnpm --filter @myfitness/contracts build && pnpm --filter @myfitness/domain build",
     "start": "node dist/main.js",
     "prestart:dev": "pnpm --filter @myfitness/contracts build && pnpm --filter @myfitness/domain build",

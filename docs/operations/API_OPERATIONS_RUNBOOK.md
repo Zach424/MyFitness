@@ -1,10 +1,12 @@
 # API operations runbook
 
-Status: local implementation evidence; production ownership and alert delivery are not yet assigned
+Status: local implementation and OCI-topology evidence; production ownership and alert delivery are not yet assigned
 
 ## Deployment preflight
 
-1. Provide `DATABASE_URL`, `REDIS_URL`, `RATE_LIMIT_HASH_SECRET`, `OPERATIONS_TOKEN`, AI/photo secrets, object-store credentials/SSE settings, erasure-ledger HMAC secret and the exact `TRUST_PROXY_HOPS` through a secret manager.
+Use the artifact, secret, migration, rollout and immutable-digest procedure in [the deployment runbook](DEPLOYMENT_RUNBOOK.md); this section defines the API-specific gates.
+
+1. Provide `API_HOST`, `DATABASE_URL`, `REDIS_URL`, `RATE_LIMIT_HASH_SECRET`, `OPERATIONS_TOKEN`, AI/photo secrets, object-store credentials/SSE settings, erasure-ledger HMAC secret and the exact `TRUST_PROXY_HOPS` through a secret manager. Production normally binds `API_HOST=0.0.0.0`; restrict exposure with the platform network/edge policy.
 2. Require TLS plus ACL credentials in the production Redis URL. Keep the rate key prefix isolated from queues or application caches.
 3. Apply checksum-verified database migrations before shifting traffic.
 4. Verify `/v1/health/live` returns `200`, then `/v1/health` returns PostgreSQL, Redis and object storage `up`.

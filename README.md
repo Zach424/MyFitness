@@ -2,7 +2,7 @@
 
 面向普通健身人群的多端记录与 AI 规划产品。产品把身体、训练、饮食和恢复数据整理为可解释、可调整、可持续执行的个人计划。
 
-> 当前阶段：durable data operations / 第 15 轮已完成。本地已实现私有 S3 兼容对象存储、PostgreSQL 持久删除任务、可查询异步删除回执与备份恢复删除日志，并通过故障注入和真实 `pg_dump → pg_restore → ledger replay` 演练。云对象存储/KMS/IAM、自动备份、集中告警、生产用户身份与共享部署仍是上线门槛，下一轮进入生产身份和共享测试环境。
+> 当前阶段：reproducible deployment artifacts / 第 17 轮已完成。本地已形成 API、管理员端和 AI 的非 root OCI 镜像、迁移先于流量的容器拓扑、黑盒部署验收、生产配置预检以及 CI/GHCR 发布定义。下一轮进入托管共享测试环境；云账号、真实微信/OIDC 凭据、域名/TLS、集中遥测和责任人仍是上线门槛。
 
 ## 产品边界
 
@@ -25,12 +25,12 @@ packages/
   domain/          单位归一化、记录汇总、周计划与确定性安全规则
   design-tokens/   颜色、字体、间距、动效和图表变量
 docs/              产品、设计、架构、运营手册和每轮迭代档案
-infra/             PostgreSQL 迁移与 PostgreSQL/Redis/MinIO/AI 本地 Compose
+infra/             PostgreSQL 迁移、本地依赖 Compose 与一次性部署验收拓扑
 output/evals/      可重复的 AI 离线安全评测报告
 output/playwright/ 浏览器视觉验收证据
 ```
 
-后续迭代会按路线图补齐持久数据运营、生产身份、集中可观测性和发布基础设施，避免把本地实现误写成已上线能力。
+后续迭代会按路线图部署托管数据服务、真实身份、集中可观测性和发布边界，避免把可发布镜像误写成已经承载公网流量。
 
 ## 本地运行
 
@@ -49,6 +49,7 @@ pnpm eval:ai
 pnpm eval:food-photo
 pnpm typecheck
 pnpm audit:prod
+pnpm deploy:smoke
 ```
 
 H5 和微信小程序产物分别生成到 `apps/client/dist-h5` 与 `apps/client/dist-weapp`，两次构建不会互相清理。
@@ -90,6 +91,8 @@ pnpm test:e2e
 
 Playwright 会复用或启动 API、H5 与管理员预览服务。`pnpm db:down` 会停止本地容器并保留数据卷。`apps/admin` 的 `start` 命令面向 Linux standalone 产物；Windows 本地验收使用 `start:preview`，避免 standalone 符号链接权限差异。
 
+完整镜像验收使用 `pnpm deploy:smoke`：顺序构建三个最终镜像，运行一次性迁移，等待 API/AI/管理员端与 PostgreSQL/Redis/MinIO 健康，执行外部黑盒检查，最后自动删除容器和测试卷。该命令使用 fixture AI、开发身份和本地 MinIO，只证明部署制品，不代表共享或生产上线。生产配置、发布顺序和不可变镜像回滚见[部署运行手册](docs/operations/DEPLOYMENT_RUNBOOK.md)。
+
 ## 开发方式
 
 项目按受控迭代推进，每一轮只选择一个关键范围，并严格执行：
@@ -125,6 +128,8 @@ Playwright 会复用或启动 API、H5 与管理员预览服务。`pnpm db:down`
 - [架构决策 0013](docs/architecture/decisions/0013-auditable-transitive-security-floors.md)
 - [架构决策 0014](docs/architecture/decisions/0014-independent-operator-trust-boundary.md)
 - [架构决策 0015](docs/architecture/decisions/0015-durable-data-erasure-and-restore-ledger.md)
+- [架构决策 0016](docs/architecture/decisions/0016-verified-wechat-identity-and-erasure-suppression.md)
+- [架构决策 0017](docs/architecture/decisions/0017-reproducible-oci-deployment-boundary.md)
 - [健康记录数据模型](docs/architecture/HEALTH_RECORD_MODEL.md)
 - [训练记录数据模型](docs/architecture/WORKOUT_MODEL.md)
 - [饮食记录数据模型](docs/architecture/NUTRITION_MODEL.md)
@@ -138,6 +143,8 @@ Playwright 会复用或启动 API、H5 与管理员预览服务。`pnpm db:down`
 - [API 运营手册](docs/operations/API_OPERATIONS_RUNBOOK.md)
 - [管理员访问手册](docs/operations/ADMIN_ACCESS_RUNBOOK.md)
 - [数据托管运维手册](docs/operations/DATA_CUSTODY_RUNBOOK.md)
+- [用户身份运行手册](docs/operations/USER_IDENTITY_RUNBOOK.md)
+- [部署运行手册](docs/operations/DEPLOYMENT_RUNBOOK.md)
 - [API 契约与 OpenAPI](docs/api/README.md)
 - [第 0 轮档案](docs/iterations/000-foundation.md)
 - [第 1 轮档案](docs/iterations/001-client-foundation.md)
@@ -155,6 +162,8 @@ Playwright 会复用或启动 API、H5 与管理员预览服务。`pnpm db:down`
 - [第 13 轮档案](docs/iterations/013-production-dependency-remediation.md)
 - [第 14 轮档案](docs/iterations/014-administrator-access-support.md)
 - [第 15 轮档案](docs/iterations/015-durable-data-operations.md)
+- [第 16 轮档案](docs/iterations/016-verified-wechat-identity.md)
+- [第 17 轮档案](docs/iterations/017-reproducible-deployment-artifacts.md)
 - [移动端视觉证据](output/playwright/iteration-001-mobile.png)
 - [宽屏视觉证据](output/playwright/iteration-001-wide.png)
 - [建档移动端证据](output/playwright/iteration-003-onboarding-mobile.png)
@@ -180,4 +189,4 @@ Playwright 会复用或启动 API、H5 与管理员预览服务。`pnpm db:down`
 
 ## 仓库同步说明
 
-2026-07-18 初始化时，当前执行环境无法通过 GitHub HTTPS Git 协议或未授权 SSH 拉取，但可以访问官方源码归档。仓库基线因此从 GitHub 官方 `main` 归档恢复，并配置原始 `origin`。本地提交会持续保留；获得 GitHub 凭据后，需要先获取远端原始提交，再把本地提交重放到 `origin/main` 后推送，禁止未经确认强制覆盖远端。
+2026-07-18 初始化时，执行环境无法通过 GitHub Git 协议拉取，因此仓库基线先从官方 `main` 归档恢复。2026-07-19 HTTPS 传输恢复后，已先获取远端原始提交，再把本地迭代历史重放到 `origin/main` 并正常推送；全程未强制覆盖远端。后续仍只允许常规 fast-forward/rebase 后推送，禁止未经确认的强制推送。

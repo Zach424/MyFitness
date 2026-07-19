@@ -1,3 +1,5 @@
+import { isIP } from 'node:net'
+
 const localDatabaseUrl = 'postgresql://myfitness:myfitness_local@127.0.0.1:54329/myfitness'
 const localAiServiceUrl = 'http://127.0.0.1:8001'
 const localAiServiceToken = 'myfitness-ai-local'
@@ -38,6 +40,14 @@ const parsePort = (value: string | undefined) => {
   return port
 }
 
+const parseHost = (value: string | undefined, production: boolean) => {
+  const host = value?.trim() || (production ? '0.0.0.0' : '127.0.0.1')
+  if (isIP(host) === 0) {
+    throw new Error('API_HOST must be a valid IPv4 or IPv6 address')
+  }
+  return host
+}
+
 const parseTrustProxyHops = (value: string | undefined) => {
   const hops = Number(value ?? 0)
   if (!Number.isInteger(hops) || hops < 0 || hops > 3) {
@@ -46,7 +56,7 @@ const parseTrustProxyHops = (value: string | undefined) => {
   return hops
 }
 
-const parseRedisUrl = (value: string) => {
+const parseRedisUrl = (value: string, production: boolean) => {
   let parsed: URL
   try {
     parsed = new URL(value)
@@ -55,6 +65,9 @@ const parseRedisUrl = (value: string) => {
   }
   if (!['redis:', 'rediss:'].includes(parsed.protocol)) {
     throw new Error('REDIS_URL must use redis:// or rediss://')
+  }
+  if (production && parsed.protocol !== 'rediss:') {
+    throw new Error('REDIS_URL must use rediss:// in production')
   }
   return parsed.toString()
 }
@@ -198,6 +211,7 @@ export const getRuntimeConfig = () => {
   if (!aiServiceUrl || !aiServiceToken) {
     throw new Error('AI_SERVICE_URL and AI_SERVICE_TOKEN are required in production')
   }
+  const exactAiServiceUrl = parseAdminUrl(aiServiceUrl, 'AI_SERVICE_URL', production)
   if (!photoSigningSecret) {
     throw new Error('PHOTO_UPLOAD_SIGNING_SECRET is required in production')
   }
@@ -279,8 +293,9 @@ export const getRuntimeConfig = () => {
     wechatMiniAppId,
     wechatMiniAppSecret,
     wechatCodeSessionUrl,
+    host: parseHost(process.env.API_HOST, production),
     port: parsePort(process.env.API_PORT),
-    aiServiceUrl: aiServiceUrl.replace(/\/$/, ''),
+    aiServiceUrl: exactAiServiceUrl.replace(/\/$/, ''),
     aiServiceToken,
     aiTimeoutMs,
     photoSigningSecret,
@@ -318,7 +333,7 @@ export const getRuntimeConfig = () => {
       1_000,
       300_000,
     ),
-    redisUrl: parseRedisUrl(redisUrl),
+    redisUrl: parseRedisUrl(redisUrl, production),
     rateLimitHashSecret,
     rateLimitKeyPrefix: parseRateLimitKeyPrefix(process.env.RATE_LIMIT_KEY_PREFIX),
     operationsToken,

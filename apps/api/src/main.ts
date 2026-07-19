@@ -6,7 +6,7 @@ import { getRuntimeConfig } from './config'
 const bootstrap = async () => {
   const config = getRuntimeConfig()
   const app = await createApplication()
-  await app.listen(config.port, '127.0.0.1')
+  await app.listen(config.port, config.host)
 }
 
 void bootstrap()

@@ -2,30 +2,31 @@
 
 The roadmap is organized as controlled iterations. A round may take several working sessions, but it ends only after implementation, validation, archive update, and a commit.
 
-Progress snapshot (2026-07-19): iterations 0–16 are complete locally; iteration 17 is next. The product now adds a server-verified WeChat Mini Program identity path, provider-bound sessions and restore-safe erased-identity suppression to the existing authenticated record/planning/privacy loop. Production audit critical/high findings are zero; real WeChat credentials/device/domain proof, an H5 release identity, cloud storage/backup ownership, centralized alerting, model/provider approval and shared deployment remain gated.
+Progress snapshot (2026-07-19): iterations 0–17 are complete locally; iteration 18 is next. The product now adds pinned non-root OCI artifacts, migration-before-traffic topology, black-box deployment verification and CI/GHCR workflow definitions to the verified identity and record/planning/privacy loop. Production audit critical/high findings are zero; remote CI evidence, managed shared infrastructure, real WeChat credentials/device/domain proof, H5 release identity, cloud custody ownership, centralized alerting and model/provider approval remain gated.
 
-| Iteration | Primary scope                                       | Exit evidence                                                                                |
-| --------- | --------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| 0         | Product, design, architecture, iteration governance | Baseline documents cross-link, repository status reviewed, local commit created              |
-| 1         | Multi-end client foundation and Today shell         | H5 boots; Mini Program build is checked; screenshot reviewed; token tests pass               |
-| 2         | API foundation and health-record contract           | PostgreSQL migration, OpenAPI contract, provenance/unit tests, local stack health check      |
-| 3         | Adult onboarding and goals                          | Profile flow persists through API; consent version recorded; E2E happy/error paths pass      |
-| 4         | Body and recovery recording                         | Create/edit/delete/history flows; trends use correct time/unit semantics                     |
-| 5         | Workout recording                                   | Exercise/set model, repeat-last-workout flow, volume calculations and E2E tests              |
-| 6         | Nutrition recording                                 | Search/favorites/manual portions; macro totals and revision history verified                 |
-| 7         | Today and trend loop                                | Plan-vs-actual rail uses real API data; empty/loading/offline/error states tested            |
-| 8         | Deterministic plan engine                           | Structured plan contract, substitutions, load constraints and versioning                     |
-| 9         | AI explanation and plan orchestration               | Model gateway, prompt/version logs, validators, offline fixtures and evaluation report       |
-| 10        | Food-photo assistance                               | EXIF removal, signed upload, uncertainty/confirmation, retention deletion tests              |
-| 11        | User privacy ownership                              | Inventory, portable export, optional-consent revocation and primary-store erasure exercised  |
-| 12        | API operational perimeter                           | Correlation, Redis abuse limits, health/metrics, outage tests and incident runbook           |
-| 13        | Production dependency remediation                   | Zero critical/high audit findings plus full type/test/dual-build/E2E compatibility evidence  |
-| 14        | Administrator access and support                    | Operator identity, RBAC, immutable audit and read-only support workflow exercised            |
-| 15        | Durable data operations                             | Durable jobs, private object storage, fault retries, restore ledger and provider disposition |
-| 16        | Verified WeChat user identity                       | Server code exchange, provider-bound sessions, erasure suppression and WeApp build proof     |
-| 17        | Shared test deployment                              | Managed services/secrets, real WeChat proof, telemetry, calibrated limits and rollback       |
-| 18        | Beta hardening and release                          | H5 identity, security review, budgets, accessibility, filing artifacts and staged rollout    |
-| 19        | Native App feasibility and device sync              | Retention gate reviewed; HealthKit/Health Connect/Huawei proof of concept                    |
+| Iteration | Primary scope                                       | Exit evidence                                                                                    |
+| --------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| 0         | Product, design, architecture, iteration governance | Baseline documents cross-link, repository status reviewed, local commit created                  |
+| 1         | Multi-end client foundation and Today shell         | H5 boots; Mini Program build is checked; screenshot reviewed; token tests pass                   |
+| 2         | API foundation and health-record contract           | PostgreSQL migration, OpenAPI contract, provenance/unit tests, local stack health check          |
+| 3         | Adult onboarding and goals                          | Profile flow persists through API; consent version recorded; E2E happy/error paths pass          |
+| 4         | Body and recovery recording                         | Create/edit/delete/history flows; trends use correct time/unit semantics                         |
+| 5         | Workout recording                                   | Exercise/set model, repeat-last-workout flow, volume calculations and E2E tests                  |
+| 6         | Nutrition recording                                 | Search/favorites/manual portions; macro totals and revision history verified                     |
+| 7         | Today and trend loop                                | Plan-vs-actual rail uses real API data; empty/loading/offline/error states tested                |
+| 8         | Deterministic plan engine                           | Structured plan contract, substitutions, load constraints and versioning                         |
+| 9         | AI explanation and plan orchestration               | Model gateway, prompt/version logs, validators, offline fixtures and evaluation report           |
+| 10        | Food-photo assistance                               | EXIF removal, signed upload, uncertainty/confirmation, retention deletion tests                  |
+| 11        | User privacy ownership                              | Inventory, portable export, optional-consent revocation and primary-store erasure exercised      |
+| 12        | API operational perimeter                           | Correlation, Redis abuse limits, health/metrics, outage tests and incident runbook               |
+| 13        | Production dependency remediation                   | Zero critical/high audit findings plus full type/test/dual-build/E2E compatibility evidence      |
+| 14        | Administrator access and support                    | Operator identity, RBAC, immutable audit and read-only support workflow exercised                |
+| 15        | Durable data operations                             | Durable jobs, private object storage, fault retries, restore ledger and provider disposition     |
+| 16        | Verified WeChat user identity                       | Server code exchange, provider-bound sessions, erasure suppression and WeApp build proof         |
+| 17        | Reproducible deployment artifacts                   | Non-root OCI images, migration gate, local topology proof, CI/release workflow and rollback unit |
+| 18        | Managed shared test deployment                      | Managed services/secrets, real WeChat proof, telemetry, calibrated limits and rollback           |
+| 19        | Beta hardening and release                          | H5 identity, security review, budgets, accessibility, filing artifacts and staged rollout        |
+| 20        | Native App feasibility and device sync              | Retention gate reviewed; HealthKit/Health Connect/Huawei proof of concept                        |
 
 ## Release gates
 
@@ -44,7 +45,7 @@ Progress snapshot (2026-07-19): iterations 0–16 are complete locally; iteratio
 
 ### Public release
 
-- Iteration 18 complete.
+- Iteration 19 complete.
 - Applicable ICP/APP/Mini Program privacy/AI registration and content-labeling work is reviewed.
 - Store materials match actual data practices and product claims.
 - Release starts with a small cohort and automatic rollback thresholds.

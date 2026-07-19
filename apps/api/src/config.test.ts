@@ -38,6 +38,11 @@ const setEnvironment = (name: string, value: string) => {
   process.env[name] = value
 }
 
+const unsetEnvironment = (name: string) => {
+  if (!originalEnvironment.has(name)) originalEnvironment.set(name, process.env[name])
+  delete process.env[name]
+}
+
 afterEach(() => {
   for (const [name, value] of originalEnvironment) {
     if (value === undefined) delete process.env[name]
@@ -51,9 +56,32 @@ describe('production user identity configuration', () => {
     configureProduction()
     expect(getRuntimeConfig()).toMatchObject({
       authEnabledProviders: ['wechat'],
+      host: '0.0.0.0',
       wechatMiniAppId: productionEnvironment.WECHAT_MINI_APP_ID,
       wechatCodeSessionUrl: 'https://api.weixin.qq.com/sns/jscode2session',
     })
+  })
+
+  it('keeps local development loopback-only unless explicitly configured', () => {
+    setEnvironment('NODE_ENV', 'development')
+    unsetEnvironment('API_HOST')
+    expect(getRuntimeConfig().host).toBe('127.0.0.1')
+  })
+
+  it('rejects hostnames so the network bind is always explicit', () => {
+    configureProduction()
+    setEnvironment('API_HOST', 'api.internal')
+    expect(() => getRuntimeConfig()).toThrow('API_HOST must be a valid IPv4 or IPv6 address')
+  })
+
+  it('requires TLS for production AI and Redis service endpoints', () => {
+    configureProduction()
+    setEnvironment('AI_SERVICE_URL', 'http://ai.internal')
+    expect(() => getRuntimeConfig()).toThrow('AI_SERVICE_URL must use https:// in production')
+
+    setEnvironment('AI_SERVICE_URL', productionEnvironment.AI_SERVICE_URL)
+    setEnvironment('REDIS_URL', 'redis://redis.internal:6379')
+    expect(() => getRuntimeConfig()).toThrow('REDIS_URL must use rediss:// in production')
   })
 
   it('rejects the development adapter in production', () => {

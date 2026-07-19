@@ -1,6 +1,6 @@
 # Architecture baseline
 
-Status: accepted and implemented through the iteration-015 durable-data-operations loop; changes require an ADR.
+Status: accepted and implemented through the iteration-017 deployment-artifact boundary; changes require an ADR.
 
 ## System shape
 
@@ -58,6 +58,9 @@ Implemented foundation:
 - Outer request middleware validates UUIDv4 correlation and records final status/duration from stable route templates. A Redis-backed IP guard runs before authentication; a second actor/route limiter runs after authentication. HMAC actor keys expire atomically, business traffic fails closed without Redis, and liveness stays separate from PostgreSQL+Redis+object-storage readiness.
 - Exact administrator support lookup requires an account UUID, bounded ticket and enumerated reason, then returns lifecycle/aggregate evidence only. Every accepted/not-found lookup and authorization decision is correlated into an append-only audit table whose target identifiers are HMAC references and whose update/delete trigger fails closed.
 - `apps/admin` is a Next.js 16 App Router BFF/UI. Authorization Code + PKCE/state/nonce remains server-side, administrator API tokens stay in secure-by-default HttpOnly cookies, and the Evidence Rail renders only the bounded support/audit contract.
+- API, administrator and AI runtime boundaries have non-root OCI images with pinned base manifests, health checks and source/revision labels. API production output is a pruned pnpm deploy directory; administrator output is Next.js standalone; Python runtime dependencies are fully pinned.
+- A one-shot API-image migration task gates container traffic. The disposable deployment topology proves container networking, migrations, PostgreSQL/Redis/object readiness, AI health and administrator security headers, while remaining explicitly non-production.
+- API binding defaults to loopback outside production and all interfaces in production, with an explicit IP-only override. GitHub Actions defines source gates, image smoke, multi-architecture GHCR publishing and provenance attestations; managed infrastructure remains vendor-neutral.
 - Parent-qualified pnpm overrides place audited floors only on affected Taro 4.2.1 edges: client Vite 6.4.3, webpack 5.104.1, Swiper 12.1.2 and lodash-es 4.18.1. Root Vite 8.1.5 stays isolated for Vitest; frozen install, peer checks, dual builds, E2E and the zero-critical/high audit gate control every graph change.
 
 ## Data rules
@@ -136,5 +139,6 @@ Provider outages fall back to manual recording and deterministic summaries; core
 - Local: Node 24 runtime, pnpm 11, Docker Compose, PostgreSQL 18.4, Redis 8.8, pinned MinIO and the fixture AI provider.
 - CI: install lockfile, format check, lint, typecheck, unit/integration tests, H5 build, Mini Program build, dependency audit, artifact upload.
 - Production candidate: managed container/runtime, managed PostgreSQL and Redis, private object storage, KMS/secrets manager, CDN only for public static assets, centralized metrics and alerts.
+- Deployment artifacts: immutable API/admin/AI image digests, separate migration job, secret-manager environment injection and black-box post-deploy verification. Application rollback selects the prior digest and never reverses the database.
 
 Specific cloud vendor selection is deferred until expected China-region traffic, company entity, budget, filing owner, and operations capability are known.

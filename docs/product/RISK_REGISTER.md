@@ -1,12 +1,11 @@
 # Product risk register
 
-Last reviewed: 2026-07-19, iteration 016
+Last reviewed: 2026-07-19, iteration 017
 
 This register tracks release-affecting uncertainty. A mitigation is evidence to collect, not a claim that the risk is gone.
 
 | ID    | Risk                                                                                   | Level  | Current control / next gate                                                                                                                            |
 | ----- | -------------------------------------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| R-001 | GitHub transport is unavailable in the execution environment                           | High   | Preserve signed-off local commits; later authenticated fetch/replay/push without force                                                                 |
 | R-002 | WeChat identity is mock-proven only and H5 has no release identity adapter             | High   | Configure real AppID/secret/domain, exercise device/shared login and select H5 identity before beta                                                    |
 | R-003 | Local restore-ledger erasure works, but production backup/provider ownership is absent | High   | Automate backup/retention, independently retain ledger, exercise shared restore and approve provider controls                                          |
 | R-004 | Real food-photo quality, latency, cost and provider data controls are unknown          | High   | Fixture remains default; require owner-approved canary, legal/region/retention review and thresholds                                                   |
@@ -27,5 +26,6 @@ This register tracks release-affecting uncertainty. A mitigation is evidence to 
 | R-019 | Erasure ledger/secret loss would invalidate user and provider-identity suppression     | High   | Independently retain/replicate ledger and recover HMAC secret; implement dual-read version rotation and exercise loss scenarios                        |
 | R-020 | Dead-letter jobs lack named alerts and a least-privilege recovery service              | High   | Use exact-job audited runbook locally; add centralized paging, owner and safe recovery workflow before shared beta                                     |
 | R-021 | MVP erased-identity suppression currently prevents a new account for the same identity | High   | Confirm product/legal policy; if return is allowed, require an explicit fresh-account consent flow without reconnecting erased data before beta        |
+| R-022 | OCI/CI release definitions lack remote-run and managed-environment proof               | Medium | Observe main CI, retain registry digest/attestation evidence, then exercise managed canary and immutable-digest rollback before any beta traffic       |
 
 Resolved implementation defects remain documented in their iteration archive rather than removed from history. Product-level risks close only when the named release evidence exists.
