@@ -22,14 +22,17 @@ const parseAuthProviders = (value: string | undefined, production: boolean) => {
   const requested = (value ?? (production ? 'wechat' : 'dev'))
     .split(',')
     .map((provider) => provider.trim())
-  if (!requested.length || requested.some((provider) => !['dev', 'wechat'].includes(provider))) {
-    throw new Error('AUTH_ENABLED_PROVIDERS must contain only dev or wechat')
+  if (
+    !requested.length ||
+    requested.some((provider) => !['dev', 'wechat', 'oidc'].includes(provider))
+  ) {
+    throw new Error('AUTH_ENABLED_PROVIDERS must contain only dev, wechat or oidc')
   }
   const providers = [...new Set(requested)]
   if (production && providers.includes('dev')) {
     throw new Error('AUTH_ENABLED_PROVIDERS must not enable dev in production')
   }
-  return providers as Array<'dev' | 'wechat'>
+  return providers as Array<'dev' | 'wechat' | 'oidc'>
 }
 
 const parsePort = (value: string | undefined) => {
@@ -101,6 +104,15 @@ const parseAdminUrl = (value: string, name: string, production: boolean) => {
   }
   if (production && parsed.protocol !== 'https:') {
     throw new Error(`${name} must use https:// in production`)
+  }
+  return exactValue
+}
+
+const parseOidcUrl = (value: string, name: string, production: boolean) => {
+  const exactValue = parseAdminUrl(value, name, production)
+  const parsed = new URL(exactValue)
+  if (parsed.username || parsed.password || parsed.search || parsed.hash) {
+    throw new Error(`${name} must not contain credentials, query parameters or a fragment`)
   }
   return exactValue
 }
@@ -204,6 +216,13 @@ export const getRuntimeConfig = () => {
     'WECHAT_CODE_SESSION_URL',
     production,
   )
+  const userOidcIssuer = process.env.USER_OIDC_ISSUER?.trim()
+  const userOidcAuthorizationUrl = process.env.USER_OIDC_AUTHORIZATION_URL?.trim()
+  const userOidcTokenUrl = process.env.USER_OIDC_TOKEN_URL?.trim()
+  const userOidcJwksUrl = process.env.USER_OIDC_JWKS_URL?.trim()
+  const userOidcClientId = process.env.USER_OIDC_CLIENT_ID?.trim()
+  const userOidcClientSecret = process.env.USER_OIDC_CLIENT_SECRET?.trim()
+  const userOidcRedirectUri = process.env.USER_OIDC_REDIRECT_URI?.trim()
 
   if (!databaseUrl) {
     throw new Error('DATABASE_URL is required in production')
@@ -245,6 +264,26 @@ export const getRuntimeConfig = () => {
   }
   if (production && wechatCodeSessionUrl !== officialWechatCodeSessionUrl) {
     throw new Error('WECHAT_CODE_SESSION_URL cannot be overridden in production')
+  }
+  if (authEnabledProviders.includes('oidc')) {
+    if (
+      !userOidcIssuer ||
+      !userOidcAuthorizationUrl ||
+      !userOidcTokenUrl ||
+      !userOidcJwksUrl ||
+      !userOidcClientId ||
+      !userOidcRedirectUri
+    ) {
+      throw new Error(
+        'USER_OIDC_ISSUER, USER_OIDC_AUTHORIZATION_URL, USER_OIDC_TOKEN_URL, USER_OIDC_JWKS_URL, USER_OIDC_CLIENT_ID and USER_OIDC_REDIRECT_URI are required when oidc auth is enabled',
+      )
+    }
+    if (!/^[A-Za-z0-9._:/-]{3,200}$/.test(userOidcClientId)) {
+      throw new Error('USER_OIDC_CLIENT_ID contains unsupported characters')
+    }
+    if (userOidcClientSecret && userOidcClientSecret.length < 16) {
+      throw new Error('USER_OIDC_CLIENT_SECRET must contain at least 16 characters when set')
+    }
   }
   if ((objectStorageAccessKeyId === undefined) !== (objectStorageSecretAccessKey === undefined)) {
     throw new Error(
@@ -310,6 +349,23 @@ export const getRuntimeConfig = () => {
     wechatMiniAppId,
     wechatMiniAppSecret,
     wechatCodeSessionUrl,
+    userOidcIssuer: userOidcIssuer
+      ? parseOidcUrl(userOidcIssuer, 'USER_OIDC_ISSUER', production)
+      : undefined,
+    userOidcAuthorizationUrl: userOidcAuthorizationUrl
+      ? parseOidcUrl(userOidcAuthorizationUrl, 'USER_OIDC_AUTHORIZATION_URL', production)
+      : undefined,
+    userOidcTokenUrl: userOidcTokenUrl
+      ? parseOidcUrl(userOidcTokenUrl, 'USER_OIDC_TOKEN_URL', production)
+      : undefined,
+    userOidcJwksUrl: userOidcJwksUrl
+      ? parseOidcUrl(userOidcJwksUrl, 'USER_OIDC_JWKS_URL', production)
+      : undefined,
+    userOidcClientId,
+    userOidcClientSecret,
+    userOidcRedirectUri: userOidcRedirectUri
+      ? parseOidcUrl(userOidcRedirectUri, 'USER_OIDC_REDIRECT_URI', production)
+      : undefined,
     host: parseHost(process.env.API_HOST, production),
     port: parsePort(process.env.API_PORT),
     aiServiceUrl: exactAiServiceUrl.replace(/\/$/, ''),

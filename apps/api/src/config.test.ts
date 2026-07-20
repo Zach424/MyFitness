@@ -24,12 +24,30 @@ const productionEnvironment = {
   WECHAT_MINI_APP_SECRET: 'wechat-app-secret-with-32-characters',
 } as const
 
+const userOidcEnvironment = {
+  USER_OIDC_ISSUER: 'https://accounts.example.com',
+  USER_OIDC_AUTHORIZATION_URL: 'https://accounts.example.com/oauth2/authorize',
+  USER_OIDC_TOKEN_URL: 'https://accounts.example.com/oauth2/token',
+  USER_OIDC_JWKS_URL: 'https://accounts.example.com/.well-known/jwks.json',
+  USER_OIDC_CLIENT_ID: 'myfitness-h5',
+  USER_OIDC_CLIENT_SECRET: 'server-side-client-secret',
+  USER_OIDC_REDIRECT_URI: 'https://h5.example.com/auth/callback',
+} as const
+
 const originalEnvironment = new Map<string, string | undefined>()
 
 const configureProduction = () => {
   for (const [name, value] of Object.entries(productionEnvironment)) {
     if (!originalEnvironment.has(name)) originalEnvironment.set(name, process.env[name])
     process.env[name] = value
+  }
+}
+
+const configureProductionOidc = () => {
+  configureProduction()
+  setEnvironment('AUTH_ENABLED_PROVIDERS', 'oidc')
+  for (const [name, value] of Object.entries(userOidcEnvironment)) {
+    setEnvironment(name, value)
   }
 }
 
@@ -60,6 +78,35 @@ describe('production user identity configuration', () => {
       wechatMiniAppId: productionEnvironment.WECHAT_MINI_APP_ID,
       wechatCodeSessionUrl: 'https://api.weixin.qq.com/sns/jscode2session',
     })
+  })
+
+  it('accepts a complete TLS-only end-user OIDC production boundary', () => {
+    configureProductionOidc()
+    expect(getRuntimeConfig()).toMatchObject({
+      authEnabledProviders: ['oidc'],
+      userOidcIssuer: userOidcEnvironment.USER_OIDC_ISSUER,
+      userOidcAuthorizationUrl: userOidcEnvironment.USER_OIDC_AUTHORIZATION_URL,
+      userOidcTokenUrl: userOidcEnvironment.USER_OIDC_TOKEN_URL,
+      userOidcJwksUrl: userOidcEnvironment.USER_OIDC_JWKS_URL,
+      userOidcClientId: userOidcEnvironment.USER_OIDC_CLIENT_ID,
+      userOidcClientSecret: userOidcEnvironment.USER_OIDC_CLIENT_SECRET,
+      userOidcRedirectUri: userOidcEnvironment.USER_OIDC_REDIRECT_URI,
+    })
+  })
+
+  it('rejects incomplete or non-TLS end-user OIDC production settings', () => {
+    configureProductionOidc()
+    unsetEnvironment('USER_OIDC_TOKEN_URL')
+    expect(() => getRuntimeConfig()).toThrow('USER_OIDC_TOKEN_URL')
+
+    setEnvironment('USER_OIDC_TOKEN_URL', 'http://accounts.example.com/oauth2/token')
+    expect(() => getRuntimeConfig()).toThrow('USER_OIDC_TOKEN_URL must use https:// in production')
+
+    setEnvironment('USER_OIDC_TOKEN_URL', userOidcEnvironment.USER_OIDC_TOKEN_URL)
+    setEnvironment('USER_OIDC_CLIENT_SECRET', 'too-short')
+    expect(() => getRuntimeConfig()).toThrow(
+      'USER_OIDC_CLIENT_SECRET must contain at least 16 characters when set',
+    )
   })
 
   it('keeps local development loopback-only unless explicitly configured', () => {

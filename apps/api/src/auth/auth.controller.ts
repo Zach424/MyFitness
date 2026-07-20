@@ -1,9 +1,12 @@
-import { BadRequestException, Body, Controller, HttpCode, Post } from '@nestjs/common'
+import { BadRequestException, Body, Controller, Get, HttpCode, Post } from '@nestjs/common'
 import { ApiBody, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger'
 import {
   devSessionRequestSchema,
   devSessionSchema,
   type DevSessionRequest,
+  oidcAuthorizationConfigSchema,
+  type OidcSessionRequest,
+  oidcSessionRequestSchema,
   type WechatSessionRequest,
   verifiedSessionSchema,
   wechatSessionRequestSchema,
@@ -23,6 +26,12 @@ const parseRequest = (body: unknown): DevSessionRequest => {
 const parseWechatRequest = (body: unknown): WechatSessionRequest => {
   const result = wechatSessionRequestSchema.safeParse(body)
   if (!result.success) throw new BadRequestException('WeChat session request is invalid')
+  return result.data
+}
+
+const parseOidcRequest = (body: unknown): OidcSessionRequest => {
+  const result = oidcSessionRequestSchema.safeParse(body)
+  if (!result.success) throw new BadRequestException('OIDC session request is invalid')
   return result.data
 }
 
@@ -58,5 +67,31 @@ export class AuthController {
     return verifiedSessionSchema.parse(
       await this.auth.createWechatSession(parseWechatRequest(body)),
     )
+  }
+
+  @Get('oidc/config')
+  @RateLimit(rateLimitPolicies.authSession)
+  @ApiOperation({
+    summary: 'Read the public H5 OIDC authorization configuration',
+    description:
+      'Returns only browser-safe authorization values. Token, JWKS and client-secret settings remain server-side.',
+  })
+  @ApiOkResponse({ schema: openApiSchema(oidcAuthorizationConfigSchema) })
+  getOidcConfig() {
+    return oidcAuthorizationConfigSchema.parse(this.auth.getOidcAuthorizationConfig())
+  }
+
+  @Post('oidc/session')
+  @RateLimit(rateLimitPolicies.verifiedAuthSession)
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Exchange an H5 OIDC authorization code for an opaque user session',
+    description:
+      'The API performs the code exchange and verifies the signed ID Token issuer, audience, age and nonce before binding an identity.',
+  })
+  @ApiBody({ schema: openApiSchema(oidcSessionRequestSchema) })
+  @ApiOkResponse({ schema: openApiSchema(verifiedSessionSchema) })
+  async createOidcSession(@Body() body: unknown) {
+    return verifiedSessionSchema.parse(await this.auth.createOidcSession(parseOidcRequest(body)))
   }
 }

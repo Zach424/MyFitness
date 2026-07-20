@@ -2,7 +2,7 @@
 
 面向普通健身人群的多端记录与 AI 规划产品。产品把身体、训练、饮食和恢复数据整理为可解释、可调整、可持续执行的个人计划。
 
-> 当前阶段：首个服务候选 `v0.1.0-rc.1` 已发布验证；CI/发布工作流的 27 个外部 action 调用已固定到 12 个经核验的完整提交，下一候选的远端标签、当前 `main` 祖先关系与同提交成功 CI 也已成为镜像发布前的强制资格门。H5/WeApp 的确定性 TAR、来源绑定、实际字节校验、部署准入、删除回执恢复、AI 解释崩溃恢复、v2 对抗性输出验证与可重现评测工件已完成本地验收。现有候选仍是“仅服务”记录，下一候选必须先配置经批准的客户端 API 地址才能发布客户端制品。托管账号、真实微信/OIDC 凭据、域名/TLS、集中遥测和责任人仍是上线门槛。
+> 当前阶段：首个服务候选 `v0.1.0-rc.1` 已发布验证；H5 OIDC 服务端 Authorization Code + PKCE 信任边界已完成本地验收，CI/发布工作流的 27 个外部 action 调用已固定到 12 个经核验的完整提交，下一候选的远端标签、当前 `main` 祖先关系与同提交成功 CI 也已成为镜像发布前的强制资格门。H5/WeApp 的确定性 TAR、来源绑定、实际字节校验、部署准入、删除回执恢复、AI 解释崩溃恢复、v2 对抗性输出验证与可重现评测工件已完成本地验收。现有候选仍是“仅服务”记录，H5 浏览器回调与 `oidc / candidate` 发布契约尚待下一轮；托管账号、真实微信/OIDC 凭据、域名/TLS、集中遥测和责任人仍是上线门槛。
 
 ## 产品边界
 
@@ -69,7 +69,7 @@ pnpm ops:verify-backup-restore
 pnpm dev:api
 ```
 
-随后可访问 liveness `http://127.0.0.1:3100/v1/health/live`、PostgreSQL+Redis+对象存储 readiness `http://127.0.0.1:3100/v1/health` 与 `http://127.0.0.1:3100/docs`。开发身份通过 `POST /v1/auth/dev/session` 获取不透明 Bearer 令牌；该签发器在生产环境关闭。微信小程序发布构建设置 `TARO_APP_AUTH_MODE=wechat` 和 HTTPS API 地址，客户端以 `Taro.login` code 调用 `POST /v1/auth/wechat/session`，API 服务端完成 `code2Session` 校验且不保存 `session_key`。真实 AppID、域名白名单与设备联调仍是共享测试环境门禁，详见 [用户身份运行手册](docs/operations/USER_IDENTITY_RUNBOOK.md)。
+随后可访问 liveness `http://127.0.0.1:3100/v1/health/live`、PostgreSQL+Redis+对象存储 readiness `http://127.0.0.1:3100/v1/health` 与 `http://127.0.0.1:3100/docs`。开发身份通过 `POST /v1/auth/dev/session` 获取不透明 Bearer 令牌；该签发器在生产环境关闭。微信小程序发布构建设置 `TARO_APP_AUTH_MODE=wechat` 和 HTTPS API 地址，客户端以 `Taro.login` code 调用 `POST /v1/auth/wechat/session`，API 服务端完成 `code2Session` 校验且不保存 `session_key`。H5 可从 `GET /v1/auth/oidc/config` 读取浏览器安全配置，并把授权码、PKCE verifier、nonce 与精确回调交给 `POST /v1/auth/oidc/session`；API 服务端完成换码、JWKS/issuer/audience/age/nonce 验证，只保存不可逆身份摘要。浏览器回调仍是下一轮门禁，详见[用户身份运行手册](docs/operations/USER_IDENTITY_RUNBOOK.md)。
 
 管理员支持台默认运行在 `http://127.0.0.1:3101`。它通过 Next.js BFF 把管理员 API 令牌保存在 `HttpOnly`、`SameSite=Strict` Cookie 中，浏览器不能读取该令牌。生产登录使用 Authorization Code + PKCE + state + nonce，API 再独立验证 ID Token 的签名、issuer、audience、时效与 nonce，并只允许预配操作员换取一次性管理员会话。本地演示需要显式设置 `ADMIN_ENABLE_LOCAL_LOGIN=true`；即使管理端误开该开关，生产 API 仍会把本地签发入口返回为 `404` 并记录拒绝。配置和人员开通步骤见 [管理员访问手册](docs/operations/ADMIN_ACCESS_RUNBOOK.md)。
 
@@ -94,7 +94,7 @@ Playwright 会复用或启动 API、H5 与管理员预览服务。`pnpm db:down`
 
 完整镜像验收使用 `pnpm deploy:smoke`：顺序构建三个最终镜像，运行一次性迁移，等待 API/AI/管理员端与 PostgreSQL/Redis/MinIO 健康，执行外部黑盒检查，最后自动删除容器和测试卷。该命令使用 fixture AI、开发身份和本地 MinIO，只证明部署制品，不代表共享或生产上线。两个 GitHub 工作流的外部 action 均使用 `infra/ci/github-actions.lock.json` 登记的完整提交 SHA；版本注释和每周 Dependabot 仅用于发现受审升级，不能作为执行引用。候选版本标签触发发布工作流后，`myfitness-release-qualification/v1` 会先把远端标签、当前 `main` 祖先关系和同一提交的成功 push CI 绑定到发布运行；失败时不会登录镜像仓库或构建客户端。资格通过后才进行 GHCR 多架构发布与 H5/WeApp 构建，并分别生成 `myfitness-release/v1` 服务清单和 `myfitness-client-release/v1` 客户端清单；客户端 TAR 使用排序路径、固定权限/UID/GID/时间戳并绑定完整提交、工作流、API 地址和身份模式。
 
-托管环境必须先从 `infra/deploy/managed-environment.example.json` 创建一份受变更系统保护、只包含逻辑引用而没有密钥值的环境清单，再用 `pnpm deploy:admit -- ...` 同时校验环境、服务/客户端清单、两个清单校验和及两个实际客户端 TAR。模板本身故意不可准入；完整账号/预算、域名、所有者、数据托管、告警和 AI 策略引用才能生成 `myfitness-deployment-admission/v2`。当前 H5 仍使用生产禁用的开发身份，因此准入记录会明确保持 `preview-only` 且禁止公网流量；生产配置、准入命令、发布顺序和回滚规则见[部署运行手册](docs/operations/DEPLOYMENT_RUNBOOK.md)。
+托管环境必须先从 `infra/deploy/managed-environment.example.json` 创建一份受变更系统保护、只包含逻辑引用而没有密钥值的环境清单，再用 `pnpm deploy:admit -- ...` 同时校验环境、服务/客户端清单、两个清单校验和及两个实际客户端 TAR。模板本身故意不可准入；完整账号/预算、域名、所有者、数据托管、告警和 AI 策略引用才能生成 `myfitness-deployment-admission/v2`。H5 服务端 OIDC 边界已经就绪，但当前客户端 TAR 仍是 `dev / preview-only`，所以准入继续禁止公网流量；下一轮必须把浏览器状态机和发布契约一并升级为 `oidc / candidate`。生产配置、准入命令、发布顺序和回滚规则见[部署运行手册](docs/operations/DEPLOYMENT_RUNBOOK.md)。
 
 ## 开发方式
 
@@ -142,6 +142,7 @@ Playwright 会复用或启动 API、H5 与管理员预览服务。`pnpm db:down`
 - [架构决策 0024](docs/architecture/decisions/0024-versioned-adversarial-ai-output-safety.md)
 - [架构决策 0025](docs/architecture/decisions/0025-qualified-main-ci-release-promotion.md)
 - [架构决策 0026](docs/architecture/decisions/0026-immutable-github-actions-supply-chain.md)
+- [架构决策 0027](docs/architecture/decisions/0027-h5-oidc-authorization-code-boundary.md)
 - [健康记录数据模型](docs/architecture/HEALTH_RECORD_MODEL.md)
 - [训练记录数据模型](docs/architecture/WORKOUT_MODEL.md)
 - [饮食记录数据模型](docs/architecture/NUTRITION_MODEL.md)
@@ -186,6 +187,7 @@ Playwright 会复用或启动 API、H5 与管理员预览服务。`pnpm db:down`
 - [第 25 轮档案](docs/iterations/025-reproducible-ai-evaluation-artifacts.md)
 - [第 26 轮档案](docs/iterations/026-qualified-release-source.md)
 - [第 27 轮档案](docs/iterations/027-immutable-github-actions-supply-chain.md)
+- [第 28 轮档案](docs/iterations/028-h5-oidc-server-boundary.md)
 - [移动端视觉证据](output/playwright/iteration-001-mobile.png)
 - [宽屏视觉证据](output/playwright/iteration-001-wide.png)
 - [建档移动端证据](output/playwright/iteration-003-onboarding-mobile.png)

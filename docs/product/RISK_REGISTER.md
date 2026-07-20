@@ -1,12 +1,12 @@
 # Product risk register
 
-Last reviewed: 2026-07-20, iteration 027
+Last reviewed: 2026-07-20, iteration 028
 
 This register tracks release-affecting uncertainty. A mitigation is evidence to collect, not a claim that the risk is gone.
 
 | ID    | Risk                                                                                   | Level  | Current control / next gate                                                                                                                                  |
 | ----- | -------------------------------------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| R-002 | WeChat identity is mock-proven only and H5 has no release identity adapter             | High   | Configure real AppID/secret/domain, exercise device/shared login and select H5 identity before beta                                                          |
+| R-002 | WeChat is mock-proven; H5 OIDC has no browser/provider shared proof                    | High   | Add state/nonce/S256 callback, configure real clients/domains and exercise device/browser login before beta                                                  |
 | R-003 | Local restore-ledger erasure works, but production backup/provider ownership is absent | High   | Automate backup/retention, independently retain ledger, exercise shared restore and approve provider controls                                                |
 | R-004 | Real food-photo quality, latency, cost and provider data controls are unknown          | High   | Fixture remains default; require owner-approved canary, legal/region/retention review and thresholds                                                         |
 | R-005 | Local MinIO does not prove production object-store custody                             | High   | Configure cloud bucket/KMS/IAM/lifecycle/versioning/replication and exercise failure/restore                                                                 |
@@ -30,5 +30,6 @@ This register tracks release-affecting uncertainty. A mitigation is evidence to 
 | R-024 | The published `v0.1.0-rc.1` has no H5/WeApp or source-qualification asset              | Medium | Configure the approved client API URL, publish a new qualified immutable candidate, then independently verify all service/client/qualification assets        |
 | R-025 | A receipt bearer secret remains in client application storage until explicit removal   | Medium | Keep it masked and no-store over HTTP; review secure platform storage, shared-device behavior and expiry/removal policy before closed beta                   |
 | R-026 | Reviewed GitHub Action pins can age or miss upstream security/compatibility fixes      | Medium | Dependabot proposes weekly; verify exact upstream tag/source, update lock and every use together, then require complete hosted CI before merge               |
+| R-027 | End-user OIDC tenant, recovery, linking and provider data policy are unapproved        | High   | Select tenant/client and owners; review region/retention/recovery; keep cross-provider linking off; exercise JWKS rotation and incident paths before beta    |
 
 Resolved implementation defects remain documented in their iteration archive rather than removed from history. Product-level risks close only when the named release evidence exists.

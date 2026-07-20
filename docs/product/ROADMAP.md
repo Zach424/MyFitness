@@ -2,7 +2,7 @@
 
 The roadmap is organized as controlled iterations. A round may take several working sessions, but it ends only after implementation, validation, archive update, and a commit.
 
-Progress snapshot (2026-07-20): iterations 0–27 are complete locally, including green hosted quality/smoke through iteration 26, verified service-only `v0.1.0-rc.1` assets, strict managed-environment admission, deterministic source-bound H5/WeApp TARs, recoverable account-erasure receipts, crash-safe AI explanation reconciliation, v2 adversarial output validation, byte-reproducible evaluation reports, exact tag/main/CI release qualification and full-SHA action pins for every hosted workflow dependency. Iteration 24's hosted formatting failure is preserved in its archive and corrected by iteration 25 instead of rewriting history. The externally gated managed deployment moved to iteration 28 because no owner-approved account, budget, domain, client API URL or protected credential references exist yet; iterations 26–27 reduced release-source and workflow-supply-chain risk without inventing them. Managed infrastructure, real WeChat credentials/device/domain proof, H5 production identity, cloud custody, centralized alerting, expert review and model/provider approval remain gated.
+Progress snapshot (2026-07-20): iterations 0–28 are complete locally, including green hosted quality/smoke through iteration 27, verified service-only `v0.1.0-rc.1` assets, strict managed-environment admission, deterministic source-bound H5/WeApp TARs, recoverable account-erasure receipts, crash-safe AI explanation reconciliation, v2 adversarial output validation, byte-reproducible evaluation reports, exact tag/main/CI release qualification, full-SHA action pins and a server-verified H5 OIDC Authorization Code + PKCE boundary. Iteration 24's hosted formatting failure is preserved in its archive and corrected by iteration 25 instead of rewriting history. Because no owner-approved account, budget, domain, client API URL or protected credential references exist yet, iterations 26–29 close locally provable release-source, workflow and H5 client-identity gaps without inventing external evidence; managed shared deployment is now iteration 30. Real WeChat/OIDC credentials and device/browser/domain proof, managed custody, centralized alerting, expert review and model/provider approval remain gated.
 
 | Iteration | Primary scope                                       | Exit evidence                                                                                    |
 | --------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
@@ -34,9 +34,10 @@ Progress snapshot (2026-07-20): iterations 0–27 are complete locally, includin
 | 25        | Reproducible AI evaluation artifacts                | Formatter-owned reports plus post-eval format and zero-diff CI gates                             |
 | 26        | Qualified release source provenance                 | Remote tag/current-main ancestry/exact successful CI record blocks publication and is retained   |
 | 27        | Immutable GitHub Actions supply chain               | Full-SHA pins, reviewed lock, mutation tests, Dependabot path and repository enforcement         |
-| 28        | Managed shared test deployment                      | Managed services/secrets, real WeChat proof, telemetry, calibrated limits and rollback           |
-| 29        | Beta hardening and release                          | H5 identity, security review, budgets, accessibility, filing artifacts and staged rollout        |
-| 30        | Native App feasibility and device sync              | Retention gate reviewed; HealthKit/Health Connect/Huawei proof of concept                        |
+| 28        | H5 OIDC server trust boundary                       | Public-safe config, server code exchange, ID-token verification and identity minimization        |
+| 29        | H5 OIDC browser and release contract                | State/nonce/S256 callback, error UI, deterministic candidate TAR and browser tests               |
+| 30        | Managed shared deployment, beta hardening/release   | Real identity/custody/telemetry, rollback, security/a11y/filing review and staged rollout        |
+| 31        | Native App feasibility and device sync              | Retention gate reviewed; HealthKit/Health Connect/Huawei proof of concept                        |
 
 ## Release gates
 
@@ -48,14 +49,14 @@ Progress snapshot (2026-07-20): iterations 0–27 are complete locally, includin
 
 ### Closed beta
 
-- Iterations 9–28 complete.
+- Iterations 9–30 complete.
 - AI evaluation set is versioned and safety validators block known high-risk cases.
 - Data export and deletion are exercised end to end.
 - Support, monitoring, cost limits, rollback, and incident ownership are assigned.
 
 ### Public release
 
-- Iteration 29 complete.
+- Iteration 30 complete.
 - Applicable ICP/APP/Mini Program privacy/AI registration and content-labeling work is reviewed.
 - Store materials match actual data practices and product claims.
 - Release starts with a small cohort and automatic rollback thresholds.
