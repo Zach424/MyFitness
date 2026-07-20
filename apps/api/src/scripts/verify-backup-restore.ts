@@ -51,7 +51,7 @@ const main = async () => {
   }
   localOnly(config.objectStorageEndpoint, 'OBJECT_STORAGE_ENDPOINT')
 
-  await runMigrations(config.databaseUrl)
+  const expectedMigrations = await runMigrations(config.databaseUrl)
   const postgresContainer = execFileSync(
     'docker',
     ['compose', '-f', composePath, 'ps', '-q', 'postgres'],
@@ -179,6 +179,7 @@ const main = async () => {
     const proof = {
       proofVersion: 'backup-restore-erasure-v2',
       backupBytes: exactDump.length,
+      expectedMigrationCount: expectedMigrations.length,
       restoredMigrationCount: Number(migrations.rows[0]?.count ?? 0),
       restoredUserBeforeLedger: Number(before.rows[0]?.count ?? 0),
       restoredSuppressionsBeforeLedger: Number(suppressionsBefore.rows[0]?.count ?? 0),
@@ -189,7 +190,7 @@ const main = async () => {
       backupDisposition: receipt.rows[0]?.backup_status,
     }
     if (
-      proof.restoredMigrationCount !== 18 ||
+      proof.restoredMigrationCount !== proof.expectedMigrationCount ||
       proof.restoredUserBeforeLedger !== 1 ||
       proof.restoredSuppressionsBeforeLedger !== 0 ||
       proof.restoredIdentitySuppressions !== 1 ||

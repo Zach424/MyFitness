@@ -52,11 +52,12 @@ The design follows OpenID Connect Authorization Code flow, RFC 7636 S256-capable
 - Focused production configuration passed 1 file / 9 tests, including complete OIDC acceptance plus missing token URL, production HTTP endpoint and short-secret rejection.
 - Focused identity integration passed 1 file / 3 tests against a local HTTP provider that serves JWKS, signs RS256 ID Tokens and validates the token request. It proves public-config minimization, strict unknown-field/callback rejection, invalid code and nonce rejection, confidential Basic authentication, stable repeat-login ownership, provider-bound session issuance and absence of raw subject/upstream token in persisted evidence.
 - Full Vitest passed 38 files / 157 tests. Full PostgreSQL/Redis/object-storage/provider integration passed 11 files / 47 tests.
+- The real `pg_dump → pg_restore → ledger replay` drill passed with all 19 repository migrations, one restored user before replay, one recreated OIDC-capable provider suppression and zero restored users afterward. Its expected migration count now comes from the checksum-verifying migration runner instead of duplicating a schema version in the drill.
 - Strict TypeScript passed all six product/shared workspaces; the API production build completed.
 - OpenAPI generation completed through the real metadata-mode application graph and contains both OIDC routes plus the expanded provider enum.
 - Repository formatting passed. Production preflight passed with a complete TLS OIDC-only runtime shape and reported only browser-independent aggregate settings. Production dependency audit retained the registered six moderate Taro build-chain findings and zero critical/high findings.
 - The first full-integration attempt was invalid because Docker Desktop had exited: all 47 tests failed/skipped at dependency initialization. Docker Desktop and the four repository-local services were restarted and health-checked before the successful rerun. The initial direct production-preflight command likewise correctly rejected missing `NODE_ENV=production`; it was rerun with a complete non-secret production-shaped environment and passed. Neither failed invocation is counted as acceptance evidence.
-- The exact implementing hosted `quality` and `deployment-smoke` runs remain post-commit evidence rather than a local prediction.
+- The first implementing hosted run, CI #17 for `70b2481`, failed at `ops:verify-backup-restore`: migration `0019` was present and successfully restored, but the drill still asserted the iteration-024 count of 18. Local reproduction returned the otherwise-correct proof with `restoredMigrationCount=19`; the follow-up derives the expectation from the migration runner. The replacement exact-SHA `quality` and `deployment-smoke` results remain post-commit evidence rather than a local prediction.
 
 ## 5. Problems found and experience captured
 
@@ -68,6 +69,7 @@ The design follows OpenID Connect Authorization Code flow, RFC 7636 S256-capable
 - JWKS retrieval errors and invalid identity claims need different operational classes: availability failures return `503`, while unverifiable identity returns `401`; neither exposes provider detail.
 - Full integration evidence is meaningful only after proving dependencies are healthy. A suite that skips every test after setup failure cannot support any product claim, regardless of the number of reported failures.
 - Production preflight is intentionally environment-sensitive. A development-shell rejection proves fail-closed behavior but must be followed by an explicit production-shaped success run.
+- Migration-count assertions must not duplicate the schema version. CI #17 caught that the OIDC migration advanced the real restored schema while the privacy drill's literal remained stale; deriving the expectation from the same checksum-verified migration list keeps future schema rounds inside the restore gate without a second manual counter.
 
 ## 6. Global state review, remaining risks and next step
 
