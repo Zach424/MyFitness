@@ -5,11 +5,14 @@ import type { Compiler } from 'webpack'
 const apiBaseUrl = process.env.TARO_APP_API_BASE_URL ?? 'http://127.0.0.1:3100/v1'
 const authMode = process.env.TARO_APP_AUTH_MODE ?? 'dev'
 const platform = process.env.TARO_ENV ?? 'h5'
-if (!['dev', 'wechat'].includes(authMode)) {
-  throw new Error('TARO_APP_AUTH_MODE must be dev or wechat')
+if (!['dev', 'wechat', 'oidc'].includes(authMode)) {
+  throw new Error('TARO_APP_AUTH_MODE must be dev, wechat or oidc')
 }
 if (authMode === 'wechat' && process.env.TARO_ENV !== 'weapp') {
   throw new Error('wechat authentication can only be built for TARO_ENV=weapp')
+}
+if (authMode === 'oidc' && platform !== 'h5') {
+  throw new Error('oidc authentication can only be built for TARO_ENV=h5')
 }
 if (authMode === 'wechat' && !apiBaseUrl.startsWith('https://')) {
   throw new Error('TARO_APP_API_BASE_URL must use HTTPS for wechat authentication')
@@ -33,8 +36,11 @@ if (isReleaseBuild && !['h5', 'weapp'].includes(platform)) {
 if (isReleaseBuild && platform === 'weapp' && authMode !== 'wechat') {
   throw new Error('a WeApp release build must use wechat authentication')
 }
-if (isReleaseBuild && platform === 'h5' && authMode !== 'dev') {
-  throw new Error('the current H5 release build is preview-only and must use dev authentication')
+if (isReleaseBuild && platform === 'h5' && authMode !== 'oidc') {
+  throw new Error('an H5 release build must use oidc authentication')
+}
+if (isReleaseBuild && platform === 'h5' && !apiBaseUrl.startsWith('https://')) {
+  throw new Error('TARO_APP_API_BASE_URL must use HTTPS for an H5 release build')
 }
 
 const releaseMetadata = isReleaseBuild
@@ -54,7 +60,7 @@ const releaseMetadata = isReleaseBuild
         apiBaseUrl,
         authMode,
       },
-      deliveryClass: platform === 'weapp' ? 'candidate' : 'preview-only',
+      deliveryClass: 'candidate',
     }
   : undefined
 
@@ -110,7 +116,15 @@ const config: UserConfigExport = {
     __AUTH_MODE__: JSON.stringify(authMode),
   },
   copy: {
-    patterns: [],
+    patterns:
+      platform === 'h5' && authMode === 'oidc'
+        ? [
+            {
+              from: 'src/static/auth/callback',
+              to: `dist-${platform}/auth/callback`,
+            },
+          ]
+        : [],
     options: {},
   },
   mini: {

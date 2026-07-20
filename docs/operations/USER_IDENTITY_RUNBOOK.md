@@ -1,13 +1,13 @@
 # User identity operations runbook
 
-Status: WeChat and H5 OIDC server exchanges, provider-bound sessions and erased-identity suppression are proven against local provider doubles; real Mini Program credentials, browser callback, identity tenant, domains and device/shared-environment evidence remain gated
+Status: WeChat plus the complete H5 OIDC browser/API exchange, provider-bound sessions and erased-identity suppression are proven against local provider doubles; real Mini Program credentials, identity tenants, hosted callback/domains and device/shared-environment evidence remain gated
 
 ## Trust boundary
 
 Neither client is an identity authority.
 
 - WeApp obtains a short-lived code from `Taro.login` and sends only that code to `POST /v1/auth/wechat/session`. The API calls WeChat `code2Session`, validates `openid`, discards `session_key`, and issues an opaque `mf_user_*` token.
-- H5 reads the browser-safe values from `GET /v1/auth/oidc/config`. The browser must create transaction-specific state, nonce and PKCE verifier, redirect with `code_challenge_method=S256`, validate state on the exact callback, and send only code, original verifier, nonce and exact callback to `POST /v1/auth/oidc/session`. The API exchanges the code and verifies the signed ID Token before issuing the same opaque product token.
+- H5 reads the browser-safe values from `GET /v1/auth/oidc/config`. It creates transaction-specific state, nonce and PKCE verifier in the initiating tab, redirects with `code_challenge_method=S256`, removes callback parameters before network work, validates state/optional issuer/exact callback, consumes the transaction once, and sends only code, original verifier, nonce and exact callback to `POST /v1/auth/oidc/session`. The API exchanges the code and verifies the signed ID Token before issuing the same opaque product token.
 
 PostgreSQL stores application-token SHA-256 hashes and explicit providers. OIDC identity rows store a one-way issuer/subject digest; WeChat identities store the AppID-namespaced openid. Never accept `openid`, OIDC subject, issuer, audience, user ID or session provider from a client. Never put authorization codes, verifiers, nonces, AppSecret, OIDC client secret, provider tokens/responses or raw subjects in logs, metrics, traces, support views or browser-visible configuration.
 
@@ -48,13 +48,20 @@ $env:TARO_APP_API_BASE_URL = 'https://api.example.com/v1'
 pnpm build:weapp
 ```
 
-The H5 release command remains intentionally unavailable in this iteration: its current release manifest is `dev / preview-only`. Do not expose H5 until the next client iteration implements and verifies state, nonce, S256, callback cleanup and the `oidc / candidate` artifact contract.
+H5 OIDC local build and browser proof:
+
+```powershell
+pnpm build:h5:oidc
+pnpm test:e2e:oidc
+```
+
+The tag workflow supplies the approved HTTPS API base plus immutable release metadata and requires `oidc / candidate`. Its canonical TAR must contain `index.html`, `auth/callback/index.html`, `auth/callback/redirect.js` and `myfitness-client-build.json`. Candidate status permits controlled preview only; do not expose H5 to public traffic until the real provider, domain, callback and custody preflight below passes.
 
 ## Shared-environment preflight
 
 1. Name business/technical owners for the real Mini Program and end-user OIDC tenant/client. Record provider region, retention, incident, account-recovery and availability policy.
 2. Put WeChat AppSecret and any OIDC client secret in the secret manager. Restrict reads to the API workload identity and define rotation/emergency revocation owners.
-3. Register only the exact H5 HTTPS callback. Add the exact HTTPS API origin to WeChat request-domain allow-list and API CORS. Verify DNS, certificate chain, WAF/proxy path and `TRUST_PROXY_HOPS`.
+3. Register only the exact H5 HTTPS callback ending `/auth/callback`. Configure the static host to serve that file without adding a trailing slash or rewriting it to the SPA entrypoint; verify the callback HTML retains the reviewed CSP/no-referrer policy and serves the exact `/auth/callback/redirect.js` bytes. Add the exact H5 origin to API CORS and the exact HTTPS API origin to WeChat's request-domain allow-list. Verify DNS, certificate chain, WAF/proxy path and `TRUST_PROXY_HOPS`.
 4. Require Authorization Code flow, PKCE S256, signed ID Tokens and an approved RS256/PS256/ES256 key. Disable implicit/password flows for this client. Confirm JWKS rotation retains overlapping keys long enough for in-flight exchanges.
 5. Apply all checksum-verified migrations, including 0015 and 0019. Confirm provider constraints include `oidc` and suppression rows accept it.
 6. Start the API with the intended provider list. Confirm `POST /v1/auth/dev/session` returns `404`; confirm OIDC public config exactly matches the registered issuer/client/callback and contains no token endpoint, JWKS URL or secret.
@@ -86,3 +93,4 @@ Migrations 0015 and 0019 remain applied after provider sessions or suppressions 
 - [RFC 9700: OAuth 2.0 Security Best Current Practice](https://www.rfc-editor.org/rfc/rfc9700.html)
 - [ADR-0016](../architecture/decisions/0016-verified-wechat-identity-and-erasure-suppression.md)
 - [ADR-0027](../architecture/decisions/0027-h5-oidc-authorization-code-boundary.md)
+- [ADR-0028](../architecture/decisions/0028-h5-oidc-browser-transaction-and-candidate.md)

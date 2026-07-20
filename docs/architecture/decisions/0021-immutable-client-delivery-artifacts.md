@@ -2,9 +2,11 @@
 
 Date: 2026-07-19
 
-Status: Accepted
+Status: Accepted; H5 authentication/delivery classification is extended by ADR-0028
 
 ## Context
+
+ADR-0028 preserves this immutable TAR/manifest format but replaces the historical H5 `dev / preview-only` classification with `oidc / candidate` and makes the static callback files required entries. The original text below records the release boundary at the time this decision was accepted.
 
 `myfitness-release/v1` identifies three deployable OCI images, but H5 and WeApp were still rebuilt from source outside that release record. A source revision alone is insufficient client-delivery evidence: Taro environment variables select the API base and authentication mode, archive tools can add local timestamps and ownership, and an operator could upload a different directory from the one reviewed. The existing `v0.1.0-rc.1` release must remain immutable and cannot be retrofitted with new assets.
 

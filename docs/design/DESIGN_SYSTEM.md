@@ -242,6 +242,20 @@ Reviewed evidence:
 
 The first browser run caught two implementation—not visual—problems: the API request context resolved `/auth` outside its `/v1` base because the base URL lacked a trailing slash, and Windows could not execute the pnpm-symlinked standalone tree without elevated filesystem privileges. The test now uses an explicit `/v1/` base and production preview on Windows while retaining Linux standalone output for deployment. Final wide/mobile flows verify CSP, HttpOnly/SameSite cookie behavior, exact lookup, audit evidence, summary exclusion and session revocation. Visual review found no horizontal overflow or hierarchy collision. Open gates remain system large text, complete keyboard/screen-reader audit, 320 px, provider-error/re-auth states and a deployed Linux standalone proof.
 
+## Implementation review — iteration 029
+
+The H5 identity surface uses a **Login Trace / 登录轨迹** instead of a generic provider-logo card. Three numbered stops—local transaction, identity confirmation and return to 衡迹—make the redirect boundary visible without showing protocol secrets. Mineral blue owns the primary action and boundary rail; Juniper marks the active trace; Paper/Mist preserve the same calm logbook language as the recording flows. No new palette, font, gradient-heavy hero or chatbot motif was introduced.
+
+Mobile presents one login action after the trace and keeps the detailed trust boundary below it. Wide H5 turns that boundary into a right-hand evidence rail, so the action remains dominant while exact callback, tab lifetime and failure behavior stay inspectable. Cancellation uses product-owned copy and never displays provider text. Status is announced through `role=status`/`aria-live`, focus remains visible, and reduced-motion mode removes the moving progress bar.
+
+Reviewed evidence:
+
+- [390 × 844 mobile login-ready capture](../../output/playwright/iteration-029-oidc-login-mobile.png)
+- [390 × 844 mobile provider-denial capture](../../output/playwright/iteration-029-oidc-denied-mobile.png)
+- [1440 × 1000 wide login-boundary capture](../../output/playwright/iteration-029-oidc-login-wide.png)
+
+The browser review verified that a default protected entry reaches login, the authorization path exposes state/nonce/S256 but no stored code, callback parameters disappear, provider denial leaves a clean URL, and all three captures have no page/console errors. Open design gates remain 320 px, system large text, complete keyboard/screen-reader traversal, offline/provider-latency states and real-provider branding/consent review.
+
 ## Screenshot review checklist
 
 - The Rhythm Rail remains understandable without color.

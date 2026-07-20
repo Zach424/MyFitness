@@ -173,9 +173,9 @@ jobs:
           node-version: 24.13.0
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Build and package H5 preview
+      - name: Build and package H5 candidate
         env:
-          TARO_APP_AUTH_MODE: dev
+          TARO_APP_AUTH_MODE: oidc
         run: |
           set -euo pipefail
           pnpm build:h5

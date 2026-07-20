@@ -4,7 +4,7 @@ Status: OCI packaging, hosted CI and service-only `v0.1.0-rc.1` publication are 
 
 ## Source and lifecycle qualification
 
-Before image acceptance, stop local MyFitness dependencies and run `pnpm test`. The current 38-file/155-test unit gate must pass without PostgreSQL, Redis or MinIO. OpenAPI tests and generation use the explicit API `metadata` startup mode, which assembles the shipped application graph and HTTP policy but does not run background jobs or verify external dependencies.
+Before image acceptance, stop local MyFitness dependencies and run `pnpm test`. The current 39-file/162-test unit gate must pass without PostgreSQL, Redis or MinIO. OpenAPI tests and generation use the explicit API `metadata` startup mode, which assembles the shipped application graph and HTTP policy but does not run background jobs or verify external dependencies.
 
 Production, integration, restore, E2E and deployment processes use the default `runtime` mode. It retains object-storage startup verification, photo-expiry reconciliation and durable data-operation workers. Do not select metadata mode for a traffic-serving process, and do not treat its successful initialization as readiness evidence; `/v1/health` and the black-box deployment verifier own that proof.
 
@@ -46,7 +46,7 @@ docker run --rm --env-file production.env \
   node dist/scripts/verify-production-config.js
 ```
 
-4. Require `status: ok`, WeChat-only auth, `0.0.0.0` bind, encrypted object storage, disabled bucket auto-creation, the expected proxy hop count and TLS-backed external endpoints. Output is intentionally redacted to modes/protocols.
+4. Require `status: ok`, exactly the intended `wechat,oidc` user-auth providers, `0.0.0.0` bind, encrypted object storage, disabled bucket auto-creation, the expected proxy hop count and TLS-backed external endpoints. Output is intentionally redacted to modes/protocols.
 5. Validate administrator OIDC URLs/client/redirect, secure cookies and the internal API URL separately. Local operator login must remain false.
 
 ## Publish and identify images
@@ -60,7 +60,7 @@ git tag -a v0.1.0-rc.2 -m "MyFitness v0.1.0-rc.2"
 git push origin v0.1.0-rc.2
 ```
 
-Each image job publishes linux/amd64 and linux/arm64, records its registry digest and pushes a provenance attestation. In parallel, Taro builds H5 with its current development identity as `preview-only` and WeApp with WeChat identity as a private-preview `candidate`. The packager sorts paths and emits canonical USTAR with mode `0644`, UID/GID `0`, mtime `0`, no symlinks and an embedded `myfitness-client-build/v1` record. The dependent release job accepts exactly one API, Admin, AI, H5 and WeApp record from the same repository, full source revision, tag and workflow attempt. It publishes these GitHub Release assets:
+Each image job publishes linux/amd64 and linux/arm64, records its registry digest and pushes a provenance attestation. In parallel, Taro builds H5 with OIDC and WeApp with WeChat; both are controlled-preview `candidate` artifacts. The H5 root must contain the exact static callback HTML/script. The packager sorts paths and emits canonical USTAR with mode `0644`, UID/GID `0`, mtime `0`, no symlinks and an embedded `myfitness-client-build/v1` record. The dependent release job accepts exactly one API, Admin, AI, H5 and WeApp record from the same repository, full source revision, tag and workflow attempt. It publishes these GitHub Release assets:
 
 - `release-qualification.json`: `myfitness-release-qualification/v1` with remote tag resolution, current-main relation and exact CI identity;
 - `release-manifest.json`: `myfitness-release/v1` with the three digest-qualified references;
@@ -100,7 +100,7 @@ pnpm release:client -- verify \
   --expected-version <v-prefixed-semver-tag>
 ```
 
-Require all three commands to report `status: ok`; the qualification must name the intended tag/revision, current `main`, exact successful push CI and release workflow. Then require exactly three `image@sha256:...` references, H5 `preview-only/dev`, WeApp `candidate/wechat`, and the approved API base. The client verifier hashes the actual TAR bytes, parses canonical headers, checks required entrypoints and embedded metadata, and recomputes the unpacked tree digest. Copy every accepted file into the environment's independently protected change record. Do not deploy version or `sha-*` image tags, rebuild clients during deployment, or replace/move an existing tag/release. `v0.1.0-rc.1` remains valid immutable history but cannot satisfy admission v2 or the new qualification-asset requirement because it predates both. Keep complete previous service and client bundles for rollback and verify that all registry attestations name the same revision.
+Require all three commands to report `status: ok`; the qualification must name the intended tag/revision, current `main`, exact successful push CI and release workflow. Then require exactly three `image@sha256:...` references, H5 `candidate/oidc`, WeApp `candidate/wechat`, and the approved API base. The client verifier hashes the actual TAR bytes, parses canonical headers, requires the H5 callback files and other entrypoints, checks embedded metadata, and recomputes the unpacked tree digest. Copy every accepted file into the environment's independently protected change record. Do not deploy version or `sha-*` image tags, rebuild clients during deployment, or replace/move an existing tag/release. `v0.1.0-rc.1` remains valid immutable history but cannot satisfy admission v2 or the new qualification-asset requirement because it predates both. Keep complete previous service and client bundles for rollback and verify that all registry attestations name the same revision.
 
 ## Managed environment admission
 
@@ -123,7 +123,7 @@ pnpm deploy:admit -- \
 
 `no-traffic` is valid only for a first `shared-test` deployment. It means withdraw public traffic and scale API, administrator and AI application services to zero; it does not delete managed data, reverse migrations or restore a backup. A production admission must instead add `--previous-release`, `--previous-release-checksum`, `--previous-client-release`, `--previous-client-release-checksum`, `--previous-client-artifact-dir` and select `--rollback-mode previous-release`. The previous service/client pair must belong to this repository, share one version/revision/workflow, differ from the target and predate it.
 
-Require `schemaVersion: myfitness-deployment-admission/v2`, `status: admitted`, the expected environment/change reference, both downloaded manifest checksums, exactly seven service actions and four client actions. Admission requires the client API base to equal `<managed apiOrigin>/v1`. The client order re-verifies bytes, holds H5 from public traffic because development identity is production-disabled, uploads only the exact WeApp TAR to private preview, and requires real-device identity/custody evidence before submission. The tool validates reference syntax and completeness but does not contact external change/evidence systems. Local success is not owner approval; retain the environment and both complete release bundles inside the protected change record and obtain platform approval there.
+Require `schemaVersion: myfitness-deployment-admission/v2`, `status: admitted`, the expected environment/change reference, both downloaded manifest checksums, exactly seven service actions and four client actions. Admission requires the client API base to equal `<managed apiOrigin>/v1`. The client order re-verifies bytes, uploads the exact H5 and WeApp TARs only to controlled private previews, and requires real browser/device identity plus custody evidence before delivery or submission. The tool validates reference syntax and completeness but does not contact external change/evidence systems. Local success is not owner approval; retain the environment and both complete release bundles inside the protected change record and obtain platform approval there.
 
 ## Deployment order
 
@@ -137,7 +137,7 @@ Require `schemaVersion: myfitness-deployment-admission/v2`, `status: admitted`, 
 8. Deploy the admitted administrator digest behind the approved OIDC/edge boundary. Verify CSP, frame denial and a real least-privilege login.
 9. Verify request correlation/logs/metrics and exercise record, privacy, erasure and restore controls before shifting a bounded canary cohort.
 10. Run `node scripts/verify-deployment.mjs` against the shared endpoints and attach its redacted JSON plus the admission/release records to the protected change.
-11. Keep the H5 TAR off public hosting while its manifest says `preview-only`; selecting a production H5 identity requires a new source commit and candidate.
+11. Upload the admitted H5 TAR unchanged to a controlled private static preview. Prove the exact `/auth/callback` path is served without slash canonicalization or SPA rewrite, then exercise real-provider state/nonce/S256, history cleanup, repeat/denied/expired login and privacy/erasure custody before any public-hosting decision.
 12. Upload the admitted WeApp TAR unchanged to a private developer/experience build, verify a real-device login and privacy/erasure custody, then obtain the explicit submission decision.
 
 ## Rollback
@@ -153,6 +153,7 @@ Stop the rollout on failed migration, manifest/provenance/client-byte verificati
 | Managed PostgreSQL and Redis                               | Backup/restore owner, TLS/ACL, alerts, capacity and maintenance policy           |
 | Private object storage/KMS                                 | IAM, encryption, lifecycle/versioning/replication and erasure-ledger isolation   |
 | WeChat Mini Program                                        | Real AppID/secret, request-domain allow-list and real-device login/erasure proof |
+| End-user H5 OIDC                                           | Tenant/client, exact callback/domain, recovery/JWKS policy and browser proof     |
 | Administrator OIDC                                         | Tenant/client, provision/disable/recertification owner and audit retention       |
 | Telemetry and incident response                            | Private scraping/log destination, paging channel, thresholds and named responder |
 | AI provider                                                | Region/retention/legal/cost approval and bounded canary thresholds               |

@@ -18,10 +18,15 @@ const revisionPattern = /^[0-9a-f]{40}$/
 const clientRules = {
   h5: {
     artifactFileName: 'myfitness-client-h5.tar',
-    authMode: 'dev',
-    deliveryClass: 'preview-only',
+    authMode: 'oidc',
+    deliveryClass: 'candidate',
     adapter: 'static-host',
-    requiredFiles: ['index.html', 'myfitness-client-build.json'],
+    requiredFiles: [
+      'index.html',
+      'auth/callback/index.html',
+      'auth/callback/redirect.js',
+      'myfitness-client-build.json',
+    ],
   },
   weapp: {
     artifactFileName: 'myfitness-client-weapp.tar',

@@ -1,12 +1,12 @@
 # Product risk register
 
-Last reviewed: 2026-07-20, iteration 028
+Last reviewed: 2026-07-20, iteration 029
 
 This register tracks release-affecting uncertainty. A mitigation is evidence to collect, not a claim that the risk is gone.
 
 | ID    | Risk                                                                                   | Level  | Current control / next gate                                                                                                                                  |
 | ----- | -------------------------------------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| R-002 | WeChat is mock-proven; H5 OIDC has no browser/provider shared proof                    | High   | Add state/nonce/S256 callback, configure real clients/domains and exercise device/browser login before beta                                                  |
+| R-002 | WeChat is mock-proven; H5 OIDC is browser/provider-double proven but not shared        | High   | Configure real clients/domains, verify exact hosted callback behavior and exercise device/browser login before beta                                          |
 | R-003 | Local restore-ledger erasure works, but production backup/provider ownership is absent | High   | Automate backup/retention, independently retain ledger, exercise shared restore and approve provider controls                                                |
 | R-004 | Real food-photo quality, latency, cost and provider data controls are unknown          | High   | Fixture remains default; require owner-approved canary, legal/region/retention review and thresholds                                                         |
 | R-005 | Local MinIO does not prove production object-store custody                             | High   | Configure cloud bucket/KMS/IAM/lifecycle/versioning/replication and exercise failure/restore                                                                 |

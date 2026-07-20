@@ -18,6 +18,8 @@ import type {
   HealthRecordHistoryItem,
   Meal,
   MealHistoryItem,
+  OidcAuthorizationConfig,
+  OidcSessionRequest,
   OnboardingRequest,
   OnboardingResponse,
   PlanDecision,
@@ -36,7 +38,11 @@ import type {
   Workout,
   WorkoutHistoryItem,
 } from '@myfitness/contracts'
-import { foodPhotoConsentVersion } from '@myfitness/contracts'
+import {
+  foodPhotoConsentVersion,
+  oidcAuthorizationConfigSchema,
+  verifiedSessionSchema,
+} from '@myfitness/contracts'
 import Taro from '@tarojs/taro'
 
 const API_BASE_URL = __API_BASE_URL__.replace(/\/$/, '')
@@ -112,6 +118,13 @@ export class ApiError extends Error {
   }
 }
 
+export class AuthenticationRequiredError extends Error {
+  constructor() {
+    super('请先完成网页登录')
+    this.name = 'AuthenticationRequiredError'
+  }
+}
+
 const createSubject = () => {
   const randomPart =
     globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`
@@ -155,9 +168,16 @@ const requestWechatSession = async (): Promise<ClientSession> => {
   return response.data
 }
 
+const requireOidcSession = async (): Promise<never> => {
+  await Taro.reLaunch({ url: '/pages/login/index' })
+  throw new AuthenticationRequiredError()
+}
+
 const requestAuthSession = () => {
   Taro.removeStorageSync(LEGACY_TOKEN_KEY)
-  return AUTH_MODE === 'wechat' ? requestWechatSession() : requestDevSession()
+  if (AUTH_MODE === 'wechat') return requestWechatSession()
+  if (AUTH_MODE === 'oidc') return requireOidcSession()
+  return requestDevSession()
 }
 
 const getAccessToken = async () => {
@@ -167,6 +187,38 @@ const getAccessToken = async () => {
 }
 
 const privateApiUrl = (path: string) => `${API_BASE_URL.replace(/\/v1$/, '')}${path}`
+
+export const getOidcAuthorizationConfig = async (): Promise<OidcAuthorizationConfig> => {
+  const response = await Taro.request<unknown>({
+    url: `${API_BASE_URL}/auth/oidc/config`,
+    method: 'GET',
+  })
+  if (response.statusCode < 200 || response.statusCode >= 300) {
+    throw new ApiError(response.statusCode, response.data as ApiErrorBody)
+  }
+  return oidcAuthorizationConfigSchema.parse(response.data)
+}
+
+export const exchangeOidcAuthorizationCode = async (
+  payload: OidcSessionRequest,
+): Promise<VerifiedSession> => {
+  const response = await Taro.request<unknown>({
+    url: `${API_BASE_URL}/auth/oidc/session`,
+    method: 'POST',
+    data: payload,
+    header: { 'content-type': 'application/json' },
+  })
+  if (response.statusCode < 200 || response.statusCode >= 300) {
+    throw new ApiError(response.statusCode, response.data as ApiErrorBody)
+  }
+  const session = verifiedSessionSchema.parse(response.data)
+  if (session.provider !== 'oidc') throw new Error('身份服务返回了不匹配的登录方式')
+  Taro.setStorageSync(TOKEN_KEY, session.accessToken)
+  return session
+}
+
+export const hasStoredAuthSession = () => Boolean(Taro.getStorageSync<string>(TOKEN_KEY))
+export const isOidcAuthMode = AUTH_MODE === 'oidc'
 
 const authenticatedRequest = async <T>(
   path: string,

@@ -150,7 +150,7 @@ const clientRelease = ({
           runId: workflowId(revision),
           runAttempt: '1',
           apiBaseUrl: clientApiBaseUrl,
-          authMode: platform === 'h5' ? 'dev' : 'wechat',
+          authMode: platform === 'h5' ? 'oidc' : 'wechat',
         }),
         artifact: {
           fileName: `myfitness-client-${platform}.tar`,
@@ -233,14 +233,17 @@ const writeClientBundle = async (directory: string, name: string, options: Relea
           runId: workflowId(revision),
           runAttempt: '1',
           apiBaseUrl: clientApiBaseUrl,
-          authMode: platform === 'h5' ? 'dev' : 'wechat',
+          authMode: platform === 'h5' ? 'oidc' : 'wechat',
         }),
         null,
         2,
       )}\n`,
     )
     if (platform === 'h5') {
+      await mkdir(join(buildRoot, 'auth', 'callback'), { recursive: true })
       await writeFile(join(buildRoot, 'index.html'), '<!doctype html>\n')
+      await writeFile(join(buildRoot, 'auth', 'callback', 'index.html'), '<!doctype html>\n')
+      await writeFile(join(buildRoot, 'auth', 'callback', 'redirect.js'), 'location.replace("/")\n')
     } else {
       await writeFile(join(buildRoot, 'app.js'), 'App({})\n')
       await writeFile(join(buildRoot, 'app.json'), '{"pages":[]}\n')
@@ -289,12 +292,12 @@ describe('managed deployment admission', () => {
         source: { repository, revision: defaultRevision },
         images: { api: `ghcr.io/zach424/myfitness-api@sha256:${'a'.repeat(64)}` },
         clients: {
-          h5: { deliveryClass: 'preview-only', runtime: { authMode: 'dev' } },
+          h5: { deliveryClass: 'candidate', runtime: { authMode: 'oidc' } },
           weapp: { deliveryClass: 'candidate', runtime: { authMode: 'wechat' } },
         },
       },
       expectedRuntime: {
-        api: { authProviders: ['wechat'], trustProxyHops: 1 },
+        api: { authProviders: ['wechat', 'oidc'], trustProxyHops: 1 },
         admin: { localLoginEnabled: false, secureCookies: true },
         ai: { privateOnly: true },
       },
@@ -303,7 +306,7 @@ describe('managed deployment admission', () => {
     expect(admission.deploymentOrder.map((step) => step.sequence)).toEqual([1, 2, 3, 4, 5, 6, 7])
     expect(admission.clientDeliveryOrder.map((step) => step.sequence)).toEqual([1, 2, 3, 4])
     expect(admission.clientDeliveryOrder[1]).toMatchObject({
-      action: 'hold-h5-preview-from-public-traffic',
+      action: 'upload-h5-candidate-to-private-preview',
     })
   })
 

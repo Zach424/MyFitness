@@ -1,6 +1,6 @@
 # Identity and onboarding model
 
-Status: verified WeChat and H5 OIDC server adapters plus erased-identity suppression are implemented locally; real credentials/device/browser callback and shared-provider proof remain gated
+Status: verified WeChat and complete H5 OIDC browser/API adapters plus erased-identity suppression are implemented locally; real credentials, hosted callback, device/browser and shared-provider proof remain gated
 
 ## Ownership chain
 
@@ -44,6 +44,6 @@ The current versions are `2026-07-18` for terms, privacy and health-data process
 
 OIDC identities store `oidc:SHA-256(issuer || NUL || subject)`, not the original subject or upstream access/ID token. This value is stable and unambiguous for identity equality while reducing directly identifying provider residue. Account linking is intentionally absent: WeChat and OIDC identities create separate users even when provider profile fields appear to match.
 
-The production Mini Program build uses `TARO_APP_AUTH_MODE=wechat`, calls `Taro.login`, and requires an HTTPS API URL. The H5 server boundary is ready, but the current H5 artifact remains `dev / preview-only` until the client adds state/nonce/PKCE S256 generation, tab-scoped transaction storage, exact callback handling and an `oidc / candidate` release contract.
+The production Mini Program build uses `TARO_APP_AUTH_MODE=wechat`, calls `Taro.login`, and requires an HTTPS API URL. The H5 candidate uses `TARO_APP_AUTH_MODE=oidc`, creates state/nonce/verifier values with browser cryptography, retains its strict ten-minute transaction only in the initiating tab, derives PKCE S256, and returns through the exact same-origin `/auth/callback` bridge. Callback parameters are removed before configuration/network work; the transaction is consumed before one exchange and is never replayed automatically. The canonical H5 TAR requires both callback files and is labelled `oidc / candidate`; this local/provider-double state does not prove a real tenant, hosted path behavior or public readiness.
 
 When account erasure begins, the account is no longer active. Before the user graph is deleted, each provider subject becomes a domain-separated `HMAC-SHA256(ERASURE_LEDGER_HASH_SECRET, provider, subject)` reference in the external v2 ledger and `auth_identity_suppressions`. A future login with the same verified identity receives `403` instead of silently creating a new user. Restore replay recreates suppressions before opening traffic; legacy v1 entries derive identity references from the isolated restored rows. The current MVP has no re-registration override, which is an explicit product/legal gate rather than a support-side database edit.

@@ -479,7 +479,7 @@ export const createDeploymentAdmission = ({
     expectedRuntime: {
       api: {
         bindHost: '0.0.0.0',
-        authProviders: ['wechat'],
+        authProviders: ['wechat', 'oidc'],
         corsOrigins: [checkedEnvironment.endpoints.h5Origin],
         trustProxyHops: checkedEnvironment.endpoints.trustProxyHops,
       },
@@ -527,8 +527,9 @@ export const createDeploymentAdmission = ({
       },
       {
         sequence: 2,
-        action: 'hold-h5-preview-from-public-traffic',
-        reason: 'preview-only-dev-authentication-is-not-a-production-identity',
+        action: 'upload-h5-candidate-to-private-preview',
+        artifact: releaseRecord.clients.h5.artifact.fileName,
+        digest: releaseRecord.clients.h5.artifact.digest,
       },
       {
         sequence: 3,
@@ -538,7 +539,7 @@ export const createDeploymentAdmission = ({
       },
       {
         sequence: 4,
-        action: 'require-real-device-identity-and-data-custody-evidence-before-weapp-submission',
+        action: 'require-real-browser-device-identity-and-data-custody-evidence-before-delivery',
       },
     ],
     rollback,

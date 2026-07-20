@@ -50,7 +50,7 @@ const buildMetadata = (platform: 'h5' | 'weapp') =>
     runId,
     runAttempt,
     apiBaseUrl,
-    authMode: platform === 'h5' ? 'dev' : 'wechat',
+    authMode: platform === 'h5' ? 'oidc' : 'wechat',
   })
 
 const createBuildRoot = async (root: string, platform: 'h5' | 'weapp') => {
@@ -58,7 +58,10 @@ const createBuildRoot = async (root: string, platform: 'h5' | 'weapp') => {
   await mkdir(join(buildRoot, 'assets'), { recursive: true })
   await writeJson(join(buildRoot, 'myfitness-client-build.json'), buildMetadata(platform))
   if (platform === 'h5') {
+    await mkdir(join(buildRoot, 'auth', 'callback'), { recursive: true })
     await writeFile(join(buildRoot, 'index.html'), '<!doctype html><title>MyFitness</title>\n')
+    await writeFile(join(buildRoot, 'auth', 'callback', 'index.html'), '<!doctype html>\n')
+    await writeFile(join(buildRoot, 'auth', 'callback', 'redirect.js'), 'location.replace("/")\n')
   } else {
     await writeFile(join(buildRoot, 'app.js'), 'App({})\n')
     await writeFile(join(buildRoot, 'app.json'), '{"pages":[]}\n')
@@ -133,7 +136,13 @@ describe('immutable client delivery artifacts', () => {
     expect(first.fragment.artifact).toEqual(second.fragment.artifact)
     expect(
       parseDeterministicTar(await readFile(first.artifactPath)).map((entry) => entry.path),
-    ).toEqual(['assets/main.js', 'index.html', 'myfitness-client-build.json'])
+    ).toEqual([
+      'assets/main.js',
+      'auth/callback/index.html',
+      'auth/callback/redirect.js',
+      'index.html',
+      'myfitness-client-build.json',
+    ])
   })
 
   it('assembles, validates, and verifies both actual platform archives', async () => {
@@ -146,7 +155,7 @@ describe('immutable client delivery artifacts', () => {
       source: { repository, revision },
       workflow: { id: runId, attempt: 1 },
       clients: {
-        h5: { deliveryClass: 'preview-only', adapter: 'static-host' },
+        h5: { deliveryClass: 'candidate', adapter: 'static-host' },
         weapp: { deliveryClass: 'candidate', adapter: 'wechat-code-upload' },
       },
     })
@@ -214,6 +223,23 @@ describe('immutable client delivery artifacts', () => {
       }),
     ).rejects.toThrow('h5 build is missing required file index.html')
 
+    const callbackMissingRoot = await makeTemporaryRoot()
+    const callbackMissingBuild = await createBuildRoot(callbackMissingRoot, 'h5')
+    await rm(join(callbackMissingBuild, 'auth', 'callback', 'redirect.js'))
+    await expect(
+      packageClientArtifact({
+        platform: 'h5',
+        buildRoot: callbackMissingBuild,
+        artifactPath: join(callbackMissingRoot, 'myfitness-client-h5.tar'),
+        fragmentPath: join(callbackMissingRoot, 'client-release-fragment-h5.json'),
+        repository,
+        revision,
+        version,
+        runId,
+        runAttempt,
+      }),
+    ).rejects.toThrow('h5 build is missing required file auth/callback/redirect.js')
+
     const mismatchRoot = await makeTemporaryRoot()
     const mismatchBuild = await createBuildRoot(mismatchRoot, 'weapp')
     await expect(
@@ -244,6 +270,9 @@ describe('immutable client delivery artifacts', () => {
     expect(validateClientApiBaseUrl(apiBaseUrl)).toBe(apiBaseUrl)
     expect(() => createClientBuildMetadata({ ...buildMetadata('weapp'), authMode: 'dev' })).toThrow(
       'weapp release auth mode must be wechat',
+    )
+    expect(() => createClientBuildMetadata({ ...buildMetadata('h5'), authMode: 'dev' })).toThrow(
+      'h5 release auth mode must be oidc',
     )
   })
 
@@ -357,6 +386,6 @@ describe('immutable client delivery artifacts', () => {
     ])
 
     expect(stdout).toHaveBeenCalledWith(expect.stringContaining('"status": "ok"'))
-    expect(stdout).toHaveBeenCalledWith(expect.stringContaining('"deliveryClass": "preview-only"'))
+    expect(stdout).toHaveBeenCalledWith(expect.stringContaining('"deliveryClass": "candidate"'))
   })
 })

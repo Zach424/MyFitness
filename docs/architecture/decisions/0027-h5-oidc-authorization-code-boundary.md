@@ -2,9 +2,11 @@
 
 Date: 2026-07-20
 
-Status: Accepted for the H5 user-identity server boundary; browser callback and managed-provider proof remain pending
+Status: Accepted for the H5 user-identity server boundary; browser implementation is completed by ADR-0028, while managed-provider proof remains pending
 
 ## Context
+
+ADR-0028 implements and further constrains the browser transaction anticipated here. This decision remains authoritative for API token exchange and ID Token verification; ADR-0028 owns tab state, callback handling and the H5 candidate classification.
 
 The H5 build still uses the production-disabled development issuer. Reusing the Mini Program `Taro.login` adapter is impossible outside WeChat, while accepting an OIDC subject or ID Token without a bound authorization transaction would let an untrusted browser assert account ownership or replay identity material.
 
@@ -13,7 +15,7 @@ H5 is a public browser client and cannot keep a client secret. OAuth 2.0 Securit
 ## Decision
 
 1. Add provider `oidc` to shared contracts and all three database provider constraints. `GET /v1/auth/oidc/config` publishes only issuer, authorization endpoint, client ID, exact redirect URI and the fixed `openid` scope.
-2. The browser will create high-entropy state, nonce and PKCE verifier values, use `S256`, retain transaction values only in tab-scoped session storage, and submit the returned authorization code, original verifier, nonce and exact redirect URI to `POST /v1/auth/oidc/session`. The browser callback is the next iteration and is not claimed by this decision's implementation evidence.
+2. The browser creates high-entropy state, nonce and PKCE verifier values, uses `S256`, retains transaction values only in tab-scoped session storage, and submits the returned authorization code, original verifier, nonce and exact redirect URI to `POST /v1/auth/oidc/session`. ADR-0028 implements that browser boundary; this decision's iteration-028 evidence did not claim it.
 3. The API alone calls the configured token endpoint. A configured client secret uses `client_secret_basic` and never appears in public configuration; a provider registered as a public client receives `client_id` in the form body. Token, JWKS and secret settings remain server-only.
 4. Before issuing an application session, the API verifies the ID Token through remote JWKS with an explicit RS256/PS256/ES256 allow-list, exact issuer, client-ID audience, ten-minute maximum age, expiry and matching transaction nonce. Multiple audiences additionally require `azp` to equal the configured client ID.
 5. The token request requires a 43–128 character RFC 7636 verifier, and the submitted redirect URI must exactly equal the configured callback. Invalid codes or claims return a generic `401`; provider availability/malformed-response failures return a generic `503`. Raw codes, tokens, claims and provider payloads are not logged.
@@ -27,7 +29,7 @@ H5 is a public browser client and cannot keep a client secret. OAuth 2.0 Securit
 - Account ownership stays provider-neutral and all existing owner guards, deletion behavior and restore suppression apply to OIDC sessions.
 - Hashing the verified issuer/subject minimizes directly identifying identity residue but prevents operator inspection or provider-side subject lookup without a separately approved diagnostic mechanism.
 - This boundary does not provide account linking between WeChat and OIDC. The same person using both providers receives separate product accounts unless a future explicit, strongly re-authenticated linking design is approved.
-- This does not prove the browser redirect/callback implementation, a real provider tenant, DNS/TLS/CORS, hosted JWKS rotation, managed secrets, public H5 delivery or shared login. Those remain release gates.
+- This decision's iteration-028 evidence did not prove the browser redirect/callback implementation. ADR-0028 supplies local browser/provider-double proof, while a real provider tenant, DNS/TLS/CORS, hosted JWKS rotation, managed secrets, public H5 delivery and shared login remain release gates.
 
 ## Alternatives considered
 
@@ -49,3 +51,4 @@ Migration 0019 only broadens provider constraints and remains applied after any 
 - [RFC 7636: Proof Key for Code Exchange](https://www.rfc-editor.org/rfc/rfc7636.html)
 - [RFC 9700: OAuth 2.0 Security Best Current Practice](https://www.rfc-editor.org/rfc/rfc9700.html)
 - [ADR-0016: verified WeChat identity and erasure suppression](0016-verified-wechat-identity-and-erasure-suppression.md)
+- [ADR-0028: H5 OIDC browser transaction and candidate](0028-h5-oidc-browser-transaction-and-candidate.md)
