@@ -13,6 +13,7 @@ import { exerciseEquipmentOptions } from '@myfitness/contracts/exercise-catalog.
 import { buttonA11yProps } from '../../lib/accessibility'
 import { LocalDraftNotice } from '../../components/local-draft-notice'
 import { OccurrenceField } from '../../components/occurrence-field'
+import { currentCorrectionTarget } from '../../lib/correction-draft'
 import {
   ApiError,
   archiveExerciseCatalogEntry,
@@ -131,10 +132,44 @@ const WorkoutsPage = () => {
   const recoverableDraft = useRecoverableDraft({
     kind: 'workout',
     draft,
-    enabled: !editing,
-    dirty: JSON.stringify(draft) !== JSON.stringify(initialWorkoutDraft()),
+    enabled: true,
+    dirty:
+      JSON.stringify(draft) !==
+      JSON.stringify(editing ? draftFromWorkout(editing) : initialWorkoutDraft()),
     validate: isWorkoutDraft,
   })
+
+  const restorePendingDraft = async () => {
+    const pending = recoverableDraft.pending
+    if (!pending) return
+    const correction = pending.payload.correction
+    if (!correction) {
+      const restored = recoverableDraft.restore()
+      if (!restored) return
+      setDraft(restored)
+      pendingKey.current = ''
+      setFeedback('本地草稿已恢复；保存前请重新核对完成组、负重与感受。')
+      return
+    }
+    try {
+      const result = await listWorkouts()
+      const target = currentCorrectionTarget(result.items, correction)
+      setWorkouts(result.items)
+      if (!target) {
+        recoverableDraft.clear()
+        setFeedback('这份修改基于旧版本或已删除训练，已安全放弃；当前训练没有被覆盖。')
+        return
+      }
+      const restored = recoverableDraft.restore()
+      if (!restored) return
+      setEditing(target)
+      setDraft(restored)
+      pendingKey.current = ''
+      setFeedback(`已恢复基于 R${correction.baseRevision} 的训练修改；保存仍会校验当前版本。`)
+    } catch (error) {
+      setFeedback(`暂时无法核对原训练，修改草稿仍保留。${messageOf(error)}`)
+    }
+  }
 
   const summary = useMemo(() => workoutDraftSummary(draft), [draft])
   const filteredCatalog = useMemo(
@@ -342,6 +377,11 @@ const WorkoutsPage = () => {
   }
 
   const edit = (workout: Workout) => {
+    if (recoverableDraft.pending) {
+      setFeedback('请先恢复或放弃页面顶部的本地草稿，再开始另一项修改。')
+      Taro.pageScrollTo({ scrollTop: 0, duration: 220 })
+      return
+    }
     setEditing(workout)
     setDraft(draftFromWorkout(workout))
     setFeedback('正在修改这次训练；保存会产生新版本。')
@@ -350,6 +390,11 @@ const WorkoutsPage = () => {
   }
 
   const repeat = (workout: Workout) => {
+    if (recoverableDraft.pending) {
+      setFeedback('请先恢复或放弃页面顶部的本地草稿，再复制另一项训练。')
+      Taro.pageScrollTo({ scrollTop: 0, duration: 220 })
+      return
+    }
     setEditing(undefined)
     setDraft(draftFromWorkout(workout, true))
     setFeedback('已复制上次结构；请勾选今天实际完成的组，再保存为新训练。')
@@ -415,16 +460,13 @@ const WorkoutsPage = () => {
             </Text>
           </View>
 
-          {!editing && recoverableDraft.pending ? (
+          {recoverableDraft.pending ? (
             <LocalDraftNotice
               mode="restore"
               envelope={recoverableDraft.pending}
+              correctionRevision={recoverableDraft.pending.payload.correction?.baseRevision}
               onRestore={() => {
-                const restored = recoverableDraft.restore()
-                if (!restored) return
-                setDraft(restored)
-                pendingKey.current = ''
-                setFeedback('本地草稿已恢复；保存前请重新核对完成组、负重与感受。')
+                void restorePendingDraft()
               }}
               onDiscard={() => {
                 recoverableDraft.clear()
@@ -433,12 +475,14 @@ const WorkoutsPage = () => {
                 setFeedback('本地训练草稿已清除。')
               }}
             />
-          ) : !editing && recoverableDraft.saved ? (
+          ) : recoverableDraft.saved ? (
             <LocalDraftNotice
               mode="saved"
               envelope={recoverableDraft.saved}
+              correctionRevision={recoverableDraft.saved.payload.correction?.baseRevision}
               onDiscard={() => {
                 recoverableDraft.clear()
+                setEditing(undefined)
                 setDraft(initialWorkoutDraft())
                 pendingKey.current = ''
                 setFeedback('本地训练草稿已清除。')

@@ -1,6 +1,6 @@
 # Privacy ownership model
 
-Status: durable local ownership/erasure boundary with lost-response recovery, purpose-separated photo custody, catalog history and expiring occurrence-aware editor drafts implemented through iteration 043
+Status: durable local ownership/erasure boundary with lost-response recovery, purpose-separated photo custody, catalog history and conflict-safe expiring editor drafts implemented through iteration 044
 
 ## User-owned surface
 
@@ -37,9 +37,9 @@ Consent rows remain append-oriented: dropping the old purpose/version uniqueness
 
 ## Expiring local editor drafts
 
-Workout, meal and health-record create forms may keep one owner-scoped `myfitness-sensitive-draft/v1` envelope in platform application storage for at most 24 hours. The client requires the verified user UUID, or the production-disabled development subject fallback, before writing. A different owner, missing scope, incompatible version, invalid structure, expiry or size above 96 KiB prevents restoration and removes the value.
+Workout, meal and health-record create/correction forms may keep one owner-scoped `myfitness-sensitive-draft/v1` envelope in platform application storage for at most 24 hours. The client requires the verified user UUID, or the production-disabled development subject fallback, before writing. A different owner, missing scope, incompatible version, invalid structure, expiry or size above 96 KiB prevents restoration and removes the value.
 
-Each page validates only its explicit form fields and asks before restoring. Occurrence-local input, IANA timezone, optional DST offset and a bounded original instant are included because they are necessary to recover or precisely correct the user's fact; they receive the same owner/expiry/size handling as other sensitive draft fields. Raw or temporary photo material, authorization state/tokens, erasure intent/receipt secrets, idempotency/request state and AI candidate sheets have no draft field. Successful save, explicit cancel/discard, logout and account-erasure initiation clear drafts; erasure receipt storage remains separate so a lost destructive response can still be recovered. These copies are not included in the server export because they are client-local and ephemeral.
+Each page validates only its explicit form fields and asks before restoring. Occurrence-local input, IANA timezone, optional DST offset and a bounded original instant are included because they are necessary to recover or precisely correct the user's fact; they receive the same owner/expiry/size handling as other sensitive draft fields. A correction adds one aggregate UUID and positive base revision, never user identity or a server snapshot. Before restoration the client fetches the current owner-visible list and requires that exact ID/revision; stale or deleted targets are cleared, a failed check keeps the draft for retry and a later race remains subject to API optimistic concurrency. Raw or temporary photo material, authorization state/tokens, erasure intent/receipt secrets, idempotency/request state and AI candidate sheets have no draft field. Successful save, explicit cancel/discard, logout and account-erasure initiation clear drafts; erasure receipt storage remains separate so a lost destructive response can still be recovered. These copies are not included in the server export because they are client-local and ephemeral.
 
 ## Account erasure
 
@@ -96,4 +96,4 @@ The client retains the bearer receipt secret across reloads until explicit local
 - Dead-letter recovery is a restricted exact-job runbook action; centralized alert delivery and least-privilege recovery tooling are absent.
 - Local MinIO, fault injection and restore proof do not establish production bucket encryption/IAM/lifecycle/versioning/replication or provider/legal approval.
 
-Operational detail is in the [data custody runbook](../operations/DATA_CUSTODY_RUNBOOK.md); ADR-0015 records the cross-system ordering and restore-ledger decision, ADR-0022 records the recoverable intent/receipt protocol and ADR-0040 records the bounded local-draft boundary.
+Operational detail is in the [data custody runbook](../operations/DATA_CUSTODY_RUNBOOK.md); ADR-0015 records the cross-system ordering and restore-ledger decision, ADR-0022 records the recoverable intent/receipt protocol, ADR-0040 records the bounded local-draft boundary and ADR-0042 records correction revalidation.

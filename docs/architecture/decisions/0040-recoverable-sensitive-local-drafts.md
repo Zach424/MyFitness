@@ -2,7 +2,7 @@
 
 Date: 2026-08-05
 
-Status: accepted
+Status: accepted; correction exclusion in decision 8 superseded by ADR-0042
 
 ## Context
 

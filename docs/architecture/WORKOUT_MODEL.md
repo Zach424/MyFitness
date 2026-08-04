@@ -1,6 +1,6 @@
 # Workout record model
 
-Status: implemented in iteration 005; server-authoritative completion hardened in iteration 032; explicit plan-session relationship added in iteration 036; user-owned exercise catalog and snapshot semantics added in iteration 037; stable-key exercise observation added in iteration 038; explicit occurrence editing added in iteration 043
+Status: implemented in iteration 005; server-authoritative completion hardened in iteration 032; explicit plan-session relationship added in iteration 036; user-owned exercise catalog and snapshot semantics added in iteration 037; stable-key exercise observation added in iteration 038; explicit occurrence editing added in iteration 043; conflict-safe correction recovery added in iteration 044
 
 Workout records are user-owned observations of what was actually attempted and completed. They are not exercise prescriptions, readiness diagnoses or claims that greater volume is always better.
 
@@ -85,6 +85,8 @@ The client charts one unit at a time according to the newest recorded tracking m
 This makes the previous workout a convenient structure template without presenting yesterday's completion, symptoms or notes as today's facts. Saving creates a new idempotent session; it never links by mutating or cloning the previous database row.
 
 Repeat also copies the recorded tracking mode and equipment snapshot. It does not refresh the exercise from the current catalog, so a repeated draft remains visibly based on the earlier workout until the user selects another definition.
+
+Correction drafts are distinct from repeat drafts. A correction retains the workout UUID and base revision and can be restored only after the current owner-visible list still reports that exact revision; stale/deleted targets are abandoned without a write. Saving a restored correction continues to send `expectedRevision`, while cancel/discard removes the local copy. Repeat drops all correction identity and creates a new session.
 
 ## Plan relationship
 

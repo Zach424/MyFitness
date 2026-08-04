@@ -117,8 +117,13 @@ describe('nutrition page model', () => {
       updatedAt: '2026-07-18T04:00:00.000Z',
     }
     const correction = draftFromMeal(created)
+    expect(correction.correction).toEqual({
+      aggregateId: created.id,
+      baseRevision: 1,
+    })
     expect(buildMealRequest(correction, 1).occurredAt).toBe('2026-07-18T04:00:42.789Z')
     const repeated = draftFromMeal(created, true)
+    expect(repeated.correction).toBeUndefined()
     expect(repeated.note).toBe('')
     expect(repeated.occurredLocal).toBe('')
     expect(repeated.items[0]?.amount).toBe('120')

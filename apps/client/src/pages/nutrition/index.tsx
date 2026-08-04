@@ -14,6 +14,7 @@ import type {
 import { buttonA11yProps } from '../../lib/accessibility'
 import { LocalDraftNotice } from '../../components/local-draft-notice'
 import { OccurrenceField } from '../../components/occurrence-field'
+import { currentCorrectionTarget } from '../../lib/correction-draft'
 import {
   ApiError,
   confirmFoodPhotoCandidate,
@@ -174,10 +175,44 @@ const NutritionPage = () => {
   const recoverableDraft = useRecoverableDraft({
     kind: 'meal',
     draft,
-    enabled: !editing,
-    dirty: JSON.stringify(draft) !== JSON.stringify(initialMealDraft()),
+    enabled: true,
+    dirty:
+      JSON.stringify(draft) !==
+      JSON.stringify(editing ? draftFromMeal(editing) : initialMealDraft()),
     validate: isMealDraft,
   })
+
+  const restorePendingDraft = async () => {
+    const pending = recoverableDraft.pending
+    if (!pending) return
+    const correction = pending.payload.correction
+    if (!correction) {
+      const restored = recoverableDraft.restore()
+      if (!restored) return
+      setDraft(restored)
+      pendingKey.current = ''
+      setFeedback('本地餐次草稿已恢复；请重新核对食物、份量和参考来源。')
+      return
+    }
+    try {
+      const result = await listMeals()
+      const target = currentCorrectionTarget(result.items, correction)
+      setMeals(result.items)
+      if (!target) {
+        recoverableDraft.clear()
+        setFeedback('这份修改基于旧版本或已删除餐次，已安全放弃；当前餐次没有被覆盖。')
+        return
+      }
+      const restored = recoverableDraft.restore()
+      if (!restored) return
+      setEditing(target)
+      setDraft(restored)
+      pendingKey.current = ''
+      setFeedback(`已恢复基于 R${correction.baseRevision} 的餐次修改；保存仍会校验当前版本。`)
+    } catch (error) {
+      setFeedback(`暂时无法核对原餐次，修改草稿仍保留。${messageOf(error)}`)
+    }
+  }
 
   const summary = useMemo(() => mealDraftSummary(draft), [draft])
   const recents = useMemo(() => recentFoods(meals), [meals])
@@ -390,6 +425,11 @@ const NutritionPage = () => {
   }
 
   const edit = (meal: Meal) => {
+    if (recoverableDraft.pending) {
+      setFeedback('请先恢复或放弃页面顶部的本地草稿，再开始另一项修改。')
+      Taro.pageScrollTo({ scrollTop: 0, duration: 180 })
+      return
+    }
     setEditing(meal)
     setDraft(draftFromMeal(meal))
     setFeedback('正在修改这餐；保存会产生新版本。')
@@ -397,6 +437,11 @@ const NutritionPage = () => {
   }
 
   const repeat = (meal: Meal) => {
+    if (recoverableDraft.pending) {
+      setFeedback('请先恢复或放弃页面顶部的本地草稿，再复制另一餐。')
+      Taro.pageScrollTo({ scrollTop: 0, duration: 180 })
+      return
+    }
     setEditing(undefined)
     pendingKey.current = ''
     setDraft(draftFromMeal(meal, true))
@@ -462,16 +507,13 @@ const NutritionPage = () => {
             </Text>
           </View>
 
-          {!editing && recoverableDraft.pending ? (
+          {recoverableDraft.pending ? (
             <LocalDraftNotice
               mode="restore"
               envelope={recoverableDraft.pending}
+              correctionRevision={recoverableDraft.pending.payload.correction?.baseRevision}
               onRestore={() => {
-                const restored = recoverableDraft.restore()
-                if (!restored) return
-                setDraft(restored)
-                pendingKey.current = ''
-                setFeedback('本地餐次草稿已恢复；请重新核对食物、份量和参考来源。')
+                void restorePendingDraft()
               }}
               onDiscard={() => {
                 recoverableDraft.clear()
@@ -480,10 +522,11 @@ const NutritionPage = () => {
                 setFeedback('本地餐次草稿已清除。')
               }}
             />
-          ) : !editing && recoverableDraft.saved ? (
+          ) : recoverableDraft.saved ? (
             <LocalDraftNotice
               mode="saved"
               envelope={recoverableDraft.saved}
+              correctionRevision={recoverableDraft.saved.payload.correction?.baseRevision}
               onDiscard={() => {
                 resetEditor()
                 setFeedback('本地餐次草稿已清除。')

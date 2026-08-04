@@ -1,6 +1,6 @@
 # Design system baseline
 
-Status: implemented and visually validated through iteration-043 occurrence-time evidence
+Status: implemented and visually validated through iteration-044 correction-draft evidence
 
 Working brand: 衡迹 / MyFitness
 
@@ -396,6 +396,18 @@ The 390 px production-browser review first rejected a future value, then showed 
 Reviewed evidence:
 
 - [390 × 844 explicit occurrence time](../../output/playwright/iteration-043-occurrence-time-mobile.png)
+
+## Conflict-safe correction-draft review — iteration 044
+
+The existing **LOCAL / 24H ticket** now changes its language when the payload is an unsaved correction. It says `发现一份未完成修改`, prints the base revision as `基于 Rn` and explains that server change makes the copy invalid. `恢复修改` and `放弃这份修改` describe consequences directly; no color or optimistic success mark implies that the server has already accepted anything.
+
+Restore performs its version check before entering correction mode. A current target returns to the normal editor and keeps the ticket visible as `未保存修改已暂存`; a stale/deleted target removes the ticket and says the current server record was not overwritten. Network failure keeps the ticket for retry. Record, meal and workout flows separately prove restore/save, stale refusal and restore/cancel, while existing privacy flows continue to prove logout/erasure clearing.
+
+The reviewed 390 px capture shows the recovery decision before the body editor, with the revision, saved time and expiry readable without a modal. The ticket remains visually secondary to the page thesis and does not expose aggregate IDs.
+
+Reviewed evidence:
+
+- [390 × 844 conflict-safe correction draft](../../output/playwright/iteration-044-correction-draft-mobile.png)
 
 ## Screenshot review checklist
 

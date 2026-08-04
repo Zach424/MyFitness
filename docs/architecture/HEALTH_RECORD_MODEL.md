@@ -1,6 +1,6 @@
 # Health record model — measurement foundation
 
-Status: create/edit/history/delete, exact-metric observation and explicit occurrence editing implemented through iteration 043
+Status: create/edit/history/delete, exact-metric observation, explicit occurrence editing and conflict-safe correction recovery implemented through iteration 044
 
 ## Purpose and boundary
 
@@ -58,6 +58,8 @@ This overlap is intentional: a future worker, import path or administrative tool
 - `health_record_revisions` repeats the metric/unit/source/status safety constraints. A unique `(record_id, revision)` key prevents two accepted states from claiming the same version.
 
 Occurrence time and timezone remain user-domain facts; `createdAt`, `updatedAt` and `changedAt` are server timestamps. The client accepts an explicit local minute and IANA zone, rejects DST gaps/future instants and requires an offset choice for repeated minutes. On correction it preserves the exact original seconds/milliseconds unless the user changes local time, timezone or offset. Later import/admin paths must add actor/reason metadata before they may mutate records.
+
+An unsaved correction draft retains the record UUID and the revision used to open the editor. Restore first refreshes the owner list and requires the same current revision; a changed or deleted record is not restored or submitted. The subsequent update still sends `expectedRevision`, so a race after restore produces the normal `409` rather than overwriting newer evidence. The draft metadata never enters the health-record write contract or revision history.
 
 ## Exact-metric observation
 

@@ -5,6 +5,7 @@ import {
   buildWorkoutRequest,
   createExerciseDraft,
   filterExerciseCatalog,
+  draftFromWorkout,
   initialExerciseCatalogDraft,
   initialWorkoutDraft,
   validateExerciseCatalogDraft,
@@ -132,5 +133,41 @@ describe('workout page model', () => {
     })
     draft.equipment = ['other']
     expect(validateExerciseCatalogDraft(draft)).toContain('具体器械')
+  })
+
+  it('binds corrections to a revision but keeps repeats independent', () => {
+    const request = buildWorkoutRequest(initialWorkoutDraft())
+    const workout = {
+      ...request,
+      id: '00000000-0000-4000-8000-000000000021',
+      userId: '00000000-0000-4000-8000-000000000022',
+      status: 'completed' as const,
+      exercises: request.exercises.map((exercise, exerciseIndex) => ({
+        ...exercise,
+        id: `00000000-0000-4000-8000-00000000003${exerciseIndex}`,
+        sets: exercise.sets.map((set, setIndex) => ({
+          ...set,
+          id: `00000000-0000-4000-8000-00000000004${setIndex}`,
+          canonicalLoadKg: set.load ?? null,
+        })),
+      })),
+      summary: {
+        completedSets: 3,
+        totalSets: 3,
+        volumeKg: 360,
+        distanceMeters: 0,
+        activeSeconds: 0,
+      },
+      note: request.note ?? null,
+      revision: 4,
+      createdAt: '2026-07-18T10:00:00.000Z',
+      updatedAt: '2026-07-18T10:45:00.000Z',
+    }
+
+    expect(draftFromWorkout(workout).correction).toEqual({
+      aggregateId: workout.id,
+      baseRevision: 4,
+    })
+    expect(draftFromWorkout(workout, true).correction).toBeUndefined()
   })
 })

@@ -14,6 +14,11 @@ import {
 } from '@myfitness/contracts/exercise-catalog.constants'
 
 import {
+  correctionDraftTarget,
+  type CorrectionDraftTarget,
+  isCorrectionDraftTarget,
+} from '../../lib/correction-draft'
+import {
   detectedTimeZone,
   formatZonedOccurrence,
   isBoundedOccurrenceInstant,
@@ -63,6 +68,7 @@ export type WorkoutDraft = {
   endedOffsetMinutes?: number
   originalStartedAt?: string
   originalEndedAt?: string
+  correction?: CorrectionDraftTarget
 }
 
 const legacyTrackingMode = (
@@ -189,6 +195,7 @@ export const isWorkoutDraft = (value: unknown): value is WorkoutDraft =>
     'endedOffsetMinutes',
     'originalStartedAt',
     'originalEndedAt',
+    'correction',
   ]) &&
   draftString(value.title, 120) &&
   (value.loadUnit === 'kg' || value.loadUnit === 'lb') &&
@@ -208,7 +215,8 @@ export const isWorkoutDraft = (value: unknown): value is WorkoutDraft =>
     (draftNumber(value.endedOffsetMinutes, -1_080, 1_080) &&
       Number.isInteger(value.endedOffsetMinutes))) &&
   isBoundedOccurrenceInstant(value.originalStartedAt) &&
-  isBoundedOccurrenceInstant(value.originalEndedAt)
+  isBoundedOccurrenceInstant(value.originalEndedAt) &&
+  (value.correction === undefined || isCorrectionDraftTarget(value.correction))
 
 const finite = (value: string) => value.trim() !== '' && Number.isFinite(Number(value))
 
@@ -401,6 +409,7 @@ export const draftFromWorkout = (workout: Workout, repeat = false): WorkoutDraft
     ...(ended ? { endedOffsetMinutes: ended.offsetMinutes } : {}),
     ...(started ? { originalStartedAt: workout.startedAt } : {}),
     ...(ended ? { originalEndedAt: workout.endedAt } : {}),
+    ...(started && ended ? { correction: correctionDraftTarget(workout) } : {}),
   }
 }
 

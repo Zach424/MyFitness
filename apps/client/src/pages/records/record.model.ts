@@ -7,6 +7,11 @@ import type {
 } from '@myfitness/contracts'
 
 import {
+  correctionDraftTarget,
+  type CorrectionDraftTarget,
+  isCorrectionDraftTarget,
+} from '../../lib/correction-draft'
+import {
   detectedTimeZone,
   formatZonedOccurrence,
   isBoundedOccurrenceInstant,
@@ -173,6 +178,7 @@ export type RecordDraft = {
   timezone: string
   occurrenceOffsetMinutes?: number
   originalOccurredAt?: string
+  correction?: CorrectionDraftTarget
 }
 
 export const createDraft = (metric: MetricCode): RecordDraft => {
@@ -199,6 +205,7 @@ export const isRecordDraft = (value: unknown): value is RecordDraft => {
         'timezone',
         'occurrenceOffsetMinutes',
         'originalOccurredAt',
+        'correction',
       ].includes(key),
     ) ||
     typeof candidate.metric !== 'string' ||
@@ -213,7 +220,8 @@ export const isRecordDraft = (value: unknown): value is RecordDraft => {
     (candidate.occurrenceOffsetMinutes !== undefined &&
       (!Number.isInteger(candidate.occurrenceOffsetMinutes) ||
         Math.abs(candidate.occurrenceOffsetMinutes as number) > 1_080)) ||
-    !isBoundedOccurrenceInstant(candidate.originalOccurredAt)
+    !isBoundedOccurrenceInstant(candidate.originalOccurredAt) ||
+    (candidate.correction !== undefined && !isCorrectionDraftTarget(candidate.correction))
   ) {
     return false
   }
@@ -289,6 +297,7 @@ export const draftFromRecord = (record: HealthRecord): RecordDraft => {
     timezone: record.timezone,
     occurrenceOffsetMinutes: occurrence.offsetMinutes,
     originalOccurredAt: record.occurredAt,
+    correction: correctionDraftTarget(record),
   }
 }
 

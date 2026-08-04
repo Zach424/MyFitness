@@ -36,4 +36,23 @@ describe('recoverable editor draft schemas', () => {
     workout.exercises = Array.from({ length: 31 }, () => workout.exercises[0]!)
     expect(isWorkoutDraft(workout)).toBe(false)
   })
+
+  it('accepts exact correction targets and rejects malformed or expanded metadata', () => {
+    const correction = {
+      aggregateId: '00000000-0000-4000-8000-000000000001',
+      baseRevision: 2,
+    }
+    expect(isRecordDraft({ ...createDraft('body.weight'), correction })).toBe(true)
+    expect(isMealDraft({ ...initialMealDraft(), correction })).toBe(true)
+    expect(isWorkoutDraft({ ...initialWorkoutDraft(), correction })).toBe(true)
+    expect(
+      isRecordDraft({
+        ...createDraft('body.weight'),
+        correction: { ...correction, userId: '00000000-0000-4000-8000-000000000002' },
+      }),
+    ).toBe(false)
+    expect(
+      isMealDraft({ ...initialMealDraft(), correction: { ...correction, baseRevision: 0 } }),
+    ).toBe(false)
+  })
 })

@@ -235,3 +235,54 @@ test('health editor restores an owner-scoped local draft and clears it after sav
   ).toBeNull()
   expect(browserErrors).toEqual([])
 })
+
+test('health correction draft restores the exact revision and clears after update', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  const browserErrors: string[] = []
+  page.on('console', (message) => {
+    if (message.type() === 'error') browserErrors.push(message.text())
+  })
+  page.on('pageerror', (error) => browserErrors.push(error.message))
+
+  await openRecords(page)
+  const input = page.locator('[aria-label="体重数值"] input')
+  await input.fill('72.4')
+  await page.getByRole('button', { name: '保存记录' }).click()
+  await expect(page.locator('.records-layout__log').getByText('72.4 kg')).toBeVisible()
+
+  await page.getByRole('button', { name: '修改' }).click()
+  await input.fill('72.9')
+  await expect(page.getByText('未保存修改已暂存')).toBeVisible()
+  const stored = await page.evaluate(() => {
+    const raw = localStorage.getItem('myfitness.local-draft.health-record') ?? '{}'
+    const decoded = JSON.parse(raw) as { data?: unknown }
+    return typeof decoded.data === 'string' ? JSON.parse(decoded.data) : decoded
+  })
+  expect(stored).toMatchObject({ payload: { correction: { baseRevision: 1 } } })
+
+  await page.reload()
+  await expect(page.getByText('发现一份未完成修改')).toBeVisible()
+  await expect(page.getByText(/基于 R1/)).toBeVisible()
+  await page.screenshot({
+    path: 'output/playwright/iteration-044-correction-draft-mobile.png',
+    fullPage: true,
+  })
+  await page.getByRole('button', { name: '恢复修改' }).click()
+  await expect(page.getByText(/已恢复基于 R1 的修改/)).toBeVisible()
+  await expect(input).toHaveValue('72.9')
+
+  const updateResponse = page.waitForResponse(
+    (response) =>
+      /\/v1\/health-records\/[0-9a-f-]{36}$/.test(response.url()) &&
+      response.request().method() === 'PUT',
+  )
+  await page.getByRole('button', { name: '保存新版本' }).click()
+  expect((await updateResponse).status()).toBe(200)
+  await expect(page.locator('.records-layout__log').getByText('v2')).toBeVisible()
+  expect(
+    await page.evaluate(() => localStorage.getItem('myfitness.local-draft.health-record')),
+  ).toBeNull()
+  expect(browserErrors).toEqual([])
+})

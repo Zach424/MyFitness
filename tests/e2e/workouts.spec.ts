@@ -176,6 +176,33 @@ test('workout editor restores then explicitly discards its local draft', async (
   expect(browserErrors).toEqual([])
 })
 
+test('workout correction draft restores the exact revision and clears on cancel', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  const browserErrors = collectBrowserErrors(page)
+  await openWorkouts(page)
+
+  await page.getByRole('button', { name: '保存训练', exact: true }).click()
+  await expect(page.locator('.workout-entry')).toHaveCount(1)
+  await page.locator('.workout-entry').first().getByRole('button', { name: '修改' }).click()
+  const title = page.locator('.session-title-input input')
+  await title.fill('未保存的恢复训练')
+  await expect(page.getByText('未保存修改已暂存')).toBeVisible()
+
+  await page.reload()
+  await expect(page.getByText('发现一份未完成修改')).toBeVisible()
+  await page.getByRole('button', { name: '恢复修改' }).click()
+  await expect(page.getByText(/已恢复基于 R1 的训练修改/)).toBeVisible()
+  await expect(title).toHaveValue('未保存的恢复训练')
+  await page.getByRole('button', { name: '取消修改' }).click()
+  await expect(title).toHaveValue('全身训练 A')
+  expect(
+    await page.evaluate(() => localStorage.getItem('myfitness.local-draft.workout')),
+  ).toBeNull()
+  expect(browserErrors).toEqual([])
+})
+
 test('exercise observation uses completed sets and refreshes corrected evidence', async ({
   page,
 }) => {

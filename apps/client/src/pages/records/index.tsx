@@ -11,6 +11,7 @@ import type {
 import { buttonA11yProps } from '../../lib/accessibility'
 import { LocalDraftNotice } from '../../components/local-draft-notice'
 import { OccurrenceField } from '../../components/occurrence-field'
+import { currentCorrectionTarget } from '../../lib/correction-draft'
 import {
   ApiError,
   createHealthRecord,
@@ -89,10 +90,46 @@ const RecordsPage = () => {
   const recoverableDraft = useRecoverableDraft({
     kind: 'health-record',
     draft,
-    enabled: !editing,
-    dirty: JSON.stringify(draft) !== JSON.stringify(createDraft(draft.metric)),
+    enabled: true,
+    dirty:
+      JSON.stringify(draft) !==
+      JSON.stringify(editing ? draftFromRecord(editing) : createDraft(draft.metric)),
     validate: isRecordDraft,
   })
+
+  const restorePendingDraft = async () => {
+    const pending = recoverableDraft.pending
+    if (!pending) return
+    const correction = pending.payload.correction
+    if (!correction) {
+      const restored = recoverableDraft.restore()
+      if (!restored) return
+      setGroup(metricUiDefinitions[restored.metric].group)
+      setDraft(restored)
+      requestKey.current = ''
+      setFeedback('本地记录草稿已恢复；保存前请重新核对数值、单位与发生时间。')
+      return
+    }
+    try {
+      const result = await listHealthRecords()
+      const target = currentCorrectionTarget(result.items, correction)
+      setRecords(result.items)
+      if (!target) {
+        recoverableDraft.clear()
+        setFeedback('这份修改基于旧版本或已删除记录，已安全放弃；当前记录没有被覆盖。')
+        return
+      }
+      const restored = recoverableDraft.restore()
+      if (!restored) return
+      setGroup(metricUiDefinitions[target.metric].group)
+      setEditing(target)
+      setDraft(restored)
+      requestKey.current = ''
+      setFeedback(`已恢复基于 R${correction.baseRevision} 的修改；保存仍会校验当前版本。`)
+    } catch (error) {
+      setFeedback(`暂时无法核对原记录，修改草稿仍保留。${errorMessage(error)}`)
+    }
+  }
 
   const groupRecords = useMemo(
     () => records.filter((record) => metricUiDefinitions[record.metric].group === group),
@@ -164,6 +201,11 @@ const RecordsPage = () => {
   }
 
   const startEdit = (record: HealthRecord) => {
+    if (recoverableDraft.pending) {
+      setFeedback('请先恢复或放弃页面顶部的本地草稿，再开始另一项修改。')
+      Taro.pageScrollTo({ scrollTop: 0, duration: 240 })
+      return
+    }
     const nextGroup = metricUiDefinitions[record.metric].group
     setGroup(nextGroup)
     setDraft(draftFromRecord(record))
@@ -236,17 +278,13 @@ const RecordsPage = () => {
             </Text>
           </View>
 
-          {!editing && recoverableDraft.pending ? (
+          {recoverableDraft.pending ? (
             <LocalDraftNotice
               mode="restore"
               envelope={recoverableDraft.pending}
+              correctionRevision={recoverableDraft.pending.payload.correction?.baseRevision}
               onRestore={() => {
-                const restored = recoverableDraft.restore()
-                if (!restored) return
-                setGroup(metricUiDefinitions[restored.metric].group)
-                setDraft(restored)
-                requestKey.current = ''
-                setFeedback('本地记录草稿已恢复；保存前请重新核对数值、单位与发生时间。')
+                void restorePendingDraft()
               }}
               onDiscard={() => {
                 recoverableDraft.clear()
@@ -255,12 +293,14 @@ const RecordsPage = () => {
                 setFeedback('本地身体记录草稿已清除。')
               }}
             />
-          ) : !editing && recoverableDraft.saved ? (
+          ) : recoverableDraft.saved ? (
             <LocalDraftNotice
               mode="saved"
               envelope={recoverableDraft.saved}
+              correctionRevision={recoverableDraft.saved.payload.correction?.baseRevision}
               onDiscard={() => {
                 recoverableDraft.clear()
+                setEditing(undefined)
                 setDraft(createDraft(draft.metric))
                 requestKey.current = ''
                 setFeedback('本地身体记录草稿已清除。')

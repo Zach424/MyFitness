@@ -1,6 +1,6 @@
 # Architecture baseline
 
-Status: accepted and implemented through the iteration-043 explicit occurrence-time boundary; changes require an ADR.
+Status: accepted and implemented through the iteration-044 conflict-safe correction-draft boundary; changes require an ADR.
 
 ## System shape
 
@@ -42,7 +42,7 @@ Implemented foundation:
 - `packages/domain` owns measurement units, canonical conversion, plausible ranges and integer score rules.
 - PostgreSQL 18.4 stores measurements through parameterized `pg`; ordered SQL migrations run transactionally and record a SHA-256 checksum to detect drift.
 - Protected routes resolve a provider-bound opaque Bearer session to a server-owned user principal. Only SHA-256 token hashes are persisted. The production-disabled local issuer and server-verified WeChat `code2Session` adapter share the ownership boundary; WeChat `session_key` is never stored.
-- The workout, meal and health-record create editors share a dependency-free `myfitness-sensitive-draft/v1` vault over platform application storage. Exact per-editor guards accept incomplete form input but reject unknown fields; envelopes are owner-scoped, capped at 96 KiB, expire after 24 hours and require explicit restore/discard. Save, cancel, logout and erasure initiation clear the relevant scope. Photos, authorization material, erasure receipts and AI candidate sheets are outside the draft contract.
+- The workout, meal and health-record create/correction editors share a dependency-free `myfitness-sensitive-draft/v1` vault over platform application storage. Exact per-editor guards accept incomplete form input but reject unknown fields; envelopes are owner-scoped, capped at 96 KiB, expire after 24 hours and require explicit restore/discard. Correction payloads carry only aggregate ID and base revision; the page re-lists current owner-visible aggregates and restores only an exact match. Missing/stale targets clear without submitting, and a change after restore still reaches the API with the previously rechecked expected revision. Save, cancel, logout and erasure initiation clear the relevant scope. Photos, authorization material, erasure receipts and AI candidate sheets are outside the draft contract.
 - The three record editors share a dependency-free local occurrence resolver. A calendar minute plus explicit IANA timezone is round-tripped through platform `Intl` data; nonexistent DST minutes fail and repeated minutes require an explicit offset choice. Client validation and shared write contracts reject future instants, while untouched corrections retain the exact original timestamp rather than truncating seconds to the editor's minute precision.
 - Administrator routes use an independent operator/identity/role/session boundary and `adminBearer` OpenAPI scheme. The API verifies pre-provisioned OIDC subjects against remote JWKS, issuer, audience, age and nonce, rejects token replay, re-resolves roles per request and keeps the local operator issuer production-disabled.
 - Adult profile, training goal, risk eligibility and immutable purpose/version consent events persist transactionally. Profile updates use optimistic revision checks.
@@ -93,6 +93,8 @@ ADR-0004 records the health-record replacement, append-only snapshot, soft-delet
 The exact-metric confirmed-only health observation is documented in [HEALTH_RECORD_MODEL.md](HEALTH_RECORD_MODEL.md). ADR-0039 keeps canonical statistics separate from recorded display provenance and prohibits cross-metric or candidate aggregation.
 
 Recoverable local editor state is documented in ADR-0040. It is a short-lived client recovery copy, not a fourth persistence authority: PostgreSQL remains authoritative after save, while receipt storage remains separate for erasure recovery.
+
+Conflict-safe correction recovery is documented in ADR-0042. A local correction draft is only an editing intention against one base revision; it does not authorize a write, bypass ownership or replace the server's current aggregate.
 
 Explicit occurrence editing is documented in ADR-0041. Local civil time is never persisted as an assumed instant: the client resolves it with the named timezone and DST choice, and the API accepts only an unambiguous offset timestamp that is not in the future.
 

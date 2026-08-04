@@ -258,6 +258,39 @@ test('meal editor restores only whitelisted form fields and clears the draft aft
   expect(browserErrors).toEqual([])
 })
 
+test('meal correction draft refuses a stale server revision without overwriting it', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  const browserErrors = collectBrowserErrors(page)
+  await openNutrition(page)
+
+  await page.getByRole('button', { name: '添加熟鸡胸肉' }).click()
+  await page.getByRole('button', { name: '保存餐次', exact: true }).click()
+  await expect(page.locator('.meal-entry')).toHaveCount(1)
+  await page.locator('.meal-entry').first().getByRole('button', { name: '修改' }).click()
+  await page.locator('.nutrition-title-input input').fill('未保存的餐次修改')
+  await expect(page.getByText('未保存修改已暂存')).toBeVisible()
+
+  await page.reload()
+  await expect(page.getByText('发现一份未完成修改')).toBeVisible()
+  await page.route('**/v1/nutrition/meals', async (route) => {
+    if (route.request().method() !== 'GET') {
+      await route.continue()
+      return
+    }
+    const response = await route.fetch()
+    const body = (await response.json()) as { items: Array<{ revision: number }> }
+    body.items = body.items.map((item) => ({ ...item, revision: item.revision + 1 }))
+    await route.fulfill({ response, json: body })
+  })
+  await page.getByRole('button', { name: '恢复修改' }).click()
+  await expect(page.getByText(/修改基于旧版本或已删除餐次/)).toBeVisible()
+  await expect(page.getByText('发现一份未完成修改')).not.toBeVisible()
+  expect(await page.evaluate(() => localStorage.getItem('myfitness.local-draft.meal'))).toBeNull()
+  expect(browserErrors).toEqual([])
+})
+
 test('daily nutrition observation keeps recorded and missing local days explicit', async ({
   page,
 }) => {

@@ -11,6 +11,11 @@ import type {
 import { starterFoodCatalog } from '@myfitness/contracts/nutrition.constants'
 
 import {
+  correctionDraftTarget,
+  type CorrectionDraftTarget,
+  isCorrectionDraftTarget,
+} from '../../lib/correction-draft'
+import {
   detectedTimeZone,
   formatZonedOccurrence,
   isBoundedOccurrenceInstant,
@@ -37,6 +42,7 @@ export type MealDraft = {
   timezone: string
   occurrenceOffsetMinutes?: number
   originalOccurredAt?: string
+  correction?: CorrectionDraftTarget
 }
 
 export const mealTypeLabels: Record<MealDraft['mealType'], string> = {
@@ -112,6 +118,7 @@ export const isMealDraft = (value: unknown): value is MealDraft =>
     'timezone',
     'occurrenceOffsetMinutes',
     'originalOccurredAt',
+    'correction',
   ]) &&
   draftMealTypes.includes(value.mealType as (typeof draftMealTypes)[number]) &&
   draftString(value.title, 120) &&
@@ -124,7 +131,8 @@ export const isMealDraft = (value: unknown): value is MealDraft =>
   (value.occurrenceOffsetMinutes === undefined ||
     (draftNumber(value.occurrenceOffsetMinutes, -1_080, 1_080) &&
       Number.isInteger(value.occurrenceOffsetMinutes))) &&
-  isBoundedOccurrenceInstant(value.originalOccurredAt)
+  isBoundedOccurrenceInstant(value.originalOccurredAt) &&
+  (value.correction === undefined || isCorrectionDraftTarget(value.correction))
 
 const finitePositive = (value: string) =>
   value.trim() !== '' && Number.isFinite(Number(value)) && Number(value) > 0
@@ -243,6 +251,7 @@ export const draftFromMeal = (meal: Meal, repeat = false): MealDraft => {
     timezone: occurrence ? meal.timezone : detectedTimeZone(),
     ...(occurrence ? { occurrenceOffsetMinutes: occurrence.offsetMinutes } : {}),
     ...(occurrence ? { originalOccurredAt: meal.occurredAt } : {}),
+    ...(occurrence ? { correction: correctionDraftTarget(meal) } : {}),
   }
 }
 

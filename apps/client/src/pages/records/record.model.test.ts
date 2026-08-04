@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildRecordRequest, createDraft, validateRecordDraft } from './record.model'
+import {
+  buildRecordRequest,
+  createDraft,
+  draftFromRecord,
+  validateRecordDraft,
+} from './record.model'
 
 describe('record page model', () => {
   it('creates a metric-specific draft', () => {
@@ -51,5 +56,31 @@ describe('record page model', () => {
     const draft = createDraft('body.weight')
     draft.occurredLocal = '2100-01-01 00:00'
     expect(validateRecordDraft(draft)).toContain('晚于现在')
+  })
+
+  it('binds a correction draft to the aggregate and base revision', () => {
+    const draft = draftFromRecord({
+      id: '00000000-0000-4000-8000-000000000001',
+      userId: '00000000-0000-4000-8000-000000000002',
+      metric: 'body.weight',
+      canonicalValue: 72.4,
+      canonicalUnit: 'kg',
+      displayValue: 72.4,
+      displayUnit: 'kg',
+      source: { kind: 'manual' },
+      confidence: null,
+      status: 'confirmed',
+      occurredAt: '2026-07-18T08:00:00.000Z',
+      timezone: 'Asia/Shanghai',
+      revision: 3,
+      createdAt: '2026-07-18T08:00:00.000Z',
+      updatedAt: '2026-07-18T08:10:00.000Z',
+    })
+
+    expect(draft.correction).toEqual({
+      aggregateId: '00000000-0000-4000-8000-000000000001',
+      baseRevision: 3,
+    })
+    expect(buildRecordRequest(draft, 3)).not.toHaveProperty('correction')
   })
 })
