@@ -2023,6 +2023,965 @@
         "tags": ["exercise-catalog"]
       }
     },
+    "/v1/food-catalog": {
+      "get": {
+        "operationId": "FoodCatalogController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "starterVersion": { "type": "string", "enum": ["starter-food-2026-08-05-v1"] },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "oneOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "source": { "type": "string", "enum": ["starter"] },
+                              "id": { "type": "string", "pattern": "^starter:[a-z0-9_]{2,80}$" },
+                              "foodKey": { "type": "string", "pattern": "^[a-z0-9_]{2,80}$" },
+                              "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+                              "aliases": {
+                                "maxItems": 8,
+                                "type": "array",
+                                "items": { "type": "string", "minLength": 1, "maxLength": 100 }
+                              },
+                              "category": {
+                                "type": "string",
+                                "enum": [
+                                  "staple",
+                                  "protein",
+                                  "vegetable",
+                                  "fruit",
+                                  "dairy",
+                                  "snack",
+                                  "custom"
+                                ]
+                              },
+                              "nutrientsPer100g": {
+                                "type": "object",
+                                "properties": {
+                                  "energyKcal": { "type": "number", "minimum": 0, "maximum": 1000 },
+                                  "proteinG": { "type": "number", "minimum": 0, "maximum": 100 },
+                                  "carbohydrateG": {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "maximum": 100
+                                  },
+                                  "fatG": { "type": "number", "minimum": 0, "maximum": 100 },
+                                  "fiberG": { "type": "number", "minimum": 0, "maximum": 100 }
+                                },
+                                "required": ["energyKcal", "proteinG", "carbohydrateG", "fatG"],
+                                "additionalProperties": false
+                              },
+                              "reference": { "type": "string", "minLength": 2, "maxLength": 200 },
+                              "defaultServing": {
+                                "type": "object",
+                                "properties": {
+                                  "amount": {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "exclusiveMinimum": true,
+                                    "maximum": 10000
+                                  },
+                                  "unit": {
+                                    "type": "string",
+                                    "enum": ["g", "ml", "piece", "serving"]
+                                  },
+                                  "grams": {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "exclusiveMinimum": true,
+                                    "maximum": 10000
+                                  }
+                                },
+                                "required": ["amount", "unit", "grams"],
+                                "additionalProperties": false
+                              },
+                              "catalogVersion": {
+                                "type": "string",
+                                "enum": ["starter-food-2026-08-05-v1"]
+                              },
+                              "revision": { "type": "number", "enum": [1] },
+                              "editable": { "type": "boolean", "enum": [false] },
+                              "archivedAt": { "type": "string", "nullable": true, "enum": [null] },
+                              "createdAt": { "type": "string", "nullable": true, "enum": [null] },
+                              "updatedAt": { "type": "string", "nullable": true, "enum": [null] }
+                            },
+                            "required": [
+                              "source",
+                              "id",
+                              "foodKey",
+                              "name",
+                              "aliases",
+                              "category",
+                              "nutrientsPer100g",
+                              "reference",
+                              "defaultServing",
+                              "catalogVersion",
+                              "revision",
+                              "editable",
+                              "archivedAt",
+                              "createdAt",
+                              "updatedAt"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "source": { "type": "string", "enum": ["custom"] },
+                              "id": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                              },
+                              "userId": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                              },
+                              "foodKey": { "type": "string", "pattern": "^custom:[a-f0-9]{32}$" },
+                              "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+                              "aliases": {
+                                "maxItems": 8,
+                                "type": "array",
+                                "items": { "type": "string", "minLength": 1, "maxLength": 100 }
+                              },
+                              "category": {
+                                "type": "string",
+                                "enum": [
+                                  "staple",
+                                  "protein",
+                                  "vegetable",
+                                  "fruit",
+                                  "dairy",
+                                  "snack",
+                                  "custom"
+                                ]
+                              },
+                              "nutrientsPer100g": {
+                                "type": "object",
+                                "properties": {
+                                  "energyKcal": { "type": "number", "minimum": 0, "maximum": 1000 },
+                                  "proteinG": { "type": "number", "minimum": 0, "maximum": 100 },
+                                  "carbohydrateG": {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "maximum": 100
+                                  },
+                                  "fatG": { "type": "number", "minimum": 0, "maximum": 100 },
+                                  "fiberG": { "type": "number", "minimum": 0, "maximum": 100 }
+                                },
+                                "required": ["energyKcal", "proteinG", "carbohydrateG", "fatG"],
+                                "additionalProperties": false
+                              },
+                              "reference": { "type": "string", "minLength": 2, "maxLength": 200 },
+                              "defaultServing": {
+                                "type": "object",
+                                "properties": {
+                                  "amount": {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "exclusiveMinimum": true,
+                                    "maximum": 10000
+                                  },
+                                  "unit": {
+                                    "type": "string",
+                                    "enum": ["g", "ml", "piece", "serving"]
+                                  },
+                                  "grams": {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "exclusiveMinimum": true,
+                                    "maximum": 10000
+                                  }
+                                },
+                                "required": ["amount", "unit", "grams"],
+                                "additionalProperties": false
+                              },
+                              "catalogVersion": {
+                                "type": "string",
+                                "nullable": true,
+                                "enum": [null]
+                              },
+                              "revision": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "exclusiveMinimum": true,
+                                "maximum": 9007199254740991
+                              },
+                              "editable": { "type": "boolean", "enum": [true] },
+                              "archivedAt": {
+                                "nullable": true,
+                                "type": "string",
+                                "format": "date-time",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                              },
+                              "createdAt": {
+                                "type": "string",
+                                "format": "date-time",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                              },
+                              "updatedAt": {
+                                "type": "string",
+                                "format": "date-time",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                              }
+                            },
+                            "required": [
+                              "source",
+                              "id",
+                              "userId",
+                              "foodKey",
+                              "name",
+                              "aliases",
+                              "category",
+                              "nutrientsPer100g",
+                              "reference",
+                              "defaultServing",
+                              "catalogVersion",
+                              "revision",
+                              "editable",
+                              "archivedAt",
+                              "createdAt",
+                              "updatedAt"
+                            ],
+                            "additionalProperties": false
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  "required": ["starterVersion", "items"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": { "description": "Bearer token is missing, invalid, expired or revoked." }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "List versioned starter and active user-owned foods",
+        "tags": ["food-catalog"]
+      },
+      "post": {
+        "operationId": "FoodCatalogController_create",
+        "parameters": [
+          {
+            "name": "x-idempotency-key",
+            "in": "header",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+                  "aliases": {
+                    "maxItems": 8,
+                    "type": "array",
+                    "items": { "type": "string", "minLength": 1, "maxLength": 100 }
+                  },
+                  "category": {
+                    "type": "string",
+                    "enum": ["staple", "protein", "vegetable", "fruit", "dairy", "snack", "custom"]
+                  },
+                  "nutrientsPer100g": {
+                    "type": "object",
+                    "properties": {
+                      "energyKcal": { "type": "number", "minimum": 0, "maximum": 1000 },
+                      "proteinG": { "type": "number", "minimum": 0, "maximum": 100 },
+                      "carbohydrateG": { "type": "number", "minimum": 0, "maximum": 100 },
+                      "fatG": { "type": "number", "minimum": 0, "maximum": 100 },
+                      "fiberG": { "type": "number", "minimum": 0, "maximum": 100 }
+                    },
+                    "required": ["energyKcal", "proteinG", "carbohydrateG", "fatG"],
+                    "additionalProperties": false
+                  },
+                  "reference": { "type": "string", "minLength": 2, "maxLength": 200 },
+                  "defaultServing": {
+                    "type": "object",
+                    "properties": {
+                      "amount": {
+                        "type": "number",
+                        "minimum": 0,
+                        "exclusiveMinimum": true,
+                        "maximum": 10000
+                      },
+                      "unit": { "type": "string", "enum": ["g", "ml", "piece", "serving"] },
+                      "grams": {
+                        "type": "number",
+                        "minimum": 0,
+                        "exclusiveMinimum": true,
+                        "maximum": 10000
+                      }
+                    },
+                    "required": ["amount", "unit", "grams"],
+                    "additionalProperties": false
+                  }
+                },
+                "required": ["name", "category", "nutrientsPer100g", "reference", "defaultServing"],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "source": { "type": "string", "enum": ["custom"] },
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "userId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "foodKey": { "type": "string", "pattern": "^custom:[a-f0-9]{32}$" },
+                    "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+                    "aliases": {
+                      "maxItems": 8,
+                      "type": "array",
+                      "items": { "type": "string", "minLength": 1, "maxLength": 100 }
+                    },
+                    "category": {
+                      "type": "string",
+                      "enum": [
+                        "staple",
+                        "protein",
+                        "vegetable",
+                        "fruit",
+                        "dairy",
+                        "snack",
+                        "custom"
+                      ]
+                    },
+                    "nutrientsPer100g": {
+                      "type": "object",
+                      "properties": {
+                        "energyKcal": { "type": "number", "minimum": 0, "maximum": 1000 },
+                        "proteinG": { "type": "number", "minimum": 0, "maximum": 100 },
+                        "carbohydrateG": { "type": "number", "minimum": 0, "maximum": 100 },
+                        "fatG": { "type": "number", "minimum": 0, "maximum": 100 },
+                        "fiberG": { "type": "number", "minimum": 0, "maximum": 100 }
+                      },
+                      "required": ["energyKcal", "proteinG", "carbohydrateG", "fatG"],
+                      "additionalProperties": false
+                    },
+                    "reference": { "type": "string", "minLength": 2, "maxLength": 200 },
+                    "defaultServing": {
+                      "type": "object",
+                      "properties": {
+                        "amount": {
+                          "type": "number",
+                          "minimum": 0,
+                          "exclusiveMinimum": true,
+                          "maximum": 10000
+                        },
+                        "unit": { "type": "string", "enum": ["g", "ml", "piece", "serving"] },
+                        "grams": {
+                          "type": "number",
+                          "minimum": 0,
+                          "exclusiveMinimum": true,
+                          "maximum": 10000
+                        }
+                      },
+                      "required": ["amount", "unit", "grams"],
+                      "additionalProperties": false
+                    },
+                    "catalogVersion": { "type": "string", "nullable": true, "enum": [null] },
+                    "revision": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "exclusiveMinimum": true,
+                      "maximum": 9007199254740991
+                    },
+                    "editable": { "type": "boolean", "enum": [true] },
+                    "archivedAt": {
+                      "nullable": true,
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "updatedAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    }
+                  },
+                  "required": [
+                    "source",
+                    "id",
+                    "userId",
+                    "foodKey",
+                    "name",
+                    "aliases",
+                    "category",
+                    "nutrientsPer100g",
+                    "reference",
+                    "defaultServing",
+                    "catalogVersion",
+                    "revision",
+                    "editable",
+                    "archivedAt",
+                    "createdAt",
+                    "updatedAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": { "description": "Food definition, basis or nutrition values are invalid." },
+          "401": { "description": "Bearer token is missing, invalid, expired or revoked." },
+          "409": { "description": "Name or idempotency key is already in use." }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Create an idempotent user-owned food definition",
+        "tags": ["food-catalog"]
+      }
+    },
+    "/v1/food-catalog/{entryId}": {
+      "put": {
+        "operationId": "FoodCatalogController_update",
+        "parameters": [
+          {
+            "name": "entryId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+                  "aliases": {
+                    "maxItems": 8,
+                    "type": "array",
+                    "items": { "type": "string", "minLength": 1, "maxLength": 100 }
+                  },
+                  "category": {
+                    "type": "string",
+                    "enum": ["staple", "protein", "vegetable", "fruit", "dairy", "snack", "custom"]
+                  },
+                  "nutrientsPer100g": {
+                    "type": "object",
+                    "properties": {
+                      "energyKcal": { "type": "number", "minimum": 0, "maximum": 1000 },
+                      "proteinG": { "type": "number", "minimum": 0, "maximum": 100 },
+                      "carbohydrateG": { "type": "number", "minimum": 0, "maximum": 100 },
+                      "fatG": { "type": "number", "minimum": 0, "maximum": 100 },
+                      "fiberG": { "type": "number", "minimum": 0, "maximum": 100 }
+                    },
+                    "required": ["energyKcal", "proteinG", "carbohydrateG", "fatG"],
+                    "additionalProperties": false
+                  },
+                  "reference": { "type": "string", "minLength": 2, "maxLength": 200 },
+                  "defaultServing": {
+                    "type": "object",
+                    "properties": {
+                      "amount": {
+                        "type": "number",
+                        "minimum": 0,
+                        "exclusiveMinimum": true,
+                        "maximum": 10000
+                      },
+                      "unit": { "type": "string", "enum": ["g", "ml", "piece", "serving"] },
+                      "grams": {
+                        "type": "number",
+                        "minimum": 0,
+                        "exclusiveMinimum": true,
+                        "maximum": 10000
+                      }
+                    },
+                    "required": ["amount", "unit", "grams"],
+                    "additionalProperties": false
+                  },
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "exclusiveMinimum": true,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "name",
+                  "category",
+                  "nutrientsPer100g",
+                  "reference",
+                  "defaultServing",
+                  "expectedRevision"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "source": { "type": "string", "enum": ["custom"] },
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "userId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "foodKey": { "type": "string", "pattern": "^custom:[a-f0-9]{32}$" },
+                    "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+                    "aliases": {
+                      "maxItems": 8,
+                      "type": "array",
+                      "items": { "type": "string", "minLength": 1, "maxLength": 100 }
+                    },
+                    "category": {
+                      "type": "string",
+                      "enum": [
+                        "staple",
+                        "protein",
+                        "vegetable",
+                        "fruit",
+                        "dairy",
+                        "snack",
+                        "custom"
+                      ]
+                    },
+                    "nutrientsPer100g": {
+                      "type": "object",
+                      "properties": {
+                        "energyKcal": { "type": "number", "minimum": 0, "maximum": 1000 },
+                        "proteinG": { "type": "number", "minimum": 0, "maximum": 100 },
+                        "carbohydrateG": { "type": "number", "minimum": 0, "maximum": 100 },
+                        "fatG": { "type": "number", "minimum": 0, "maximum": 100 },
+                        "fiberG": { "type": "number", "minimum": 0, "maximum": 100 }
+                      },
+                      "required": ["energyKcal", "proteinG", "carbohydrateG", "fatG"],
+                      "additionalProperties": false
+                    },
+                    "reference": { "type": "string", "minLength": 2, "maxLength": 200 },
+                    "defaultServing": {
+                      "type": "object",
+                      "properties": {
+                        "amount": {
+                          "type": "number",
+                          "minimum": 0,
+                          "exclusiveMinimum": true,
+                          "maximum": 10000
+                        },
+                        "unit": { "type": "string", "enum": ["g", "ml", "piece", "serving"] },
+                        "grams": {
+                          "type": "number",
+                          "minimum": 0,
+                          "exclusiveMinimum": true,
+                          "maximum": 10000
+                        }
+                      },
+                      "required": ["amount", "unit", "grams"],
+                      "additionalProperties": false
+                    },
+                    "catalogVersion": { "type": "string", "nullable": true, "enum": [null] },
+                    "revision": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "exclusiveMinimum": true,
+                      "maximum": 9007199254740991
+                    },
+                    "editable": { "type": "boolean", "enum": [true] },
+                    "archivedAt": {
+                      "nullable": true,
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "updatedAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    }
+                  },
+                  "required": [
+                    "source",
+                    "id",
+                    "userId",
+                    "foodKey",
+                    "name",
+                    "aliases",
+                    "category",
+                    "nutrientsPer100g",
+                    "reference",
+                    "defaultServing",
+                    "catalogVersion",
+                    "revision",
+                    "editable",
+                    "archivedAt",
+                    "createdAt",
+                    "updatedAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": { "description": "Bearer token is missing, invalid, expired or revoked." },
+          "404": { "description": "Food entry does not exist for this user." },
+          "409": { "description": "Expected revision or active name conflicts." }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Correct a user-owned food using optimistic revision control",
+        "tags": ["food-catalog"]
+      },
+      "delete": {
+        "operationId": "FoodCatalogController_archive",
+        "parameters": [
+          {
+            "name": "entryId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "x-expected-revision",
+            "in": "header",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "source": { "type": "string", "enum": ["custom"] },
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "userId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "foodKey": { "type": "string", "pattern": "^custom:[a-f0-9]{32}$" },
+                    "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+                    "aliases": {
+                      "maxItems": 8,
+                      "type": "array",
+                      "items": { "type": "string", "minLength": 1, "maxLength": 100 }
+                    },
+                    "category": {
+                      "type": "string",
+                      "enum": [
+                        "staple",
+                        "protein",
+                        "vegetable",
+                        "fruit",
+                        "dairy",
+                        "snack",
+                        "custom"
+                      ]
+                    },
+                    "nutrientsPer100g": {
+                      "type": "object",
+                      "properties": {
+                        "energyKcal": { "type": "number", "minimum": 0, "maximum": 1000 },
+                        "proteinG": { "type": "number", "minimum": 0, "maximum": 100 },
+                        "carbohydrateG": { "type": "number", "minimum": 0, "maximum": 100 },
+                        "fatG": { "type": "number", "minimum": 0, "maximum": 100 },
+                        "fiberG": { "type": "number", "minimum": 0, "maximum": 100 }
+                      },
+                      "required": ["energyKcal", "proteinG", "carbohydrateG", "fatG"],
+                      "additionalProperties": false
+                    },
+                    "reference": { "type": "string", "minLength": 2, "maxLength": 200 },
+                    "defaultServing": {
+                      "type": "object",
+                      "properties": {
+                        "amount": {
+                          "type": "number",
+                          "minimum": 0,
+                          "exclusiveMinimum": true,
+                          "maximum": 10000
+                        },
+                        "unit": { "type": "string", "enum": ["g", "ml", "piece", "serving"] },
+                        "grams": {
+                          "type": "number",
+                          "minimum": 0,
+                          "exclusiveMinimum": true,
+                          "maximum": 10000
+                        }
+                      },
+                      "required": ["amount", "unit", "grams"],
+                      "additionalProperties": false
+                    },
+                    "catalogVersion": { "type": "string", "nullable": true, "enum": [null] },
+                    "revision": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "exclusiveMinimum": true,
+                      "maximum": 9007199254740991
+                    },
+                    "editable": { "type": "boolean", "enum": [true] },
+                    "archivedAt": {
+                      "nullable": true,
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "updatedAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    }
+                  },
+                  "required": [
+                    "source",
+                    "id",
+                    "userId",
+                    "foodKey",
+                    "name",
+                    "aliases",
+                    "category",
+                    "nutrientsPer100g",
+                    "reference",
+                    "defaultServing",
+                    "catalogVersion",
+                    "revision",
+                    "editable",
+                    "archivedAt",
+                    "createdAt",
+                    "updatedAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": { "description": "Bearer token is missing, invalid, expired or revoked." },
+          "404": { "description": "Food entry does not exist for this user." },
+          "409": { "description": "Expected revision does not match." }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Archive a user-owned food without rewriting meal snapshots",
+        "tags": ["food-catalog"]
+      }
+    },
+    "/v1/food-catalog/{entryId}/history": {
+      "get": {
+        "operationId": "FoodCatalogController_history",
+        "parameters": [
+          {
+            "name": "entryId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "entryId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "source": { "type": "string", "enum": ["custom"] },
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "userId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "foodKey": { "type": "string", "pattern": "^custom:[a-f0-9]{32}$" },
+                          "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+                          "aliases": {
+                            "maxItems": 8,
+                            "type": "array",
+                            "items": { "type": "string", "minLength": 1, "maxLength": 100 }
+                          },
+                          "category": {
+                            "type": "string",
+                            "enum": [
+                              "staple",
+                              "protein",
+                              "vegetable",
+                              "fruit",
+                              "dairy",
+                              "snack",
+                              "custom"
+                            ]
+                          },
+                          "nutrientsPer100g": {
+                            "type": "object",
+                            "properties": {
+                              "energyKcal": { "type": "number", "minimum": 0, "maximum": 1000 },
+                              "proteinG": { "type": "number", "minimum": 0, "maximum": 100 },
+                              "carbohydrateG": { "type": "number", "minimum": 0, "maximum": 100 },
+                              "fatG": { "type": "number", "minimum": 0, "maximum": 100 },
+                              "fiberG": { "type": "number", "minimum": 0, "maximum": 100 }
+                            },
+                            "required": ["energyKcal", "proteinG", "carbohydrateG", "fatG"],
+                            "additionalProperties": false
+                          },
+                          "reference": { "type": "string", "minLength": 2, "maxLength": 200 },
+                          "defaultServing": {
+                            "type": "object",
+                            "properties": {
+                              "amount": {
+                                "type": "number",
+                                "minimum": 0,
+                                "exclusiveMinimum": true,
+                                "maximum": 10000
+                              },
+                              "unit": { "type": "string", "enum": ["g", "ml", "piece", "serving"] },
+                              "grams": {
+                                "type": "number",
+                                "minimum": 0,
+                                "exclusiveMinimum": true,
+                                "maximum": 10000
+                              }
+                            },
+                            "required": ["amount", "unit", "grams"],
+                            "additionalProperties": false
+                          },
+                          "catalogVersion": { "type": "string", "nullable": true, "enum": [null] },
+                          "revision": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "exclusiveMinimum": true,
+                            "maximum": 9007199254740991
+                          },
+                          "editable": { "type": "boolean", "enum": [true] },
+                          "archivedAt": {
+                            "nullable": true,
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                          },
+                          "updatedAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                          },
+                          "action": {
+                            "type": "string",
+                            "enum": ["created", "updated", "archived"]
+                          },
+                          "changedAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                          }
+                        },
+                        "required": [
+                          "source",
+                          "id",
+                          "userId",
+                          "foodKey",
+                          "name",
+                          "aliases",
+                          "category",
+                          "nutrientsPer100g",
+                          "reference",
+                          "defaultServing",
+                          "catalogVersion",
+                          "revision",
+                          "editable",
+                          "archivedAt",
+                          "createdAt",
+                          "updatedAt",
+                          "action",
+                          "changedAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": ["entryId", "items"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": { "description": "Bearer token is missing, invalid, expired or revoked." },
+          "404": { "description": "Food entry does not exist for this user." }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Read immutable user-owned food definition revisions",
+        "tags": ["food-catalog"]
+      }
+    },
     "/v1/health/live": {
       "get": {
         "operationId": "HealthController_liveness",
@@ -8683,7 +9642,7 @@
                       "properties": {
                         "schemaVersion": {
                           "type": "string",
-                          "enum": ["myfitness-portable-export-v3"]
+                          "enum": ["myfitness-portable-export-v4"]
                         },
                         "contentType": { "type": "string", "enum": ["application/json"] },
                         "includesHistory": { "type": "boolean", "enum": [true] },

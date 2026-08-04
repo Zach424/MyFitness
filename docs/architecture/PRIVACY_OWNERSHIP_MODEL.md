@@ -1,22 +1,22 @@
 # Privacy ownership model
 
-Status: durable local ownership/erasure boundary with lost-response recovery, purpose-separated progress-photo custody and exercise-catalog history implemented through iteration 037
+Status: durable local ownership/erasure boundary with lost-response recovery, purpose-separated photo custody and exercise/food catalog history implemented through iteration 039
 
 ## User-owned surface
 
 The privacy center gives the authenticated account one place to inspect what MyFitness currently holds, download a portable copy, withdraw optional processing consent and leave the service. It is an ownership workflow, not an administrator dashboard or a legal-policy substitute.
 
-The inventory has eight stable user-facing categories: profile/goals, health/recovery records, workouts, nutrition/favorites, weekly plans, AI outputs, photo analyses/progress photos and consent receipts. Counts describe recognizable records rather than every normalized child row. `includesHistory` states whether the corresponding export also contains revision history.
+The inventory has eight stable user-facing categories: profile/goals, health/recovery records, workouts/exercise definitions, nutrition/meals/favorites/food definitions, weekly plans, AI outputs, photo analyses/progress photos and consent receipts. Counts describe recognizable records rather than every normalized child row. `includesHistory` states whether the corresponding export also contains revision history.
 
 ## Portable export
 
-`GET /v1/me/privacy/export` creates `myfitness-portable-export-v3` directly from a repeatable-read PostgreSQL snapshot. The JSON attachment is marked `no-store`, is not persisted as a server artifact and contains:
+`GET /v1/me/privacy/export` creates `myfitness-portable-export-v4` directly from a repeatable-read PostgreSQL snapshot. The JSON attachment is marked `no-store`, is not persisted as a server artifact and contains:
 
 - Account lifecycle fields and provider identities.
 - Profile, goals and every consent acceptance/revocation event.
 - Current and soft-deleted health records plus immutable revisions.
 - Workouts with exercises, sets and immutable history, plus active/archived custom exercise definitions and their immutable revisions.
-- Meals with item snapshots/history and owner favorites.
+- Meals with item snapshots/history and owner favorites, plus active/archived custom food definitions and their immutable revisions.
 - Weekly plans with decision history and AI explanations with provenance.
 - Food-photo candidate/selection provenance and any still-retained sanitized JPEG as base64.
 - Progress-photo declared view, retention/lifecycle and machine capture-quality provenance plus any still-retained sanitized JPEG as base64.

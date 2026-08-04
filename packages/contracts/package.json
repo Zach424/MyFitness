@@ -21,6 +21,10 @@
       "types": "./dist/exercise-catalog.constants.d.ts",
       "default": "./dist/exercise-catalog.constants.js"
     },
+    "./food-catalog.constants": {
+      "types": "./dist/food-catalog.constants.d.ts",
+      "default": "./dist/food-catalog.constants.js"
+    },
     "./nutrition.constants": {
       "types": "./dist/nutrition.constants.d.ts",
       "default": "./dist/nutrition.constants.js"

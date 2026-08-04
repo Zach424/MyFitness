@@ -1,6 +1,7 @@
 import type {
   CreateMeal,
   ConfirmFoodPhotoCandidate,
+  FoodCatalogItem,
   FoodServing,
   FoodSnapshot,
   Meal,
@@ -56,6 +57,19 @@ export const draftFromCatalog = (entry: StarterFood): FoodDraft => ({
   gramsPerUnit: entry.defaultServing.grams / entry.defaultServing.amount,
 })
 
+export const draftFromFoodCatalogItem = (entry: FoodCatalogItem): FoodDraft => ({
+  food: {
+    foodKey: entry.foodKey,
+    name: entry.name,
+    category: entry.category,
+    nutrientsPer100g: { ...entry.nutrientsPer100g },
+    reference: entry.reference,
+  },
+  amount: String(entry.defaultServing.amount),
+  unit: entry.defaultServing.unit,
+  gramsPerUnit: entry.defaultServing.grams / entry.defaultServing.amount,
+})
+
 export const draftsFromPhotoConfirmation = (
   items: ConfirmFoodPhotoCandidate['items'],
 ): FoodDraft[] =>
@@ -65,54 +79,6 @@ export const draftsFromPhotoConfirmation = (
     const draft = draftFromCatalog(catalog)
     return { ...draft, amount: String(item.grams), unit: 'g', gramsPerUnit: 1 }
   })
-
-export const createCustomFoodDraft = (input: {
-  name: string
-  grams: string
-  energyKcal: string
-  proteinG: string
-  carbohydrateG: string
-  fatG: string
-}): FoodDraft => ({
-  food: {
-    foodKey: `custom:${Date.now()}`,
-    name: input.name.trim(),
-    category: 'custom',
-    nutrientsPer100g: {
-      energyKcal: Number(input.energyKcal),
-      proteinG: Number(input.proteinG),
-      carbohydrateG: Number(input.carbohydrateG),
-      fatG: Number(input.fatG),
-    },
-    reference: '用户手工录入的每 100g 营养快照',
-  },
-  amount: input.grams,
-  unit: 'g',
-  gramsPerUnit: 1,
-})
-
-export const validateCustomFood = (input: {
-  name: string
-  grams: string
-  energyKcal: string
-  proteinG: string
-  carbohydrateG: string
-  fatG: string
-}) => {
-  if (!input.name.trim()) return '请填写食物名称'
-  if (!finitePositive(input.grams)) return '份量需大于 0'
-  for (const [label, value] of [
-    ['热量', input.energyKcal],
-    ['蛋白质', input.proteinG],
-    ['碳水', input.carbohydrateG],
-    ['脂肪', input.fatG],
-  ] as const) {
-    if (value.trim() === '' || !Number.isFinite(Number(value)) || Number(value) < 0) {
-      return `${label}需为不小于 0 的数字`
-    }
-  }
-  return ''
-}
 
 export const validateMealDraft = (draft: MealDraft) => {
   if (!draft.title.trim()) return '请填写餐次名称'

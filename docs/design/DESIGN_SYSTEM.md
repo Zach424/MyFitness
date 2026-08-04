@@ -335,6 +335,18 @@ Reviewed evidence:
 
 - [390 × 844 stable-key exercise observation](../../output/playwright/iteration-038-exercise-trend-mobile.png)
 
+## Owner-food register review — iteration 039
+
+The meal sheet now treats the food picker as a fact-selection surface and sends mutable definition work to a dedicated **OWNED FOOD REGISTER**. The register names its three operations—define, correct, snapshot—and states that a meal copies the selected name, nutrition and reference. User values are described as confirmed reference data rather than laboratory measurements; the page never adds a target, “healthy” score or intake recommendation.
+
+Create/correct uses a compact per-100-g grid, visible category choices and a required basis field. Revision history sits inside the correction sheet, while archive requires a separate dialog that explains the definition leaves search but historical meals/favorites stay intact. The photo boundary remains visible above the editor: custom entries do not silently join the candidate allow-list.
+
+The first embedded implementation passed behavior tests but made the WeApp nutrition page `46,721` bytes. Moving the register into a lazy route returned the largest page to `39,472` bytes and made the definition/fact distinction clearer. The 390 px browser proof creates a recipe estimate, selects it into the meal draft, corrects the live definition, verifies the draft keeps the old name/value/reference, reads R2/R1 and archives without erasing the draft. Browser request/page/console error capture remained empty.
+
+Reviewed evidence:
+
+- [390 × 844 owner-food register](../../output/playwright/iteration-039-user-food-catalog-mobile.png)
+
 ## Screenshot review checklist
 
 - The Rhythm Rail remains understandable without color.

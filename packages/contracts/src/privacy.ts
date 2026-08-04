@@ -137,6 +137,7 @@ export const privacyExportSchema = z
         healthRecords: z.array(jsonObjectSchema),
         healthRecordRevisions: z.array(jsonObjectSchema),
         exerciseCatalog: z.array(jsonObjectSchema),
+        foodCatalog: z.array(jsonObjectSchema),
         workouts: z.array(jsonObjectSchema),
         nutritionMeals: z.array(jsonObjectSchema),
         nutritionFavorites: z.array(jsonObjectSchema),

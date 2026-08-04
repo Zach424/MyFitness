@@ -223,6 +223,94 @@ test('meal editor and ledger remain balanced at wide viewport', async ({ page })
   expect(browserErrors).toEqual([])
 })
 
+test('owned food stays reusable and corrections never rewrite the meal draft snapshot', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  const browserErrors = collectBrowserErrors(page)
+  await openNutrition(page)
+
+  await page.getByRole('button', { name: '管理我的食物' }).click()
+  await expect(page.getByText('我的食物，是可修订的定义，不是会漂移的历史。')).toBeVisible()
+  await page.getByRole('button', { name: '＋ 新建食物' }).click()
+  await page.locator('[aria-label="自定义食物名称"] input').fill('家庭炖牛肉')
+  await page.locator('[aria-label="自定义别名（逗号分隔）"] input').fill('周末炖牛肉')
+  await page.locator('[aria-label="自定义默认克重"] input').fill('180')
+  await page.locator('[aria-label="自定义热量 kcal"] input').fill('186')
+  await page.locator('[aria-label="自定义蛋白质 g"] input').fill('22')
+  await page.locator('[aria-label="自定义碳水 g"] input').fill('4')
+  await page.locator('[aria-label="自定义脂肪 g"] input').fill('9')
+  await page.locator('[aria-label="自定义膳食纤维 g（可选）"] input').fill('0.8')
+  await page.locator('[aria-label="自定义数据依据（必填）"] input').fill('家庭配方估算：2026-08-05')
+  await page.locator('.food-editor__categories').getByRole('button', { name: '蛋白来源' }).click()
+
+  const createResponse = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/v1/food-catalog') && response.request().method() === 'POST',
+  )
+  await page.getByRole('button', { name: '保存定义' }).click()
+  expect((await createResponse).status()).toBe(201)
+  await expect(page.getByText('自建食物已保存；返回餐食页后可从“我的”列表加入本餐。')).toBeVisible()
+  await page.getByRole('button', { name: '返回餐食记录' }).click()
+  await page.getByRole('button', { name: '我的 1' }).click()
+  await page.getByRole('button', { name: '添加家庭炖牛肉' }).click()
+  await expect(page.locator('.meal-item').getByText('家庭炖牛肉')).toBeVisible()
+  await expect(page.getByText('家庭炖牛肉已加入本餐，请确认实际份量。')).toBeVisible()
+
+  const historyResponse = page.waitForResponse(
+    (response) => response.url().endsWith('/history') && response.request().method() === 'GET',
+  )
+  await page.getByRole('button', { name: '编辑家庭炖牛肉' }).click()
+  expect((await historyResponse).status()).toBe(200)
+  await page.locator('[aria-label="自定义食物名称"] input').fill('低脂家庭炖牛肉')
+  await page.locator('[aria-label="自定义热量 kcal"] input').fill('165')
+  await page.locator('[aria-label="自定义脂肪 g"] input').fill('6.5')
+  await page
+    .locator('[aria-label="自定义数据依据（必填）"] input')
+    .fill('家庭配方重新称量：2026-08-06')
+  const updateResponse = page.waitForResponse(
+    (response) =>
+      /\/v1\/food-catalog\/[0-9a-f-]{36}$/.test(response.url()) &&
+      response.request().method() === 'PUT',
+  )
+  await page.getByRole('button', { name: '保存纠正' }).click()
+  expect((await updateResponse).status()).toBe(200)
+  await expect(
+    page.getByText('定义已纠正；餐食页中的当前草稿、历史餐食和收藏快照不会被改写。'),
+  ).toBeVisible()
+  await page.getByRole('button', { name: '返回餐食记录' }).click()
+  await expect(page.locator('.meal-item').getByText('家庭炖牛肉')).toBeVisible()
+  await expect(page.locator('.meal-item').getByText('低脂家庭炖牛肉')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: '添加低脂家庭炖牛肉' })).toBeVisible()
+
+  const revisedHistoryResponse = page.waitForResponse(
+    (response) => response.url().endsWith('/history') && response.request().method() === 'GET',
+  )
+  await page.getByRole('button', { name: '编辑低脂家庭炖牛肉' }).click()
+  expect((await revisedHistoryResponse).status()).toBe(200)
+  await expect(page.locator('.food-editor__history').getByText(/R2 · 纠正/)).toBeVisible()
+  await expect(page.locator('.food-editor__history').getByText(/R1 · 创建/)).toBeVisible()
+  await page.screenshot({
+    path: 'output/playwright/iteration-039-user-food-catalog-mobile.png',
+    fullPage: true,
+  })
+
+  const archiveResponse = page.waitForResponse(
+    (response) =>
+      /\/v1\/food-catalog\/[0-9a-f-]{36}$/.test(response.url()) &&
+      response.request().method() === 'DELETE',
+  )
+  await page.getByRole('button', { name: '归档', exact: true }).click()
+  await expect(page.getByRole('dialog', { name: '确认归档自建食物' })).toBeVisible()
+  await page.getByRole('button', { name: '确认归档' }).click()
+  expect((await archiveResponse).status()).toBe(200)
+  await expect(page.getByText('自建食物已归档；历史餐食与收藏未被改写。')).toBeVisible()
+  await page.getByRole('button', { name: '返回餐食记录' }).click()
+  await expect(page.getByRole('button', { name: '添加低脂家庭炖牛肉' })).toHaveCount(0)
+  await expect(page.locator('.meal-item').getByText('家庭炖牛肉')).toBeVisible()
+  expect(browserErrors).toEqual([])
+})
+
 test('food photo candidates require review, delete media and only fill an unsaved draft', async ({
   page,
 }) => {

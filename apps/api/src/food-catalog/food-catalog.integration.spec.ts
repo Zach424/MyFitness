@@ -9,7 +9,7 @@ import { createApplication } from '../bootstrap'
 import { getRuntimeConfig } from '../config'
 import { runMigrations } from '../database/migrate'
 
-describe('user exercise catalog API with PostgreSQL', () => {
+describe('user food catalog API with PostgreSQL', () => {
   const databaseUrl = getRuntimeConfig().databaseUrl
   const pool = new Pool({ connectionString: databaseUrl })
   let app: INestApplication
@@ -19,12 +19,18 @@ describe('user exercise catalog API with PostgreSQL', () => {
   let otherUserId = ''
 
   const definition = {
-    name: '地雷管推举',
-    aliases: ['Landmine Press'],
-    category: 'strength',
-    trackingMode: 'reps_load',
-    equipment: ['other'],
-    equipmentNotes: '地雷管固定装置',
+    name: '家庭炖牛肉',
+    aliases: ['周末炖牛肉'],
+    category: 'protein',
+    nutrientsPer100g: {
+      energyKcal: 186,
+      proteinG: 22,
+      carbohydrateG: 4,
+      fatG: 9,
+      fiberG: 0.8,
+    },
+    reference: '家庭配方估算：成品总重 1200g，2026-08-05',
+    defaultServing: { amount: 1, unit: 'serving', grams: 180 },
   }
 
   beforeAll(async () => {
@@ -33,13 +39,13 @@ describe('user exercise catalog API with PostgreSQL', () => {
     await app.init()
     const session = await request(app.getHttpServer())
       .post('/v1/auth/dev/session')
-      .send({ subject: `exercise-catalog-${randomUUID()}` })
+      .send({ subject: `food-catalog-${randomUUID()}` })
       .expect(200)
     token = String(session.body.accessToken)
     userId = String(session.body.userId)
     const other = await request(app.getHttpServer())
       .post('/v1/auth/dev/session')
-      .send({ subject: `exercise-catalog-other-${randomUUID()}` })
+      .send({ subject: `food-catalog-other-${randomUUID()}` })
       .expect(200)
     otherToken = String(other.body.accessToken)
     otherUserId = String(other.body.userId)
@@ -54,150 +60,125 @@ describe('user exercise catalog API with PostgreSQL', () => {
     if (app) await app.close()
   })
 
-  it('owns, reuses, corrects, exports and archives a custom exercise without rewriting workouts', async () => {
+  it('owns, reuses, corrects, exports and archives food definitions without rewriting meals', async () => {
     const initialList = await request(app.getHttpServer())
-      .get('/v1/exercise-catalog')
+      .get('/v1/food-catalog')
       .set('Authorization', `Bearer ${token}`)
       .expect(200)
-    expect(initialList.body.starterVersion).toBe('starter-2026-08-05-v1')
-    expect(initialList.body.items).toHaveLength(9)
+    expect(initialList.body.starterVersion).toBe('starter-food-2026-08-05-v1')
+    expect(initialList.body.items).toHaveLength(10)
     expect(initialList.body.items[0]).toMatchObject({
       source: 'starter',
-      trackingMode: 'reps_load',
-      equipment: ['dumbbells'],
+      reference: expect.stringContaining('演示食物库'),
     })
 
-    const idempotencyKey = `exercise-${randomUUID()}`
+    const idempotencyKey = `food-${randomUUID()}`
     const created = await request(app.getHttpServer())
-      .post('/v1/exercise-catalog')
+      .post('/v1/food-catalog')
       .set('Authorization', `Bearer ${token}`)
       .set('x-idempotency-key', idempotencyKey)
       .send(definition)
       .expect(201)
-    expect(created.body).toMatchObject({
-      source: 'custom',
-      revision: 1,
-      name: definition.name,
-      equipmentNotes: definition.equipmentNotes,
-    })
-    expect(created.body.key).toMatch(/^custom_[a-f0-9]{32}$/)
+    expect(created.body).toMatchObject({ source: 'custom', revision: 1, ...definition })
+    expect(created.body.foodKey).toMatch(/^custom:[a-f0-9]{32}$/)
 
     const replay = await request(app.getHttpServer())
-      .post('/v1/exercise-catalog')
+      .post('/v1/food-catalog')
       .set('Authorization', `Bearer ${token}`)
       .set('x-idempotency-key', idempotencyKey)
       .send(definition)
       .expect(201)
     expect(replay.body.id).toBe(created.body.id)
     await request(app.getHttpServer())
-      .post('/v1/exercise-catalog')
+      .post('/v1/food-catalog')
       .set('Authorization', `Bearer ${token}`)
       .set('x-idempotency-key', idempotencyKey)
-      .send({ ...definition, name: '另一动作' })
+      .send({ ...definition, name: '另一食物' })
       .expect(409)
     await request(app.getHttpServer())
-      .post('/v1/exercise-catalog')
+      .post('/v1/food-catalog')
       .set('Authorization', `Bearer ${token}`)
-      .set('x-idempotency-key', `exercise-${randomUUID()}`)
+      .set('x-idempotency-key', `food-${randomUUID()}`)
       .send({ ...definition, name: definition.name.toUpperCase() })
       .expect(409)
 
     const otherOwned = await request(app.getHttpServer())
-      .post('/v1/exercise-catalog')
+      .post('/v1/food-catalog')
       .set('Authorization', `Bearer ${otherToken}`)
-      .set('x-idempotency-key', `exercise-${randomUUID()}`)
+      .set('x-idempotency-key', `food-${randomUUID()}`)
       .send(definition)
       .expect(201)
     expect(otherOwned.body.userId).toBe(otherUserId)
     await request(app.getHttpServer())
-      .get(`/v1/exercise-catalog/${String(created.body.id)}/history`)
+      .get(`/v1/food-catalog/${String(created.body.id)}/history`)
       .set('Authorization', `Bearer ${otherToken}`)
       .expect(404)
 
-    const workout = await request(app.getHttpServer())
-      .post('/v1/workouts')
+    const meal = await request(app.getHttpServer())
+      .post('/v1/nutrition/meals')
       .set('Authorization', `Bearer ${token}`)
-      .set('x-idempotency-key', `workout-${randomUUID()}`)
+      .set('x-idempotency-key', `meal-${randomUUID()}`)
       .send({
-        title: '自定义动作训练',
+        mealType: 'dinner',
+        title: '家庭晚餐',
         source: { kind: 'manual' },
-        exercises: [
+        items: [
           {
             position: 1,
-            exerciseKey: created.body.key,
-            name: created.body.name,
-            category: created.body.category,
-            trackingMode: created.body.trackingMode,
-            equipment: created.body.equipment,
-            equipmentNotes: created.body.equipmentNotes,
-            sets: [
-              {
-                position: 1,
-                kind: 'working',
-                reps: 8,
-                load: 15,
-                loadUnit: 'kg',
-                completed: true,
-              },
-            ],
+            food: {
+              foodKey: created.body.foodKey,
+              name: created.body.name,
+              category: created.body.category,
+              nutrientsPer100g: created.body.nutrientsPer100g,
+              reference: created.body.reference,
+            },
+            serving: created.body.defaultServing,
           },
         ],
-        startedAt: '2026-08-05T18:00:00+08:00',
-        endedAt: '2026-08-05T18:30:00+08:00',
+        occurredAt: '2026-08-05T19:00:00+08:00',
         timezone: 'Asia/Shanghai',
-        painLevel: 0,
-        fatigue: 3,
       })
       .expect(201)
 
     const corrected = await request(app.getHttpServer())
-      .put(`/v1/exercise-catalog/${String(created.body.id)}`)
+      .put(`/v1/food-catalog/${String(created.body.id)}`)
       .set('Authorization', `Bearer ${token}`)
       .send({
         ...definition,
-        name: '单臂地雷管推举',
-        aliases: ['Landmine Press', '地雷管肩推'],
+        name: '低脂家庭炖牛肉',
+        nutrientsPer100g: { ...definition.nutrientsPer100g, energyKcal: 165, fatG: 6.5 },
+        reference: '家庭配方重新称量：成品总重 1350g，2026-08-06',
         expectedRevision: 1,
       })
       .expect(200)
-    expect(corrected.body).toMatchObject({ revision: 2, name: '单臂地雷管推举' })
+    expect(corrected.body).toMatchObject({ revision: 2, name: '低脂家庭炖牛肉' })
     await request(app.getHttpServer())
-      .put(`/v1/exercise-catalog/${String(created.body.id)}`)
+      .put(`/v1/food-catalog/${String(created.body.id)}`)
       .set('Authorization', `Bearer ${token}`)
       .send({ ...definition, expectedRevision: 1 })
       .expect(409)
 
-    const workouts = await request(app.getHttpServer())
-      .get('/v1/workouts')
+    const meals = await request(app.getHttpServer())
+      .get('/v1/nutrition/meals')
       .set('Authorization', `Bearer ${token}`)
       .expect(200)
-    expect(workouts.body.items[0].exercises[0]).toMatchObject({
-      exerciseKey: created.body.key,
-      name: '地雷管推举',
-      trackingMode: 'reps_load',
-      equipment: ['other'],
-      equipmentNotes: '地雷管固定装置',
+    expect(meals.body.items[0]).toMatchObject({ id: meal.body.id })
+    expect(meals.body.items[0].items[0].food).toMatchObject({
+      name: '家庭炖牛肉',
+      nutrientsPer100g: { energyKcal: 186, fatG: 9 },
+      reference: definition.reference,
     })
-    expect(workouts.body.items[0].id).toBe(workout.body.id)
 
     const archived = await request(app.getHttpServer())
-      .delete(`/v1/exercise-catalog/${String(created.body.id)}`)
+      .delete(`/v1/food-catalog/${String(created.body.id)}`)
       .set('Authorization', `Bearer ${token}`)
       .set('x-expected-revision', '2')
       .expect(200)
-    expect(archived.body).toMatchObject({ revision: 3, name: '单臂地雷管推举' })
+    expect(archived.body).toMatchObject({ revision: 3, name: '低脂家庭炖牛肉' })
     expect(archived.body.archivedAt).toBeTruthy()
 
-    const activeList = await request(app.getHttpServer())
-      .get('/v1/exercise-catalog')
-      .set('Authorization', `Bearer ${token}`)
-      .expect(200)
-    expect(
-      activeList.body.items.some((entry: { id: string }) => entry.id === created.body.id),
-    ).toBe(false)
-
     const history = await request(app.getHttpServer())
-      .get(`/v1/exercise-catalog/${String(created.body.id)}/history`)
+      .get(`/v1/food-catalog/${String(created.body.id)}/history`)
       .set('Authorization', `Bearer ${token}`)
       .expect(200)
     expect(history.body.items.map((item: { action: string }) => item.action)).toEqual([
@@ -205,14 +186,14 @@ describe('user exercise catalog API with PostgreSQL', () => {
       'updated',
       'created',
     ])
-    expect(history.body.items[2]).toMatchObject({ name: '地雷管推举', revision: 1 })
+    expect(history.body.items[2]).toMatchObject({ name: '家庭炖牛肉', revision: 1 })
 
     const privacy = await request(app.getHttpServer())
       .get('/v1/me/privacy')
       .set('Authorization', `Bearer ${token}`)
       .expect(200)
     expect(
-      privacy.body.inventory.find((item: { category: string }) => item.category === 'workouts'),
+      privacy.body.inventory.find((item: { category: string }) => item.category === 'nutrition'),
     ).toMatchObject({ recordCount: 2, includesHistory: true })
 
     const portable = await request(app.getHttpServer())
@@ -220,23 +201,23 @@ describe('user exercise catalog API with PostgreSQL', () => {
       .set('Authorization', `Bearer ${token}`)
       .expect(200)
     expect(portable.body.schemaVersion).toBe('myfitness-portable-export-v4')
-    expect(portable.body.data.exerciseCatalog[0]).toMatchObject({
+    expect(portable.body.data.foodCatalog[0]).toMatchObject({
       id: created.body.id,
-      name: '单臂地雷管推举',
+      name: '低脂家庭炖牛肉',
     })
-    expect(portable.body.data.exerciseCatalog[0].history).toHaveLength(3)
-    expect(portable.body.data.workouts[0].exercises[0]).toMatchObject({
-      name: '地雷管推举',
-      equipment: ['other'],
+    expect(portable.body.data.foodCatalog[0].history).toHaveLength(3)
+    expect(portable.body.data.nutritionMeals[0].items[0]).toMatchObject({
+      food_name: '家庭炖牛肉',
+      energy_kcal_per_100g: 186,
     })
   })
 
-  it('rejects incomplete other-equipment semantics before persistence', async () => {
+  it('rejects missing nutrition provenance before persistence', async () => {
     await request(app.getHttpServer())
-      .post('/v1/exercise-catalog')
+      .post('/v1/food-catalog')
       .set('Authorization', `Bearer ${token}`)
-      .set('x-idempotency-key', `exercise-${randomUUID()}`)
-      .send({ ...definition, name: '缺少说明', equipmentNotes: undefined })
+      .set('x-idempotency-key', `food-${randomUUID()}`)
+      .send({ ...definition, name: '缺少依据', reference: '' })
       .expect(400)
   })
 })

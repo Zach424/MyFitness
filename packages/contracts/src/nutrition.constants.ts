@@ -12,6 +12,8 @@ export const foodPortionUnits = ['g', 'ml', 'piece', 'serving'] as const
 export const nutritionSourceKinds = ['manual', 'imported'] as const
 export const mealRevisionActions = ['created', 'updated', 'deleted'] as const
 
+export const starterFoodCatalogReference = '衡迹演示食物库 v2026-07；请按包装或实际食材校正'
+
 export const starterFoodCatalog = [
   {
     foodKey: 'chicken_breast_cooked',

@@ -116,11 +116,13 @@ export class PrivacyService {
         UNION ALL
         SELECT 'nutrition',
                ((SELECT COUNT(*) FROM nutrition_meals WHERE user_id = $1)
-                + (SELECT COUNT(*) FROM nutrition_favorites WHERE user_id = $1))::text,
+                + (SELECT COUNT(*) FROM nutrition_favorites WHERE user_id = $1)
+                + (SELECT COUNT(*) FROM user_food_catalog_entries WHERE user_id = $1))::text,
                TRUE,
                GREATEST(
                  (SELECT MAX(updated_at) FROM nutrition_meals WHERE user_id = $1),
-                 (SELECT MAX(updated_at) FROM nutrition_favorites WHERE user_id = $1)
+                 (SELECT MAX(updated_at) FROM nutrition_favorites WHERE user_id = $1),
+                 (SELECT MAX(updated_at) FROM user_food_catalog_entries WHERE user_id = $1)
                )
         UNION ALL
         SELECT 'plans',
@@ -328,6 +330,25 @@ export class PrivacyService {
          ORDER BY created_at, id`,
         userId,
       )
+      const foodCatalog = await jsonRows(
+        client,
+        `SELECT (
+           (to_jsonb(entry) - 'user_id' - 'idempotency_key' - 'request_hash')
+           || jsonb_build_object(
+             'history', COALESCE((
+               SELECT jsonb_agg(
+                 (to_jsonb(history) - 'user_id' - 'entry_id') ORDER BY history.revision
+               )
+               FROM user_food_catalog_revisions AS history
+               WHERE history.entry_id = entry.id
+             ), '[]'::jsonb)
+           )
+         ) AS payload
+         FROM user_food_catalog_entries AS entry
+         WHERE user_id = $1
+         ORDER BY created_at, id`,
+        userId,
+      )
       const nutritionMeals = await jsonRows(
         client,
         `SELECT (
@@ -475,6 +496,7 @@ export class PrivacyService {
           healthRecords,
           healthRecordRevisions,
           exerciseCatalog,
+          foodCatalog,
           workouts,
           nutritionMeals,
           nutritionFavorites,

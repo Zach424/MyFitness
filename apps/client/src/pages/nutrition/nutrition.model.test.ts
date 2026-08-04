@@ -5,6 +5,7 @@ import { starterFoodCatalog } from '@myfitness/contracts/nutrition.constants'
 import {
   buildMealRequest,
   draftFromCatalog,
+  draftFromFoodCatalogItem,
   draftsFromPhotoConfirmation,
   draftFromMeal,
   initialMealDraft,
@@ -34,6 +35,45 @@ describe('nutrition page model', () => {
       fatG: 4.8,
     })
     expect(buildMealRequest(draft).items.map((item) => item.serving.grams)).toEqual([120, 150])
+  })
+
+  it('turns an owned definition into an independent meal draft snapshot', () => {
+    const definition = {
+      source: 'custom' as const,
+      id: '00000000-0000-4000-8000-000000000010',
+      userId: '00000000-0000-4000-8000-000000000011',
+      foodKey: 'custom:00000000000040008000000000000010',
+      name: '家庭炖牛肉',
+      aliases: ['周末炖牛肉'],
+      category: 'protein' as const,
+      nutrientsPer100g: {
+        energyKcal: 186,
+        proteinG: 22,
+        carbohydrateG: 4,
+        fatG: 9,
+      },
+      reference: '家庭配方估算：2026-08-05',
+      defaultServing: { amount: 1, unit: 'serving' as const, grams: 180 },
+      catalogVersion: null,
+      revision: 1,
+      editable: true as const,
+      archivedAt: null,
+      createdAt: '2026-08-05T00:00:00.000Z',
+      updatedAt: '2026-08-05T00:00:00.000Z',
+    }
+    const draft = draftFromFoodCatalogItem(definition)
+    definition.name = '纠正后的名称'
+    definition.nutrientsPer100g.energyKcal = 165
+    expect(draft).toMatchObject({
+      food: {
+        name: '家庭炖牛肉',
+        nutrientsPer100g: { energyKcal: 186 },
+        reference: '家庭配方估算：2026-08-05',
+      },
+      amount: '1',
+      unit: 'serving',
+      gramsPerUnit: 180,
+    })
   })
 
   it('rejects an empty meal and invalid portions', () => {

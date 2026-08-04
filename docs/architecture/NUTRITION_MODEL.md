@@ -1,6 +1,6 @@
 # Nutrition record model
 
-Status: implemented for manual meal records and revocable photo candidates through iteration 010
+Status: manual meal/photo records plus owner-created food definitions implemented through iteration 039
 
 Nutrition records are user-confirmed snapshots of food, portion and context. They support personal recall and later deterministic summaries; they are not dietary prescriptions, laboratory measurements or judgments about food quality.
 
@@ -44,7 +44,11 @@ Before beta, the project must select a licensed, localized and versioned source 
 
 Recent foods are derived from the newest owner-visible meal snapshots, de-duplicated by food key; they are not a second mutable table. Favorites are user-owned snapshot/default-serving rows. Saving a favorite is an upsert, deletion is idempotent, and neither operation changes old meal revisions.
 
-Custom foods use a generated `custom:` key and a user-entered per-100g snapshot. The UI states the basis explicitly. Barcode/provider search, branded variants and catalog reconciliation are deferred.
+Owner-created foods now live in a separate versioned definition aggregate. The server generates a stable `custom:<32 hex>` key; a definition stores searchable aliases, category, bounded per-100g nutrients, a required user-confirmed reference and a default gram serving. Creation is idempotent, correction/archive require the expected revision and every accepted state has an immutable definition revision. Active names are owner-unique without pretending that equal names across owners are one identity.
+
+Selecting a definition copies its current values into the existing meal draft/snapshot. Later correction or archive cannot rewrite that draft, a persisted meal, meal history or a favorite. Archived definitions leave normal search but stay in owner history/export until account erasure. Owner values remain reference data, not verified provider or laboratory facts.
+
+The definition register is a dedicated H5/WeApp route; the meal page refreshes active entries on show and searches owner aliases. Food-photo candidates remain limited to the controlled starter catalog. Barcode/provider search, branded variants, recipes, non-gram household conversion rules and catalog reconciliation are deferred.
 
 ## Revisions and ownership
 

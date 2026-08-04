@@ -8,6 +8,7 @@ export default defineAppConfig({
     'pages/workouts/index',
     'pages/exercise-insights/index',
     'pages/nutrition/index',
+    'pages/food-catalog/index',
     'pages/plans/index',
     'pages/privacy/index',
   ],

@@ -1,15 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Button, Image, Input, ScrollView, Text, Textarea, View } from '@tarojs/components'
-import Taro from '@tarojs/taro'
+import Taro, { useDidShow } from '@tarojs/taro'
 import type {
   FavoriteFood,
+  FoodCatalogItem,
   FoodPhotoAnalysis,
   FoodServing,
   FoodSnapshot,
   Meal,
   MealHistoryItem,
 } from '@myfitness/contracts'
-import { starterFoodCatalog } from '@myfitness/contracts/nutrition.constants'
 
 import { buttonA11yProps } from '../../lib/accessibility'
 import {
@@ -21,6 +21,7 @@ import {
   deleteMeal,
   getMealHistory,
   listFoodPhotoCandidates,
+  listFoodCatalog,
   listFavoriteFoods,
   listMeals,
   privatePhotoUrl,
@@ -31,8 +32,7 @@ import {
 } from '../../lib/api'
 import {
   buildMealRequest,
-  createCustomFoodDraft,
-  draftFromCatalog,
+  draftFromFoodCatalogItem,
   draftsFromPhotoConfirmation,
   draftFromMeal,
   draftFromSavedFood,
@@ -40,7 +40,6 @@ import {
   mealDraftSummary,
   mealTypeLabels,
   recentFoods,
-  validateCustomFood,
   validateMealDraft,
   type FoodDraft,
   type MealDraft,
@@ -90,27 +89,31 @@ const messageOf = (error: unknown) =>
 
 type SavedFood = { food: FoodSnapshot; defaultServing: FoodServing }
 
+type CatalogDisplayEntry = SavedFood & { catalog?: FoodCatalogItem }
+
+const catalogFoodSnapshot = (entry: FoodCatalogItem): FoodSnapshot => ({
+  foodKey: entry.foodKey,
+  name: entry.name,
+  category: entry.category,
+  nutrientsPer100g: entry.nutrientsPer100g,
+  reference: entry.reference,
+})
+
 const confidenceLabels = { low: '低置信', medium: '中置信', high: '高置信' } as const
 
 const NutritionPage = () => {
   const [draft, setDraft] = useState<MealDraft>(initialMealDraft)
   const [meals, setMeals] = useState<Meal[]>([])
   const [favorites, setFavorites] = useState<FavoriteFood[]>([])
+  const [foodCatalog, setFoodCatalog] = useState<FoodCatalogItem[]>([])
   const [editing, setEditing] = useState<Meal>()
   const [deleting, setDeleting] = useState<Meal>()
   const [historyMeal, setHistoryMeal] = useState<Meal>()
   const [history, setHistory] = useState<MealHistoryItem[]>()
-  const [sourceTab, setSourceTab] = useState<'library' | 'favorites' | 'recent'>('library')
+  const [sourceTab, setSourceTab] = useState<'library' | 'custom' | 'favorites' | 'recent'>(
+    'library',
+  )
   const [search, setSearch] = useState('')
-  const [customOpen, setCustomOpen] = useState(false)
-  const [custom, setCustom] = useState({
-    name: '',
-    grams: '100',
-    energyKcal: '',
-    proteinG: '',
-    carbohydrateG: '',
-    fatG: '',
-  })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [feedback, setFeedback] = useState('')
@@ -158,29 +161,35 @@ const NutritionPage = () => {
     })()
   }, [])
 
+  useDidShow(() => {
+    void listFoodCatalog()
+      .then((result) => setFoodCatalog(result.items))
+      .catch((error: unknown) => setFeedback(messageOf(error)))
+  })
+
   const summary = useMemo(() => mealDraftSummary(draft), [draft])
   const recents = useMemo(() => recentFoods(meals), [meals])
-  const catalogEntries = useMemo<SavedFood[]>(() => {
+  const catalogEntries = useMemo<CatalogDisplayEntry[]>(() => {
     if (sourceTab === 'favorites') return favorites
     if (sourceTab === 'recent') return recents
-    return starterFoodCatalog.map((entry) => ({
-      food: draftFromCatalog(entry).food,
-      defaultServing: {
-        amount: entry.defaultServing.amount,
-        unit: entry.defaultServing.unit,
-        grams: entry.defaultServing.grams,
-      },
-    }))
-  }, [favorites, recents, sourceTab])
-  const visibleEntries = catalogEntries.filter((entry) => entry.food.name.includes(search.trim()))
+    return foodCatalog
+      .filter((entry) => entry.source === (sourceTab === 'custom' ? 'custom' : 'starter'))
+      .map((entry) => ({
+        food: catalogFoodSnapshot(entry),
+        defaultServing: entry.defaultServing,
+        catalog: entry,
+      }))
+  }, [favorites, foodCatalog, recents, sourceTab])
+  const visibleEntries = catalogEntries.filter((entry) => {
+    const query = search.trim().toLocaleLowerCase()
+    if (!query) return true
+    return [entry.food.name, ...(entry.catalog?.aliases ?? [])].some((label) =>
+      label.toLocaleLowerCase().includes(query),
+    )
+  })
 
-  const addFood = (entry: SavedFood) => {
-    const item =
-      sourceTab === 'library'
-        ? draftFromCatalog(
-            starterFoodCatalog.find((candidate) => candidate.foodKey === entry.food.foodKey)!,
-          )
-        : draftFromSavedFood(entry)
+  const addFood = (entry: CatalogDisplayEntry) => {
+    const item = entry.catalog ? draftFromFoodCatalogItem(entry.catalog) : draftFromSavedFood(entry)
     setDraft((current) => ({ ...current, items: [...current.items, item] }))
     setFeedback(`${entry.food.name}已加入本餐，请确认实际份量。`)
   }
@@ -199,28 +208,6 @@ const NutritionPage = () => {
       ...current,
       items: current.items.filter((_, itemIndex) => itemIndex !== index),
     }))
-  }
-
-  const addCustom = () => {
-    const error = validateCustomFood(custom)
-    if (error) {
-      setFeedback(error)
-      return
-    }
-    setDraft((current) => ({
-      ...current,
-      items: [...current.items, createCustomFoodDraft(custom)],
-    }))
-    setCustom({
-      name: '',
-      grams: '100',
-      energyKcal: '',
-      proteinG: '',
-      carbohydrateG: '',
-      fatG: '',
-    })
-    setCustomOpen(false)
-    setFeedback('自定义食物已加入；营养值按你填写的每 100g 快照计算。')
   }
 
   const choosePhoto = async () => {
@@ -671,15 +658,19 @@ const NutritionPage = () => {
                   <Button
                     {...buttonA11yProps}
                     className="nutrition-link"
-                    onClick={() => setCustomOpen((current) => !current)}
+                    onClick={() => void Taro.navigateTo({ url: '/pages/food-catalog/index' })}
                   >
-                    ＋ 自定义
+                    管理我的食物
                   </Button>
                 </View>
                 <View className="food-source-tabs">
                   {(
                     [
                       ['library', '食物库'],
+                      [
+                        'custom',
+                        `我的 ${foodCatalog.filter((entry) => entry.source === 'custom').length}`,
+                      ],
                       ['favorites', `收藏 ${favorites.length}`],
                       ['recent', `最近 ${recents.length}`],
                     ] as const
@@ -705,69 +696,49 @@ const NutritionPage = () => {
                 <View className="food-catalog">
                   {visibleEntries.length ? (
                     visibleEntries.map((entry) => (
-                      <Button
-                        {...buttonA11yProps}
-                        className="food-option"
-                        aria-label={`添加${entry.food.name}`}
-                        key={entry.food.foodKey}
-                        onClick={() => addFood(entry)}
-                      >
-                        <Text className="food-option__plus">＋</Text>
-                        <View>
-                          <Text className="food-option__name">{entry.food.name}</Text>
-                          <Text className="food-option__meta">
-                            {entry.defaultServing.amount} {unitLabels[entry.defaultServing.unit]} ·{' '}
-                            {Math.round(
-                              (entry.food.nutrientsPer100g.energyKcal *
-                                entry.defaultServing.grams) /
-                                100,
-                            )}{' '}
-                            kcal
-                          </Text>
-                        </View>
-                      </Button>
+                      <View className="food-option-wrap" key={entry.food.foodKey}>
+                        <Button
+                          {...buttonA11yProps}
+                          className="food-option"
+                          aria-label={`添加${entry.food.name}`}
+                          onClick={() => addFood(entry)}
+                        >
+                          <Text className="food-option__plus">＋</Text>
+                          <View>
+                            <Text className="food-option__name">{entry.food.name}</Text>
+                            <Text className="food-option__meta">
+                              {entry.defaultServing.amount} {unitLabels[entry.defaultServing.unit]}{' '}
+                              ·{' '}
+                              {Math.round(
+                                (entry.food.nutrientsPer100g.energyKcal *
+                                  entry.defaultServing.grams) /
+                                  100,
+                              )}{' '}
+                              kcal
+                            </Text>
+                          </View>
+                        </Button>
+                        {entry.catalog?.source === 'custom' ? (
+                          <Button
+                            {...buttonA11yProps}
+                            className="food-option__edit"
+                            aria-label={`编辑${entry.food.name}`}
+                            onClick={() =>
+                              void Taro.navigateTo({
+                                url: `/pages/food-catalog/index?entryId=${entry.catalog?.id}`,
+                              })
+                            }
+                          >
+                            修订 · R{entry.catalog.revision}
+                          </Button>
+                        ) : null}
+                      </View>
                     ))
                   ) : (
                     <View className="food-picker-empty">当前列表没有匹配食物</View>
                   )}
                 </View>
               </View>
-
-              {customOpen ? (
-                <View className="custom-food">
-                  <Text className="nutrition-eyebrow">MANUAL SNAPSHOT / 每 100g</Text>
-                  <Text className="custom-food__title">按包装或食材资料录入</Text>
-                  <View className="custom-grid">
-                    {(
-                      [
-                        ['name', '食物名称', '例如：家庭炖牛肉'],
-                        ['grams', '本次克重', '100'],
-                        ['energyKcal', '热量 kcal', '0'],
-                        ['proteinG', '蛋白质 g', '0'],
-                        ['carbohydrateG', '碳水 g', '0'],
-                        ['fatG', '脂肪 g', '0'],
-                      ] as const
-                    ).map(([key, label, placeholder]) => (
-                      <View className="custom-field" key={key}>
-                        <Text>{label}</Text>
-                        <Input
-                          className="custom-input metric"
-                          type={key === 'name' ? 'text' : 'digit'}
-                          value={custom[key]}
-                          placeholder={placeholder}
-                          aria-label={`自定义${label}`}
-                          onInput={(event) =>
-                            setCustom((current) => ({ ...current, [key]: event.detail.value }))
-                          }
-                        />
-                      </View>
-                    ))}
-                  </View>
-                  <Button {...buttonA11yProps} className="custom-add" onClick={addCustom}>
-                    加入本餐
-                  </Button>
-                </View>
-              ) : null}
 
               <View className="meal-items">
                 <View className="meal-items__heading">

@@ -2,6 +2,7 @@ import type {
   AiExplanation,
   CreateHealthRecord,
   CreateExerciseCatalogEntry,
+  CreateFoodCatalogEntry,
   CreateMeal,
   CreatePlanWorkoutLink,
   CreateWorkout,
@@ -38,8 +39,12 @@ import type {
   ExerciseCatalogEntryHistoryItem,
   ExerciseCatalogItem,
   CustomExerciseCatalogEntry,
+  CustomFoodCatalogEntry,
+  FoodCatalogEntryHistoryItem,
+  FoodCatalogItem,
   UpdateHealthRecord,
   UpdateExerciseCatalogEntry,
+  UpdateFoodCatalogEntry,
   UpdateMeal,
   UpdateWorkout,
   WeeklyPlan,
@@ -352,6 +357,28 @@ export const archiveExerciseCatalogEntry = (entryId: string, expectedRevision: n
 export const getExerciseCatalogEntryHistory = (entryId: string) =>
   authenticatedRequest<{ entryId: string; items: ExerciseCatalogEntryHistoryItem[] }>(
     `/exercise-catalog/${entryId}/history`,
+    'GET',
+  )
+
+export const listFoodCatalog = () =>
+  authenticatedRequest<{ starterVersion: string; items: FoodCatalogItem[] }>('/food-catalog', 'GET')
+
+export const createFoodCatalogEntry = (payload: CreateFoodCatalogEntry, idempotencyKey: string) =>
+  authenticatedRequest<CustomFoodCatalogEntry>('/food-catalog', 'POST', payload, {
+    'x-idempotency-key': idempotencyKey,
+  })
+
+export const updateFoodCatalogEntry = (entryId: string, payload: UpdateFoodCatalogEntry) =>
+  authenticatedRequest<CustomFoodCatalogEntry>(`/food-catalog/${entryId}`, 'PUT', payload)
+
+export const archiveFoodCatalogEntry = (entryId: string, expectedRevision: number) =>
+  authenticatedRequest<CustomFoodCatalogEntry>(`/food-catalog/${entryId}`, 'DELETE', undefined, {
+    'x-expected-revision': String(expectedRevision),
+  })
+
+export const getFoodCatalogEntryHistory = (entryId: string) =>
+  authenticatedRequest<{ entryId: string; items: FoodCatalogEntryHistoryItem[] }>(
+    `/food-catalog/${entryId}/history`,
     'GET',
   )
 
