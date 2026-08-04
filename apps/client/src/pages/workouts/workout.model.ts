@@ -160,9 +160,6 @@ export function buildWorkoutRequest(
   )
   return {
     title: draft.title.trim(),
-    status: exercises.every((exercise) => exercise.sets.every((set) => set.completed))
-      ? 'completed'
-      : 'partial',
     source: { kind: 'manual' },
     exercises,
     startedAt,

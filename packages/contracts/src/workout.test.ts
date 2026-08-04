@@ -38,6 +38,14 @@ describe('workout contracts', () => {
     expect(updateWorkoutSchema.parse({ ...workout, expectedRevision: 2 }).expectedRevision).toBe(2)
   })
 
+  it('accepts requests without the deprecated client status hint', () => {
+    const { status: _status, ...serverAuthoritativeWorkout } = workout
+    const parsed = createWorkoutSchema.parse(serverAuthoritativeWorkout)
+
+    expect(parsed).not.toHaveProperty('status')
+    expect(parsed.exercises[0]?.sets[0]?.completed).toBe(true)
+  })
+
   it('requires a performance measure and paired load unit', () => {
     const missingMeasure = structuredClone(workout)
     missingMeasure.exercises[0]!.sets[0] = {

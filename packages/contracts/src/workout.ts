@@ -89,7 +89,9 @@ export const workoutExerciseInputSchema = z
 export const workoutBaseSchema = z
   .object({
     title: z.string().trim().min(1).max(100),
-    status: workoutStatusSchema,
+    status: workoutStatusSchema
+      .optional()
+      .describe('Deprecated compatibility hint; the server derives status from completed sets.'),
     source: workoutSourceSchema,
     exercises: z.array(workoutExerciseInputSchema).min(1).max(30),
     startedAt: z.string().datetime({ offset: true }),

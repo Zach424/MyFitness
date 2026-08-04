@@ -120,6 +120,10 @@ const progressPhotoMigrationPath = path.resolve(
   __dirname,
   '../../../../infra/postgres/migrations/0020_progress_photos.sql',
 )
+const authoritativeWorkoutStatusMigrationPath = path.resolve(
+  __dirname,
+  '../../../../infra/postgres/migrations/0021_authoritative_workout_status.sql',
+)
 
 describe('health-record migration drift', () => {
   it('contains every contract metric, unit and source kind', async () => {
@@ -175,6 +179,13 @@ describe('health-record migration drift', () => {
     ]) {
       expect(migration, `${value} is missing from the workout migration`).toContain(`'${value}'`)
     }
+  })
+
+  it('backfills the server-authoritative workout status invariant', async () => {
+    const migration = await readFile(authoritativeWorkoutStatusMigrationPath, 'utf8')
+    expect(migration).toContain('BOOL_AND(set_row.completed)')
+    expect(migration).toContain('COUNT(set_row.id) > 0')
+    expect(migration).toContain('Server-derived cache')
   })
 
   it('contains every nutrition lifecycle enum at the snapshot boundary', async () => {

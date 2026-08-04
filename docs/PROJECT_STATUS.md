@@ -2,7 +2,7 @@
 
 Last reviewed: 2026-08-04
 
-Stage: internal alpha locally runnable; privacy-first progress-photo capture guidance, separate retention consent and user-controlled same-view comparison are locally implemented and browser-proven. The complete development stack, safe onboarding, deterministic weekly plan and fixture AI explanation were re-exercised on 2026-08-04. Both first-release client candidate contracts, H5 OIDC browser/API trust, immutable workflow dependencies, exact tag/main/CI release-source qualification, combined admission, recoverable erasure receipts, crash-safe AI lifecycle, adversarial output validation and reproducible evaluation artifacts remain locally green. Owner-operated cloud, domain and real-provider work is explicitly parked while locally verifiable product gaps continue.
+Stage: internal alpha locally runnable; workout completion is now a server-derived fact from persisted set evidence, and the browser-proven client no longer submits it as authority. Privacy-first progress-photo capture guidance, separate retention consent and user-controlled same-view comparison are also locally implemented. The complete development stack, safe onboarding, deterministic weekly plan and fixture AI explanation were re-exercised on 2026-08-04. Both first-release client candidate contracts, H5 OIDC browser/API trust, immutable workflow dependencies, exact tag/main/CI release-source qualification, combined admission, recoverable erasure receipts, crash-safe AI lifecycle, adversarial output validation and reproducible evaluation artifacts remain locally green. Owner-operated cloud, domain and real-provider work is explicitly parked while locally verifiable product gaps continue.
 
 Primary release target: WeChat Mini Program + responsive H5
 
@@ -20,11 +20,11 @@ MyFitness / 衡迹 turns body, training, nutrition, and recovery records into sa
 | Client: Mini Program/H5 | Partial, candidate paths local  | WeApp `wechat` and H5 `oidc` candidate contracts; browser double green | Real providers/domains/device/browser proof |
 | Admin console           | Partial, local slice done       | OIDC BFF, exact lookup, role split and Evidence Rail exercised         | Select IdP, owner, retention and deployment |
 | Business API            | Partial                         | Verified WeChat/OIDC identity plus self-contained OCI runtime          | Shared deployment and real credential proof |
-| Domain rules            | Partial                         | Safety validators + strict privacy action contracts                    | Add release policy enforcement              |
+| Domain rules            | Partial                         | Server-derived workout status + safety/privacy validators              | Add release policy enforcement              |
 | AI service              | Partial                         | Crash-safe runs + adversarial text/vision validators + 23 evals        | Expert corpus + approved provider canary    |
 | Native App/devices      | Deferred                        | Phase-two decision                                                     | MVP retention gate reached                  |
 | Privacy/compliance      | Partial, durable local proof    | Purpose-scoped photo consent/export/deletion + restore replay tested   | Production retention/provider/legal review  |
-| Testing/observability   | Partial                         | 175 unit, 50 integration, 25 browser tests + real-browser photo proof  | Centralize telemetry after account approval |
+| Testing/observability   | Partial                         | 178 unit, 50 integration, 25 browser tests + real-browser state proofs | Centralize telemetry after account approval |
 | Deployment              | Partial, source/admission ready | Immutable actions + tag/main/CI + service/client/environment gates     | Approve dossier, provision and canary       |
 
 Status vocabulary: `Done` means validated for the present stage, `Partial` means usable but missing a named gate, `Pending` means not implemented, and `Deferred` means intentionally outside the current release.
@@ -43,7 +43,7 @@ Status vocabulary: `Done` means validated for the present stage, `Partial` means
 - Next.js 16 administrator BFF keeps the API credential in an HttpOnly cookie and renders the responsive Evidence Desk without user-content browsing or mutation controls.
 - Transactional adult profile, goals, risk eligibility and immutable versioned consent events with optimistic revisions.
 - Transactional measurement create/replace/soft-delete with owner-only append-only snapshots, expected revisions and idempotent creation.
-- Transactional relational workout aggregates with ordered exercises/sets, completed-only deterministic summaries, expected revisions, idempotent creation and immutable JSON snapshots.
+- Transactional relational workout aggregates with ordered exercises/sets, completed-only deterministic summaries, server-authoritative completion status, expected revisions, status-insensitive idempotent creation and immutable JSON snapshots.
 - Transactional nutrition aggregates with food/serving snapshots, canonical grams, deterministic kcal/P/C/F/fiber totals, owner favorites and immutable JSON revisions.
 - Timezone-aware read-only Today projection with confirmed evidence, nullable recovery summary and 7/30/90-day totals.
 - Versioned weekly plans with deterministic availability/load/equipment constraints, evidence snapshots, substitutions, optimistic decisions and immutable history.
@@ -99,7 +99,6 @@ Status vocabulary: `Done` means validated for the present stage, `Partial` means
 | Dead-letter recovery has no alert owner or safe service endpoint                      | High   | Centralize alerts; require audited exact-job runbook until a least-privilege tool exists                 |
 | Process metrics are not centrally scraped and alerts have no owner                    | High   | Deploy private aggregation, dashboards, paging and named incident ownership before beta                  |
 | Rate limits use uncalibrated fixed windows and exact proxy topology                   | Medium | Load-test policy boundaries and verify `TRUST_PROXY_HOPS` in the shared environment                      |
-| Workout status can diverge from set completion in non-client use                      | Medium | Make server derivation authoritative before exposing imports                                             |
 | Starter exercise catalog lacks custom/equipment semantics                             | Medium | Model additions only after the manual workout loop informs actual needs                                  |
 | Starter food values are demonstration data, not release catalog                       | High   | Select licensed/localized versioned provider and attribution before beta                                 |
 | Energy/macro UI can be harmful for eating-disorder risk                               | High   | Maintain scope exclusion; add screening/content review before adaptive nutrition planning                |
@@ -118,4 +117,4 @@ The MVP cannot enter public beta until all of the following are reproducible:
 
 ## Primary next step
 
-Iteration 32: harden the now-complete local MVP boundary for a managed shared deployment and controlled beta. Owner-operated cloud account/budget, domain/TLS, real WeChat/OIDC, data-custody owners, centralized telemetry, policy/filing decisions and any approved paid-provider canary remain mandatory external inputs. Until those inputs exist, continue only locally reproducible hardening such as bundle budgets, large-text/keyboard accessibility, stale-plan refresh and server-authoritative workout completion; do not describe local MinIO, fixture AI or candidate artifacts as public production.
+Iteration 33: make stale weekly-plan state proactive instead of waiting for a failed server decision. The client should detect revision/eligibility drift, explain why the displayed plan is no longer current, offer a bounded reload/regenerate path and preserve server authority with focused browser and concurrency tests. Owner-operated cloud account/budget, domain/TLS, real WeChat/OIDC, data-custody owners, centralized telemetry, policy/filing decisions and any approved paid-provider canary remain mandatory external inputs but are parked until the user supplies them; do not describe local MinIO, fixture AI or candidate artifacts as public production.

@@ -2,7 +2,7 @@
 
 The roadmap is organized as controlled iterations. A round may take several working sessions, but it ends only after implementation, validation, archive update, and a commit.
 
-Progress snapshot (2026-08-04): iterations 0–31 are complete locally. Progress-photo assistance now has separate analysis/retention consent, raw-image rejection and EXIF-stripping re-encoding, purpose-scoped private objects, deterministic capture-quality guidance, 24-hour temporary retention, user-controlled same-view onion-skin comparison, export/revocation/deletion integration and reviewed mobile/wide evidence. The development stack, safe onboarding, deterministic weekly plan and fixture AI explanation were also re-exercised, and the authoritative project status has a dependency-free exact-byte Obsidian mirror. Hosted quality/smoke is green through the iteration-030 exact SHA; verified service-only `v0.1.0-rc.1` assets, strict managed-environment admission, deterministic source-bound H5/WeApp TARs, recoverable account erasure, crash-safe/adversarially validated AI, release qualification, full-SHA action pins and a browser-proven H5 OIDC candidate remain available. Owner-operated account, budget, domain, credentials and paid-provider work remains parked but mandatory in iteration 32.
+Progress snapshot (2026-08-04): iterations 0–32 are complete locally. Workout completion is now a server-derived fact from persisted set evidence; new clients omit the old field, contradictory compatibility hints are ignored, current rows are backfilled and API/idempotency/history behavior is tested. Progress-photo assistance, safe onboarding, deterministic weekly planning, fixture AI explanations and the dependency-free exact-byte Obsidian status mirror remain locally available. Hosted quality/smoke is green through the iteration-030 exact SHA; the iteration-031 SHA is pushed and awaits hosted evidence. Verified service-only `v0.1.0-rc.1` assets, managed-environment admission, deterministic H5/WeApp candidates, recoverable erasure, release qualification and a browser-proven H5 OIDC candidate remain available. Owner-operated account, budget, domain, credentials and paid-provider work is parked while locally reproducible beta hardening continues; those release gates remain mandatory.
 
 | Iteration | Primary scope                                       | Exit evidence                                                                                    |
 | --------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
@@ -38,8 +38,11 @@ Progress snapshot (2026-08-04): iterations 0–31 are complete locally. Progress
 | 29        | H5 OIDC browser and release contract                | State/nonce/S256 callback, error UI, deterministic candidate TAR and browser tests               |
 | 30        | Authoritative status and Obsidian mirror            | Exact-byte write/verify CLI, contained vault target, workflow docs, local mirror and unit proof  |
 | 31        | Privacy-first progress-photo assistance             | Consent, EXIF removal, private lifecycle, alignment comparison, deletion and browser proof       |
-| 32        | Managed shared deployment, beta hardening/release   | Real identity/custody/telemetry, rollback, security/a11y/filing review and staged rollout        |
-| 33        | Native App feasibility and device sync              | Retention gate reviewed; HealthKit/Health Connect/Huawei proof of concept                        |
+| 32        | Server-authoritative workout completion             | Derived status, legacy compatibility, backfill, idempotency/history and browser proof            |
+| 33        | Proactive stale-plan refresh                        | Visible revision drift, safe reload/retry and current-plan browser proof                         |
+| 34        | Client accessibility and bundle hardening           | 320 px/large text/keyboard checks plus enforced H5/WeApp bundle budgets                          |
+| 35        | Managed shared deployment, beta hardening/release   | Real identity/custody/telemetry, rollback, security/a11y/filing review and staged rollout        |
+| 36        | Native App feasibility and device sync              | Retention gate reviewed; HealthKit/Health Connect/Huawei proof of concept                        |
 
 ## Release gates
 
@@ -51,14 +54,14 @@ Progress snapshot (2026-08-04): iterations 0–31 are complete locally. Progress
 
 ### Closed beta
 
-- Iterations 9–32 complete.
+- Iterations 9–35 complete.
 - AI evaluation set is versioned and safety validators block known high-risk cases.
 - Data export and deletion are exercised end to end.
 - Support, monitoring, cost limits, rollback, and incident ownership are assigned.
 
 ### Public release
 
-- Iteration 32 complete.
+- Iteration 35 complete.
 - Applicable ICP/APP/Mini Program privacy/AI registration and content-labeling work is reviewed.
 - Store materials match actual data practices and product claims.
 - Release starts with a small cohort and automatic rollback thresholds.

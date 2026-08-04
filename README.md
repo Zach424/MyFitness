@@ -2,7 +2,7 @@
 
 面向普通健身人群的多端记录与 AI 规划产品。产品把身体、训练、饮食和恢复数据整理为可解释、可调整、可持续执行的个人计划。
 
-> 当前阶段：首个服务候选 `v0.1.0-rc.1` 已发布验证；本地产品还完成了隐私优先的进度照拍摄条件检查、独立保留授权和同视角叠片对比。H5 OIDC 的浏览器状态/nonce/PKCE S256、精确回调清理、一次性交换和 API 信任边界已完成本地/provider-double 验收，H5 与 WeApp 均有来源绑定、实际字节校验的 `candidate` 确定性 TAR 契约。CI/发布工作流的 27 个外部 action 调用已固定到 12 个经核验的完整提交，下一候选的远端标签、当前 `main` 祖先关系与同提交成功 CI 也是镜像发布前的强制资格门。现有 `v0.1.0-rc.1` 仍是“仅服务”历史记录；托管账号、真实微信/OIDC 凭据、精确回调域名/TLS/CORS、集中遥测、数据托管和责任人仍是上线门槛，当前没有声称已经承载公网流量。
+> 当前阶段：首个服务候选 `v0.1.0-rc.1` 已发布验证；本地产品还完成了隐私优先的进度照辅助，以及由服务端按训练组事实生成的训练完成状态。H5 OIDC 的浏览器状态/nonce/PKCE S256、精确回调清理、一次性交换和 API 信任边界已完成本地/provider-double 验收，H5 与 WeApp 均有来源绑定、实际字节校验的 `candidate` 确定性 TAR 契约。CI/发布工作流的 27 个外部 action 调用已固定到 12 个经核验的完整提交，下一候选的远端标签、当前 `main` 祖先关系与同提交成功 CI 也是镜像发布前的强制资格门。现有 `v0.1.0-rc.1` 仍是“仅服务”历史记录；托管账号、真实微信/OIDC 凭据、精确回调域名/TLS/CORS、集中遥测、数据托管和责任人仍是上线门槛，当前没有声称已经承载公网流量。
 
 ## 产品边界
 
@@ -158,6 +158,7 @@ Playwright 会复用或启动 API、H5 与管理员预览服务。`pnpm db:down`
 - [架构决策 0027](docs/architecture/decisions/0027-h5-oidc-authorization-code-boundary.md)
 - [架构决策 0028](docs/architecture/decisions/0028-h5-oidc-browser-transaction-and-candidate.md)
 - [架构决策 0029](docs/architecture/decisions/0029-privacy-first-progress-photo-assistance.md)
+- [架构决策 0030](docs/architecture/decisions/0030-server-authoritative-workout-status.md)
 - [健康记录数据模型](docs/architecture/HEALTH_RECORD_MODEL.md)
 - [训练记录数据模型](docs/architecture/WORKOUT_MODEL.md)
 - [饮食记录数据模型](docs/architecture/NUTRITION_MODEL.md)
@@ -207,6 +208,7 @@ Playwright 会复用或启动 API、H5 与管理员预览服务。`pnpm db:down`
 - [第 29 轮档案](docs/iterations/029-h5-oidc-browser-candidate.md)
 - [第 30 轮档案](docs/iterations/030-obsidian-status-mirror.md)
 - [第 31 轮档案](docs/iterations/031-progress-photo-assistance.md)
+- [第 32 轮档案](docs/iterations/032-server-authoritative-workout-status.md)
 - [移动端视觉证据](output/playwright/iteration-001-mobile.png)
 - [宽屏视觉证据](output/playwright/iteration-001-wide.png)
 - [建档移动端证据](output/playwright/iteration-003-onboarding-mobile.png)

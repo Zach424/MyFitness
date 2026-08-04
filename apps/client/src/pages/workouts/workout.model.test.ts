@@ -13,7 +13,7 @@ describe('workout page model', () => {
   it('builds ordered completed strength sets', () => {
     const draft = initialWorkoutDraft()
     const request = buildWorkoutRequest(draft)
-    expect(request.status).toBe('completed')
+    expect(request).not.toHaveProperty('status')
     expect(request.exercises[0]?.sets).toHaveLength(3)
     expect(request.exercises[0]?.sets[0]).toMatchObject({ reps: 10, load: 12, loadUnit: 'kg' })
   })

@@ -552,6 +552,9 @@ const WorkoutsPage = () => {
                     <Text className="session-summary__label">有效分钟</Text>
                   </View>
                 </View>
+                <Text className="session-status-rule">
+                  保存后，服务端会按组完成事实生成状态：全部勾选为已完成，否则记为部分完成。
+                </Text>
 
                 {draft.painLevel >= 6 ? (
                   <View className="pain-warning" role="alert">

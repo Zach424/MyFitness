@@ -7248,7 +7248,11 @@
                 "type": "object",
                 "properties": {
                   "title": { "type": "string", "minLength": 1, "maxLength": 100 },
-                  "status": { "type": "string", "enum": ["completed", "partial"] },
+                  "status": {
+                    "description": "Deprecated compatibility hint; the server derives status from completed sets.",
+                    "type": "string",
+                    "enum": ["completed", "partial"]
+                  },
                   "source": {
                     "type": "object",
                     "properties": {
@@ -7334,7 +7338,6 @@
                 },
                 "required": [
                   "title",
-                  "status",
                   "source",
                   "exercises",
                   "startedAt",
@@ -7790,7 +7793,11 @@
                 "type": "object",
                 "properties": {
                   "title": { "type": "string", "minLength": 1, "maxLength": 100 },
-                  "status": { "type": "string", "enum": ["completed", "partial"] },
+                  "status": {
+                    "description": "Deprecated compatibility hint; the server derives status from completed sets.",
+                    "type": "string",
+                    "enum": ["completed", "partial"]
+                  },
                   "source": {
                     "type": "object",
                     "properties": {
@@ -7882,7 +7889,6 @@
                 },
                 "required": [
                   "title",
-                  "status",
                   "source",
                   "exercises",
                   "startedAt",

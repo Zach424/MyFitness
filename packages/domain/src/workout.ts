@@ -8,6 +8,9 @@ const round = (value: number, precision = 4) => {
 export const normalizeLoadKg = (load: number, unit: 'kg' | 'lb') =>
   round(unit === 'kg' ? load : load * 0.45359237)
 
+export const deriveWorkoutStatus = (completedSets: number, totalSets: number) =>
+  totalSets > 0 && completedSets === totalSets ? ('completed' as const) : ('partial' as const)
+
 export const calculateWorkout = (exercises: WorkoutExerciseInput[]) => {
   let completedSets = 0
   let totalSets = 0
@@ -39,6 +42,7 @@ export const calculateWorkout = (exercises: WorkoutExerciseInput[]) => {
 
   return {
     exercises: normalizedExercises,
+    status: deriveWorkoutStatus(completedSets, totalSets),
     summary: {
       completedSets,
       totalSets,

@@ -20,7 +20,6 @@ describe('workout API with PostgreSQL', () => {
 
   const workout = {
     title: '全身 A',
-    status: 'completed',
     source: { kind: 'manual' },
     exercises: [
       {
@@ -108,6 +107,7 @@ describe('workout API with PostgreSQL', () => {
     expect(created.body).toMatchObject({
       userId,
       revision: 1,
+      status: 'partial',
       summary: {
         completedSets: 2,
         totalSets: 3,
@@ -121,12 +121,17 @@ describe('workout API with PostgreSQL', () => {
       loadUnit: 'lb',
       canonicalLoadKg: 19.9581,
     })
+    const storedPartial = await pool.query<{ status: string }>(
+      'SELECT status FROM workout_sessions WHERE id = $1',
+      [created.body.id],
+    )
+    expect(storedPartial.rows[0]?.status).toBe('partial')
 
     const replay = await request(app.getHttpServer())
       .post('/v1/workouts')
       .set('Authorization', `Bearer ${token}`)
       .set('x-idempotency-key', key)
-      .send(workout)
+      .send({ ...workout, status: 'completed' })
       .expect(201)
     expect(replay.body.id).toBe(created.body.id)
 
@@ -135,6 +140,7 @@ describe('workout API with PostgreSQL', () => {
       .set('Authorization', `Bearer ${token}`)
       .expect(200)
     expect(list.body.items).toHaveLength(1)
+    expect(list.body.items[0].status).toBe('partial')
 
     const update = {
       ...workout,
@@ -145,6 +151,7 @@ describe('workout API with PostgreSQL', () => {
         },
         workout.exercises[1],
       ],
+      status: 'partial',
       expectedRevision: 1,
     }
     const updated = await request(app.getHttpServer())
@@ -152,9 +159,14 @@ describe('workout API with PostgreSQL', () => {
       .set('Authorization', `Bearer ${token}`)
       .send(update)
       .expect(200)
-    expect(updated.body).toMatchObject({ revision: 2 })
+    expect(updated.body).toMatchObject({ revision: 2, status: 'completed' })
     expect(updated.body.summary.volumeKg).toBe(359.25)
     expect(updated.body.summary.completedSets).toBe(3)
+    const storedCompleted = await pool.query<{ status: string }>(
+      'SELECT status FROM workout_sessions WHERE id = $1',
+      [created.body.id],
+    )
+    expect(storedCompleted.rows[0]?.status).toBe('completed')
 
     await request(app.getHttpServer())
       .put(`/v1/workouts/${String(created.body.id)}`)
@@ -173,6 +185,10 @@ describe('workout API with PostgreSQL', () => {
     expect(history.body.items.map((item: { action: string }) => item.action)).toEqual([
       'updated',
       'created',
+    ])
+    expect(history.body.items.map((item: { status: string }) => item.status)).toEqual([
+      'completed',
+      'partial',
     ])
 
     await request(app.getHttpServer())

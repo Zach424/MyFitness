@@ -62,29 +62,40 @@ type SetRow = {
   completed: boolean
 }
 
-const mapWorkout = (session: SessionRow, exercises: Workout['exercises']): Workout => ({
-  id: session.id,
-  userId: session.user_id,
-  title: session.title,
-  status: session.status,
-  source: {
-    kind: session.source_kind,
-    ...(Object.keys(session.source_metadata ?? {}).length
-      ? { metadata: session.source_metadata }
-      : {}),
-  },
-  exercises,
-  summary: calculateWorkout(exercises).summary,
-  startedAt: session.started_at.toISOString(),
-  endedAt: session.ended_at.toISOString(),
-  timezone: session.timezone,
-  painLevel: session.pain_level,
-  fatigue: session.fatigue,
-  note: session.note,
-  revision: session.revision,
-  createdAt: session.created_at.toISOString(),
-  updatedAt: session.updated_at.toISOString(),
-})
+const mapWorkout = (session: SessionRow, exercises: Workout['exercises']): Workout => {
+  const calculation = calculateWorkout(exercises)
+  return {
+    id: session.id,
+    userId: session.user_id,
+    title: session.title,
+    status: calculation.status,
+    source: {
+      kind: session.source_kind,
+      ...(Object.keys(session.source_metadata ?? {}).length
+        ? { metadata: session.source_metadata }
+        : {}),
+    },
+    exercises,
+    summary: calculation.summary,
+    startedAt: session.started_at.toISOString(),
+    endedAt: session.ended_at.toISOString(),
+    timezone: session.timezone,
+    painLevel: session.pain_level,
+    fatigue: session.fatigue,
+    note: session.note,
+    revision: session.revision,
+    createdAt: session.created_at.toISOString(),
+    updatedAt: session.updated_at.toISOString(),
+  }
+}
+
+const requestHash = (input: CreateWorkout) => {
+  const { status: _legacyStatus, ...serverAuthoritativeInput } = input
+  return createHash('sha256').update(JSON.stringify(serverAuthoritativeInput)).digest('hex')
+}
+
+const legacyRequestHash = (input: CreateWorkout) =>
+  createHash('sha256').update(JSON.stringify(input)).digest('hex')
 
 const loadWorkouts = async (executor: QueryExecutor, sessions: SessionRow[]) => {
   if (!sessions.length) return []
@@ -216,7 +227,9 @@ export class WorkoutsService {
   constructor(private readonly database: DatabaseService) {}
 
   async create(userId: string, idempotencyKey: string, input: CreateWorkout) {
-    const requestHash = createHash('sha256').update(JSON.stringify(input)).digest('hex')
+    const authoritativeStatus = calculateWorkout(input.exercises).status
+    const authoritativeRequestHash = requestHash(input)
+    const compatibleLegacyRequestHash = legacyRequestHash(input)
     return this.database.withTransaction(async (client) => {
       const result = await client.query<SessionRow>(
         `
@@ -235,7 +248,7 @@ export class WorkoutsService {
           randomUUID(),
           userId,
           input.title,
-          input.status,
+          authoritativeStatus,
           input.source.kind,
           JSON.stringify(input.source.metadata ?? {}),
           input.startedAt,
@@ -245,7 +258,7 @@ export class WorkoutsService {
           input.fatigue,
           input.note ?? null,
           idempotencyKey,
-          requestHash,
+          authoritativeRequestHash,
         ],
       )
       const created = result.rows[0]
@@ -262,7 +275,7 @@ export class WorkoutsService {
       )
       const row = existing.rows[0]
       if (!row) throw new ConflictException('idempotency conflict could not be resolved')
-      if (row.request_hash !== requestHash) {
+      if (![authoritativeRequestHash, compatibleLegacyRequestHash].includes(row.request_hash)) {
         throw new ConflictException('idempotency key was already used for a different request')
       }
       if (row.deleted_at) throw new ConflictException('idempotent workout was already deleted')
@@ -284,6 +297,7 @@ export class WorkoutsService {
   }
 
   async update(userId: string, workoutId: string, input: UpdateWorkout) {
+    const authoritativeStatus = calculateWorkout(input.exercises).status
     return this.database.withTransaction(async (client) => {
       const result = await client.query<SessionRow>(
         `
@@ -297,7 +311,7 @@ export class WorkoutsService {
         `,
         [
           input.title,
-          input.status,
+          authoritativeStatus,
           input.source.kind,
           JSON.stringify(input.source.metadata ?? {}),
           input.startedAt,

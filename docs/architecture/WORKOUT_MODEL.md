@@ -1,6 +1,6 @@
 # Workout record model
 
-Status: implemented in iteration 005
+Status: implemented in iteration 005; server-authoritative completion hardened in iteration 032
 
 Workout records are user-owned observations of what was actually attempted and completed. They are not exercise prescriptions, readiness diagnoses or claims that greater volume is always better.
 
@@ -35,7 +35,7 @@ The client sends display values and completion evidence. The server computes:
 
 Incomplete sets stay in the record so planned-versus-actual structure remains visible, but they never inflate volume, distance or active time. The database stores both display load/unit and canonical kilograms so history preserves what the user entered while summaries stay comparable.
 
-`status` currently remains an explicit contract field, with the shared client deriving `completed` only when every set is complete and `partial` otherwise. Future imports must apply the same rule or document a versioned exception.
+`status` is a server-derived response fact. The domain rule returns `completed` only when at least one set exists and every persisted set is complete; every other accepted aggregate is `partial`. New clients omit the field from create/update requests. The API temporarily accepts an optional deprecated hint from older clients but ignores it for persistence, responses, idempotency equivalence and new revision snapshots. This lets later imports use the same aggregate endpoint without becoming a second authority.
 
 ## Persistence and revisions
 
@@ -44,6 +44,8 @@ The current aggregate is normalized into `workout_sessions`, `workout_exercises`
 Creation is protected by a per-user idempotency key and request hash. Replacement requires `expectedRevision`; a stale revision returns `409`. Deletion is soft deletion from normal lists and adds a final `deleted` snapshot. Owner history remains readable, while missing and cross-user targets both return `404`.
 
 The JSON revision is intentionally immutable evidence, not a second writable source of truth. Current relational rows are rebuilt transactionally on replacement, and their database constraints repeat the main contract invariants.
+
+Migration `0021_authoritative_workout_status.sql` backfills the relational status cache from persisted set flags without rewriting immutable revision history. API reads also derive current status from the loaded set graph, so a stale cache cannot become the response authority. Historical snapshots created before this rule remain original accepted evidence; every snapshot created after the hardening contains the server-derived status.
 
 ## Repeat-last semantics
 

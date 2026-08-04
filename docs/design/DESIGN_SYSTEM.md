@@ -269,6 +269,12 @@ Reviewed evidence:
 
 The real-browser review uploaded two synthetic portrait fixtures through the production H5 build, confirmed all four bounded quality explanations, rendered the same-view overlay, changed responsive width and exercised explicit deletion. The page had no API or application errors; the Taro production build retained only known non-blocking dependency/chunk warnings. The desktop evidence intentionally shows comparison/history detail after scroll, while mobile evidence shows the first-screen hierarchy and capture guide. Open design gates remain 320 px, system large text, full screen-reader/keyboard traversal, real-camera safe-area behavior and research with explicitly consented users; no real-person dataset was used in this round.
 
+## Implementation review — iteration 032
+
+The workout sheet now states its completion rule directly below the live set summary: all checked sets become “已完成”; any unchecked set becomes “部分完成”. The note uses the existing muted evidence-copy style, so it clarifies data authority without competing with pain guidance, save feedback or the primary action. No new color, badge or score was introduced for this backend invariant.
+
+The in-app browser review dismissed the known Taro development warning layer, then saved one `3/3 · 360 kg` session and one `2/3 · 240 kg` session through the real API. The ledger displayed `已完成` and `部分完成` respectively, while the editor reset for the next entry. Existing iteration-005 mobile/wide captures remain the visual baseline because the change adds only one explanatory line; the new DOM-backed flow is recorded in the iteration archive. Open design gates remain 320 px, system large text, full keyboard/screen-reader traversal and offline/stale recovery.
+
 ## Screenshot review checklist
 
 - The Rhythm Rail remains understandable without color.
