@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 
 import type { INestApplication } from '@nestjs/common'
+import { aiPlanConsentVersion } from '@myfitness/contracts'
 import { Pool } from 'pg'
 import request from 'supertest'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -45,6 +46,7 @@ describe('weekly plan API with PostgreSQL', () => {
   let otherToken: string
   let riskToken: string
   let incompleteToken: string
+  let evidenceToken: string
 
   const createSession = async (subject: string) => {
     const response = await request(app.getHttpServer())
@@ -65,6 +67,7 @@ describe('weekly plan API with PostgreSQL', () => {
     otherToken = await createSession(`plans-other-${randomUUID()}`)
     riskToken = await createSession(`plans-risk-${randomUUID()}`)
     incompleteToken = await createSession(`plans-incomplete-${randomUUID()}`)
+    evidenceToken = await createSession(`plans-evidence-${randomUUID()}`)
 
     await request(app.getHttpServer())
       .put('/v1/me/onboarding')
@@ -80,6 +83,11 @@ describe('weekly plan API with PostgreSQL', () => {
       .put('/v1/me/onboarding')
       .set('Authorization', `Bearer ${riskToken}`)
       .send(onboarding(['chest_pain']))
+      .expect(200)
+    await request(app.getHttpServer())
+      .put('/v1/me/onboarding')
+      .set('Authorization', `Bearer ${evidenceToken}`)
+      .send(onboarding())
       .expect(200)
   })
 
@@ -321,5 +329,172 @@ describe('weekly plan API with PostgreSQL', () => {
       'generated',
       'generated',
     ])
+  })
+
+  it('invalidates only evidence changes that alter the deterministic planning boundary', async () => {
+    const generated = await request(app.getHttpServer())
+      .post('/v1/plans/weekly')
+      .set('Authorization', `Bearer ${evidenceToken}`)
+      .set('x-idempotency-key', `plan-${randomUUID()}`)
+      .send({ weekStart: '2026-08-03' })
+      .expect(201)
+    expect(generated.body).toMatchObject({
+      revision: 1,
+      evidence: {
+        readinessScore: null,
+        evidencePolicyVersion: 'planning-impact-v1',
+        evidenceFingerprint: 'planning-impact-v1:readiness-missing',
+      },
+    })
+
+    const now = Date.now()
+    await request(app.getHttpServer())
+      .post('/v1/workouts')
+      .set('Authorization', `Bearer ${evidenceToken}`)
+      .set('x-idempotency-key', `workout-${randomUUID()}`)
+      .send({
+        title: '边界测试训练',
+        source: { kind: 'manual' },
+        exercises: [
+          {
+            position: 1,
+            exerciseKey: 'goblet_squat',
+            name: '高脚杯深蹲',
+            category: 'strength',
+            sets: [{ position: 1, kind: 'working', reps: 8, completed: true }],
+          },
+        ],
+        startedAt: new Date(now - 30 * 60_000).toISOString(),
+        endedAt: new Date(now - 20 * 60_000).toISOString(),
+        timezone: 'Asia/Shanghai',
+        painLevel: 0,
+        fatigue: 2,
+      })
+      .expect(201)
+    await request(app.getHttpServer())
+      .post('/v1/nutrition/meals')
+      .set('Authorization', `Bearer ${evidenceToken}`)
+      .set('x-idempotency-key', `meal-${randomUUID()}`)
+      .send({
+        mealType: 'lunch',
+        title: '边界测试午餐',
+        source: { kind: 'manual' },
+        items: [
+          {
+            position: 1,
+            food: {
+              foodKey: 'rice_cooked',
+              name: '熟米饭',
+              category: 'staple',
+              nutrientsPer100g: {
+                energyKcal: 130,
+                proteinG: 2.7,
+                carbohydrateG: 28,
+                fatG: 0.3,
+              },
+            },
+            serving: { amount: 150, unit: 'g', grams: 150 },
+          },
+        ],
+        occurredAt: new Date(now - 10 * 60_000).toISOString(),
+        timezone: 'Asia/Shanghai',
+      })
+      .expect(201)
+
+    const noOpRegeneration = await request(app.getHttpServer())
+      .post('/v1/plans/weekly')
+      .set('Authorization', `Bearer ${evidenceToken}`)
+      .set('x-idempotency-key', `plan-${randomUUID()}`)
+      .send({ weekStart: '2026-08-03' })
+      .expect(201)
+    expect(noOpRegeneration.body).toMatchObject({ id: generated.body.id, revision: 1 })
+
+    await request(app.getHttpServer())
+      .post('/v1/health-records')
+      .set('Authorization', `Bearer ${evidenceToken}`)
+      .set('x-idempotency-key', `record-${randomUUID()}`)
+      .send({
+        metric: 'recovery.energy',
+        value: 5,
+        unit: 'score_1_5',
+        source: { kind: 'manual' },
+        status: 'confirmed',
+        occurredAt: new Date(now - 60_000).toISOString(),
+        timezone: 'Asia/Shanghai',
+      })
+      .expect(201)
+
+    const staleList = await request(app.getHttpServer())
+      .get('/v1/plans/weekly')
+      .set('Authorization', `Bearer ${evidenceToken}`)
+      .expect(200)
+    expect(staleList.body.items[0].freshness).toMatchObject({
+      state: 'evidence_changed',
+      changeReason: 'recovery_added',
+      planEvidenceFingerprint: 'planning-impact-v1:readiness-missing',
+      currentEvidenceFingerprint: 'planning-impact-v1:readiness-standard',
+      canAcceptOrModify: false,
+      canExplainWithAi: false,
+      canSkip: true,
+      recommendedAction: 'regenerate',
+    })
+
+    const blockedDecision = await request(app.getHttpServer())
+      .put(`/v1/plans/weekly/${generated.body.id}/decision`)
+      .set('Authorization', `Bearer ${evidenceToken}`)
+      .send({ decision: 'accepted', expectedRevision: 1, selections: [] })
+      .expect(409)
+    expect(blockedDecision.body).toMatchObject({
+      code: 'plan_evidence_changed',
+      changeReason: 'recovery_added',
+    })
+
+    const blockedExplanation = await request(app.getHttpServer())
+      .post(`/v1/plans/weekly/${generated.body.id}/explanation`)
+      .set('Authorization', `Bearer ${evidenceToken}`)
+      .set('x-idempotency-key', `ai-explain-${randomUUID()}`)
+      .send({
+        expectedPlanRevision: 1,
+        consent: {
+          purpose: 'ai_plan_explanation',
+          version: aiPlanConsentVersion,
+          accepted: true,
+        },
+      })
+      .expect(409)
+    expect(blockedExplanation.body).toMatchObject({
+      code: 'plan_evidence_changed',
+      changeReason: 'recovery_added',
+    })
+
+    const regenerated = await request(app.getHttpServer())
+      .post('/v1/plans/weekly')
+      .set('Authorization', `Bearer ${evidenceToken}`)
+      .set('x-idempotency-key', `plan-${randomUUID()}`)
+      .send({ weekStart: '2026-08-03' })
+      .expect(201)
+    expect(regenerated.body).toMatchObject({
+      id: generated.body.id,
+      revision: 2,
+      evidence: {
+        readinessScore: 100,
+        evidenceFingerprint: 'planning-impact-v1:readiness-standard',
+      },
+    })
+    expect(
+      regenerated.body.days
+        .filter((day: { session: unknown }) => day.session)
+        .every((day: { session: { intensity: string } }) => day.session.intensity === 'moderate'),
+    ).toBe(true)
+
+    const currentList = await request(app.getHttpServer())
+      .get('/v1/plans/weekly')
+      .set('Authorization', `Bearer ${evidenceToken}`)
+      .expect(200)
+    expect(currentList.body.items[0].freshness).toMatchObject({
+      state: 'current',
+      planEvidenceFingerprint: 'planning-impact-v1:readiness-standard',
+      currentEvidenceFingerprint: 'planning-impact-v1:readiness-standard',
+    })
   })
 })

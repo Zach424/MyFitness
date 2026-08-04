@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto'
+
 import { expect, test, type Page, type Response } from '@playwright/test'
 import { Pool } from 'pg'
 
@@ -87,6 +89,7 @@ const seedProfileAndOpenPlans = async (page: Page, riskFlags: string[] = []) => 
   expect(profile.status()).toBe(200)
   await page.getByRole('button', { name: '计划' }).click()
   await expect(page.getByText('这一周，先留出余地')).toBeVisible()
+  return accessToken
 }
 
 test('weekly plan supports substitution, modification and acceptance history', async ({ page }) => {
@@ -209,5 +212,60 @@ test('plan generation visibly fails closed for professional-clearance risk', asy
   await page.getByRole('button', { name: /生成 .* 初稿/ }).click()
   await expect(page.getByText(/当前风险回答需要先取得专业许可/)).toBeVisible()
   await expect(page.getByText('先生成一份可审核的初稿')).toBeVisible()
+  expect(errors).toEqual([])
+})
+
+test('material recovery evidence freezes the old fold and regenerates it safely', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  const errors = collectBrowserErrors(page)
+  const accessToken = await seedProfileAndOpenPlans(page)
+  await page.getByRole('button', { name: /生成 .* 初稿/ }).click()
+  await expect(page.getByText('本周折页')).toBeVisible()
+
+  const record = await page.request.post('http://127.0.0.1:3100/v1/health-records', {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'x-idempotency-key': `plan-evidence-${randomUUID()}`,
+    },
+    data: {
+      metric: 'recovery.energy',
+      value: 5,
+      unit: 'score_1_5',
+      source: { kind: 'manual' },
+      status: 'confirmed',
+      occurredAt: new Date().toISOString(),
+      timezone: 'Asia/Shanghai',
+    },
+  })
+  expect(record.status()).toBe(201)
+
+  await page.getByRole('button', { name: '检查版本' }).click()
+  const alert = page.getByRole('alert')
+  await expect(alert).toContainText('EVIDENCE SHIFT')
+  await expect(alert).toContainText('新的恢复记录改变了本周安排边界')
+  await expect(alert).toContainText('不是医学判断')
+  await expect(page.getByRole('button', { name: '高脚杯深蹲' })).toHaveAttribute(
+    'aria-disabled',
+    'true',
+  )
+  await expect(page.getByRole('button', { name: '采用这份计划' })).toHaveAttribute('disabled', '')
+  await expect(page.getByRole('button', { name: '本周暂不采用' })).toHaveAttribute(
+    'disabled',
+    'false',
+  )
+  await alert.scrollIntoViewIfNeeded()
+  await page.screenshot({ path: 'output/playwright/iteration-035-evidence-shift-mobile.png' })
+
+  const regeneration = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/v1/plans/weekly') && response.request().method() === 'POST',
+  )
+  await page.getByRole('button', { name: '按最新记录重排本周' }).click()
+  expect((await regeneration).status()).toBe(201)
+  await expect(alert).not.toBeVisible()
+  await expect(page.getByText('v2', { exact: true }).first()).toBeVisible()
+  await expect(page.locator('.evidence-strip__value').filter({ hasText: '100' })).toBeVisible()
   expect(errors).toEqual([])
 })

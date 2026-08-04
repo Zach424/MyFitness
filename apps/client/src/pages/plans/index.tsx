@@ -28,6 +28,7 @@ import {
   currentPlanFreshness,
   defaultPlanWeekStart,
   planFreshnessNotice,
+  planFreshnessProjectionKey,
   updatePlanSelection,
 } from './plan.model'
 import './index.scss'
@@ -228,8 +229,7 @@ const PlansPage = () => {
       const previousFreshness = freshnessRef.current
       const planChanged = plan.id !== current.id || plan.revision !== current.revision
       const freshnessChanged =
-        previousFreshness?.state !== nextFreshness.state ||
-        previousFreshness?.currentOnboardingRevision !== nextFreshness.currentOnboardingRevision
+        planFreshnessProjectionKey(previousFreshness) !== planFreshnessProjectionKey(nextFreshness)
 
       if (planChanged || freshnessChanged) {
         setCurrentPlan(plan, nextFreshness)
@@ -513,14 +513,24 @@ const PlansPage = () => {
               {freshnessNotice && freshness ? (
                 <View className={`plan-freshness plan-freshness--${freshness.state}`} role="alert">
                   <View className="plan-freshness__seam" aria-hidden="true">
-                    <Text className="metric">PLAN v{freshness.planOnboardingRevision}</Text>
-                    <Text>→</Text>
-                    <Text className="metric">
-                      PROFILE{' '}
-                      {freshness.currentOnboardingRevision
-                        ? `v${freshness.currentOnboardingRevision}`
-                        : '—'}
-                    </Text>
+                    {freshness.state === 'evidence_changed' ? (
+                      <>
+                        <Text className="metric">PLAN EVIDENCE</Text>
+                        <Text>→</Text>
+                        <Text className="metric">CURRENT RECORDS</Text>
+                      </>
+                    ) : (
+                      <>
+                        <Text className="metric">PLAN v{freshness.planOnboardingRevision}</Text>
+                        <Text>→</Text>
+                        <Text className="metric">
+                          PROFILE{' '}
+                          {freshness.currentOnboardingRevision
+                            ? `v${freshness.currentOnboardingRevision}`
+                            : '—'}
+                        </Text>
+                      </>
+                    )}
                   </View>
                   <View className="plan-freshness__body">
                     <View>

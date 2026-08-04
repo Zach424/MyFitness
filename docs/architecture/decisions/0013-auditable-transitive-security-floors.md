@@ -19,11 +19,17 @@ The repository also uses Vitest 4.1.10, whose Vite 8 toolchain must remain indep
 - Make `pnpm audit:prod` the release gate for critical/high production advisories. Continue reporting lower-severity findings instead of calling the dependency graph clean.
 - Remove each override when an adopted Taro release selects an equal or newer compatible version and the same validation set passes without it.
 
+## 2026-08-04 amendment
+
+Iteration 035's current audit added high-severity advisories for Next below 16.2.11, Next's optional Sharp 0.34 line, `fast-uri 3.1.3`, `js-yaml 5.2.1` and the resolved 1.x/2.x/5.x `brace-expansion` versions. The administrator now pins Next 16.2.11. Because it does not use `next/image`, the workspace removes Next's optional vulnerable Sharp edge instead of forcing a Sharp minor outside Next's declared range; the API independently retains Sharp 0.35.3 for required private-media processing.
+
+Exact-version pnpm overrides lift only the affected resolved `fast-uri`, `js-yaml` and `brace-expansion` inputs to the advisory's patched releases. They follow the same removal rule as the original Taro floors and were accepted only after fresh lock installation, dependency graph inspection, audit, strict types, all unit/integration/browser tests, administrator/API builds and both Taro production builds.
+
 ## Consequences
 
-The production audit falls from 20 findings to six moderate findings, with no critical or high advisory. The lockfile has one resolved `swiper`, `lodash-es` and webpack version for the client paths, while Taro Vite 6 and Vitest Vite 8 remain intentionally separate.
+The original production audit fell from 20 findings to six moderate findings. After the 2026-08-04 advisory refresh and patched floors, the current graph has nine moderate findings with no critical or high advisory. The lockfile has one resolved `swiper`, `lodash-es` and webpack version for the client paths, while Taro Vite 6 and Vitest Vite 8 remain intentionally separate.
 
-The workspace now owns a small compatibility patch surface that upstream would otherwise own. Parent-qualified selectors and exact versions make that surface visible and reversible, but every Taro upgrade must review the overrides rather than assuming they are permanent. The remaining Taro helper/development chain contains `esbuild 0.21.5`, `webpack-dev-server 4.15.2` and its `uuid 8.3.2`; their patched releases require incompatible 0.x or major transitions. They remain R-015 and must be removed through a supported Taro/build-chain upgrade, not an untested global override.
+The workspace now owns a small compatibility patch surface that upstream would otherwise own. Parent/exact-version selectors make that surface visible and reversible, but every Taro or Next upgrade must review the overrides rather than assuming they are permanent. The remaining Taro helper/development chain contains one `esbuild`, one `postcss`, one `uuid` and six `webpack-dev-server` moderate advisories; their supported resolution still requires upstream/build-chain movement. They remain R-015 and must be removed through a supported Taro upgrade rather than an untested broad override.
 
 ## References
 

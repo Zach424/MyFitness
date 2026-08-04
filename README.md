@@ -69,9 +69,9 @@ pnpm test:e2e:oidc
 
 H5 和微信小程序产物分别生成到 `apps/client/dist-h5` 与 `apps/client/dist-weapp`，两次构建不会互相清理。完成双端构建后，`pnpm client:verify` 会检查 H5 入口/异步页面与小程序 vendor/页面/总量预算，并拒绝完整验证运行时重新进入客户端包；CI 与客户端发布组装均执行同一门槛。
 
-Taro 4.2.1 当前通过父级限定的 pnpm override 使用已验证的 Swiper、lodash-es、Vite 与 webpack 安全下限；Vitest 保留独立 Vite 8 工具链。`pnpm audit:prod` 只把严重/高危作为阻断门槛，原始审计中的 6 个中危项仍在风险登记中；升级与 override 退出规则见 [ADR-0013](docs/architecture/decisions/0013-auditable-transitive-security-floors.md)。
+Taro 4.2.1 当前通过父级限定的 pnpm override 使用已验证的 Swiper、lodash-es、Vite、webpack、解析器与 glob 安全下限；Vitest 保留独立 Vite 8 工具链。`pnpm audit:prod` 把严重/高危作为阻断门槛，当前生产树为 0 critical / 0 high，原始审计中的 9 个中危 Taro 构建链项仍在风险登记中；升级与 override 退出规则见 [ADR-0013](docs/architecture/decisions/0013-auditable-transitive-security-floors.md)。
 
-Next.js 16.2.10 的管理员构建路径通过父级限定 override 使用 PostCSS 8.5.19，消除了新增的中危字符串化路径；任何 Next/Taro 升级都必须重新检查是否可以删除对应 override，而不是长期无条件保留。
+Next.js 16.2.11 的管理员构建路径通过父级限定 override 使用 PostCSS 8.5.19，并移除管理员未使用的旧版可选 Sharp；图片处理 API 独立保留 Sharp 0.35.3。任何 Next/Taro 升级都必须重新检查是否可以删除对应 override，而不是长期无条件保留。
 
 启动本地 API、PostgreSQL、Redis、MinIO 与 AI worker：
 
@@ -161,6 +161,8 @@ Playwright 会复用或启动 API、H5 与管理员预览服务。`pnpm db:down`
 - [架构决策 0029](docs/architecture/decisions/0029-privacy-first-progress-photo-assistance.md)
 - [架构决策 0030](docs/architecture/decisions/0030-server-authoritative-workout-status.md)
 - [架构决策 0031](docs/architecture/decisions/0031-server-projected-plan-freshness.md)
+- [架构决策 0032](docs/architecture/decisions/0032-client-runtime-and-measured-bundle-boundary.md)
+- [架构决策 0033](docs/architecture/decisions/0033-bounded-record-evidence-plan-freshness.md)
 - [健康记录数据模型](docs/architecture/HEALTH_RECORD_MODEL.md)
 - [训练记录数据模型](docs/architecture/WORKOUT_MODEL.md)
 - [饮食记录数据模型](docs/architecture/NUTRITION_MODEL.md)
@@ -212,6 +214,8 @@ Playwright 会复用或启动 API、H5 与管理员预览服务。`pnpm db:down`
 - [第 31 轮档案](docs/iterations/031-progress-photo-assistance.md)
 - [第 32 轮档案](docs/iterations/032-server-authoritative-workout-status.md)
 - [第 33 轮档案](docs/iterations/033-proactive-plan-freshness.md)
+- [第 34 轮档案](docs/iterations/034-client-accessibility-and-bundle-hardening.md)
+- [第 35 轮档案](docs/iterations/035-bounded-record-evidence-plan-freshness.md)
 - [移动端视觉证据](output/playwright/iteration-001-mobile.png)
 - [宽屏视觉证据](output/playwright/iteration-001-wide.png)
 - [建档移动端证据](output/playwright/iteration-003-onboarding-mobile.png)
@@ -225,6 +229,7 @@ Playwright 会复用或启动 API、H5 与管理员预览服务。`pnpm db:down`
 - [真实 Today 移动端证据](output/playwright/iteration-007-today-mobile.png)
 - [真实 Today 宽屏证据](output/playwright/iteration-007-today-wide.png)
 - [周计划移动端证据](output/playwright/iteration-008-plans-mobile.png)
+- [周计划证据变化移动端证据](output/playwright/iteration-035-evidence-shift-mobile.png)
 - [周计划宽屏证据](output/playwright/iteration-008-plans-wide.png)
 - [AI 边注移动端证据](output/playwright/iteration-009-ai-mobile.png)
 - [AI 边注宽屏证据](output/playwright/iteration-009-ai-wide.png)

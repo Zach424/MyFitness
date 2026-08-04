@@ -62,7 +62,15 @@ export const buildAiPlanContext = (plan: WeeklyPlan): AiPlanContext =>
     ),
     nutritionFocuses: plan.nutritionFocuses.map(({ title, action }) => ({ title, action })),
     reasons: plan.reasons,
-    evidence: plan.evidence,
+    evidence: {
+      onboardingRevision: plan.evidence.onboardingRevision,
+      dashboardGeneratedAt: plan.evidence.dashboardGeneratedAt,
+      readinessScore: plan.evidence.readinessScore,
+      recentActiveDays: plan.evidence.recentActiveDays,
+      recentWorkoutCount: plan.evidence.recentWorkoutCount,
+      recentActiveMinutes: plan.evidence.recentActiveMinutes,
+      recentMealCount: plan.evidence.recentMealCount,
+    },
     evidenceKeys: aiExplanationEvidenceKeys,
   })
 

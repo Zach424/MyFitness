@@ -4,7 +4,13 @@ import type {
   PlanDecision,
   WeeklyPlanContent,
 } from '@myfitness/contracts'
-import { weekdays, weeklyPlanContentSchema } from '@myfitness/contracts'
+import {
+  planEvidenceFingerprint,
+  planEvidencePolicyVersion,
+  planReadinessBand,
+  weekdays,
+  weeklyPlanContentSchema,
+} from '@myfitness/contracts'
 
 type PlanningInput = {
   weekStart: string
@@ -243,6 +249,38 @@ export const assessPlanEligibility = (onboarding: OnboardingResponse) =>
         riskFlags: onboarding.eligibility.riskFlags,
       } as const)
 
+export const comparePlanEvidence = (
+  planReadinessScore: number | null,
+  currentReadinessScore: number | null,
+) => {
+  const planFingerprint = planEvidenceFingerprint(planReadinessScore)
+  const currentFingerprint = planEvidenceFingerprint(currentReadinessScore)
+  if (planFingerprint === currentFingerprint) {
+    return {
+      current: true,
+      evidencePolicyVersion: planEvidencePolicyVersion,
+      planFingerprint,
+      currentFingerprint,
+    } as const
+  }
+
+  const planBand = planReadinessBand(planReadinessScore)
+  const currentBand = planReadinessBand(currentReadinessScore)
+  const changeReason =
+    planBand === 'missing'
+      ? 'recovery_added'
+      : currentBand === 'missing'
+        ? 'recovery_expired'
+        : 'recovery_threshold_crossed'
+  return {
+    current: false,
+    evidencePolicyVersion: planEvidencePolicyVersion,
+    planFingerprint,
+    currentFingerprint,
+    changeReason,
+  } as const
+}
+
 export const buildWeeklyPlanContent = ({
   weekStart,
   onboarding,
@@ -362,6 +400,8 @@ export const buildWeeklyPlanContent = ({
       recentWorkoutCount: sevenDay.workoutCount,
       recentActiveMinutes: sevenDay.activeMinutes,
       recentMealCount: sevenDay.mealCount,
+      evidencePolicyVersion: planEvidencePolicyVersion,
+      evidenceFingerprint: planEvidenceFingerprint(readiness),
     },
   })
 }

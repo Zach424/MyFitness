@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import type { Dashboard, OnboardingResponse } from '@myfitness/contracts'
 
-import { applyPlanSelections, assessPlanEligibility, buildWeeklyPlanContent } from './plan'
+import {
+  applyPlanSelections,
+  assessPlanEligibility,
+  buildWeeklyPlanContent,
+  comparePlanEvidence,
+} from './plan'
 
 const onboarding = {
   userId: '00000000-0000-4000-8000-000000000001',
@@ -127,6 +132,24 @@ describe('deterministic weekly plan', () => {
         eligibility: { status: 'professional_clearance_required', riskFlags: ['chest_pain'] },
       }),
     ).toMatchObject({ allowed: false, code: 'professional_clearance_required' })
+  })
+
+  it('invalidates only readiness changes that cross a planning-impact boundary', () => {
+    expect(comparePlanEvidence(null, null)).toMatchObject({ current: true })
+    expect(comparePlanEvidence(42, 59)).toMatchObject({ current: true })
+    expect(comparePlanEvidence(60, 88)).toMatchObject({ current: true })
+    expect(comparePlanEvidence(null, 80)).toMatchObject({
+      current: false,
+      changeReason: 'recovery_added',
+    })
+    expect(comparePlanEvidence(80, null)).toMatchObject({
+      current: false,
+      changeReason: 'recovery_expired',
+    })
+    expect(comparePlanEvidence(80, 59)).toMatchObject({
+      current: false,
+      changeReason: 'recovery_threshold_crossed',
+    })
   })
 
   it('applies only a declared substitution', () => {

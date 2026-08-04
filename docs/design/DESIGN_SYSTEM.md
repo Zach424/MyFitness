@@ -289,6 +289,16 @@ The release-hardening pass exercises the narrowest supported H5 width with enlar
 
 The browser review exposed a semantic trap hidden by snapshots: Taro's H5 `Button` renders as `TARO-BUTTON-CORE`, so giving it `role="checkbox"` and `tabIndex=0` made it focusable but did not make Space activate it. A shared keyboard adapter now handles non-repeating Space/Enter, prevents page movement and reuses the same guarded state transition as pointer activation. Shift+Tab/Tab returned to the control, computed focus was a 3 px solid outline, Space changed `aria-checked` to true and enabled the AI action. Unit coverage protects disabled, repeating and irrelevant keys. Real screen-reader announcements, remaining routes at system text extremes and physical WeChat devices remain open.
 
+## Evidence freshness review — iteration 035
+
+Material recovery drift reuses the Week Fold's misaligned-paper state without pretending that a record transition is an alarm or diagnosis. The seam changes from profile revisions to `PLAN EVIDENCE → CURRENT RECORDS`, and the card names one bounded reason before stating that the summary is not medical judgment. Amber remains the review color; no red, readiness gauge, body score, coach avatar or automatic adoption is introduced.
+
+The stale fold stays readable and skippable. Substitutions, adoption and AI explanation are frozen until the user chooses “按最新记录重排本周”; the original plan ID then advances as an immutable revision. The 390 px browser proof first adds a confirmed energy record to a missing-evidence plan, explicitly verifies disabled adoption/substitution and enabled skip, captures the state, then regenerates to v2 with a current evidence summary. Normal workout/meal additions are protected as no-op behavior by PostgreSQL coverage rather than shown as noisy UI.
+
+Reviewed evidence:
+
+- [390 × 844 evidence-shift fold](../../output/playwright/iteration-035-evidence-shift-mobile.png)
+
 ## Screenshot review checklist
 
 - The Rhythm Rail remains understandable without color.

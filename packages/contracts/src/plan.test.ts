@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
-import { generateWeeklyPlanSchema, planDecisionSchema, planFreshnessSchema } from './plan'
+import {
+  generateWeeklyPlanSchema,
+  normalizePersistedPlanEvidence,
+  planDecisionSchema,
+  planEvidenceSchema,
+  planFreshnessSchema,
+} from './plan'
 
 describe('weekly plan contract', () => {
   it('accepts Monday generation and explicit decisions', () => {
@@ -61,5 +67,56 @@ describe('weekly plan contract', () => {
         recommendedAction: 'review_profile',
       }).success,
     ).toBe(false)
+  })
+
+  it('normalizes legacy evidence into a stable planning-impact fingerprint', () => {
+    const legacyEvidence = {
+      onboardingRevision: 1,
+      dashboardGeneratedAt: '2026-08-04T08:00:00.000Z',
+      readinessScore: null,
+      recentActiveDays: 0,
+      recentWorkoutCount: 0,
+      recentActiveMinutes: 0,
+      recentMealCount: 0,
+    }
+    expect(normalizePersistedPlanEvidence(legacyEvidence)).toMatchObject({
+      evidencePolicyVersion: 'planning-impact-v1',
+      evidenceFingerprint: 'planning-impact-v1:readiness-missing',
+    })
+    expect(
+      planEvidenceSchema.safeParse({
+        ...legacyEvidence,
+        evidenceFingerprint: 'planning-impact-v1:readiness-standard',
+        evidencePolicyVersion: 'planning-impact-v1',
+      }).success,
+    ).toBe(false)
+  })
+
+  it('requires evidence drift projections to be non-actionable and internally consistent', () => {
+    const checkedAt = '2026-08-04T08:00:00.000Z'
+    const changed = {
+      state: 'evidence_changed',
+      checkedAt,
+      planOnboardingRevision: 1,
+      currentOnboardingRevision: 1,
+      evidencePolicyVersion: 'planning-impact-v1',
+      planEvidenceFingerprint: 'planning-impact-v1:readiness-missing',
+      currentEvidenceFingerprint: 'planning-impact-v1:readiness-standard',
+      changeReason: 'recovery_added',
+      canAcceptOrModify: false,
+      canExplainWithAi: false,
+      canSkip: true,
+      recommendedAction: 'regenerate',
+    }
+    expect(planFreshnessSchema.parse(changed)).toMatchObject({ state: 'evidence_changed' })
+    expect(
+      planFreshnessSchema.safeParse({
+        ...changed,
+        currentEvidenceFingerprint: changed.planEvidenceFingerprint,
+      }).success,
+    ).toBe(false)
+    expect(planFreshnessSchema.safeParse({ ...changed, canExplainWithAi: true }).success).toBe(
+      false,
+    )
   })
 })

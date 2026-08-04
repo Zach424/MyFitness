@@ -5173,6 +5173,18 @@
                           "type": "integer",
                           "minimum": 0,
                           "maximum": 9007199254740991
+                        },
+                        "evidencePolicyVersion": {
+                          "type": "string",
+                          "enum": ["planning-impact-v1"]
+                        },
+                        "evidenceFingerprint": {
+                          "type": "string",
+                          "enum": [
+                            "planning-impact-v1:readiness-missing",
+                            "planning-impact-v1:readiness-conservative",
+                            "planning-impact-v1:readiness-standard"
+                          ]
                         }
                       },
                       "required": [
@@ -5182,7 +5194,9 @@
                         "recentActiveDays",
                         "recentWorkoutCount",
                         "recentActiveMinutes",
-                        "recentMealCount"
+                        "recentMealCount",
+                        "evidencePolicyVersion",
+                        "evidenceFingerprint"
                       ],
                       "additionalProperties": false
                     },
@@ -5485,6 +5499,18 @@
                                 "type": "integer",
                                 "minimum": 0,
                                 "maximum": 9007199254740991
+                              },
+                              "evidencePolicyVersion": {
+                                "type": "string",
+                                "enum": ["planning-impact-v1"]
+                              },
+                              "evidenceFingerprint": {
+                                "type": "string",
+                                "enum": [
+                                  "planning-impact-v1:readiness-missing",
+                                  "planning-impact-v1:readiness-conservative",
+                                  "planning-impact-v1:readiness-standard"
+                                ]
                               }
                             },
                             "required": [
@@ -5494,7 +5520,9 @@
                               "recentActiveDays",
                               "recentWorkoutCount",
                               "recentActiveMinutes",
-                              "recentMealCount"
+                              "recentMealCount",
+                              "evidencePolicyVersion",
+                              "evidenceFingerprint"
                             ],
                             "additionalProperties": false
                           },
@@ -5548,6 +5576,26 @@
                                     "maximum": 9007199254740991
                                   },
                                   "canSkip": { "type": "boolean", "enum": [true] },
+                                  "evidencePolicyVersion": {
+                                    "type": "string",
+                                    "enum": ["planning-impact-v1"]
+                                  },
+                                  "planEvidenceFingerprint": {
+                                    "type": "string",
+                                    "enum": [
+                                      "planning-impact-v1:readiness-missing",
+                                      "planning-impact-v1:readiness-conservative",
+                                      "planning-impact-v1:readiness-standard"
+                                    ]
+                                  },
+                                  "currentEvidenceFingerprint": {
+                                    "type": "string",
+                                    "enum": [
+                                      "planning-impact-v1:readiness-missing",
+                                      "planning-impact-v1:readiness-conservative",
+                                      "planning-impact-v1:readiness-standard"
+                                    ]
+                                  },
                                   "state": { "type": "string", "enum": ["current"] },
                                   "currentOnboardingRevision": {
                                     "type": "integer",
@@ -5563,8 +5611,81 @@
                                   "checkedAt",
                                   "planOnboardingRevision",
                                   "canSkip",
+                                  "evidencePolicyVersion",
+                                  "planEvidenceFingerprint",
+                                  "currentEvidenceFingerprint",
                                   "state",
                                   "currentOnboardingRevision",
+                                  "canAcceptOrModify",
+                                  "canExplainWithAi",
+                                  "recommendedAction"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "checkedAt": {
+                                    "type": "string",
+                                    "format": "date-time",
+                                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                  },
+                                  "planOnboardingRevision": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "exclusiveMinimum": true,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "canSkip": { "type": "boolean", "enum": [true] },
+                                  "evidencePolicyVersion": {
+                                    "type": "string",
+                                    "enum": ["planning-impact-v1"]
+                                  },
+                                  "planEvidenceFingerprint": {
+                                    "type": "string",
+                                    "enum": [
+                                      "planning-impact-v1:readiness-missing",
+                                      "planning-impact-v1:readiness-conservative",
+                                      "planning-impact-v1:readiness-standard"
+                                    ]
+                                  },
+                                  "currentEvidenceFingerprint": {
+                                    "type": "string",
+                                    "enum": [
+                                      "planning-impact-v1:readiness-missing",
+                                      "planning-impact-v1:readiness-conservative",
+                                      "planning-impact-v1:readiness-standard"
+                                    ]
+                                  },
+                                  "state": { "type": "string", "enum": ["evidence_changed"] },
+                                  "currentOnboardingRevision": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "exclusiveMinimum": true,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "changeReason": {
+                                    "type": "string",
+                                    "enum": [
+                                      "recovery_added",
+                                      "recovery_expired",
+                                      "recovery_threshold_crossed"
+                                    ]
+                                  },
+                                  "canAcceptOrModify": { "type": "boolean", "enum": [false] },
+                                  "canExplainWithAi": { "type": "boolean", "enum": [false] },
+                                  "recommendedAction": { "type": "string", "enum": ["regenerate"] }
+                                },
+                                "required": [
+                                  "checkedAt",
+                                  "planOnboardingRevision",
+                                  "canSkip",
+                                  "evidencePolicyVersion",
+                                  "planEvidenceFingerprint",
+                                  "currentEvidenceFingerprint",
+                                  "state",
+                                  "currentOnboardingRevision",
+                                  "changeReason",
                                   "canAcceptOrModify",
                                   "canExplainWithAi",
                                   "recommendedAction"
@@ -6002,6 +6123,18 @@
                           "type": "integer",
                           "minimum": 0,
                           "maximum": 9007199254740991
+                        },
+                        "evidencePolicyVersion": {
+                          "type": "string",
+                          "enum": ["planning-impact-v1"]
+                        },
+                        "evidenceFingerprint": {
+                          "type": "string",
+                          "enum": [
+                            "planning-impact-v1:readiness-missing",
+                            "planning-impact-v1:readiness-conservative",
+                            "planning-impact-v1:readiness-standard"
+                          ]
                         }
                       },
                       "required": [
@@ -6011,7 +6144,9 @@
                         "recentActiveDays",
                         "recentWorkoutCount",
                         "recentActiveMinutes",
-                        "recentMealCount"
+                        "recentMealCount",
+                        "evidencePolicyVersion",
+                        "evidenceFingerprint"
                       ],
                       "additionalProperties": false
                     },
@@ -6328,6 +6463,18 @@
                                 "type": "integer",
                                 "minimum": 0,
                                 "maximum": 9007199254740991
+                              },
+                              "evidencePolicyVersion": {
+                                "type": "string",
+                                "enum": ["planning-impact-v1"]
+                              },
+                              "evidenceFingerprint": {
+                                "type": "string",
+                                "enum": [
+                                  "planning-impact-v1:readiness-missing",
+                                  "planning-impact-v1:readiness-conservative",
+                                  "planning-impact-v1:readiness-standard"
+                                ]
                               }
                             },
                             "required": [
@@ -6337,7 +6484,9 @@
                               "recentActiveDays",
                               "recentWorkoutCount",
                               "recentActiveMinutes",
-                              "recentMealCount"
+                              "recentMealCount",
+                              "evidencePolicyVersion",
+                              "evidenceFingerprint"
                             ],
                             "additionalProperties": false
                           },

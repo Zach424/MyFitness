@@ -55,14 +55,43 @@ export const currentPlanFreshness = (
   checkedAt,
   planOnboardingRevision: plan.evidence.onboardingRevision,
   currentOnboardingRevision: plan.evidence.onboardingRevision,
+  evidencePolicyVersion: plan.evidence.evidencePolicyVersion,
+  planEvidenceFingerprint: plan.evidence.evidenceFingerprint,
+  currentEvidenceFingerprint: plan.evidence.evidenceFingerprint,
   canAcceptOrModify: true,
   canExplainWithAi: true,
   canSkip: true,
   recommendedAction: 'none',
 })
 
+export const planFreshnessProjectionKey = (freshness: PlanFreshness | undefined) => {
+  if (!freshness) return 'missing'
+  const evidenceFingerprint =
+    'currentEvidenceFingerprint' in freshness ? freshness.currentEvidenceFingerprint : 'n/a'
+  const changeReason = 'changeReason' in freshness ? freshness.changeReason : 'n/a'
+  return [
+    freshness.state,
+    freshness.currentOnboardingRevision,
+    evidenceFingerprint,
+    changeReason,
+  ].join(':')
+}
+
 export const planFreshnessNotice = (freshness: PlanFreshness) => {
   if (freshness.state === 'current') return null
+  if (freshness.state === 'evidence_changed') {
+    const title = {
+      recovery_added: '新的恢复记录改变了本周安排边界',
+      recovery_expired: '生成时的恢复摘要已超出当前窗口',
+      recovery_threshold_crossed: '近期恢复摘要跨过了保守安排边界',
+    }[freshness.changeReason]
+    return {
+      eyebrow: 'EVIDENCE SHIFT',
+      title,
+      body: '这是近期记录的规则摘要，不是医学判断。采用、替换动作和 AI 边注已冻结；你仍可跳过本周，或按最新记录安全重排。',
+      actionLabel: '按最新记录重排本周',
+    }
+  }
   if (freshness.state === 'profile_changed') {
     return {
       eyebrow: 'MISALIGNED FOLD',

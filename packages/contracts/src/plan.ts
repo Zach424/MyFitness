@@ -5,6 +5,10 @@ import {
   nutritionFocusKeys,
   planActivityRoles,
   planEngineVersion,
+  planEvidenceChangeReasons,
+  planEvidenceFingerprint,
+  planEvidenceFingerprints,
+  planEvidencePolicyVersion,
   planIntensityLevels,
   planRevisionActions,
   planSessionKinds,
@@ -27,6 +31,8 @@ export const planSessionKindSchema = z.enum(planSessionKinds)
 export const planIntensitySchema = z.enum(planIntensityLevels)
 export const planActivityRoleSchema = z.enum(planActivityRoles)
 export const nutritionFocusKeySchema = z.enum(nutritionFocusKeys)
+export const planEvidenceFingerprintSchema = z.enum(planEvidenceFingerprints)
+export const planEvidenceChangeReasonSchema = z.enum(planEvidenceChangeReasons)
 
 export const planActivityOptionSchema = z
   .object({
@@ -103,17 +109,60 @@ export const planReasonSchema = z
   })
   .strict()
 
+const planEvidenceBase = {
+  onboardingRevision: z.number().int().positive(),
+  dashboardGeneratedAt: z.string().datetime({ offset: true }),
+  readinessScore: z.number().int().min(0).max(100).nullable(),
+  recentActiveDays: z.number().int().min(0),
+  recentWorkoutCount: z.number().int().min(0),
+  recentActiveMinutes: z.number().finite().min(0),
+  recentMealCount: z.number().int().min(0),
+} as const
+
 export const planEvidenceSchema = z
   .object({
-    onboardingRevision: z.number().int().positive(),
-    dashboardGeneratedAt: z.string().datetime({ offset: true }),
-    readinessScore: z.number().int().min(0).max(100).nullable(),
-    recentActiveDays: z.number().int().min(0),
-    recentWorkoutCount: z.number().int().min(0),
-    recentActiveMinutes: z.number().finite().min(0),
-    recentMealCount: z.number().int().min(0),
+    ...planEvidenceBase,
+    evidencePolicyVersion: z.literal(planEvidencePolicyVersion),
+    evidenceFingerprint: planEvidenceFingerprintSchema,
   })
   .strict()
+  .superRefine((evidence, ctx) => {
+    const expected = planEvidenceFingerprint(evidence.readinessScore)
+    if (evidence.evidenceFingerprint !== expected) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'evidenceFingerprint must match the planning-impact readiness band',
+        path: ['evidenceFingerprint'],
+      })
+    }
+  })
+
+const persistedPlanEvidenceSchema = z
+  .object({
+    ...planEvidenceBase,
+    evidencePolicyVersion: z.literal(planEvidencePolicyVersion).optional(),
+    evidenceFingerprint: planEvidenceFingerprintSchema.optional(),
+  })
+  .strict()
+  .superRefine((evidence, ctx) => {
+    const expected = planEvidenceFingerprint(evidence.readinessScore)
+    if (evidence.evidenceFingerprint && evidence.evidenceFingerprint !== expected) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'persisted evidenceFingerprint does not match the readiness band',
+        path: ['evidenceFingerprint'],
+      })
+    }
+  })
+
+export const normalizePersistedPlanEvidence = (input: unknown) => {
+  const evidence = persistedPlanEvidenceSchema.parse(input)
+  return planEvidenceSchema.parse({
+    ...evidence,
+    evidencePolicyVersion: planEvidencePolicyVersion,
+    evidenceFingerprint: planEvidenceFingerprint(evidence.readinessScore),
+  })
+}
 
 export const weeklyPlanContentSchema = z
   .object({
@@ -166,17 +215,54 @@ const planFreshnessBase = {
   canSkip: z.literal(true),
 } as const
 
+const planEvidenceFreshnessBase = {
+  evidencePolicyVersion: z.literal(planEvidencePolicyVersion),
+  planEvidenceFingerprint: planEvidenceFingerprintSchema,
+  currentEvidenceFingerprint: planEvidenceFingerprintSchema,
+} as const
+
 export const planFreshnessSchema = z.discriminatedUnion('state', [
   z
     .object({
       ...planFreshnessBase,
+      ...planEvidenceFreshnessBase,
       state: z.literal('current'),
       currentOnboardingRevision: z.number().int().positive(),
       canAcceptOrModify: z.literal(true),
       canExplainWithAi: z.literal(true),
       recommendedAction: z.literal('none'),
     })
-    .strict(),
+    .strict()
+    .superRefine((freshness, ctx) => {
+      if (freshness.planEvidenceFingerprint !== freshness.currentEvidenceFingerprint) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'current evidence fingerprints must match',
+          path: ['currentEvidenceFingerprint'],
+        })
+      }
+    }),
+  z
+    .object({
+      ...planFreshnessBase,
+      ...planEvidenceFreshnessBase,
+      state: z.literal('evidence_changed'),
+      currentOnboardingRevision: z.number().int().positive(),
+      changeReason: planEvidenceChangeReasonSchema,
+      canAcceptOrModify: z.literal(false),
+      canExplainWithAi: z.literal(false),
+      recommendedAction: z.literal('regenerate'),
+    })
+    .strict()
+    .superRefine((freshness, ctx) => {
+      if (freshness.planEvidenceFingerprint === freshness.currentEvidenceFingerprint) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'changed evidence fingerprints must differ',
+          path: ['currentEvidenceFingerprint'],
+        })
+      }
+    }),
   z
     .object({
       ...planFreshnessBase,

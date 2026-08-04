@@ -1,6 +1,6 @@
 import * as z from 'zod'
 
-import { planEvidenceSchema, planIntensitySchema, planSessionKindSchema } from './plan'
+import { planIntensitySchema, planSessionKindSchema } from './plan'
 import {
   aiExplanationEvidenceKeys,
   aiExplanationProviders,
@@ -21,6 +21,18 @@ export const aiExplanationProviderSchema = z.enum(aiExplanationProviders)
 export const aiWorkerProviderSchema = z.enum(aiWorkerProviders)
 export const aiExplanationSourceSchema = z.enum(aiExplanationSources)
 export const aiExplanationEvidenceKeySchema = z.enum(aiExplanationEvidenceKeys)
+
+const aiPlanEvidenceSchema = z
+  .object({
+    onboardingRevision: z.number().int().positive(),
+    dashboardGeneratedAt: z.string().datetime({ offset: true }),
+    readinessScore: z.number().int().min(0).max(100).nullable(),
+    recentActiveDays: z.number().int().min(0),
+    recentWorkoutCount: z.number().int().min(0),
+    recentActiveMinutes: z.number().finite().min(0),
+    recentMealCount: z.number().int().min(0),
+  })
+  .strict()
 export const aiWorkerFailureCodeSchema = z.enum(aiWorkerFailureCodes)
 export const aiPlanPromptVersionSchema = z.enum(aiPlanPromptVersions)
 export const aiPlanValidatorVersionSchema = z.enum(aiPlanValidatorVersions)
@@ -89,7 +101,7 @@ export const aiPlanContextSchema = z
       )
       .min(1)
       .max(8),
-    evidence: planEvidenceSchema,
+    evidence: aiPlanEvidenceSchema,
     evidenceKeys: z.array(aiExplanationEvidenceKeySchema).min(1).max(7),
   })
   .strict()

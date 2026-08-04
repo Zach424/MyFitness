@@ -16,11 +16,17 @@ import type {
   WeeklyPlanContent,
   WeeklyPlanHistoryItem,
 } from '@myfitness/contracts'
-import { planEngineVersion, weeklyPlanContentSchema } from '@myfitness/contracts'
+import {
+  normalizePersistedPlanEvidence,
+  planEngineVersion,
+  weeklyPlanContentSchema,
+  weeklyPlanSchema,
+} from '@myfitness/contracts'
 import {
   applyPlanSelections,
   assessPlanEligibility,
   buildWeeklyPlanContent,
+  comparePlanEvidence,
   PlanSelectionError,
 } from '@myfitness/domain'
 import type { QueryResult, QueryResultRow } from 'pg'
@@ -54,6 +60,12 @@ const localDate = (value: string | Date) => {
   return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`
 }
 
+const normalizePayload = (payload: WeeklyPlanContent) =>
+  weeklyPlanContentSchema.parse({
+    ...payload,
+    evidence: normalizePersistedPlanEvidence(payload.evidence),
+  })
+
 const mapPlan = (row: PlanRow): WeeklyPlan => ({
   id: row.id,
   userId: row.user_id,
@@ -61,7 +73,7 @@ const mapPlan = (row: PlanRow): WeeklyPlan => ({
   timezone: row.timezone,
   engineVersion: row.engine_version,
   status: row.status,
-  ...weeklyPlanContentSchema.parse(row.payload),
+  ...normalizePayload(row.payload),
   revision: row.revision,
   createdAt: row.created_at.toISOString(),
   updatedAt: row.updated_at.toISOString(),
@@ -70,6 +82,7 @@ const mapPlan = (row: PlanRow): WeeklyPlan => ({
 const projectFreshness = (
   plan: WeeklyPlan,
   profile: OnboardingResponse | undefined,
+  currentReadinessScore: number | null | undefined,
   checkedAt: string,
 ): PlanFreshness => {
   const base = {
@@ -107,8 +120,30 @@ const projectFreshness = (
       recommendedAction: 'regenerate',
     }
   }
+  if (currentReadinessScore === undefined) {
+    throw new Error('eligible plan freshness requires a current evidence projection')
+  }
+  const evidence = comparePlanEvidence(plan.evidence.readinessScore, currentReadinessScore)
+  const evidenceProjection = {
+    evidencePolicyVersion: evidence.evidencePolicyVersion,
+    planEvidenceFingerprint: evidence.planFingerprint,
+    currentEvidenceFingerprint: evidence.currentFingerprint,
+  }
+  if (!evidence.current) {
+    return {
+      ...base,
+      ...evidenceProjection,
+      state: 'evidence_changed',
+      currentOnboardingRevision: profile.revision,
+      changeReason: evidence.changeReason,
+      canAcceptOrModify: false,
+      canExplainWithAi: false,
+      recommendedAction: 'regenerate',
+    }
+  }
   return {
     ...base,
+    ...evidenceProjection,
     state: 'current',
     currentOnboardingRevision: profile.revision,
     canAcceptOrModify: true,
@@ -166,6 +201,25 @@ export class PlansService {
     return profile
   }
 
+  private async assertEvidenceCurrent(
+    userId: string,
+    profile: OnboardingResponse,
+    planReadinessScore: number | null,
+  ) {
+    const dashboard = await this.insights.dashboard(userId, profile.profile.timezone)
+    const evidence = comparePlanEvidence(planReadinessScore, dashboard.readiness.score)
+    if (!evidence.current) {
+      throw new ConflictException({
+        code: 'plan_evidence_changed',
+        message: '近期恢复记录已改变计划安排边界；请按最新记录重新生成本周计划。',
+        evidencePolicyVersion: evidence.evidencePolicyVersion,
+        planEvidenceFingerprint: evidence.planFingerprint,
+        currentEvidenceFingerprint: evidence.currentFingerprint,
+        changeReason: evidence.changeReason,
+      })
+    }
+  }
+
   async generate(userId: string, idempotencyKey: string, input: GenerateWeeklyPlan) {
     const profile = await this.loadEligibleProfile(userId)
     const dashboard = await this.insights.dashboard(userId, profile.profile.timezone)
@@ -212,8 +266,12 @@ export class PlansService {
       )
       const existingWeek = byWeek.rows[0]
       if (existingWeek) {
-        if (existingWeek.payload.evidence.onboardingRevision === profile.revision) {
-          return mapPlan(existingWeek)
+        const existingPlan = mapPlan(existingWeek)
+        if (
+          existingPlan.evidence.onboardingRevision === profile.revision &&
+          existingPlan.evidence.evidenceFingerprint === payload.evidence.evidenceFingerprint
+        ) {
+          return existingPlan
         }
         const refreshed = await client.query<PlanRow>(
           `
@@ -266,11 +324,19 @@ export class PlansService {
     } catch (error) {
       if (!(error instanceof NotFoundException)) throw error
     }
+    let currentReadinessScore: number | null | undefined
+    if (result.rows.length && profile && assessPlanEligibility(profile).allowed) {
+      const dashboard = await this.insights.dashboard(userId, profile.profile.timezone)
+      currentReadinessScore = dashboard.readiness.score
+    }
     const checkedAt = new Date().toISOString()
     return {
       items: result.rows.map((row) => {
         const plan = mapPlan(row)
-        return { ...plan, freshness: projectFreshness(plan, profile, checkedAt) }
+        return {
+          ...plan,
+          freshness: projectFreshness(plan, profile, currentReadinessScore, checkedAt),
+        }
       }),
     }
   }
@@ -292,11 +358,13 @@ export class PlansService {
       })
     }
 
+    const plan = mapPlan(row)
     const profile = await this.loadEligibleProfile(userId)
-    if (profile.revision !== row.payload.evidence.onboardingRevision) {
+    if (profile.revision !== plan.evidence.onboardingRevision) {
       throw new ConflictException('planning constraints changed; generate a new plan version')
     }
-    return mapPlan(row)
+    await this.assertEvidenceCurrent(userId, profile, plan.evidence.readinessScore)
+    return plan
   }
 
   async decide(userId: string, planId: string, input: PlanDecision) {
@@ -310,14 +378,15 @@ export class PlansService {
       if (row.revision !== input.expectedRevision) {
         throw new ConflictException(`plan revision changed; current revision is ${row.revision}`)
       }
+      let payload = normalizePayload(row.payload)
       if (input.decision !== 'skipped') {
         const profile = await this.loadEligibleProfile(userId)
-        if (profile.revision !== row.payload.evidence.onboardingRevision) {
+        if (profile.revision !== payload.evidence.onboardingRevision) {
           throw new ConflictException('planning constraints changed; generate a new plan version')
         }
+        await this.assertEvidenceCurrent(userId, profile, payload.evidence.readinessScore)
       }
 
-      let payload = weeklyPlanContentSchema.parse(row.payload)
       if (input.decision === 'modified') {
         try {
           payload = applyPlanSelections(payload, input.selections)
@@ -365,12 +434,18 @@ export class PlansService {
     )
     return {
       planId,
-      items: result.rows.map((revision) => ({
-        ...revision.snapshot,
-        action: revision.action,
-        changedAt: revision.changed_at.toISOString(),
-        decisionNote: revision.decision_note,
-      })),
+      items: result.rows.map((revision) => {
+        const snapshot = weeklyPlanSchema.parse({
+          ...revision.snapshot,
+          evidence: normalizePersistedPlanEvidence(revision.snapshot.evidence),
+        })
+        return {
+          ...snapshot,
+          action: revision.action,
+          changedAt: revision.changed_at.toISOString(),
+          decisionNote: revision.decision_note,
+        }
+      }),
     }
   }
 }
