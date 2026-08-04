@@ -1,6 +1,6 @@
 import * as z from 'zod'
 
-export const privacyExportSchemaVersion = 'myfitness-portable-export-v1' as const
+export const privacyExportSchemaVersion = 'myfitness-portable-export-v2' as const
 export const privacyExportContentType = 'application/json' as const
 export const privacyErasureScopeVersion = 'durable-erasure-v2' as const
 export const accountDeletionConfirmationPhrase = '删除我的衡迹账户' as const
@@ -11,9 +11,16 @@ export const consentPurposes = [
   'health_data',
   'ai_plan_explanation',
   'food_photo_analysis',
+  'progress_photo_analysis',
+  'progress_photo_retention',
 ] as const
 
-export const revocableConsentPurposes = ['ai_plan_explanation', 'food_photo_analysis'] as const
+export const revocableConsentPurposes = [
+  'ai_plan_explanation',
+  'food_photo_analysis',
+  'progress_photo_analysis',
+  'progress_photo_retention',
+] as const
 
 export const privacyDataCategories = [
   'profile',
@@ -84,6 +91,7 @@ export const consentRevocationResultSchema = z
     status: z.literal('revoked'),
     revokedAt: z.string().datetime({ offset: true }),
     removedPhotoAnalyses: z.number().int().nonnegative(),
+    removedProgressPhotos: z.number().int().nonnegative(),
   })
   .strict()
 
@@ -155,6 +163,7 @@ export const privacyExportSchema = z
         weeklyPlans: z.array(jsonObjectSchema),
         aiExplanationRuns: z.array(jsonObjectSchema),
         foodPhotoAnalyses: z.array(jsonObjectSchema),
+        progressPhotos: z.array(jsonObjectSchema),
       })
       .strict(),
   })

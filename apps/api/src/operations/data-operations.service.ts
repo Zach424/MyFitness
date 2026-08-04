@@ -10,7 +10,7 @@ import {
 } from '../application-lifecycle'
 import { getRuntimeConfig } from '../config'
 import { DatabaseService } from '../database/database.service'
-import { PhotoStorageService } from '../nutrition/photo-storage.service'
+import { PhotoStorageService, type PhotoScope } from '../nutrition/photo-storage.service'
 import { ErasureLedgerService } from '../privacy/erasure-ledger.service'
 
 export type DataOperationErrorCode =
@@ -39,8 +39,11 @@ class ObjectStorageOperationError extends Error {
 }
 
 const storageKeyPattern =
-  /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\/)?[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.jpg$/
+  /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\/(?:food\/|progress\/)?[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}|[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\.jpg$/
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+const photoScopes = ['food', 'progress'] as const
+
+type PhotoRecordReference = string | { kind: 'food_candidate' | 'progress_photo'; id: string }
 
 @Injectable()
 export class DataOperationsService implements OnModuleInit, OnModuleDestroy {
@@ -74,10 +77,25 @@ export class DataOperationsService implements OnModuleInit, OnModuleDestroy {
     client: PoolClient,
     storageKey: string,
     cause: string,
-    candidateId?: string,
+    reference?: PhotoRecordReference,
   ) {
     if (!storageKeyPattern.test(storageKey)) throw new InvalidJobPayloadError()
-    if (candidateId && !uuidPattern.test(candidateId)) throw new InvalidJobPayloadError()
+    const candidateId =
+      typeof reference === 'string'
+        ? reference
+        : reference?.kind === 'food_candidate'
+          ? reference.id
+          : undefined
+    const progressPhotoId =
+      typeof reference === 'object' && reference.kind === 'progress_photo'
+        ? reference.id
+        : undefined
+    if (
+      (candidateId && !uuidPattern.test(candidateId)) ||
+      (progressPhotoId && !uuidPattern.test(progressPhotoId))
+    ) {
+      throw new InvalidJobPayloadError()
+    }
     const result = await client.query<{ id: string }>(
       `INSERT INTO data_operation_jobs (id, kind, payload, dedupe_key)
        VALUES ($1, 'photo_object_delete', $2::jsonb, $3)
@@ -85,15 +103,21 @@ export class DataOperationsService implements OnModuleInit, OnModuleDestroy {
        RETURNING id`,
       [
         randomUUID(),
-        JSON.stringify({ storageKey, candidateId, cause: cause.slice(0, 80) }),
+        JSON.stringify({ storageKey, candidateId, progressPhotoId, cause: cause.slice(0, 80) }),
         `photo-delete:${storageKey}`,
       ],
     )
     return result.rows[0]!.id
   }
 
-  async enqueuePhotoPrefixDeletion(client: PoolClient, userId: string, cause: string) {
+  async enqueuePhotoPrefixDeletion(
+    client: PoolClient,
+    userId: string,
+    cause: string,
+    scope?: PhotoScope,
+  ) {
     if (!uuidPattern.test(userId)) throw new InvalidJobPayloadError()
+    if (scope && !photoScopes.includes(scope)) throw new InvalidJobPayloadError()
     const result = await client.query<{ id: string }>(
       `INSERT INTO data_operation_jobs (id, kind, payload, dedupe_key)
        VALUES ($1, 'photo_prefix_delete', $2::jsonb, $3)
@@ -101,8 +125,8 @@ export class DataOperationsService implements OnModuleInit, OnModuleDestroy {
        RETURNING id`,
       [
         randomUUID(),
-        JSON.stringify({ userId, cause: cause.slice(0, 80) }),
-        `photo-prefix-delete:${userId}`,
+        JSON.stringify({ userId, scope, cause: cause.slice(0, 80) }),
+        `photo-prefix-delete:${userId}:${scope ?? 'all'}`,
       ],
     )
     return result.rows[0]!.id
@@ -199,7 +223,15 @@ export class DataOperationsService implements OnModuleInit, OnModuleDestroy {
     ) {
       throw new InvalidJobPayloadError()
     }
-    return { storageKey, candidateId }
+    const progressPhotoId = job.payload.progressPhotoId
+    if (
+      progressPhotoId !== undefined &&
+      (typeof progressPhotoId !== 'string' || !uuidPattern.test(progressPhotoId))
+    ) {
+      throw new InvalidJobPayloadError()
+    }
+    if (candidateId && progressPhotoId) throw new InvalidJobPayloadError()
+    return { storageKey, candidateId, progressPhotoId }
   }
 
   private photoPrefixPayload(job: DataOperationJob) {
@@ -207,7 +239,14 @@ export class DataOperationsService implements OnModuleInit, OnModuleDestroy {
     if (typeof userId !== 'string' || !uuidPattern.test(userId)) {
       throw new InvalidJobPayloadError()
     }
-    return { userId }
+    const scope = job.payload.scope
+    if (
+      scope !== undefined &&
+      (typeof scope !== 'string' || !photoScopes.includes(scope as PhotoScope))
+    ) {
+      throw new InvalidJobPayloadError()
+    }
+    return { userId, scope: scope as PhotoScope | undefined }
   }
 
   private accountPayload(job: DataOperationJob) {
@@ -218,7 +257,12 @@ export class DataOperationsService implements OnModuleInit, OnModuleDestroy {
     return { userId, receiptId: job.receipt_id }
   }
 
-  private async finishPhotoDeletion(job: DataOperationJob, startedAt: Date, candidateId?: string) {
+  private async finishPhotoDeletion(
+    job: DataOperationJob,
+    startedAt: Date,
+    candidateId?: string,
+    progressPhotoId?: string,
+  ) {
     await this.database.withTransaction(async (client) => {
       const updated = await client.query(
         `UPDATE data_operation_jobs
@@ -236,6 +280,14 @@ export class DataOperationsService implements OnModuleInit, OnModuleDestroy {
            SET media_deletion_status = 'deleted'
            WHERE id = $1 AND media_deletion_status = 'pending'`,
           [candidateId],
+        )
+      }
+      if (progressPhotoId) {
+        await client.query(
+          `UPDATE progress_photos
+           SET media_deletion_status = 'deleted'
+           WHERE id = $1 AND media_deletion_status = 'pending'`,
+          [progressPhotoId],
         )
       }
       await client.query(
@@ -425,17 +477,18 @@ export class DataOperationsService implements OnModuleInit, OnModuleDestroy {
     const startedAt = new Date()
     try {
       if (job.kind === 'photo_object_delete') {
-        const { storageKey, candidateId } = this.photoPayload(job)
+        const { storageKey, candidateId, progressPhotoId } = this.photoPayload(job)
         try {
           await this.photos.remove(storageKey)
         } catch (error) {
           throw new ObjectStorageOperationError(error)
         }
-        await this.finishPhotoDeletion(job, startedAt, candidateId)
+        await this.finishPhotoDeletion(job, startedAt, candidateId, progressPhotoId)
       } else if (job.kind === 'photo_prefix_delete') {
-        const { userId } = this.photoPrefixPayload(job)
+        const { userId, scope } = this.photoPrefixPayload(job)
         try {
-          await this.photos.removeUserDirectory(userId)
+          if (scope) await this.photos.removeUserScope(userId, scope)
+          else await this.photos.removeUserDirectory(userId)
         } catch (error) {
           throw new ObjectStorageOperationError(error)
         }

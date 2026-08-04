@@ -105,6 +105,49 @@
   gap: 16px;
 }
 
+.progress-photo-entry {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 16px;
+  padding: 18px 20px;
+  border-left: 4px solid var(--color-juniper);
+  background: rgba(252, 253, 252, 0.94);
+}
+
+.progress-photo-entry__title,
+.progress-photo-entry__body {
+  display: block;
+}
+
+.progress-photo-entry__title {
+  margin-top: 5px;
+  font-size: 18px;
+  font-weight: 760;
+  letter-spacing: -0.025em;
+}
+
+.progress-photo-entry__body {
+  max-width: 650px;
+  margin-top: 6px;
+  color: var(--color-muted);
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+.progress-photo-entry__action {
+  width: auto;
+  min-height: 44px;
+  margin: 0;
+  padding: 0 15px;
+  border: 1px solid var(--color-mineral);
+  border-radius: 0;
+  color: var(--color-mineral);
+  background: transparent;
+  font-size: 10px;
+  font-weight: 720;
+  line-height: 42px;
+}
+
 .records-layout__editor {
   display: grid;
   gap: 16px;
@@ -767,6 +810,11 @@ input:focus-visible {
     grid-template-columns: minmax(0, 1.35fr) minmax(310px, 0.78fr);
     gap: 22px;
     align-items: start;
+  }
+
+  .progress-photo-entry {
+    grid-template-columns: 1fr auto;
+    align-items: center;
   }
 
   .records-layout__log {

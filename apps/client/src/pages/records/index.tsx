@@ -222,6 +222,23 @@ const RecordsPage = () => {
             </Text>
           </View>
 
+          <View className="progress-photo-entry">
+            <View>
+              <Text className="panel-eyebrow">PRIVATE CONTACT SHEET</Text>
+              <Text className="progress-photo-entry__title">进度照与同视角对位</Text>
+              <Text className="progress-photo-entry__body">
+                检查拍摄条件、选择 24 小时自动删除或单独授权长期保留，并用叠片观察变化。
+              </Text>
+            </View>
+            <Button
+              {...buttonA11yProps}
+              className="progress-photo-entry__action"
+              onClick={() => void Taro.navigateTo({ url: '/pages/progress-photos/index' })}
+            >
+              打开进度照 →
+            </Button>
+          </View>
+
           <View className="records-layout">
             <View className="records-layout__editor">
               <View className="group-tabs" aria-label="记录类别">

@@ -15,6 +15,12 @@ describe('privacy contracts', () => {
   it('keeps optional revocation narrower than required service consent', () => {
     expect(revocableConsentPurposeSchema.parse('ai_plan_explanation')).toBe('ai_plan_explanation')
     expect(revocableConsentPurposeSchema.parse('food_photo_analysis')).toBe('food_photo_analysis')
+    expect(revocableConsentPurposeSchema.parse('progress_photo_analysis')).toBe(
+      'progress_photo_analysis',
+    )
+    expect(revocableConsentPurposeSchema.parse('progress_photo_retention')).toBe(
+      'progress_photo_retention',
+    )
     expect(revocableConsentPurposeSchema.safeParse('health_data').success).toBe(false)
     expect(consentRevocationRequestSchema.parse({ confirmed: true })).toEqual({ confirmed: true })
   })
@@ -89,7 +95,7 @@ describe('privacy contracts', () => {
       })),
       consents: [],
       portableExport: {
-        schemaVersion: 'myfitness-portable-export-v1',
+        schemaVersion: 'myfitness-portable-export-v2',
         contentType: 'application/json',
         includesHistory: true,
         includesActiveSanitizedPhotos: true,

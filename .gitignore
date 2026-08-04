@@ -26,6 +26,7 @@ coverage/
 playwright-report/
 test-results/
 .playwright-cli/
+output/playwright/progress-*.jpg
 *.log
 *.tsbuildinfo
 

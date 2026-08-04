@@ -141,7 +141,11 @@ const PrivacyPage = () => {
       setFeedback(
         purpose === 'food_photo_analysis'
           ? `餐食照片授权已撤回，已清除 ${result.removedPhotoAnalyses} 项照片分析。`
-          : 'AI 计划解释授权已撤回，新的解释和待处理任务已停止。',
+          : purpose === 'progress_photo_analysis'
+            ? `进度照检查授权已撤回，已处理 ${result.removedProgressPhotos} 项进度照；明确保留的照片仍在。`
+            : purpose === 'progress_photo_retention'
+              ? `进度照保留授权已撤回，已清除 ${result.removedProgressPhotos} 项照片记录。`
+              : 'AI 计划解释授权已撤回，新的解释和待处理任务已停止。',
       )
       setRevokeTarget(null)
       await loadOverview()
@@ -397,7 +401,11 @@ const PrivacyPage = () => {
                                 <Text>
                                   {consent.purpose === 'food_photo_analysis'
                                     ? '将清除餐食照片分析和仍保留的图片。'
-                                    : '将停止新的 AI 计划解释和待处理任务。'}
+                                    : consent.purpose === 'progress_photo_analysis'
+                                      ? '将删除临时进度照，并从长期保留照片中清除机器检查结果；保留照片不会被删除。'
+                                      : consent.purpose === 'progress_photo_retention'
+                                        ? '将永久清除全部进度照媒体与记录。'
+                                        : '将停止新的 AI 计划解释和待处理任务。'}
                                 </Text>
                                 <View className="revoke-confirm__actions">
                                   <Button

@@ -28,7 +28,11 @@ type SupportAccountRow = QueryResultRow & {
 }
 
 type ConsentRow = QueryResultRow & {
-  purpose: 'ai_plan_explanation' | 'food_photo_analysis'
+  purpose:
+    | 'ai_plan_explanation'
+    | 'food_photo_analysis'
+    | 'progress_photo_analysis'
+    | 'progress_photo_retention'
   accepted_at: Date
   revoked_at: Date | null
 }
@@ -61,12 +65,15 @@ export class AdminSupportService {
                 (SELECT COUNT(*)::text FROM nutrition_meals WHERE user_id = account.id) AS meals,
                 (SELECT COUNT(*)::text FROM weekly_plans WHERE user_id = account.id) AS weekly_plans,
                 (SELECT COUNT(*)::text FROM ai_explanation_runs WHERE user_id = account.id) AS ai_explanations,
-                (SELECT COUNT(*)::text FROM nutrition_photo_candidates WHERE user_id = account.id) AS photo_analyses,
+                ((SELECT COUNT(*) FROM nutrition_photo_candidates WHERE user_id = account.id)
+                  + (SELECT COUNT(*) FROM progress_photos WHERE user_id = account.id))::text AS photo_analyses,
                 (SELECT COUNT(*)::text FROM consent_events WHERE user_id = account.id) AS consent_receipts,
                 (SELECT COUNT(*)::text FROM auth_sessions
                   WHERE user_id = account.id AND revoked_at IS NULL AND expires_at > NOW()) AS active_session_count,
-                (SELECT COUNT(*)::text FROM nutrition_photo_candidates
-                  WHERE user_id = account.id AND storage_key IS NOT NULL) AS active_photo_count,
+                ((SELECT COUNT(*) FROM nutrition_photo_candidates
+                  WHERE user_id = account.id AND storage_key IS NOT NULL)
+                  + (SELECT COUNT(*) FROM progress_photos
+                    WHERE user_id = account.id AND storage_key IS NOT NULL))::text AS active_photo_count,
                 GREATEST(
                   account.updated_at,
                   (SELECT MAX(updated_at) FROM health_records WHERE user_id = account.id),
@@ -74,7 +81,8 @@ export class AdminSupportService {
                   (SELECT MAX(updated_at) FROM nutrition_meals WHERE user_id = account.id),
                   (SELECT MAX(updated_at) FROM weekly_plans WHERE user_id = account.id),
                   (SELECT MAX(created_at) FROM ai_explanation_runs WHERE user_id = account.id),
-                  (SELECT MAX(created_at) FROM nutrition_photo_candidates WHERE user_id = account.id)
+                  (SELECT MAX(created_at) FROM nutrition_photo_candidates WHERE user_id = account.id),
+                  (SELECT MAX(created_at) FROM progress_photos WHERE user_id = account.id)
                 ) AS latest_activity_at
          FROM users AS account
          WHERE account.id = $1`,
@@ -100,7 +108,10 @@ export class AdminSupportService {
       const consents = await client.query<ConsentRow>(
         `SELECT DISTINCT ON (purpose) purpose, accepted_at, revoked_at
          FROM consent_events
-         WHERE user_id = $1 AND purpose IN ('ai_plan_explanation', 'food_photo_analysis')
+         WHERE user_id = $1 AND purpose IN (
+           'ai_plan_explanation', 'food_photo_analysis',
+           'progress_photo_analysis', 'progress_photo_retention'
+         )
          ORDER BY purpose, accepted_at DESC`,
         [input.accountId],
       )
@@ -146,6 +157,8 @@ export class AdminSupportService {
           optionalConsents: {
             aiPlanExplanation: consentState(consentByPurpose.get('ai_plan_explanation')),
             foodPhotoAnalysis: consentState(consentByPurpose.get('food_photo_analysis')),
+            progressPhotoAnalysis: consentState(consentByPurpose.get('progress_photo_analysis')),
+            progressPhotoRetention: consentState(consentByPurpose.get('progress_photo_retention')),
           },
         },
       })

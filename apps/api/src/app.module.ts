@@ -44,6 +44,8 @@ import { RateLimitService } from './operations/rate-limit.service'
 import { RedisService } from './operations/redis.service'
 import { PlansController } from './plans/plans.controller'
 import { PlansService } from './plans/plans.service'
+import { ProgressPhotosController } from './progress-photos/progress-photos.controller'
+import { ProgressPhotosService } from './progress-photos/progress-photos.service'
 import { PrivacyController } from './privacy/privacy.controller'
 import { ErasureReceiptsController } from './privacy/erasure-receipts.controller'
 import { ErasureLedgerService } from './privacy/erasure-ledger.service'
@@ -67,6 +69,7 @@ import { WorkoutsService } from './workouts/workouts.service'
     OnboardingController,
     OperationsController,
     PlansController,
+    ProgressPhotosController,
     PrivacyController,
     WorkoutsController,
   ],
@@ -92,6 +95,7 @@ import { WorkoutsService } from './workouts/workouts.service'
     OperationalMetricsService,
     ObjectStorageService,
     PlansService,
+    ProgressPhotosService,
     PrivacyService,
     RateLimitService,
     RedisService,

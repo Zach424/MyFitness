@@ -30,6 +30,7 @@ import { DatabaseService } from '../database/database.service'
 import { PhotoCandidatesService } from '../nutrition/photo-candidates.service'
 import { PhotoStorageService } from '../nutrition/photo-storage.service'
 import { DataOperationsService } from '../operations/data-operations.service'
+import { ProgressPhotosService } from '../progress-photos/progress-photos.service'
 import { ErasureLedgerService } from './erasure-ledger.service'
 
 type InventoryRow = QueryResultRow & {
@@ -73,6 +74,7 @@ export class PrivacyService {
   constructor(
     private readonly database: DatabaseService,
     private readonly photos: PhotoCandidatesService,
+    private readonly progressPhotos: ProgressPhotosService,
     private readonly photoStorage: PhotoStorageService,
     private readonly dataOperations: DataOperationsService,
     private readonly erasureLedger: ErasureLedgerService,
@@ -121,8 +123,14 @@ export class PrivacyService {
         SELECT 'ai_outputs', COUNT(*)::text, FALSE, MAX(created_at)
           FROM ai_explanation_runs WHERE user_id = $1
         UNION ALL
-        SELECT 'photo_analyses', COUNT(*)::text, FALSE, MAX(created_at)
-          FROM nutrition_photo_candidates WHERE user_id = $1
+        SELECT 'photo_analyses',
+               ((SELECT COUNT(*) FROM nutrition_photo_candidates WHERE user_id = $1)
+                + (SELECT COUNT(*) FROM progress_photos WHERE user_id = $1))::text,
+               FALSE,
+               GREATEST(
+                 (SELECT MAX(created_at) FROM nutrition_photo_candidates WHERE user_id = $1),
+                 (SELECT MAX(created_at) FROM progress_photos WHERE user_id = $1)
+               )
         UNION ALL
         SELECT 'consent_receipts', COUNT(*)::text, TRUE, MAX(accepted_at)
           FROM consent_events WHERE user_id = $1
@@ -167,8 +175,12 @@ export class PrivacyService {
       }
     })
     const activePhotoCount = await this.database.query<{ count: string }>(
-      `SELECT COUNT(*)::text AS count FROM nutrition_photo_candidates
-       WHERE user_id = $1 AND storage_key IS NOT NULL`,
+      `SELECT (
+         (SELECT COUNT(*) FROM nutrition_photo_candidates
+          WHERE user_id = $1 AND storage_key IS NOT NULL)
+         + (SELECT COUNT(*) FROM progress_photos
+            WHERE user_id = $1 AND storage_key IS NOT NULL)
+       )::text AS count`,
       [userId],
     )
 
@@ -378,6 +390,41 @@ export class PrivacyService {
         foodPhotoAnalyses.push({ ...photo.payload, media })
       }
 
+      const progressRows = await client.query<
+        QueryResultRow & {
+          id: string
+          storage_key: string | null
+          payload: Record<string, unknown>
+        }
+      >(
+        `SELECT id, storage_key, (to_jsonb(photo) - 'storage_key') AS payload FROM (
+           SELECT id, status, view, retention_mode, captured_at, timezone,
+                  quality_method_version, quality, width, height, byte_size, content_type,
+                  upload_expires_at, retention_expires_at, media_deletion_status,
+                  analysis_revoked_at, created_at, completed_at, deleted_at, storage_key
+           FROM progress_photos WHERE user_id = $1 ORDER BY captured_at, created_at
+         ) AS photo`,
+        [userId],
+      )
+      const progressPhotos: Array<Record<string, unknown>> = []
+      for (const photo of progressRows.rows) {
+        let media: Record<string, unknown> | null = null
+        if (photo.storage_key) {
+          try {
+            const bytes = await this.photoStorage.read(photo.storage_key)
+            media = {
+              contentType: 'image/jpeg',
+              encoding: 'base64',
+              data: bytes.toString('base64'),
+            }
+          } catch (error) {
+            if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+            media = { unavailable: true }
+          }
+        }
+        progressPhotos.push({ ...photo.payload, media })
+      }
+
       return {
         schemaVersion: privacyExportSchemaVersion,
         generatedAt: new Date().toISOString(),
@@ -396,6 +443,7 @@ export class PrivacyService {
           weeklyPlans,
           aiExplanationRuns,
           foodPhotoAnalyses,
+          progressPhotos,
         },
       }
     })
@@ -413,8 +461,13 @@ export class PrivacyService {
     if (!revoked.rows[0]) throw new NotFoundException('consent has not been granted')
 
     let removedPhotoAnalyses = 0
+    let removedProgressPhotos = 0
     if (purpose === 'food_photo_analysis') {
       removedPhotoAnalyses = await this.photos.purgeForUser(userId)
+    } else if (purpose === 'progress_photo_analysis') {
+      removedProgressPhotos = await this.progressPhotos.revokeAnalysisForUser(userId)
+    } else if (purpose === 'progress_photo_retention') {
+      removedProgressPhotos = await this.progressPhotos.purgeForUser(userId)
     } else {
       await this.database.query(
         "DELETE FROM ai_explanation_runs WHERE user_id = $1 AND status = 'pending'",
@@ -430,6 +483,7 @@ export class PrivacyService {
       status: 'revoked' as const,
       revokedAt: revokedAt.toISOString(),
       removedPhotoAnalyses,
+      removedProgressPhotos,
     }
   }
 

@@ -1,6 +1,6 @@
 # Architecture baseline
 
-Status: accepted and implemented through the iteration-027 immutable-workflow-supply-chain boundary; changes require an ADR.
+Status: accepted and implemented through the iteration-031 privacy-first progress-photo boundary; changes require an ADR.
 
 ## System shape
 
@@ -54,6 +54,7 @@ Implemented foundation:
 - Plan explanations and food-photo display copy share a versioned deterministic safety policy. Validator v2 applies Unicode NFKC normalization, strips format controls, compacts separators for policy matching and normalizes numeric evidence without rewriting persisted copy; stored v1 provenance remains readable.
 - Food-photo reservations keep the raw upload in memory, sanitize to a private expiring JPEG, write it conditionally with a checksum to S3-compatible storage, send only that JPEG plus a catalog allow-list to the worker, validate candidates deterministically and enqueue media deletion on confirm/failure/reject/delete/expiry.
 - Food-photo prompt v2 treats all image text as untrusted data: the provider must not follow, repeat or reveal image-borne instructions, prompts or secrets, and instruction-dominant images are rejected instead of becoming nutrition candidates.
+- Progress-photo reservations keep raw uploads in memory, sanitize into the separate private `progress` object scope and perform only deterministic orientation/resolution/brightness/contrast checks. Analysis-only media expires after 24 hours; long-term comparison requires separate retention consent, uses the user's declared view and calculates no body/posture score.
 - PostgreSQL data-operation jobs are transactionally enqueued with lifecycle changes and claimed atomically using `FOR UPDATE SKIP LOCKED`, leases, bounded exponential retry, attempt evidence and dead-letter state. Successful jobs clear payload and sensitive dedupe material.
 - The authenticated privacy boundary inventories owned data, creates a no-store repeatable-read portable JSON export, records renewed consent cycles, revokes optional processing and closes account access before asynchronous media/primary erasure.
 - `durable-erasure-v2` receipts require a separate status token and expose independent primary/media/provider/backup dispositions. An external HMAC erasure ledger is replayed before a restored database can serve traffic, preventing known deleted accounts from being resurrected by an older backup.
@@ -95,6 +96,8 @@ The deterministic weekly-plan rules, evidence provenance, revision lifecycle and
 The review-only AI boundary, minimization, provider contract, validation and fallback are documented in [AI_EXPLANATION_MODEL.md](AI_EXPLANATION_MODEL.md). ADR-0009 records why explanations cannot mutate plans or confirmed records.
 
 The private media lifecycle, candidate contract, vision provider boundary and no-auto-write rule are documented in [FOOD_PHOTO_MODEL.md](FOOD_PHOTO_MODEL.md). ADR-0010 records why images and model output remain revocable proposals.
+
+The purpose-separated progress-photo lifecycle, bounded capture-quality method, two-consent withdrawal semantics and user-controlled same-view overlay are documented in [PROGRESS_PHOTO_MODEL.md](PROGRESS_PHOTO_MODEL.md). ADR-0029 records why this boundary excludes posture diagnosis, body-composition inference and external datasets.
 
 The inventory/export/consent/erasure boundary is documented in [PRIVACY_OWNERSHIP_MODEL.md](PRIVACY_OWNERSHIP_MODEL.md). ADR-0011 records the user-scoped media, renewed consent and unlinkable primary-store receipt decisions.
 

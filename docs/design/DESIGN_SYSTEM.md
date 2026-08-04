@@ -256,6 +256,19 @@ Reviewed evidence:
 
 The browser review verified that a default protected entry reaches login, the authorization path exposes state/nonce/S256 but no stored code, callback parameters disappear, provider denial leaves a clean URL, and all three captures have no page/console errors. Open design gates remain 320 px, system large text, complete keyboard/screen-reader traversal, offline/provider-latency states and real-provider branding/consent review.
 
+## Implementation review — iteration 031
+
+The progress-photo surface is an **Alignment Contact Sheet / 对位联系表**, not a transformation dashboard. Print-registration corners, center axes and a neutral capture silhouette establish consistent framing without detecting or judging a body. The comparison signature is an **onion-skin seam**: two same-view retained photos occupy one frame while a user-controlled opacity slider and registration crosses reveal visual differences. There is no score, gauge, “good/bad posture” color or automatic before/after claim.
+
+Paper and Mist retain the private-logbook character; Mineral owns actions and the comparison seam; Juniper marks user-selected retention and capture-ready machine checks; amber is limited to adjust-the-camera guidance. Noto Sans SC handles Chinese reading, Barlow Condensed labels the contact sheet and metric mono keeps dates/opacity compact. Retention choices use structured rectangular fields rather than promotional cards, and every upload repeats both the analysis consent and—only when selected—the separate long-term retention consent.
+
+Reviewed evidence:
+
+- [390 × 844 mobile capture register](../../output/playwright/iteration-031-progress-photos-mobile.png)
+- [1440 × 1000 wide comparison/contact sheet](../../output/playwright/iteration-031-progress-photos-wide.png)
+
+The real-browser review uploaded two synthetic portrait fixtures through the production H5 build, confirmed all four bounded quality explanations, rendered the same-view overlay, changed responsive width and exercised explicit deletion. The page had no API or application errors; the Taro production build retained only known non-blocking dependency/chunk warnings. The desktop evidence intentionally shows comparison/history detail after scroll, while mobile evidence shows the first-screen hierarchy and capture guide. Open design gates remain 320 px, system large text, full screen-reader/keyboard traversal, real-camera safe-area behavior and research with explicitly consented users; no real-person dataset was used in this round.
+
 ## Screenshot review checklist
 
 - The Rhythm Rail remains understandable without color.

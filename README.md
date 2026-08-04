@@ -2,7 +2,7 @@
 
 面向普通健身人群的多端记录与 AI 规划产品。产品把身体、训练、饮食和恢复数据整理为可解释、可调整、可持续执行的个人计划。
 
-> 当前阶段：首个服务候选 `v0.1.0-rc.1` 已发布验证；H5 OIDC 的浏览器状态/nonce/PKCE S256、精确回调清理、一次性交换和 API 信任边界已完成本地/provider-double 验收，H5 与 WeApp 均有来源绑定、实际字节校验的 `candidate` 确定性 TAR 契约。CI/发布工作流的 27 个外部 action 调用已固定到 12 个经核验的完整提交，下一候选的远端标签、当前 `main` 祖先关系与同提交成功 CI 也是镜像发布前的强制资格门。现有 `v0.1.0-rc.1` 仍是“仅服务”历史记录；托管账号、真实微信/OIDC 凭据、精确回调域名/TLS/CORS、集中遥测、数据托管和责任人仍是上线门槛，当前没有声称已经承载公网流量。
+> 当前阶段：首个服务候选 `v0.1.0-rc.1` 已发布验证；本地产品还完成了隐私优先的进度照拍摄条件检查、独立保留授权和同视角叠片对比。H5 OIDC 的浏览器状态/nonce/PKCE S256、精确回调清理、一次性交换和 API 信任边界已完成本地/provider-double 验收，H5 与 WeApp 均有来源绑定、实际字节校验的 `candidate` 确定性 TAR 契约。CI/发布工作流的 27 个外部 action 调用已固定到 12 个经核验的完整提交，下一候选的远端标签、当前 `main` 祖先关系与同提交成功 CI 也是镜像发布前的强制资格门。现有 `v0.1.0-rc.1` 仍是“仅服务”历史记录；托管账号、真实微信/OIDC 凭据、精确回调域名/TLS/CORS、集中遥测、数据托管和责任人仍是上线门槛，当前没有声称已经承载公网流量。
 
 ## 产品边界
 
@@ -90,7 +90,7 @@ pnpm dev:api
 
 AI worker 健康地址是 `http://127.0.0.1:8001/health`。本地默认使用无费用的 `fixture`，不会读取 `OPENAI_API_KEY`；切换 `AI_PROVIDER=openai` 前必须完成隐私、地域、费用、限额和质量审批。计划解释只使用精简计划摘要；每个待处理请求都带有晚于 worker 超时的数据库截止时间和预验证恢复结果，API 启动/定时任务会把过期请求原子收敛为可见的确定性 fallback。v2 验证器会在不改写展示文本的前提下识别常见全角、零宽、分隔混淆和中英文指令泄漏。照片路径只向 worker 提供服务端重编码 JPEG 和食物目录允许清单，图片内文字被视为不可信数据；`store:false` 不等于零留存协议，外部提供方回执只会标记为受审批政策约束。
 
-本地照片和恢复删除日志存放在私有 MinIO bucket；照片逻辑键为 `<user UUID>/<photo UUID>.jpg`，对象前缀与 ledger 前缀可独立配置。API 使用 AWS SDK v3 写入 SHA-256 校验和，新照片条件写入避免覆盖；所有删除路径先落 PostgreSQL 持久任务。生产环境必须配置 HTTPS 对象端点、最小权限凭据、SSE/KMS、生命周期/版本/复制、独立 ledger 留存以及至少 32 字符的照片签名和 ledger HMAC 密钥。真实照片模型仍默认关闭；本地 MinIO 不是生产对象存储证明。
+本地照片和恢复删除日志存放在私有 MinIO bucket；新照片逻辑键按用途分为 `<user UUID>/food/<photo UUID>.jpg` 与 `<user UUID>/progress/<photo UUID>.jpg`，用途撤回不会交叉删除，账户删除仍清理完整用户前缀。API 使用 AWS SDK v3 写入 SHA-256 校验和，新照片条件写入避免覆盖；所有删除路径先落 PostgreSQL 持久任务。进度照只做画幅、清晰度、亮度与对比度检查以及用户控制的同视角叠片，不诊断体态或估算精确体脂。生产环境必须配置 HTTPS 对象端点、最小权限凭据、SSE/KMS、生命周期/版本/复制、独立 ledger 留存以及至少 32 字符的照片签名和 ledger HMAC 密钥。真实照片模型仍默认关闭；本地 MinIO 不是生产对象存储证明。
 
 账户删除先创建 15 分钟单次意图并在客户端保存一次性密钥，再用意图 ID/密钥提交删除；服务端只保存 SHA-256。账户访问先关闭，后台再删除私有对象、发布恢复删除日志并清除主数据库。即使 `202` 响应丢失或页面刷新，客户端也能用原密钥找回最小回执状态。备份恢复必须在开放流量前重放 ledger；本地真实演练命令是 `pnpm ops:verify-backup-restore`。任务状态、故障处理和生产门槛见 [数据托管运维手册](docs/operations/DATA_CUSTODY_RUNBOOK.md)。
 
@@ -157,6 +157,7 @@ Playwright 会复用或启动 API、H5 与管理员预览服务。`pnpm db:down`
 - [架构决策 0026](docs/architecture/decisions/0026-immutable-github-actions-supply-chain.md)
 - [架构决策 0027](docs/architecture/decisions/0027-h5-oidc-authorization-code-boundary.md)
 - [架构决策 0028](docs/architecture/decisions/0028-h5-oidc-browser-transaction-and-candidate.md)
+- [架构决策 0029](docs/architecture/decisions/0029-privacy-first-progress-photo-assistance.md)
 - [健康记录数据模型](docs/architecture/HEALTH_RECORD_MODEL.md)
 - [训练记录数据模型](docs/architecture/WORKOUT_MODEL.md)
 - [饮食记录数据模型](docs/architecture/NUTRITION_MODEL.md)
@@ -164,6 +165,7 @@ Playwright 会复用或启动 API、H5 与管理员预览服务。`pnpm db:down`
 - [周计划数据模型](docs/architecture/PLAN_MODEL.md)
 - [AI 计划解释模型](docs/architecture/AI_EXPLANATION_MODEL.md)
 - [餐食照片候选模型](docs/architecture/FOOD_PHOTO_MODEL.md)
+- [进度照辅助模型](docs/architecture/PROGRESS_PHOTO_MODEL.md)
 - [隐私所有权模型](docs/architecture/PRIVACY_OWNERSHIP_MODEL.md)
 - [API 运营边界](docs/architecture/OPERATIONS_PERIMETER.md)
 - [管理员支持边界](docs/architecture/ADMIN_SUPPORT_MODEL.md)
@@ -203,6 +205,8 @@ Playwright 会复用或启动 API、H5 与管理员预览服务。`pnpm db:down`
 - [第 27 轮档案](docs/iterations/027-immutable-github-actions-supply-chain.md)
 - [第 28 轮档案](docs/iterations/028-h5-oidc-server-boundary.md)
 - [第 29 轮档案](docs/iterations/029-h5-oidc-browser-candidate.md)
+- [第 30 轮档案](docs/iterations/030-obsidian-status-mirror.md)
+- [第 31 轮档案](docs/iterations/031-progress-photo-assistance.md)
 - [移动端视觉证据](output/playwright/iteration-001-mobile.png)
 - [宽屏视觉证据](output/playwright/iteration-001-wide.png)
 - [建档移动端证据](output/playwright/iteration-003-onboarding-mobile.png)
@@ -229,6 +233,8 @@ Playwright 会复用或启动 API、H5 与管理员预览服务。`pnpm db:down`
 - [H5 OIDC 登录移动端证据](output/playwright/iteration-029-oidc-login-mobile.png)
 - [H5 OIDC 拒绝态移动端证据](output/playwright/iteration-029-oidc-denied-mobile.png)
 - [H5 OIDC 登录宽屏证据](output/playwright/iteration-029-oidc-login-wide.png)
+- [进度照移动端证据](output/playwright/iteration-031-progress-photos-mobile.png)
+- [进度照宽屏证据](output/playwright/iteration-031-progress-photos-wide.png)
 
 ## 仓库同步说明
 

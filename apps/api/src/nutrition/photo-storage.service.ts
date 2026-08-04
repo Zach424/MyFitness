@@ -21,6 +21,8 @@ type UploadedPhoto = {
   size: number
 }
 
+export type PhotoScope = 'food' | 'progress'
+
 export type StoredPhoto = {
   storageKey: string
   buffer: Buffer
@@ -41,7 +43,8 @@ export class PhotoStorageService {
   private validateStorageKey(key: string) {
     const validLegacy = /^[0-9a-f-]{36}\.jpg$/.test(key)
     const validScoped = /^[0-9a-f-]{36}\/[0-9a-f-]{36}\.jpg$/.test(key)
-    if (!validLegacy && !validScoped) {
+    const validPurposeScoped = /^[0-9a-f-]{36}\/(?:food|progress)\/[0-9a-f-]{36}\.jpg$/.test(key)
+    if (!validLegacy && !validScoped && !validPurposeScoped) {
       throw new BadRequestException('invalid private photo key')
     }
     return key
@@ -56,7 +59,12 @@ export class PhotoStorageService {
     return `${this.prefix}/${this.validateStorageKey(storageKey)}`
   }
 
-  async sanitizeAndStore(userId: string, id: string, upload: UploadedPhoto): Promise<StoredPhoto> {
+  async sanitizeAndStore(
+    userId: string,
+    id: string,
+    upload: UploadedPhoto,
+    scope: PhotoScope = 'food',
+  ): Promise<StoredPhoto> {
     if (
       !foodPhotoContentTypes.includes(upload.mimetype as (typeof foodPhotoContentTypes)[number])
     ) {
@@ -108,7 +116,7 @@ export class PhotoStorageService {
 
     if (!this.uuidPattern.test(id)) throw new BadRequestException('invalid private photo id')
     this.validateUserId(userId)
-    const key = `${userId}/${id}.jpg`
+    const key = `${userId}/${scope}/${id}.jpg`
     const sha256 = createHash('sha256').update(output.data).digest('hex')
     try {
       await this.objects.putPrivateObject({
@@ -145,6 +153,12 @@ export class PhotoStorageService {
 
   async removeUserDirectory(userId: string) {
     return this.objects.deletePrivatePrefix(`${this.prefix}/${this.validateUserId(userId)}`)
+  }
+
+  async removeUserScope(userId: string, scope: PhotoScope) {
+    return this.objects.deletePrivatePrefix(
+      `${this.prefix}/${this.validateUserId(userId)}/${scope}`,
+    )
   }
 
   async exists(storageKey: string) {

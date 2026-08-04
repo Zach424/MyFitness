@@ -47,6 +47,12 @@ import {
   adminAuditTargetTypes,
   adminIdentityProviders,
   adminRoles,
+  progressPhotoAnalysisConsentPurpose,
+  progressPhotoQualityMethodVersion,
+  progressPhotoRetentionConsentPurpose,
+  progressPhotoRetentionModes,
+  progressPhotoStatuses,
+  progressPhotoViews,
 } from '@myfitness/contracts'
 import { describe, expect, it } from 'vitest'
 
@@ -109,6 +115,10 @@ const aiRecoveryMigrationPath = path.resolve(
 const adversarialAiSafetyMigrationPath = path.resolve(
   __dirname,
   '../../../../infra/postgres/migrations/0018_version_adversarial_ai_safety.sql',
+)
+const progressPhotoMigrationPath = path.resolve(
+  __dirname,
+  '../../../../infra/postgres/migrations/0020_progress_photos.sql',
 )
 
 describe('health-record migration drift', () => {
@@ -235,6 +245,24 @@ describe('health-record migration drift', () => {
     ]) {
       expect(migration, `${value} is missing from the food-photo migration`).toContain(`'${value}'`)
     }
+  })
+
+  it('contains every progress-photo lifecycle, consent boundary and quality method', async () => {
+    const migration = await readFile(progressPhotoMigrationPath, 'utf8')
+    for (const value of [
+      ...progressPhotoStatuses,
+      ...progressPhotoViews,
+      ...progressPhotoRetentionModes,
+      progressPhotoAnalysisConsentPurpose,
+      progressPhotoRetentionConsentPurpose,
+      progressPhotoQualityMethodVersion,
+    ]) {
+      expect(migration, `${value} is missing from the progress-photo migration`).toContain(
+        `'${value}'`,
+      )
+    }
+    expect(migration).toContain('/progress/')
+    expect(migration).toContain("content_type = 'image/jpeg'")
   })
 
   it('allows append-only consent cycles and user-scoped private photo keys', async () => {

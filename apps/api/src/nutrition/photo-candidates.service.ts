@@ -379,7 +379,7 @@ export class PhotoCandidatesService implements OnModuleInit, OnModuleDestroy {
   async upload(userId: string, id: string, token: string, upload: UploadedPhoto) {
     this.verify(token, id, userId, 'upload')
     await this.expireOld()
-    const stored = await this.storage.sanitizeAndStore(userId, id, upload)
+    const stored = await this.storage.sanitizeAndStore(userId, id, upload, 'food')
     await this.markProcessing(userId, id, stored)
 
     const worker = await this.worker(id, stored.buffer)
@@ -629,7 +629,12 @@ export class PhotoCandidatesService implements OnModuleInit, OnModuleDestroy {
         }
       }
       jobIds.push(
-        await this.dataOperations.enqueuePhotoPrefixDeletion(client, userId, 'consent_revoked'),
+        await this.dataOperations.enqueuePhotoPrefixDeletion(
+          client,
+          userId,
+          'consent_revoked',
+          'food',
+        ),
       )
       await client.query('DELETE FROM nutrition_photo_candidates WHERE user_id = $1', [userId])
       return { count: owned.rowCount ?? 0, jobIds }

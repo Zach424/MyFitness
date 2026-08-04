@@ -411,9 +411,22 @@
                             "foodPhotoAnalysis": {
                               "type": "string",
                               "enum": ["never_granted", "active", "revoked"]
+                            },
+                            "progressPhotoAnalysis": {
+                              "type": "string",
+                              "enum": ["never_granted", "active", "revoked"]
+                            },
+                            "progressPhotoRetention": {
+                              "type": "string",
+                              "enum": ["never_granted", "active", "revoked"]
                             }
                           },
-                          "required": ["aiPlanExplanation", "foodPhotoAnalysis"],
+                          "required": [
+                            "aiPlanExplanation",
+                            "foodPhotoAnalysis",
+                            "progressPhotoAnalysis",
+                            "progressPhotoRetention"
+                          ],
                           "additionalProperties": false
                         }
                       },
@@ -6246,6 +6259,600 @@
         "tags": ["plans"]
       }
     },
+    "/v1/progress-photos": {
+      "post": {
+        "operationId": "ProgressPhotosController_reserve",
+        "parameters": [
+          {
+            "name": "x-idempotency-key",
+            "in": "header",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "view": { "type": "string", "enum": ["front", "side", "back"] },
+                  "capturedAt": {
+                    "type": "string",
+                    "format": "date-time",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                  },
+                  "timezone": { "type": "string", "minLength": 1, "maxLength": 64 },
+                  "analysisConsent": {
+                    "type": "object",
+                    "properties": {
+                      "granted": { "type": "boolean", "enum": [true] },
+                      "version": {
+                        "type": "string",
+                        "enum": ["progress-photo-analysis-2026-08-04.v1"]
+                      }
+                    },
+                    "required": ["granted", "version"],
+                    "additionalProperties": false
+                  },
+                  "retention": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": { "mode": { "type": "string", "enum": ["analysis_only"] } },
+                        "required": ["mode"],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "mode": { "type": "string", "enum": ["retained"] },
+                          "consent": {
+                            "type": "object",
+                            "properties": {
+                              "granted": { "type": "boolean", "enum": [true] },
+                              "version": {
+                                "type": "string",
+                                "enum": ["progress-photo-retention-2026-08-04.v1"]
+                              }
+                            },
+                            "required": ["granted", "version"],
+                            "additionalProperties": false
+                          }
+                        },
+                        "required": ["mode", "consent"],
+                        "additionalProperties": false
+                      }
+                    ]
+                  }
+                },
+                "required": ["view", "capturedAt", "timezone", "analysisConsent", "retention"],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "status": { "type": "string", "enum": ["reserved"] },
+                    "view": { "type": "string", "enum": ["front", "side", "back"] },
+                    "retentionMode": { "type": "string", "enum": ["analysis_only", "retained"] },
+                    "upload": {
+                      "type": "object",
+                      "properties": {
+                        "path": { "type": "string", "pattern": "^\\/v1\\/progress-photos\\/.*" },
+                        "expiresAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                        },
+                        "maxBytes": { "type": "number", "enum": [6291456] },
+                        "acceptedContentTypes": {
+                          "type": "array",
+                          "items": {
+                            "anyOf": [
+                              { "type": "string", "enum": ["image/jpeg"] },
+                              { "type": "string", "enum": ["image/png"] },
+                              { "type": "string", "enum": ["image/webp"] }
+                            ]
+                          },
+                          "minItems": 3,
+                          "maxItems": 3
+                        }
+                      },
+                      "required": ["path", "expiresAt", "maxBytes", "acceptedContentTypes"],
+                      "additionalProperties": false
+                    },
+                    "capturedAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "timezone": { "type": "string", "minLength": 1, "maxLength": 64 },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "status",
+                    "view",
+                    "retentionMode",
+                    "upload",
+                    "capturedAt",
+                    "timezone",
+                    "createdAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": { "description": "Current analysis/retention consent is invalid." },
+          "401": { "description": "Bearer token is missing, invalid, expired or revoked." },
+          "409": { "description": "Reservation, account or capture time conflicts." }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Reserve a private progress-photo capture check",
+        "tags": ["progress photos"]
+      },
+      "get": {
+        "operationId": "ProgressPhotosController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "maxItems": 100,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "status": { "type": "string", "enum": ["ready"] },
+                          "view": { "type": "string", "enum": ["front", "side", "back"] },
+                          "retentionMode": {
+                            "type": "string",
+                            "enum": ["analysis_only", "retained"]
+                          },
+                          "previewPath": {
+                            "type": "string",
+                            "pattern": "^\\/v1\\/progress-photos\\/.*"
+                          },
+                          "analysisAvailable": { "type": "boolean" },
+                          "quality": {
+                            "nullable": true,
+                            "type": "object",
+                            "properties": {
+                              "methodVersion": {
+                                "type": "string",
+                                "enum": ["progress-photo-capture-quality-2026-08-04.v1"]
+                              },
+                              "machineEstimate": { "type": "boolean", "enum": [true] },
+                              "overallStatus": { "type": "string", "enum": ["ready", "adjust"] },
+                              "metrics": {
+                                "type": "object",
+                                "properties": {
+                                  "width": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "exclusiveMinimum": true,
+                                    "maximum": 1600
+                                  },
+                                  "height": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "exclusiveMinimum": true,
+                                    "maximum": 1600
+                                  },
+                                  "brightnessPercent": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 100
+                                  },
+                                  "contrastPercent": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 100
+                                  }
+                                },
+                                "required": [
+                                  "width",
+                                  "height",
+                                  "brightnessPercent",
+                                  "contrastPercent"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "checks": {
+                                "type": "array",
+                                "items": {
+                                  "anyOf": [
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "key": { "type": "string", "enum": ["orientation"] },
+                                        "status": { "type": "string", "enum": ["ready", "adjust"] },
+                                        "reason": {
+                                          "type": "string",
+                                          "enum": ["portrait_ready", "use_portrait_frame"]
+                                        }
+                                      },
+                                      "required": ["key", "status", "reason"],
+                                      "additionalProperties": false
+                                    },
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "key": { "type": "string", "enum": ["resolution"] },
+                                        "status": { "type": "string", "enum": ["ready", "adjust"] },
+                                        "reason": {
+                                          "type": "string",
+                                          "enum": [
+                                            "resolution_ready",
+                                            "move_closer_or_use_higher_resolution"
+                                          ]
+                                        }
+                                      },
+                                      "required": ["key", "status", "reason"],
+                                      "additionalProperties": false
+                                    },
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "key": { "type": "string", "enum": ["lighting"] },
+                                        "status": { "type": "string", "enum": ["ready", "adjust"] },
+                                        "reason": {
+                                          "type": "string",
+                                          "enum": [
+                                            "lighting_ready",
+                                            "image_too_dark",
+                                            "image_too_bright"
+                                          ]
+                                        }
+                                      },
+                                      "required": ["key", "status", "reason"],
+                                      "additionalProperties": false
+                                    },
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "key": { "type": "string", "enum": ["contrast"] },
+                                        "status": { "type": "string", "enum": ["ready", "adjust"] },
+                                        "reason": {
+                                          "type": "string",
+                                          "enum": ["contrast_ready", "increase_even_lighting"]
+                                        }
+                                      },
+                                      "required": ["key", "status", "reason"],
+                                      "additionalProperties": false
+                                    }
+                                  ]
+                                },
+                                "minItems": 4,
+                                "maxItems": 4
+                              }
+                            },
+                            "required": [
+                              "methodVersion",
+                              "machineEstimate",
+                              "overallStatus",
+                              "metrics",
+                              "checks"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "mediaDeleted": { "type": "boolean", "enum": [false] },
+                          "mediaDeletionStatus": { "type": "string", "enum": ["not_required"] },
+                          "capturedAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                          },
+                          "timezone": { "type": "string", "minLength": 1, "maxLength": 64 },
+                          "expiresAt": {
+                            "nullable": true,
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "status",
+                          "view",
+                          "retentionMode",
+                          "previewPath",
+                          "analysisAvailable",
+                          "quality",
+                          "mediaDeleted",
+                          "mediaDeletionStatus",
+                          "capturedAt",
+                          "timezone",
+                          "expiresAt",
+                          "createdAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": ["items"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": { "description": "Bearer token is missing, invalid, expired or revoked." }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "List owner-visible progress photos",
+        "tags": ["progress photos"]
+      }
+    },
+    "/v1/progress-photos/{photoId}/upload": {
+      "post": {
+        "operationId": "ProgressPhotosController_upload",
+        "parameters": [
+          {
+            "name": "photoId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": ["file"],
+                "properties": { "file": { "type": "string", "format": "binary" } }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "status": { "type": "string", "enum": ["ready"] },
+                    "view": { "type": "string", "enum": ["front", "side", "back"] },
+                    "retentionMode": { "type": "string", "enum": ["analysis_only", "retained"] },
+                    "previewPath": { "type": "string", "pattern": "^\\/v1\\/progress-photos\\/.*" },
+                    "analysisAvailable": { "type": "boolean" },
+                    "quality": {
+                      "nullable": true,
+                      "type": "object",
+                      "properties": {
+                        "methodVersion": {
+                          "type": "string",
+                          "enum": ["progress-photo-capture-quality-2026-08-04.v1"]
+                        },
+                        "machineEstimate": { "type": "boolean", "enum": [true] },
+                        "overallStatus": { "type": "string", "enum": ["ready", "adjust"] },
+                        "metrics": {
+                          "type": "object",
+                          "properties": {
+                            "width": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "exclusiveMinimum": true,
+                              "maximum": 1600
+                            },
+                            "height": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "exclusiveMinimum": true,
+                              "maximum": 1600
+                            },
+                            "brightnessPercent": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 100
+                            },
+                            "contrastPercent": { "type": "integer", "minimum": 0, "maximum": 100 }
+                          },
+                          "required": ["width", "height", "brightnessPercent", "contrastPercent"],
+                          "additionalProperties": false
+                        },
+                        "checks": {
+                          "type": "array",
+                          "items": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "key": { "type": "string", "enum": ["orientation"] },
+                                  "status": { "type": "string", "enum": ["ready", "adjust"] },
+                                  "reason": {
+                                    "type": "string",
+                                    "enum": ["portrait_ready", "use_portrait_frame"]
+                                  }
+                                },
+                                "required": ["key", "status", "reason"],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "key": { "type": "string", "enum": ["resolution"] },
+                                  "status": { "type": "string", "enum": ["ready", "adjust"] },
+                                  "reason": {
+                                    "type": "string",
+                                    "enum": [
+                                      "resolution_ready",
+                                      "move_closer_or_use_higher_resolution"
+                                    ]
+                                  }
+                                },
+                                "required": ["key", "status", "reason"],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "key": { "type": "string", "enum": ["lighting"] },
+                                  "status": { "type": "string", "enum": ["ready", "adjust"] },
+                                  "reason": {
+                                    "type": "string",
+                                    "enum": ["lighting_ready", "image_too_dark", "image_too_bright"]
+                                  }
+                                },
+                                "required": ["key", "status", "reason"],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "key": { "type": "string", "enum": ["contrast"] },
+                                  "status": { "type": "string", "enum": ["ready", "adjust"] },
+                                  "reason": {
+                                    "type": "string",
+                                    "enum": ["contrast_ready", "increase_even_lighting"]
+                                  }
+                                },
+                                "required": ["key", "status", "reason"],
+                                "additionalProperties": false
+                              }
+                            ]
+                          },
+                          "minItems": 4,
+                          "maxItems": 4
+                        }
+                      },
+                      "required": [
+                        "methodVersion",
+                        "machineEstimate",
+                        "overallStatus",
+                        "metrics",
+                        "checks"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "mediaDeleted": { "type": "boolean", "enum": [false] },
+                    "mediaDeletionStatus": { "type": "string", "enum": ["not_required"] },
+                    "capturedAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "timezone": { "type": "string", "minLength": 1, "maxLength": 64 },
+                    "expiresAt": {
+                      "nullable": true,
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "status",
+                    "view",
+                    "retentionMode",
+                    "previewPath",
+                    "analysisAvailable",
+                    "quality",
+                    "mediaDeleted",
+                    "mediaDeletionStatus",
+                    "capturedAt",
+                    "timezone",
+                    "expiresAt",
+                    "createdAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": { "description": "Image bytes or signed upload token are invalid." },
+          "401": { "description": "Bearer token is missing, invalid, expired or revoked." },
+          "409": { "description": "Reservation is no longer uploadable." }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Sanitize, store and check one private progress photo",
+        "tags": ["progress photos"]
+      }
+    },
+    "/v1/progress-photos/{photoId}/preview": {
+      "get": {
+        "operationId": "ProgressPhotosController_preview",
+        "parameters": [
+          {
+            "name": "photoId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": { "404": { "description": "Preview is deleted, expired or unavailable." } },
+        "summary": "Read a sanitized progress preview using a short-lived signature",
+        "tags": ["progress photos"]
+      }
+    },
+    "/v1/progress-photos/{photoId}": {
+      "delete": {
+        "operationId": "ProgressPhotosController_remove",
+        "parameters": [
+          {
+            "name": "photoId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "204": { "description": "Progress photo and capture analysis were deleted." },
+          "401": { "description": "Bearer token is missing, invalid, expired or revoked." },
+          "404": { "description": "Progress photo is unavailable for this user." }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Delete one private progress photo and its capture analysis",
+        "tags": ["progress photos"]
+      }
+    },
     "/v1/me/privacy": {
       "get": {
         "operationId": "PrivacyController_overview",
@@ -6316,8 +6923,8 @@
                       }
                     },
                     "consents": {
-                      "minItems": 5,
-                      "maxItems": 5,
+                      "minItems": 7,
+                      "maxItems": 7,
                       "type": "array",
                       "items": {
                         "type": "object",
@@ -6329,7 +6936,9 @@
                               "privacy",
                               "health_data",
                               "ai_plan_explanation",
-                              "food_photo_analysis"
+                              "food_photo_analysis",
+                              "progress_photo_analysis",
+                              "progress_photo_retention"
                             ]
                           },
                           "status": {
@@ -6374,7 +6983,7 @@
                       "properties": {
                         "schemaVersion": {
                           "type": "string",
-                          "enum": ["myfitness-portable-export-v1"]
+                          "enum": ["myfitness-portable-export-v2"]
                         },
                         "contentType": { "type": "string", "enum": ["application/json"] },
                         "includesHistory": { "type": "boolean", "enum": [true] },
@@ -6449,7 +7058,12 @@
                   "properties": {
                     "purpose": {
                       "type": "string",
-                      "enum": ["ai_plan_explanation", "food_photo_analysis"]
+                      "enum": [
+                        "ai_plan_explanation",
+                        "food_photo_analysis",
+                        "progress_photo_analysis",
+                        "progress_photo_retention"
+                      ]
                     },
                     "status": { "type": "string", "enum": ["revoked"] },
                     "revokedAt": {
@@ -6461,9 +7075,20 @@
                       "type": "integer",
                       "minimum": 0,
                       "maximum": 9007199254740991
+                    },
+                    "removedProgressPhotos": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
                     }
                   },
-                  "required": ["purpose", "status", "revokedAt", "removedPhotoAnalyses"],
+                  "required": [
+                    "purpose",
+                    "status",
+                    "revokedAt",
+                    "removedPhotoAnalyses",
+                    "removedProgressPhotos"
+                  ],
                   "additionalProperties": false
                 }
               }

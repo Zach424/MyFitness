@@ -37,6 +37,9 @@ import type {
   WeeklyPlanHistoryItem,
   Workout,
   WorkoutHistoryItem,
+  CreateProgressPhoto,
+  ProgressPhotoItem,
+  ProgressPhotoTicket,
 } from '@myfitness/contracts'
 import {
   foodPhotoConsentVersion,
@@ -395,6 +398,45 @@ export const confirmFoodPhotoCandidate = (photoId: string, payload: ConfirmFoodP
 
 export const deleteFoodPhotoCandidate = (photoId: string) =>
   authenticatedRequest<void>(`/nutrition/photo-candidates/${photoId}`, 'DELETE')
+
+export const reserveProgressPhoto = (payload: CreateProgressPhoto, idempotencyKey: string) =>
+  authenticatedRequest<ProgressPhotoTicket>('/progress-photos', 'POST', payload, {
+    'x-idempotency-key': idempotencyKey,
+  })
+
+export const uploadProgressPhoto = async (
+  uploadPath: string,
+  filePath: string,
+  retry = true,
+): Promise<ProgressPhotoItem> => {
+  const token = await getAccessToken()
+  const response = await Taro.uploadFile({
+    url: privateApiUrl(uploadPath),
+    filePath,
+    name: 'file',
+    header: { authorization: `Bearer ${token}` },
+  })
+  let body: unknown
+  try {
+    body = typeof response.data === 'string' ? JSON.parse(response.data) : response.data
+  } catch {
+    body = { message: '进度照检查返回了无法读取的内容' }
+  }
+  if (response.statusCode === 401 && retry) {
+    Taro.removeStorageSync(TOKEN_KEY)
+    return uploadProgressPhoto(uploadPath, filePath, false)
+  }
+  if (response.statusCode < 200 || response.statusCode >= 300) {
+    throw new ApiError(response.statusCode, body as ApiErrorBody)
+  }
+  return body as ProgressPhotoItem
+}
+
+export const listProgressPhotos = () =>
+  authenticatedRequest<{ items: ProgressPhotoItem[] }>('/progress-photos', 'GET')
+
+export const deleteProgressPhoto = (photoId: string) =>
+  authenticatedRequest<void>(`/progress-photos/${photoId}`, 'DELETE')
 
 export const getDashboard = (timezone: string) =>
   authenticatedRequest<Dashboard>(

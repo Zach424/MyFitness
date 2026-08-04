@@ -15,7 +15,11 @@ export const privacyCategoryCopy: Record<
   nutrition: { label: '饮食记录与收藏', shortLabel: '饮食', note: '餐次、份量与食物快照' },
   plans: { label: '每周计划', shortLabel: '计划', note: '计划内容与决策历史' },
   ai_outputs: { label: 'AI 解释', shortLabel: 'AI', note: '来源、模型与安全说明' },
-  photo_analyses: { label: '餐食照片分析', shortLabel: '照片', note: '候选、选择与保留期媒体' },
+  photo_analyses: {
+    label: '照片分析与进度照',
+    shortLabel: '照片',
+    note: '餐食候选、拍摄检查与保留期媒体',
+  },
   consent_receipts: { label: '授权凭据', shortLabel: '授权', note: '接受、撤回与版本时间' },
 }
 
@@ -25,6 +29,14 @@ export const consentCopy: Record<ConsentState['purpose'], { label: string; note:
   health_data: { label: '健康数据处理', note: '记录核心功能所需；可通过销户停止' },
   ai_plan_explanation: { label: 'AI 计划解释', note: '撤回后停止新的解释与待处理任务' },
   food_photo_analysis: { label: '餐食照片分析', note: '撤回后清除照片分析及仍保留的图片' },
+  progress_photo_analysis: {
+    label: '进度照拍摄检查',
+    note: '撤回后删除临时照片，并从保留照片清除机器检查结果',
+  },
+  progress_photo_retention: {
+    label: '进度照长期保留',
+    note: '撤回后清除全部进度照媒体与记录',
+  },
 }
 
 export const consentStatusCopy: Record<ConsentState['status'], string> = {

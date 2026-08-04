@@ -122,7 +122,7 @@ describe('privacy ownership API with PostgreSQL and private media', () => {
       .expect(201)
     return {
       photoId,
-      storageKey: `${userId}/${photoId}.jpg`,
+      storageKey: `${userId}/food/${photoId}.jpg`,
     }
   }
 
@@ -187,13 +187,15 @@ describe('privacy ownership API with PostgreSQL and private media', () => {
         healthRecords: unknown[]
         healthRecordRevisions: unknown[]
         foodPhotoAnalyses: Array<{ media?: { encoding?: string; data?: string } }>
+        progressPhotos: unknown[]
       }
     }
-    expect(payload.schemaVersion).toBe('myfitness-portable-export-v1')
+    expect(payload.schemaVersion).toBe('myfitness-portable-export-v2')
     expect(payload.data.healthRecords).toHaveLength(1)
     expect(payload.data.healthRecordRevisions).toHaveLength(1)
     expect(payload.data.foodPhotoAnalyses[0]?.media).toMatchObject({ encoding: 'base64' })
     expect(payload.data.foodPhotoAnalyses[0]?.media?.data?.length).toBeGreaterThan(20)
+    expect(payload.data.progressPhotos).toEqual([])
     expect(exported.text).not.toContain(token)
     expect(exported.text).not.toContain('token_hash')
     expect(exported.text).not.toContain('request_hash')
@@ -218,6 +220,7 @@ describe('privacy ownership API with PostgreSQL and private media', () => {
       purpose: 'food_photo_analysis',
       status: 'revoked',
       removedPhotoAnalyses: 1,
+      removedProgressPhotos: 0,
     })
     expect(await storage.exists(first.storageKey)).toBe(false)
     const afterRevoke = await request(app.getHttpServer())

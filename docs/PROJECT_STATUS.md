@@ -2,7 +2,7 @@
 
 Last reviewed: 2026-08-04
 
-Stage: internal alpha locally runnable; the complete development stack, safe onboarding, deterministic weekly plan and fixture AI explanation were re-exercised on 2026-08-04. Both first-release client candidate contracts, H5 OIDC browser/API trust, immutable workflow dependencies, exact tag/main/CI release-source qualification, combined admission, recoverable erasure receipts, crash-safe AI lifecycle, adversarial output validation and reproducible evaluation artifacts remain locally green. Owner-operated cloud, domain and real-provider work is explicitly parked while locally verifiable product gaps continue.
+Stage: internal alpha locally runnable; privacy-first progress-photo capture guidance, separate retention consent and user-controlled same-view comparison are locally implemented and browser-proven. The complete development stack, safe onboarding, deterministic weekly plan and fixture AI explanation were re-exercised on 2026-08-04. Both first-release client candidate contracts, H5 OIDC browser/API trust, immutable workflow dependencies, exact tag/main/CI release-source qualification, combined admission, recoverable erasure receipts, crash-safe AI lifecycle, adversarial output validation and reproducible evaluation artifacts remain locally green. Owner-operated cloud, domain and real-provider work is explicitly parked while locally verifiable product gaps continue.
 
 Primary release target: WeChat Mini Program + responsive H5
 
@@ -16,15 +16,15 @@ MyFitness / 衡迹 turns body, training, nutrition, and recovery records into sa
 | ----------------------- | ------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------- |
 | Product scope           | Done for MVP baseline           | `docs/product/PRODUCT_BRIEF.md`                                        | Validate with target-user interviews        |
 | Delivery roadmap        | Done for planning baseline      | `docs/product/ROADMAP.md`                                              | Continue local gaps; keep external gates    |
-| Design language         | Partial, twelve flows tested    | Core flows + H5 sign-in + 26 reviewed screenshots                      | Large text, keyboard and remaining states   |
+| Design language         | Partial, thirteen flows tested  | Core flows + H5 sign-in/progress photos + 28 reviewed screenshots      | Large text, keyboard and remaining states   |
 | Client: Mini Program/H5 | Partial, candidate paths local  | WeApp `wechat` and H5 `oidc` candidate contracts; browser double green | Real providers/domains/device/browser proof |
 | Admin console           | Partial, local slice done       | OIDC BFF, exact lookup, role split and Evidence Rail exercised         | Select IdP, owner, retention and deployment |
 | Business API            | Partial                         | Verified WeChat/OIDC identity plus self-contained OCI runtime          | Shared deployment and real credential proof |
 | Domain rules            | Partial                         | Safety validators + strict privacy action contracts                    | Add release policy enforcement              |
 | AI service              | Partial                         | Crash-safe runs + adversarial text/vision validators + 23 evals        | Expert corpus + approved provider canary    |
 | Native App/devices      | Deferred                        | Phase-two decision                                                     | MVP retention gate reached                  |
-| Privacy/compliance      | Partial, durable local proof    | Recoverable erasure, identity suppression and restore replay tested    | Production retention/provider/legal review  |
-| Testing/observability   | Partial                         | 165 unit, 47 integration, 25 browser tests + eval/action drift gates   | Centralize telemetry after account approval |
+| Privacy/compliance      | Partial, durable local proof    | Purpose-scoped photo consent/export/deletion + restore replay tested   | Production retention/provider/legal review  |
+| Testing/observability   | Partial                         | 175 unit, 50 integration, 25 browser tests + real-browser photo proof  | Centralize telemetry after account approval |
 | Deployment              | Partial, source/admission ready | Immutable actions + tag/main/CI + service/client/environment gates     | Approve dossier, provision and canary       |
 
 Status vocabulary: `Done` means validated for the present stage, `Partial` means usable but missing a named gate, `Pending` means not implemented, and `Deferred` means intentionally outside the current release.
@@ -53,7 +53,8 @@ Status vocabulary: `Done` means validated for the present stage, `Partial` means
 - FastAPI worker with authenticated fixture/OpenAI provider adapters, strict structured output, bounded retry and health check. The v2 food-photo prompt treats image text as untrusted data and rejects instruction-dominant images rather than following or repeating their content.
 - Review-only AI runs with explicit versioned consent, minimized context, prompt/model/validator provenance, owner-scoped idempotency, deterministic validation/fallback and exact plan-revision binding. Versioned v2 output safety performs NFKC normalization, removes format characters and compacts separators before checking medical/prescriptive/control-language policy; number grounding separately normalizes full-width and separated digits without rewriting stored prose. Every reservation stores a separately validated recovery result and database deadline beyond the worker timeout; runtime startup/interval reconciliation uses atomic `SKIP LOCKED` claims, while private operations routes expose aggregate health and a bounded manual pass without user content.
 - Revocable food-photo proposals with per-request consent, signed upload/preview, Sharp metadata stripping, 24-hour expiry, catalog-bound and display-copy validation, durable deletion paths and confirmation into an unsaved draft only. Historical v1 provenance remains readable while new worker calls require prompt/validator v2.
-- Private S3-compatible object storage with checksummed/conditional writes, production-required SSE, user-scoped photo keys and local pinned MinIO.
+- Privacy-first progress photos with declared front/side/back view, separate analysis/retention consent, Sharp metadata stripping, four deterministic capture-quality checks, 24-hour analysis-only expiry, retained same-view onion-skin comparison, explicit deletion and no posture/body-composition inference.
+- Private S3-compatible object storage with checksummed/conditional writes, production-required SSE, purpose-scoped `food`/`progress` keys, legacy deletion compatibility and local pinned MinIO.
 - PostgreSQL durable data-operation jobs with transactional enqueue, atomic `SKIP LOCKED` claims, leases, exponential retry, attempts, dead-letter state and aggregate operations evidence.
 - User-owned privacy custody with inventory/export/revocation plus `durable-erasure-v2`: immediate access closure, status-token receipt, media/primary/provider/backup dispositions and cleared completed-subject fields.
 - Recoverable account erasure uses a 15-minute single-use intent, stores only SHA-256 token hashes, persists the secret on the client before deletion and reuses it for a rate-limited no-store receipt lookup after the account session is closed.
@@ -81,6 +82,7 @@ Status vocabulary: `Done` means validated for the present stage, `Partial` means
 | Pinned GitHub Actions can age after their reviewed upstream releases                  | Medium | Review weekly Dependabot proposals, upstream tags/source and the synchronized lock; require complete CI  |
 | Scope may expand before the recording loop is proven                                  | High   | Enforce MVP exclusions and one-scope iteration archives                                                  |
 | Food-photo portion estimates can be misleading                                        | High   | Catalog-bound ranges/confidence, user edit, no auto-write; broaden real-image evaluation                 |
+| Progress photos can be over-interpreted or retained longer than expected              | High   | Capture-only checks/no body score, separate retention consent, scoped deletion; real-user/policy review  |
 | AI may generate unsafe training or diet changes                                       | High   | Deterministic constraints and validators precede model output                                            |
 | Production AI retention/region/cost/quality are unverified                            | High   | Keep fixture default and provider receipts `policy_bound`; require approved real canary                  |
 | Twenty-three deterministic AI cases do not establish real-world safety                | High   | Add expert-reviewed real/obfuscated/injection image and text cases plus slice thresholds                 |
@@ -116,4 +118,4 @@ The MVP cannot enter public beta until all of the following are reproducible:
 
 ## Primary next step
 
-Iteration 31: implement privacy-first progress-photo assistance without diagnosing posture or estimating an exact body-fat percentage. The smallest local candidate must require separate consent, strip EXIF, use private expiring objects, provide user-controlled pose/alignment guidance and visual comparison, label any machine estimate as unconfirmed, support explicit retention/deletion and pass contracts, lifecycle, privacy and browser tests. Owner-operated cloud, domain, real WeChat/OIDC and paid-model work remains parked; managed deployment moves to iteration 32 and is still mandatory before public delivery.
+Iteration 32: harden the now-complete local MVP boundary for a managed shared deployment and controlled beta. Owner-operated cloud account/budget, domain/TLS, real WeChat/OIDC, data-custody owners, centralized telemetry, policy/filing decisions and any approved paid-provider canary remain mandatory external inputs. Until those inputs exist, continue only locally reproducible hardening such as bundle budgets, large-text/keyboard accessibility, stale-plan refresh and server-authoritative workout completion; do not describe local MinIO, fixture AI or candidate artifacts as public production.

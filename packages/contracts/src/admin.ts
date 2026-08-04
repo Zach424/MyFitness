@@ -123,6 +123,8 @@ export const supportUserSummarySchema = z
           .object({
             aiPlanExplanation: z.enum(['never_granted', 'active', 'revoked']),
             foodPhotoAnalysis: z.enum(['never_granted', 'active', 'revoked']),
+            progressPhotoAnalysis: z.enum(['never_granted', 'active', 'revoked']),
+            progressPhotoRetention: z.enum(['never_granted', 'active', 'revoked']),
           })
           .strict(),
       })
