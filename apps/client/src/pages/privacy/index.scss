@@ -604,6 +604,23 @@
   background: #9b4035;
 }
 
+.session-card {
+  border-color: rgba(34, 58, 52, 0.22);
+  background: linear-gradient(135deg, var(--color-paper), rgba(63, 117, 107, 0.07));
+}
+
+.session-action {
+  min-height: 46px;
+  margin: 18px 0 0;
+  border: 1px solid rgba(34, 58, 52, 0.36);
+  border-radius: var(--radius-round);
+  color: var(--color-mineral);
+  background: transparent;
+  font-size: 12px;
+  font-weight: 720;
+  line-height: 46px;
+}
+
 .privacy-footnote {
   display: block;
   padding: 22px 10px 0;

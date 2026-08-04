@@ -8,7 +8,10 @@ import type {
   Workout,
   WorkoutExerciseInput,
 } from '@myfitness/contracts'
-import { starterExerciseCatalog } from '@myfitness/contracts/exercise-catalog.constants'
+import {
+  exerciseEquipmentOptions,
+  starterExerciseCatalog,
+} from '@myfitness/contracts/exercise-catalog.constants'
 
 export type DraftCatalogItem = Pick<
   ExerciseCatalogItem,
@@ -106,6 +109,78 @@ export const initialWorkoutDraft = (): WorkoutDraft => ({
   fatigue: 3,
   note: '',
 })
+
+const isDraftObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+const hasOnlyDraftKeys = (value: Record<string, unknown>, keys: readonly string[]) =>
+  Object.keys(value).every((key) => keys.includes(key))
+const draftString = (value: unknown, max: number) =>
+  typeof value === 'string' && value.length <= max
+const draftNumber = (value: unknown, min: number, max: number) =>
+  typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max
+const draftTimestamp = (value: unknown) =>
+  value === undefined ||
+  (typeof value === 'string' && value.length <= 40 && Number.isFinite(Date.parse(value)))
+const workoutCategories = ['strength', 'cardio', 'mobility'] as const
+const workoutTrackingModes = ['reps_load', 'duration', 'duration_distance'] as const
+
+const isWorkoutSetDraft = (value: unknown) =>
+  isDraftObject(value) &&
+  hasOnlyDraftKeys(value, ['reps', 'load', 'durationMinutes', 'distanceKm', 'rpe', 'completed']) &&
+  draftString(value.reps, 32) &&
+  draftString(value.load, 32) &&
+  draftString(value.durationMinutes, 32) &&
+  draftString(value.distanceKm, 32) &&
+  draftString(value.rpe, 32) &&
+  typeof value.completed === 'boolean'
+
+const isWorkoutExerciseDraft = (value: unknown) =>
+  isDraftObject(value) &&
+  hasOnlyDraftKeys(value, [
+    'exerciseKey',
+    'name',
+    'category',
+    'trackingMode',
+    'equipment',
+    'equipmentNotes',
+    'sets',
+  ]) &&
+  draftString(value.exerciseKey, 128) &&
+  draftString(value.name, 200) &&
+  workoutCategories.includes(value.category as (typeof workoutCategories)[number]) &&
+  workoutTrackingModes.includes(value.trackingMode as (typeof workoutTrackingModes)[number]) &&
+  Array.isArray(value.equipment) &&
+  value.equipment.length <= exerciseEquipmentOptions.length &&
+  value.equipment.every((item) =>
+    exerciseEquipmentOptions.includes(item as (typeof exerciseEquipmentOptions)[number]),
+  ) &&
+  draftString(value.equipmentNotes, 300) &&
+  Array.isArray(value.sets) &&
+  value.sets.length <= 50 &&
+  value.sets.every(isWorkoutSetDraft)
+
+export const isWorkoutDraft = (value: unknown): value is WorkoutDraft =>
+  isDraftObject(value) &&
+  hasOnlyDraftKeys(value, [
+    'title',
+    'loadUnit',
+    'exercises',
+    'painLevel',
+    'fatigue',
+    'note',
+    'startedAt',
+    'endedAt',
+  ]) &&
+  draftString(value.title, 120) &&
+  (value.loadUnit === 'kg' || value.loadUnit === 'lb') &&
+  Array.isArray(value.exercises) &&
+  value.exercises.length <= 30 &&
+  value.exercises.every(isWorkoutExerciseDraft) &&
+  draftNumber(value.painLevel, 0, 10) &&
+  draftNumber(value.fatigue, 1, 5) &&
+  draftString(value.note, 2_000) &&
+  draftTimestamp(value.startedAt) &&
+  draftTimestamp(value.endedAt)
 
 const finite = (value: string) => value.trim() !== '' && Number.isFinite(Number(value))
 

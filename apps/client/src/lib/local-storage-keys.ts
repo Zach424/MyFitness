@@ -1,0 +1,5 @@
+export const authAccessTokenStorageKey = 'myfitness.auth.accessToken'
+export const legacyDevAccessTokenStorageKey = 'myfitness.dev.accessToken'
+export const devSubjectStorageKey = 'myfitness.dev.subject'
+export const authUserIdStorageKey = 'myfitness.auth.userId'
+export const erasureReceiptStorageKey = 'myfitness.privacy.erasureReceipt'

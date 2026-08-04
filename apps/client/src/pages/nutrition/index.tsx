@@ -12,6 +12,7 @@ import type {
 } from '@myfitness/contracts'
 
 import { buttonA11yProps } from '../../lib/accessibility'
+import { LocalDraftNotice } from '../../components/local-draft-notice'
 import {
   ApiError,
   confirmFoodPhotoCandidate,
@@ -30,6 +31,7 @@ import {
   updateMeal,
   uploadFoodPhoto,
 } from '../../lib/api'
+import { useRecoverableDraft } from '../../lib/use-local-draft'
 import {
   buildMealRequest,
   draftFromFoodCatalogItem,
@@ -37,6 +39,7 @@ import {
   draftFromMeal,
   draftFromSavedFood,
   initialMealDraft,
+  isMealDraft,
   mealDraftSummary,
   mealTypeLabels,
   recentFoods,
@@ -165,6 +168,14 @@ const NutritionPage = () => {
     void listFoodCatalog()
       .then((result) => setFoodCatalog(result.items))
       .catch((error: unknown) => setFeedback(messageOf(error)))
+  })
+
+  const recoverableDraft = useRecoverableDraft({
+    kind: 'meal',
+    draft,
+    enabled: !editing,
+    dirty: JSON.stringify(draft) !== JSON.stringify(initialMealDraft()),
+    validate: isMealDraft,
   })
 
   const summary = useMemo(() => mealDraftSummary(draft), [draft])
@@ -345,6 +356,7 @@ const NutritionPage = () => {
   }
 
   const resetEditor = () => {
+    recoverableDraft.clear()
     setDraft(initialMealDraft())
     setEditing(undefined)
     pendingKey.current = ''
@@ -448,6 +460,35 @@ const NutritionPage = () => {
               先确认食物和实际份量；这里整理记录，不评价“好坏”，也不把参考值当成精确化验。
             </Text>
           </View>
+
+          {!editing && recoverableDraft.pending ? (
+            <LocalDraftNotice
+              mode="restore"
+              envelope={recoverableDraft.pending}
+              onRestore={() => {
+                const restored = recoverableDraft.restore()
+                if (!restored) return
+                setDraft(restored)
+                pendingKey.current = ''
+                setFeedback('本地餐次草稿已恢复；请重新核对食物、份量和参考来源。')
+              }}
+              onDiscard={() => {
+                recoverableDraft.clear()
+                setDraft(initialMealDraft())
+                pendingKey.current = ''
+                setFeedback('本地餐次草稿已清除。')
+              }}
+            />
+          ) : !editing && recoverableDraft.saved ? (
+            <LocalDraftNotice
+              mode="saved"
+              envelope={recoverableDraft.saved}
+              onDiscard={() => {
+                resetEditor()
+                setFeedback('本地餐次草稿已清除。')
+              }}
+            />
+          ) : null}
 
           <View className="nutrition-layout">
             <View className="nutrition-card meal-editor">

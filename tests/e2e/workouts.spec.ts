@@ -147,6 +147,26 @@ test('workout log remains useful at wide viewport', async ({ page }) => {
   expect(browserErrors).toEqual([])
 })
 
+test('workout editor restores then explicitly discards its local draft', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  const browserErrors = collectBrowserErrors(page)
+  await openWorkouts(page)
+
+  const title = page.locator('.session-title-input input')
+  await title.fill('未完成的力量训练')
+  await expect(page.getByText('未完成内容已暂存')).toBeVisible()
+  await page.reload()
+  await expect(page.getByText('发现一份未完成记录')).toBeVisible()
+  await page.getByRole('button', { name: '恢复草稿' }).click()
+  await expect(title).toHaveValue('未完成的力量训练')
+  await page.getByRole('button', { name: '清除草稿' }).click()
+  await expect(title).toHaveValue('全身训练 A')
+  expect(
+    await page.evaluate(() => localStorage.getItem('myfitness.local-draft.workout')),
+  ).toBeNull()
+  expect(browserErrors).toEqual([])
+})
+
 test('exercise observation uses completed sets and refreshes corrected evidence', async ({
   page,
 }) => {

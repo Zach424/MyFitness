@@ -63,13 +63,22 @@ import { foodPhotoConsentVersion } from '@myfitness/contracts/food-photo.constan
 import Taro from '@tarojs/taro'
 
 import { parseOidcAuthorizationConfig, parseVerifiedSession } from './api-response'
+import { clearAllLocalDrafts } from './local-drafts'
+import {
+  authAccessTokenStorageKey,
+  authUserIdStorageKey,
+  devSubjectStorageKey,
+  erasureReceiptStorageKey,
+  legacyDevAccessTokenStorageKey,
+} from './local-storage-keys'
 
 const API_BASE_URL = __API_BASE_URL__.replace(/\/$/, '')
 const AUTH_MODE = __AUTH_MODE__
-const TOKEN_KEY = 'myfitness.auth.accessToken'
-const LEGACY_TOKEN_KEY = 'myfitness.dev.accessToken'
-const SUBJECT_KEY = 'myfitness.dev.subject'
-const ERASURE_RECEIPT_KEY = 'myfitness.privacy.erasureReceipt'
+const TOKEN_KEY = authAccessTokenStorageKey
+const LEGACY_TOKEN_KEY = legacyDevAccessTokenStorageKey
+const SUBJECT_KEY = devSubjectStorageKey
+const USER_ID_KEY = authUserIdStorageKey
+const ERASURE_RECEIPT_KEY = erasureReceiptStorageKey
 
 type StoredErasureReceipt = {
   intentId: string
@@ -109,9 +118,11 @@ const writeStoredErasureReceipt = (value: StoredErasureReceipt) =>
   Taro.setStorageSync(ERASURE_RECEIPT_KEY, JSON.stringify(value))
 
 const clearAuthStorage = () => {
+  clearAllLocalDrafts()
   Taro.removeStorageSync(TOKEN_KEY)
   Taro.removeStorageSync(LEGACY_TOKEN_KEY)
   Taro.removeStorageSync(SUBJECT_KEY)
+  Taro.removeStorageSync(USER_ID_KEY)
 }
 
 type ClientSession = {
@@ -168,6 +179,7 @@ const requestDevSession = async (): Promise<ClientSession> => {
     throw new ApiError(response.statusCode, response.data as ApiErrorBody)
   }
   Taro.setStorageSync(TOKEN_KEY, response.data.accessToken)
+  Taro.setStorageSync(USER_ID_KEY, response.data.userId)
   return { accessToken: response.data.accessToken, isNewUser }
 }
 
@@ -184,6 +196,7 @@ const requestWechatSession = async (): Promise<ClientSession> => {
     throw new ApiError(response.statusCode, response.data as ApiErrorBody)
   }
   Taro.setStorageSync(TOKEN_KEY, response.data.accessToken)
+  Taro.setStorageSync(USER_ID_KEY, response.data.userId)
   return response.data
 }
 
@@ -238,11 +251,13 @@ export const exchangeOidcAuthorizationCode = async (
   const session = parseVerifiedSession(response.data)
   if (session.provider !== 'oidc') throw new Error('身份服务返回了不匹配的登录方式')
   Taro.setStorageSync(TOKEN_KEY, session.accessToken)
+  Taro.setStorageSync(USER_ID_KEY, session.userId)
   return session
 }
 
 export const hasStoredAuthSession = () => Boolean(Taro.getStorageSync<string>(TOKEN_KEY))
 export const isOidcAuthMode = AUTH_MODE === 'oidc'
+export const logoutClientSession = () => clearAuthStorage()
 
 const authenticatedRequest = async <T>(
   path: string,
@@ -656,6 +671,7 @@ const recoverErasureReceipt = async (statusToken: string): Promise<ErasureReceip
 }
 
 export const prepareAccountDeletion = async (): Promise<AccountDeletionIntent> => {
+  clearAllLocalDrafts()
   const intent = await authenticatedRequest<AccountDeletionIntent>(
     '/me/privacy/account-deletion-intents',
     'POST',

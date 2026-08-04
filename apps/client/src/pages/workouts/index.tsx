@@ -11,6 +11,7 @@ import type {
 import { exerciseEquipmentOptions } from '@myfitness/contracts/exercise-catalog.constants'
 
 import { buttonA11yProps } from '../../lib/accessibility'
+import { LocalDraftNotice } from '../../components/local-draft-notice'
 import {
   ApiError,
   archiveExerciseCatalogEntry,
@@ -23,6 +24,7 @@ import {
   updateExerciseCatalogEntry,
   updateWorkout,
 } from '../../lib/api'
+import { useRecoverableDraft } from '../../lib/use-local-draft'
 import {
   buildExerciseCatalogRequest,
   buildWorkoutRequest,
@@ -33,6 +35,7 @@ import {
   filterExerciseCatalog,
   initialExerciseCatalogDraft,
   initialWorkoutDraft,
+  isWorkoutDraft,
   type ExerciseCatalogDraft,
   type WorkoutDraft,
   validateExerciseCatalogDraft,
@@ -123,6 +126,14 @@ const WorkoutsPage = () => {
       }
     })()
   }, [])
+
+  const recoverableDraft = useRecoverableDraft({
+    kind: 'workout',
+    draft,
+    enabled: !editing,
+    dirty: JSON.stringify(draft) !== JSON.stringify(initialWorkoutDraft()),
+    validate: isWorkoutDraft,
+  })
 
   const summary = useMemo(() => workoutDraftSummary(draft), [draft])
   const filteredCatalog = useMemo(
@@ -306,6 +317,7 @@ const WorkoutsPage = () => {
     try {
       if (editing) {
         const saved = await updateWorkout(editing.id, buildWorkoutRequest(draft, editing.revision))
+        recoverableDraft.clear()
         setWorkouts((current) =>
           current.map((workout) => (workout.id === saved.id ? saved : workout)),
         )
@@ -315,6 +327,7 @@ const WorkoutsPage = () => {
       } else {
         if (!pendingKey.current) pendingKey.current = requestKey()
         const saved = await createWorkout(buildWorkoutRequest(draft), pendingKey.current)
+        recoverableDraft.clear()
         setWorkouts((current) => [saved, ...current])
         setDraft(initialWorkoutDraft())
         pendingKey.current = ''
@@ -401,6 +414,37 @@ const WorkoutsPage = () => {
             </Text>
           </View>
 
+          {!editing && recoverableDraft.pending ? (
+            <LocalDraftNotice
+              mode="restore"
+              envelope={recoverableDraft.pending}
+              onRestore={() => {
+                const restored = recoverableDraft.restore()
+                if (!restored) return
+                setDraft(restored)
+                pendingKey.current = ''
+                setFeedback('本地草稿已恢复；保存前请重新核对完成组、负重与感受。')
+              }}
+              onDiscard={() => {
+                recoverableDraft.clear()
+                setDraft(initialWorkoutDraft())
+                pendingKey.current = ''
+                setFeedback('本地训练草稿已清除。')
+              }}
+            />
+          ) : !editing && recoverableDraft.saved ? (
+            <LocalDraftNotice
+              mode="saved"
+              envelope={recoverableDraft.saved}
+              onDiscard={() => {
+                recoverableDraft.clear()
+                setDraft(initialWorkoutDraft())
+                pendingKey.current = ''
+                setFeedback('本地训练草稿已清除。')
+              }}
+            />
+          ) : null}
+
           <View className="workouts-grid">
             <View className="workout-builder">
               {workouts[0] && !editing ? (
@@ -432,6 +476,7 @@ const WorkoutsPage = () => {
                       {...buttonA11yProps}
                       className="workout-quiet"
                       onClick={() => {
+                        recoverableDraft.clear()
                         setEditing(undefined)
                         setDraft(initialWorkoutDraft())
                         setFeedback('')

@@ -9,6 +9,7 @@ import type {
 } from '@myfitness/contracts'
 
 import { buttonA11yProps } from '../../lib/accessibility'
+import { LocalDraftNotice } from '../../components/local-draft-notice'
 import {
   ApiError,
   createHealthRecord,
@@ -17,12 +18,14 @@ import {
   listHealthRecords,
   updateHealthRecord,
 } from '../../lib/api'
+import { useRecoverableDraft } from '../../lib/use-local-draft'
 import {
   buildRecordRequest,
   createDraft,
   draftFromRecord,
   formatRecordValue,
   groupMetrics,
+  isRecordDraft,
   metricUiDefinitions,
   type RecordDraft,
   type RecordGroup,
@@ -82,6 +85,14 @@ const RecordsPage = () => {
     void loadRecords()
   }, [])
 
+  const recoverableDraft = useRecoverableDraft({
+    kind: 'health-record',
+    draft,
+    enabled: !editing,
+    dirty: JSON.stringify(draft) !== JSON.stringify(createDraft(draft.metric)),
+    validate: isRecordDraft,
+  })
+
   const groupRecords = useMemo(
     () => records.filter((record) => metricUiDefinitions[record.metric].group === group),
     [group, records],
@@ -128,6 +139,7 @@ const RecordsPage = () => {
           editing.id,
           buildRecordRequest(draft, editing.revision),
         )
+        recoverableDraft.clear()
         setRecords((current) =>
           current.map((record) => (record.id === updated.id ? updated : record)),
         )
@@ -137,6 +149,7 @@ const RecordsPage = () => {
       } else {
         if (!requestKey.current) requestKey.current = createRequestKey()
         const created = await createHealthRecord(buildRecordRequest(draft), requestKey.current)
+        recoverableDraft.clear()
         setRecords((current) => [created, ...current])
         setDraft(createDraft(created.metric))
         requestKey.current = ''
@@ -222,6 +235,38 @@ const RecordsPage = () => {
             </Text>
           </View>
 
+          {!editing && recoverableDraft.pending ? (
+            <LocalDraftNotice
+              mode="restore"
+              envelope={recoverableDraft.pending}
+              onRestore={() => {
+                const restored = recoverableDraft.restore()
+                if (!restored) return
+                setGroup(metricUiDefinitions[restored.metric].group)
+                setDraft(restored)
+                requestKey.current = ''
+                setFeedback('本地记录草稿已恢复；保存前请重新核对数值、单位与发生时间。')
+              }}
+              onDiscard={() => {
+                recoverableDraft.clear()
+                setDraft(createDraft(draft.metric))
+                requestKey.current = ''
+                setFeedback('本地身体记录草稿已清除。')
+              }}
+            />
+          ) : !editing && recoverableDraft.saved ? (
+            <LocalDraftNotice
+              mode="saved"
+              envelope={recoverableDraft.saved}
+              onDiscard={() => {
+                recoverableDraft.clear()
+                setDraft(createDraft(draft.metric))
+                requestKey.current = ''
+                setFeedback('本地身体记录草稿已清除。')
+              }}
+            />
+          ) : null}
+
           <View className="progress-photo-entry">
             <View>
               <Text className="panel-eyebrow">PRIVATE CONTACT SHEET</Text>
@@ -267,6 +312,7 @@ const RecordsPage = () => {
                       {...buttonA11yProps}
                       className="quiet-button"
                       onClick={() => {
+                        recoverableDraft.clear()
                         setEditing(undefined)
                         setDraft(createDraft(draft.metric))
                         setFeedback('')

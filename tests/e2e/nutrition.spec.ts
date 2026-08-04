@@ -223,6 +223,34 @@ test('meal editor and ledger remain balanced at wide viewport', async ({ page })
   expect(browserErrors).toEqual([])
 })
 
+test('meal editor restores only whitelisted form fields and clears the draft after save', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  const browserErrors = collectBrowserErrors(page)
+  await openNutrition(page)
+
+  const title = page.locator('.nutrition-title-input input')
+  await title.fill('训练后的晚餐')
+  await page.getByRole('button', { name: '添加熟鸡胸肉' }).click()
+  await expect(page.getByText('未完成内容已暂存')).toBeVisible()
+  await page.reload()
+  await expect(page.getByText('发现一份未完成记录')).toBeVisible()
+  await page.getByRole('button', { name: '恢复草稿' }).click()
+  await expect(title).toHaveValue('训练后的晚餐')
+  await expect(page.locator('.meal-item')).toHaveCount(1)
+  await expect(page.getByText('仅保存表单字段，不包含照片、授权材料或 AI 待审内容。')).toBeVisible()
+
+  const createResponse = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/v1/nutrition/meals') && response.request().method() === 'POST',
+  )
+  await page.getByRole('button', { name: '保存餐次', exact: true }).click()
+  expect((await createResponse).status()).toBe(201)
+  expect(await page.evaluate(() => localStorage.getItem('myfitness.local-draft.meal'))).toBeNull()
+  expect(browserErrors).toEqual([])
+})
+
 test('daily nutrition observation keeps recorded and missing local days explicit', async ({
   page,
 }) => {

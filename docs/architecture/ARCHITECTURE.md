@@ -1,6 +1,6 @@
 # Architecture baseline
 
-Status: accepted and implemented through the iteration-031 privacy-first progress-photo boundary; changes require an ADR.
+Status: accepted and implemented through the iteration-042 recoverable local-draft boundary; changes require an ADR.
 
 ## System shape
 
@@ -42,6 +42,7 @@ Implemented foundation:
 - `packages/domain` owns measurement units, canonical conversion, plausible ranges and integer score rules.
 - PostgreSQL 18.4 stores measurements through parameterized `pg`; ordered SQL migrations run transactionally and record a SHA-256 checksum to detect drift.
 - Protected routes resolve a provider-bound opaque Bearer session to a server-owned user principal. Only SHA-256 token hashes are persisted. The production-disabled local issuer and server-verified WeChat `code2Session` adapter share the ownership boundary; WeChat `session_key` is never stored.
+- The workout, meal and health-record create editors share a dependency-free `myfitness-sensitive-draft/v1` vault over platform application storage. Exact per-editor guards accept incomplete form input but reject unknown fields; envelopes are owner-scoped, capped at 96 KiB, expire after 24 hours and require explicit restore/discard. Save, cancel, logout and erasure initiation clear the relevant scope. Photos, authorization material, erasure receipts and AI candidate sheets are outside the draft contract.
 - Administrator routes use an independent operator/identity/role/session boundary and `adminBearer` OpenAPI scheme. The API verifies pre-provisioned OIDC subjects against remote JWKS, issuer, audience, age and nonce, rejects token replay, re-resolves roles per request and keeps the local operator issuer production-disabled.
 - Adult profile, training goal, risk eligibility and immutable purpose/version consent events persist transactionally. Profile updates use optimistic revision checks.
 - Body/recovery record creation, replacement and soft deletion run in database transactions. Each accepted state is copied to an append-only revision table; writes use expected revisions and lists exclude deleted records while owner history remains available.
@@ -89,6 +90,8 @@ The implemented identity, profile, goal, risk and consent invariants are documen
 ADR-0004 records the health-record replacement, append-only snapshot, soft-delete and optimistic-concurrency decision.
 
 The exact-metric confirmed-only health observation is documented in [HEALTH_RECORD_MODEL.md](HEALTH_RECORD_MODEL.md). ADR-0039 keeps canonical statistics separate from recorded display provenance and prohibits cross-metric or candidate aggregation.
+
+Recoverable local editor state is documented in ADR-0040. It is a short-lived client recovery copy, not a fourth persistence authority: PostgreSQL remains authoritative after save, while receipt storage remains separate for erasure recovery.
 
 The workout aggregate, derived-value rules, exercise-catalog boundary, exercise observation and safe repeat semantics are documented in [WORKOUT_MODEL.md](WORKOUT_MODEL.md). ADR-0005 records the normalized current graph plus immutable-snapshot decision; ADR-0030 makes set evidence authoritative for workout completion status; ADR-0035 keeps mutable exercise definitions separate from workout fact snapshots; ADR-0036 defines stable-key completed-only insight projection.
 

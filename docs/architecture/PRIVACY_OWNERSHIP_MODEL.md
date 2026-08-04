@@ -1,6 +1,6 @@
 # Privacy ownership model
 
-Status: durable local ownership/erasure boundary with lost-response recovery, purpose-separated photo custody and exercise/food catalog history implemented through iteration 039
+Status: durable local ownership/erasure boundary with lost-response recovery, purpose-separated photo custody, catalog history and expiring editor drafts implemented through iteration 042
 
 ## User-owned surface
 
@@ -34,6 +34,12 @@ revoked + new explicit request → new accepted event → active
 `terms`, `privacy` and `health_data` are required to operate the current account. They cannot be withdrawn independently in the UI; account erasure stops that processing. `ai_plan_explanation`, `food_photo_analysis`, `progress_photo_analysis` and `progress_photo_retention` are optional and independently revocable.
 
 Consent rows remain append-oriented: dropping the old purpose/version uniqueness allows a new event after withdrawal instead of erasing the prior acceptance/revocation interval. AI and photo idempotency locks ensure one consent receipt is created for one unique request. Food-photo withdrawal removes every food analysis and only the `food` object scope. Progress-analysis withdrawal deletes temporary images but preserves separately retained images after clearing their machine checks; progress-retention withdrawal deletes every progress record and only the `progress` scope. AI withdrawal removes pending work while completed user-visible explanations remain exportable until account erasure. Media deletion can remain `pending` during a storage outage without being misreported as completed.
+
+## Expiring local editor drafts
+
+Workout, meal and health-record create forms may keep one owner-scoped `myfitness-sensitive-draft/v1` envelope in platform application storage for at most 24 hours. The client requires the verified user UUID, or the production-disabled development subject fallback, before writing. A different owner, missing scope, incompatible version, invalid structure, expiry or size above 96 KiB prevents restoration and removes the value.
+
+Each page validates only its explicit form fields and asks before restoring. Raw or temporary photo material, authorization state/tokens, erasure intent/receipt secrets, idempotency/request state and AI candidate sheets have no draft field. Successful save, explicit cancel/discard, logout and account-erasure initiation clear drafts; erasure receipt storage remains separate so a lost destructive response can still be recovered. These copies are not included in the server export because they are client-local and ephemeral.
 
 ## Account erasure
 
@@ -86,7 +92,8 @@ The client retains the bearer receipt secret across reloads until explicit local
 - Export is generated in API memory and the Mini Program download API has a 50 MiB practical boundary.
 - Retained progress photos increase that export/custody burden; capture-quality checks do not establish posture, composition or health outcomes.
 - Receipt status recovery is secret-gated and tested across response loss/reload, but client secure-storage and final token-retention policy are not yet approved.
+- Expiring drafts are minimized and owner-scoped, but H5/Mini Program application-storage encryption, shared-device semantics and operating-system backup behavior still require closed-beta review.
 - Dead-letter recovery is a restricted exact-job runbook action; centralized alert delivery and least-privilege recovery tooling are absent.
 - Local MinIO, fault injection and restore proof do not establish production bucket encryption/IAM/lifecycle/versioning/replication or provider/legal approval.
 
-Operational detail is in the [data custody runbook](../operations/DATA_CUSTODY_RUNBOOK.md); ADR-0015 records the cross-system ordering and restore-ledger decision, while ADR-0022 records the recoverable intent/receipt protocol.
+Operational detail is in the [data custody runbook](../operations/DATA_CUSTODY_RUNBOOK.md); ADR-0015 records the cross-system ordering and restore-ledger decision, ADR-0022 records the recoverable intent/receipt protocol and ADR-0040 records the bounded local-draft boundary.

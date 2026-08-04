@@ -172,6 +172,29 @@ export const createDraft = (metric: MetricCode): RecordDraft => {
   }
 }
 
+export const isRecordDraft = (value: unknown): value is RecordDraft => {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
+  const candidate = value as Record<string, unknown>
+  if (
+    !Object.keys(candidate).every((key) =>
+      ['metric', 'value', 'unit', 'occurredAt'].includes(key),
+    ) ||
+    typeof candidate.metric !== 'string' ||
+    !(candidate.metric in metricUiDefinitions) ||
+    typeof candidate.value !== 'string' ||
+    candidate.value.length > 32 ||
+    typeof candidate.unit !== 'string' ||
+    (candidate.occurredAt !== undefined &&
+      (typeof candidate.occurredAt !== 'string' ||
+        candidate.occurredAt.length > 40 ||
+        !Number.isFinite(Date.parse(candidate.occurredAt))))
+  ) {
+    return false
+  }
+  const definition = metricUiDefinitions[candidate.metric as MetricCode]
+  return definition.units.includes(candidate.unit as UnitCode)
+}
+
 const getTimezone = () => {
   try {
     return Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Shanghai'

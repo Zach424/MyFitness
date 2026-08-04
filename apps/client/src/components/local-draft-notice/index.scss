@@ -1,0 +1,123 @@
+.local-draft {
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr);
+  overflow: hidden;
+  margin: 0 0 20px;
+  border: 1px solid rgba(34, 58, 52, 0.22);
+  border-radius: var(--radius-card);
+  background: var(--color-paper);
+  box-shadow: 0 12px 30px rgba(34, 58, 52, 0.08);
+}
+
+.local-draft__rail {
+  display: flex;
+  min-height: 100%;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 0;
+  color: #f6f1e7;
+  background: var(--color-mineral);
+  font-family: var(--font-metric);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+}
+
+.local-draft--saved .local-draft__rail {
+  background: var(--color-juniper);
+}
+
+.local-draft__content {
+  min-width: 0;
+  padding: 18px 20px;
+}
+
+.local-draft__eyebrow,
+.local-draft__title,
+.local-draft__body,
+.local-draft__time {
+  display: block;
+}
+
+.local-draft__eyebrow {
+  color: var(--color-juniper);
+  font-family: var(--font-metric);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+}
+
+.local-draft__title {
+  margin-top: 5px;
+  color: var(--color-mineral);
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.local-draft__body,
+.local-draft__time {
+  margin-top: 7px;
+  color: var(--color-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.local-draft__time {
+  font-family: var(--font-metric);
+  font-size: 11px;
+}
+
+.local-draft__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 13px;
+}
+
+.local-draft__restore,
+.local-draft__discard {
+  min-height: 38px;
+  margin: 0;
+  padding: 0 16px;
+  border-radius: var(--radius-round);
+  font-size: 12px;
+  line-height: 38px;
+}
+
+.local-draft__restore {
+  color: var(--color-paper);
+  background: var(--color-mineral);
+}
+
+.local-draft__discard {
+  color: var(--color-mineral);
+  border: 1px solid rgba(34, 58, 52, 0.32);
+  background: transparent;
+}
+
+@media (max-width: 360px) {
+  .local-draft {
+    grid-template-columns: 42px minmax(0, 1fr);
+  }
+
+  .local-draft__content {
+    padding: 16px;
+  }
+
+  .local-draft__actions,
+  .local-draft__restore,
+  .local-draft__discard {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .local-draft *,
+  .local-draft *::before,
+  .local-draft *::after {
+    scroll-behavior: auto !important;
+    transition: none !important;
+  }
+}

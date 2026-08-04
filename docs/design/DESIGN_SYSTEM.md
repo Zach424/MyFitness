@@ -373,6 +373,18 @@ Reviewed evidence:
 
 - [390 × 844 exact health metric observation](../../output/playwright/iteration-041-health-metric-observation-mobile.png)
 
+## Recoverable local-draft review — iteration 042
+
+The three record editors now share a compact **LOCAL / 24H ticket** instead of a generic toast. A mineral side rail names the retention boundary; the paper body shows whether the draft is waiting for a restore decision or already represents the current form, plus exact saved-at and automatic-clear times. Restore is an explicit primary action and discard remains equally visible.
+
+The ticket says what is absent—photos, authorization material and AI review content—without presenting application storage as a secure vault. It never auto-restores over the form. A restored health draft asks the user to recheck value, unit and occurrence time; workout and meal copy similarly asks for completion/portion review. Save/cancel/discard removes the ticket and local value.
+
+The 390 px production-browser flow changed a weight value, observed the debounced saved state, refreshed into a restore decision, restored 71.2 kg and saved it. Separate flows repeat restore/discard for workout and restore/save for meal, while privacy coverage proves logout and erasure initiation clear all three keys. The first bundle measurement exposed all three guards inside the meal route; moving each guard into its owning page model returned the largest lazy JavaScript below the unchanged 200 KB ceiling.
+
+Reviewed evidence:
+
+- [390 × 844 recoverable health draft](../../output/playwright/iteration-042-recoverable-draft-mobile.png)
+
 ## Screenshot review checklist
 
 - The Rhythm Rail remains understandable without color.

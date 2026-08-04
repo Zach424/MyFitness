@@ -41,6 +41,66 @@ export const initialMealDraft = (): MealDraft => ({
   note: '',
 })
 
+const isDraftObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+const hasOnlyDraftKeys = (value: Record<string, unknown>, keys: readonly string[]) =>
+  Object.keys(value).every((key) => keys.includes(key))
+const draftString = (value: unknown, max: number) =>
+  typeof value === 'string' && value.length <= max
+const draftNumber = (value: unknown, min: number, max: number) =>
+  typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max
+const draftTimestamp = (value: unknown) =>
+  value === undefined ||
+  (typeof value === 'string' && value.length <= 40 && Number.isFinite(Date.parse(value)))
+const draftMealTypes = ['breakfast', 'lunch', 'dinner', 'snack'] as const
+const draftServingUnits = ['g', 'ml', 'piece', 'serving'] as const
+const draftFoodCategories = [
+  'staple',
+  'protein',
+  'vegetable',
+  'fruit',
+  'dairy',
+  'snack',
+  'custom',
+] as const
+
+const isDraftNutrients = (value: unknown) =>
+  isDraftObject(value) &&
+  hasOnlyDraftKeys(value, ['energyKcal', 'proteinG', 'carbohydrateG', 'fatG', 'fiberG']) &&
+  draftNumber(value.energyKcal, 0, 10_000) &&
+  draftNumber(value.proteinG, 0, 1_000) &&
+  draftNumber(value.carbohydrateG, 0, 1_000) &&
+  draftNumber(value.fatG, 0, 1_000) &&
+  (value.fiberG === undefined || draftNumber(value.fiberG, 0, 1_000))
+
+const isDraftFoodSnapshot = (value: unknown): value is FoodSnapshot =>
+  isDraftObject(value) &&
+  hasOnlyDraftKeys(value, ['foodKey', 'name', 'category', 'nutrientsPer100g', 'reference']) &&
+  draftString(value.foodKey, 128) &&
+  draftString(value.name, 200) &&
+  draftFoodCategories.includes(value.category as (typeof draftFoodCategories)[number]) &&
+  isDraftNutrients(value.nutrientsPer100g) &&
+  draftString(value.reference, 500)
+
+const isFoodDraft = (value: unknown) =>
+  isDraftObject(value) &&
+  hasOnlyDraftKeys(value, ['food', 'amount', 'unit', 'gramsPerUnit']) &&
+  isDraftFoodSnapshot(value.food) &&
+  draftString(value.amount, 32) &&
+  draftServingUnits.includes(value.unit as (typeof draftServingUnits)[number]) &&
+  draftNumber(value.gramsPerUnit, 0.001, 10_000)
+
+export const isMealDraft = (value: unknown): value is MealDraft =>
+  isDraftObject(value) &&
+  hasOnlyDraftKeys(value, ['mealType', 'title', 'items', 'note', 'occurredAt']) &&
+  draftMealTypes.includes(value.mealType as (typeof draftMealTypes)[number]) &&
+  draftString(value.title, 120) &&
+  Array.isArray(value.items) &&
+  value.items.length <= 50 &&
+  value.items.every(isFoodDraft) &&
+  draftString(value.note, 2_000) &&
+  draftTimestamp(value.occurredAt)
+
 const finitePositive = (value: string) =>
   value.trim() !== '' && Number.isFinite(Number(value)) && Number(value) > 0
 

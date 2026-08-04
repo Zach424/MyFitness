@@ -190,6 +190,35 @@ test('mobile privacy ledger inventories and downloads an owned-data export', asy
   expect(browserErrors).toEqual([])
 })
 
+test('logout removes every local editor draft before starting a new session', async ({
+  page,
+  request,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  const browserErrors = collectBrowserErrors(page)
+  await seedAccount(page, request)
+  await page.evaluate(() => {
+    localStorage.setItem('myfitness.local-draft.workout', 'sensitive-workout')
+    localStorage.setItem('myfitness.local-draft.meal', 'sensitive-meal')
+    localStorage.setItem('myfitness.local-draft.health-record', 'sensitive-health')
+  })
+
+  const nextSession = page.waitForResponse(
+    (response) => response.url().endsWith('/v1/auth/dev/session') && response.status() === 200,
+  )
+  await page.getByRole('button', { name: '退出登录并清除草稿' }).click()
+  const nextSessionBody = (await (await nextSession).json()) as { userId: string }
+  expect(
+    await page.evaluate(() =>
+      ['workout', 'meal', 'health-record'].map((kind) =>
+        localStorage.getItem(`myfitness.local-draft.${kind}`),
+      ),
+    ),
+  ).toEqual([null, null, null])
+  await database.query('DELETE FROM users WHERE id = $1', [nextSessionBody.userId])
+  expect(browserErrors).toEqual([])
+})
+
 test('wide privacy controls revoke optional processing and permanently erase the account', async ({
   page,
   request,
@@ -208,6 +237,11 @@ test('wide privacy controls revoke optional processing and permanently erase the
   await expect(photoConsent.getByText('已撤回', { exact: true })).toBeVisible()
 
   await page.getByRole('button', { name: '不导出' }).click()
+  await page.evaluate(() => {
+    localStorage.setItem('myfitness.local-draft.workout', 'sensitive-workout')
+    localStorage.setItem('myfitness.local-draft.meal', 'sensitive-meal')
+    localStorage.setItem('myfitness.local-draft.health-record', 'sensitive-health')
+  })
   await page.getByRole('checkbox', { name: /我知道删除无法撤销/ }).click()
   await page
     .locator(`input[placeholder="${accountDeletionConfirmationPhrase}"]`)
@@ -223,6 +257,13 @@ test('wide privacy controls revoke optional processing and permanently erase the
     receiptId: string
     statusToken: string
   }
+  expect(
+    await page.evaluate(() =>
+      ['workout', 'meal', 'health-record'].map((kind) =>
+        localStorage.getItem(`myfitness.local-draft.${kind}`),
+      ),
+    ),
+  ).toEqual([null, null, null])
   trackedReceiptId = deletionReceipt.receiptId
 
   await expect(page.getByText('账户数据已删除')).toBeVisible()

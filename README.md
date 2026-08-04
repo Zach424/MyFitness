@@ -2,7 +2,7 @@
 
 面向普通健身人群的多端记录与 AI 规划产品。产品把身体、训练、饮食和恢复数据整理为可解释、可调整、可持续执行的个人计划。
 
-> 当前阶段：首个服务候选 `v0.1.0-rc.1` 已发布验证；本地产品还完成了用户自建动作目录、显式器械/记录方式、隐私优先的进度照、服务端训练完成状态，以及计划训练到实际训练的显式关联。动作目录支持搜索、修正、归档和导出，目录变化不会改写已保存训练；Week Fold 与 Today 也不会根据标题、日期或时长推断完成情况。H5 OIDC 已完成本地/provider-double 验收，H5 与 WeApp 均有来源绑定、实际字节校验的 `candidate` 确定性 TAR 契约。现有 `v0.1.0-rc.1` 仍是“仅服务”历史记录；托管账号、真实微信/OIDC 凭据、精确回调域名/TLS/CORS、集中遥测、数据托管和责任人仍是上线门槛，当前没有声称已经承载公网流量。
+> 当前阶段：首个服务候选 `v0.1.0-rc.1` 已发布验证；本地产品已完成身体/训练/饮食观察、用户自建动作与食物目录、隐私优先进度照、计划到实际训练的显式关联，以及三类记录编辑器的 24 小时账号隔离恢复草稿。草稿必须显式恢复并在保存、取消、退出或发起销户时清除，不包含照片、授权材料、销户回执或 AI 待审内容。H5 OIDC 已完成本地/provider-double 验收，H5 与 WeApp 均有来源绑定、实际字节校验的 `candidate` 确定性 TAR 契约。现有 `v0.1.0-rc.1` 仍是“仅服务”历史记录；托管账号、真实微信/OIDC 凭据、精确回调域名/TLS/CORS、集中遥测、数据托管和责任人仍是上线门槛，当前没有声称已经承载公网流量。
 
 ## 产品边界
 
@@ -169,6 +169,7 @@ Playwright 会复用或启动 API、H5 与管理员预览服务。`pnpm db:down`
 - [架构决策 0037](docs/architecture/decisions/0037-user-owned-food-catalog.md)
 - [架构决策 0038](docs/architecture/decisions/0038-timezone-safe-nutrition-observation.md)
 - [架构决策 0039](docs/architecture/decisions/0039-exact-metric-health-observation.md)
+- [架构决策 0040](docs/architecture/decisions/0040-recoverable-sensitive-local-drafts.md)
 - [健康记录数据模型](docs/architecture/HEALTH_RECORD_MODEL.md)
 - [训练记录数据模型](docs/architecture/WORKOUT_MODEL.md)
 - [饮食记录数据模型](docs/architecture/NUTRITION_MODEL.md)
@@ -228,6 +229,7 @@ Playwright 会复用或启动 API、H5 与管理员预览服务。`pnpm db:down`
 - [第 39 轮档案](docs/iterations/039-user-owned-food-catalog.md)
 - [第 40 轮档案](docs/iterations/040-daily-nutrition-observation.md)
 - [第 41 轮档案](docs/iterations/041-health-metric-observation.md)
+- [第 42 轮档案](docs/iterations/042-recoverable-sensitive-local-drafts.md)
 - [移动端视觉证据](output/playwright/iteration-001-mobile.png)
 - [宽屏视觉证据](output/playwright/iteration-001-wide.png)
 - [建档移动端证据](output/playwright/iteration-003-onboarding-mobile.png)
@@ -248,6 +250,7 @@ Playwright 会复用或启动 API、H5 与管理员预览服务。`pnpm db:down`
 - [自建食物目录移动端证据](output/playwright/iteration-039-user-food-catalog-mobile.png)
 - [每日营养观察移动端证据](output/playwright/iteration-040-nutrition-observation-mobile.png)
 - [身体/恢复单指标观察移动端证据](output/playwright/iteration-041-health-metric-observation-mobile.png)
+- [可恢复本地草稿移动端证据](output/playwright/iteration-042-recoverable-draft-mobile.png)
 - [周计划宽屏证据](output/playwright/iteration-008-plans-wide.png)
 - [AI 边注移动端证据](output/playwright/iteration-009-ai-mobile.png)
 - [AI 边注宽屏证据](output/playwright/iteration-009-ai-wide.png)

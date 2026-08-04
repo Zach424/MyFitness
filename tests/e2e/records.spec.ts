@@ -170,3 +170,44 @@ test('metric observation keeps canonical statistics and recorded units explicit'
   await expect(page.getByText('7 天 · 标准单位 kg')).toBeVisible()
   expect(browserErrors).toEqual([])
 })
+
+test('health editor restores an owner-scoped local draft and clears it after save', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  const browserErrors: string[] = []
+  page.on('console', (message) => {
+    if (message.type() === 'error') browserErrors.push(message.text())
+  })
+  page.on('pageerror', (error) => browserErrors.push(error.message))
+
+  await openRecords(page)
+  const input = page.locator('[aria-label="体重数值"] input')
+  await input.fill('71.2')
+  await expect(page.getByText('未完成内容已暂存')).toBeVisible()
+  expect(
+    await page.evaluate(() => localStorage.getItem('myfitness.local-draft.health-record')),
+  ).not.toBeNull()
+
+  await page.reload()
+  await expect(page.getByText('发现一份未完成记录')).toBeVisible()
+  await expect(input).toHaveValue('70')
+  await page.getByRole('button', { name: '恢复草稿' }).click()
+  await expect(input).toHaveValue('71.2')
+  await expect(page.getByText(/自动清除/)).toBeVisible()
+  await page.screenshot({
+    path: 'output/playwright/iteration-042-recoverable-draft-mobile.png',
+    fullPage: true,
+  })
+
+  const createResponse = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/v1/health-records') && response.request().method() === 'POST',
+  )
+  await page.getByRole('button', { name: '保存记录' }).click()
+  expect((await createResponse).status()).toBe(201)
+  expect(
+    await page.evaluate(() => localStorage.getItem('myfitness.local-draft.health-record')),
+  ).toBeNull()
+  expect(browserErrors).toEqual([])
+})

@@ -16,6 +16,7 @@ import {
   forgetErasureReceipt,
   getErasureReceiptStatus,
   getPrivacyOverview,
+  logoutClientSession,
   prepareAccountDeletion,
   recoverPendingAccountDeletion,
   revokeOptionalConsent,
@@ -182,6 +183,11 @@ const PrivacyPage = () => {
   const handleForgetReceipt = () => {
     forgetErasureReceipt()
     void Taro.reLaunch({ url: '/pages/onboarding/index' })
+  }
+
+  const handleLogout = () => {
+    logoutClientSession()
+    void Taro.reLaunch({ url: '/pages/login/index' })
   }
 
   if (deleted) {
@@ -439,6 +445,17 @@ const PrivacyPage = () => {
                       )
                     })}
                   </View>
+                </View>
+
+                <View className="privacy-card session-card">
+                  <Text className="section-kicker">LOCAL SESSION</Text>
+                  <Text className="section-title">退出这台设备</Text>
+                  <Text className="section-body">
+                    退出会移除当前会话和三类未完成本地草稿；销户查询回执不会被混入或随草稿恢复。
+                  </Text>
+                  <Button {...buttonA11yProps} className="session-action" onClick={handleLogout}>
+                    退出登录并清除草稿
+                  </Button>
                 </View>
 
                 <View className="tear-line" aria-hidden="true">
