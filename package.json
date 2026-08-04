@@ -29,6 +29,8 @@
     "deploy:verify": "node scripts/verify-deployment.mjs",
     "deploy:smoke": "node scripts/run-deployment-smoke.mjs",
     "deploy:admit": "node scripts/deployment-admission.mjs verify",
+    "docs:sync-obsidian": "node scripts/sync-project-status-to-obsidian.mjs write",
+    "docs:verify-obsidian": "node scripts/sync-project-status-to-obsidian.mjs verify",
     "release:client": "node scripts/client-release.mjs",
     "release:verify": "node scripts/release-manifest.mjs verify",
     "test": "vitest run",

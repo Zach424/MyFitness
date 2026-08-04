@@ -33,6 +33,17 @@ output/playwright/ 浏览器视觉验收证据
 
 后续迭代会按路线图部署托管数据服务、真实身份、集中可观测性和发布边界，避免把可发布镜像误写成已经承载公网流量。
 
+## 项目状态与 Obsidian
+
+仓库内的 [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md) 是项目状态的唯一权威来源。已配置 Obsidian 的开发机器可以在每轮归档完成后执行：
+
+```bash
+pnpm docs:sync-obsidian
+pnpm docs:verify-obsidian
+```
+
+命令会读取 Obsidian 的本机 vault 配置，优先选择最近打开的 vault，并把状态精确镜像到 `10_Projects/MyFitness/PROJECT_STATUS.md`。`OBSIDIAN_VAULT_PATH` 可以显式选择 vault，`MYFITNESS_OBSIDIAN_STATUS_TARGET` 可以覆盖 vault 内相对路径；目标路径不能逃逸 vault，验证命令会拒绝缺失或过期的镜像。Obsidian 副本属于本机知识库，不进入本仓库提交。
+
 ## 本地运行
 
 需要 Node.js、pnpm 和微信开发者工具。安装依赖后可执行：
