@@ -35,6 +35,7 @@ import {
   foodKeySchema,
   idempotencyKeySchema,
   mealBaseSchema,
+  mealHistoryQuerySchema,
   mealHistorySchema,
   mealIdSchema,
   mealListSchema,
@@ -163,11 +164,27 @@ export class NutritionController {
   @Get('meals/:mealId/history')
   @ApiOperation({ summary: 'Get immutable meal revisions' })
   @ApiParam({ name: 'mealId', schema: { type: 'string', format: 'uuid' } })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    schema: { type: 'integer', minimum: 1, maximum: 50 },
+  })
+  @ApiQuery({
+    name: 'cursor',
+    required: false,
+    schema: { type: 'string', minLength: 24, maxLength: 256 },
+  })
   @ApiOkResponse({ schema: openApiSchema(mealHistorySchema) })
+  @ApiBadRequestResponse({ description: 'Meal identifier, history limit or cursor is invalid.' })
   @ApiNotFoundResponse({ description: 'Meal does not exist for this user.' })
-  async history(@CurrentUser() principal: AuthPrincipal, @Param('mealId') rawId: string) {
+  async history(
+    @CurrentUser() principal: AuthPrincipal,
+    @Param('mealId') rawId: string,
+    @Query() query: unknown,
+  ) {
     const id = parse(mealIdSchema, rawId, 'mealId must be a UUID')
-    return mealHistorySchema.parse(await this.nutrition.history(principal.userId, id))
+    const parsed = parse(mealHistoryQuerySchema, query, 'meal history query is invalid')
+    return mealHistorySchema.parse(await this.nutrition.history(principal.userId, id, parsed))
   }
 
   @Get('favorites')

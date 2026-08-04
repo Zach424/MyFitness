@@ -1,6 +1,6 @@
 # Health record model — measurement foundation
 
-Status: create/edit/history/delete, exact-metric observation, explicit occurrence editing, conflict-safe correction recovery and current-list pagination implemented through iteration 046
+Status: create/edit/history/delete, exact-metric observation, explicit occurrence editing, conflict-safe correction recovery and current/history pagination implemented through iteration 047
 
 ## Purpose and boundary
 
@@ -64,6 +64,8 @@ An unsaved correction draft retains the record UUID and the revision used to ope
 ## Current-list pagination
 
 `GET /v1/health-records` accepts optional `limit` (1–100) and an opaque cursor and returns `{ items, nextCursor }`; an omitted limit preserves the former 100-row behavior. Current, non-deleted owner rows use `(occurred_at, created_at, id)` descending. The cursor contains only a version, record UUID and revision; the API obtains the old sort tuple from the immutable owner revision, so later occurrence correction or deletion of the anchor does not invalidate continuation. `GET /v1/health-records/:recordId` returns one current owner-visible record for off-page workflows and returns `404` for missing, deleted or cross-owner targets.
+
+`GET /v1/health-records/:recordId/history` independently accepts `limit` (default 20, maximum 50) and the same opaque cursor shape, but orders only by immutable revision descending. The cursor UUID must equal the path UUID and the exact owner revision must exist before the service reads `revision < boundary`. Soft deletion remains readable to the owner, while missing/cross-owner aggregates are concealed and invalid/cross-resource cursors fail with `400`. The client opens with 10 versions and explicitly loads older pages.
 
 ## Exact-metric observation
 

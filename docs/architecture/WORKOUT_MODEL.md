@@ -1,6 +1,6 @@
 # Workout record model
 
-Status: implemented in iteration 005; server-authoritative completion hardened in iteration 032; explicit plan-session relationship added in iteration 036; user-owned exercise catalog and snapshot semantics added in iteration 037; stable-key exercise observation added in iteration 038; explicit occurrence editing added in iteration 043; conflict-safe correction recovery added in iteration 044
+Status: implemented in iteration 005; server-authoritative completion hardened in iteration 032; explicit plan-session relationship added in iteration 036; user-owned exercise catalog and snapshot semantics added in iteration 037; stable-key exercise observation added in iteration 038; explicit occurrence editing added in iteration 043; conflict-safe correction recovery added in iteration 044; current/history pagination completed in iteration 047
 
 Workout records are user-owned observations of what was actually attempted and completed. They are not exercise prescriptions, readiness diagnoses or claims that greater volume is always better.
 
@@ -91,6 +91,8 @@ Correction drafts are distinct from repeat drafts. A correction retains the work
 ## Current-list pagination
 
 `GET /v1/workouts` accepts optional `limit` (1–50) and an opaque cursor and returns `{ items, nextCursor }`; an omitted limit preserves the former 50-row behavior. Current, non-deleted owner sessions use `(started_at, created_at, id)` descending. A cursor stores only version/workout UUID/revision and resolves the immutable snapshot's `startedAt`/`createdAt`, so anchor correction or deletion does not erase the boundary. `GET /v1/workouts/:workoutId` loads one current owner aggregate graph for off-page workflows and conceals missing, deleted and cross-owner targets as `404`.
+
+`GET /v1/workouts/:workoutId/history` accepts `limit` (default 20, maximum 50) plus the same opaque envelope and returns the immutable `revision DESC` stream with `nextCursor`. The path UUID, owner and exact anchor revision must agree before `revision < boundary` continuation. Soft deletion adds a revision without removing owner history; a fresh read sees that head while an already issued cursor continues through its stable older suffix. The client opens with 10 snapshots and loads older versions explicitly.
 
 ## Cross-domain history-calendar participation
 

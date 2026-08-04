@@ -247,8 +247,13 @@ export const workoutHistoryItemSchema = workoutSchema.extend({
   changedAt: z.string().datetime({ offset: true }),
 })
 export const workoutHistorySchema = z
-  .object({ workoutId: z.string().uuid(), items: z.array(workoutHistoryItemSchema) })
+  .object({
+    workoutId: z.string().uuid(),
+    items: z.array(workoutHistoryItemSchema).max(50),
+    nextCursor: recordPageCursorSchema.nullable(),
+  })
   .strict()
+export const workoutHistoryQuerySchema = recordListQuerySchema(20, 50)
 
 export const workoutIdSchema = z.string().uuid()
 
@@ -260,3 +265,5 @@ export type Workout = z.infer<typeof workoutSchema>
 export type WorkoutList = z.infer<typeof workoutListSchema>
 export type WorkoutListQuery = z.infer<typeof workoutListQuerySchema>
 export type WorkoutHistoryItem = z.infer<typeof workoutHistoryItemSchema>
+export type WorkoutHistory = z.infer<typeof workoutHistorySchema>
+export type WorkoutHistoryQuery = z.infer<typeof workoutHistoryQuerySchema>

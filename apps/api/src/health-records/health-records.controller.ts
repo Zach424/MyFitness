@@ -30,6 +30,7 @@ import {
   createHealthRecordBaseSchema,
   createHealthRecordSchema,
   expectedRevisionHeaderSchema,
+  healthRecordHistoryQuerySchema,
   healthRecordHistorySchema,
   healthRecordListQuerySchema,
   healthRecordListSchema,
@@ -192,12 +193,31 @@ export class HealthRecordsController {
   @Get(':recordId/history')
   @ApiOperation({ summary: 'Get the immutable revision history for a measurement' })
   @ApiParam({ name: 'recordId', schema: { type: 'string', format: 'uuid' } })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    schema: { type: 'integer', minimum: 1, maximum: 50 },
+  })
+  @ApiQuery({
+    name: 'cursor',
+    required: false,
+    schema: { type: 'string', minLength: 24, maxLength: 256 },
+  })
   @ApiOkResponse({ schema: openApiSchema(healthRecordHistorySchema) })
-  @ApiBadRequestResponse({ description: 'Record identifier is invalid.' })
+  @ApiBadRequestResponse({ description: 'Record identifier, history limit or cursor is invalid.' })
   @ApiNotFoundResponse({ description: 'Record does not exist for the authenticated user.' })
-  async history(@CurrentUser() principal: AuthPrincipal, @Param('recordId') rawRecordId: string) {
+  async history(
+    @CurrentUser() principal: AuthPrincipal,
+    @Param('recordId') rawRecordId: string,
+    @Query() query: unknown,
+  ) {
+    const parsed = parseBody(
+      healthRecordHistoryQuerySchema,
+      query,
+      'health record history query is invalid',
+    )
     return healthRecordHistorySchema.parse(
-      await this.records.history(principal.userId, parseRecordId(rawRecordId)),
+      await this.records.history(principal.userId, parseRecordId(rawRecordId), parsed),
     )
   }
 }

@@ -117,6 +117,7 @@ const WorkoutsPage = () => {
   const [deleting, setDeleting] = useState<Workout>()
   const [historyWorkout, setHistoryWorkout] = useState<Workout>()
   const [history, setHistory] = useState<WorkoutHistoryItem[]>()
+  const [historyNextCursor, setHistoryNextCursor] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [nextCursor, setNextCursor] = useState<string | null>(null)
@@ -457,11 +458,31 @@ const WorkoutsPage = () => {
   const openHistory = async (workout: Workout) => {
     setHistoryWorkout(workout)
     setHistory(undefined)
+    setHistoryNextCursor(null)
     try {
-      setHistory((await getWorkoutHistory(workout.id)).items)
+      const result = await getWorkoutHistory(workout.id, { limit: 10 })
+      setHistory(result.items)
+      setHistoryNextCursor(result.nextCursor)
     } catch (error) {
       setHistoryWorkout(undefined)
       setFeedback(messageOf(error))
+    }
+  }
+
+  const loadOlderHistory = async () => {
+    if (!historyWorkout || !historyNextCursor || loadingMore) return
+    setLoadingMore(true)
+    try {
+      const result = await getWorkoutHistory(historyWorkout.id, {
+        limit: 10,
+        cursor: historyNextCursor,
+      })
+      setHistory((current) => [...(current ?? []), ...result.items])
+      setHistoryNextCursor(result.nextCursor)
+    } catch (error) {
+      setFeedback(messageOf(error))
+    } finally {
+      setLoadingMore(false)
     }
   }
 
@@ -1314,6 +1335,18 @@ const WorkoutsPage = () => {
                     </View>
                   </View>
                 ))}
+                {historyNextCursor ? (
+                  <Button
+                    {...buttonA11yProps}
+                    className="record-page-more"
+                    disabled={loadingMore}
+                    onClick={() => void loadOlderHistory()}
+                  >
+                    {loadingMore ? '正在载入…' : '继续载入更早版本'}
+                  </Button>
+                ) : (
+                  <Text className="record-page-end">已载入全部版本</Text>
+                )}
               </View>
             ) : (
               <View className="workout-empty">正在读取历史…</View>

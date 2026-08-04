@@ -228,4 +228,141 @@ describe('owner record pagination API with PostgreSQL', () => {
       .set('Authorization', `Bearer ${token}`)
       .expect(400)
   })
+
+  it('pages immutable revision histories and keeps issued boundaries after later writes', async () => {
+    let health = (
+      await post('/v1/health-records', healthRecord('2026-07-20T00:00:00.000Z', 70)).expect(201)
+    ).body
+    let session = (
+      await post('/v1/workouts', workout('2026-07-20T01:00:00.000Z', '修订分页训练')).expect(201)
+    ).body
+    let savedMeal = (
+      await post('/v1/nutrition/meals', meal('2026-07-20T04:00:00.000Z', '修订分页餐次')).expect(
+        201,
+      )
+    ).body
+
+    for (let revision = 2; revision <= 4; revision += 1) {
+      health = (
+        await request(app.getHttpServer())
+          .put(`/v1/health-records/${String(health.id)}`)
+          .set('Authorization', `Bearer ${token}`)
+          .send({
+            ...healthRecord('2026-07-20T00:00:00.000Z', 69 + revision),
+            expectedRevision: health.revision,
+          })
+          .expect(200)
+      ).body
+      session = (
+        await request(app.getHttpServer())
+          .put(`/v1/workouts/${String(session.id)}`)
+          .set('Authorization', `Bearer ${token}`)
+          .send({
+            ...workout('2026-07-20T01:00:00.000Z', `修订分页训练 v${revision}`),
+            expectedRevision: session.revision,
+          })
+          .expect(200)
+      ).body
+      savedMeal = (
+        await request(app.getHttpServer())
+          .put(`/v1/nutrition/meals/${String(savedMeal.id)}`)
+          .set('Authorization', `Bearer ${token}`)
+          .send({
+            ...meal('2026-07-20T04:00:00.000Z', `修订分页餐次 v${revision}`),
+            expectedRevision: savedMeal.revision,
+          })
+          .expect(200)
+      ).body
+    }
+
+    const firstHealth = await request(app.getHttpServer())
+      .get(`/v1/health-records/${String(health.id)}/history?limit=2`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200)
+    const firstWorkouts = await request(app.getHttpServer())
+      .get(`/v1/workouts/${String(session.id)}/history?limit=2`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200)
+    const firstMeals = await request(app.getHttpServer())
+      .get(`/v1/nutrition/meals/${String(savedMeal.id)}/history?limit=2`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200)
+    for (const response of [firstHealth, firstWorkouts, firstMeals]) {
+      expect(response.body.items.map((item: { revision: number }) => item.revision)).toEqual([4, 3])
+      expect(response.body.nextCursor).toMatch(/^[A-Za-z0-9_-]+$/)
+    }
+
+    health = (
+      await request(app.getHttpServer())
+        .put(`/v1/health-records/${String(health.id)}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          ...healthRecord('2026-07-20T00:00:00.000Z', 75),
+          expectedRevision: health.revision,
+        })
+        .expect(200)
+    ).body
+    await request(app.getHttpServer())
+      .delete(`/v1/workouts/${String(session.id)}`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('x-expected-revision', String(session.revision))
+      .expect(204)
+    savedMeal = (
+      await request(app.getHttpServer())
+        .put(`/v1/nutrition/meals/${String(savedMeal.id)}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          ...meal('2026-07-20T04:00:00.000Z', '修订分页餐次 v5'),
+          expectedRevision: savedMeal.revision,
+        })
+        .expect(200)
+    ).body
+    expect(health.revision).toBe(5)
+    expect(savedMeal.revision).toBe(5)
+
+    const secondHealth = await request(app.getHttpServer())
+      .get(
+        `/v1/health-records/${String(health.id)}/history?limit=2&cursor=${String(firstHealth.body.nextCursor)}`,
+      )
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200)
+    const secondWorkouts = await request(app.getHttpServer())
+      .get(
+        `/v1/workouts/${String(session.id)}/history?limit=2&cursor=${String(firstWorkouts.body.nextCursor)}`,
+      )
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200)
+    const secondMeals = await request(app.getHttpServer())
+      .get(
+        `/v1/nutrition/meals/${String(savedMeal.id)}/history?limit=2&cursor=${String(firstMeals.body.nextCursor)}`,
+      )
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200)
+    for (const response of [secondHealth, secondWorkouts, secondMeals]) {
+      expect(response.body.items.map((item: { revision: number }) => item.revision)).toEqual([2, 1])
+      expect(response.body.nextCursor).toBeNull()
+    }
+
+    await request(app.getHttpServer())
+      .get(`/v1/workouts/${String(session.id)}/history?limit=2`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200)
+      .expect(({ body }) =>
+        expect(body.items.map((item: { revision: number }) => item.revision)).toEqual([5, 4]),
+      )
+    await request(app.getHttpServer())
+      .get(`/v1/health-records/${String(health.id)}/history`)
+      .set('Authorization', `Bearer ${otherToken}`)
+      .expect(404)
+    await request(app.getHttpServer())
+      .get(
+        `/v1/workouts/${String(session.id)}/history?cursor=${String(firstHealth.body.nextCursor)}`,
+      )
+      .set('Authorization', `Bearer ${token}`)
+      .expect(400)
+    await request(app.getHttpServer())
+      .get(`/v1/nutrition/meals/${String(savedMeal.id)}/history?limit=0`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(400)
+  })
 })

@@ -1,6 +1,6 @@
 # Architecture baseline
 
-Status: accepted and implemented through the iteration-046 stable record-list pagination boundary; changes require an ADR.
+Status: accepted and implemented through the iteration-047 stable revision-history pagination boundary; changes require an ADR.
 
 ## System shape
 
@@ -48,6 +48,7 @@ Implemented foundation:
 - Adult profile, training goal, risk eligibility and immutable purpose/version consent events persist transactionally. Profile updates use optimistic revision checks.
 - Body/recovery record creation, replacement and soft deletion run in database transactions. Each accepted state is copied to an append-only revision table; writes use expected revisions and lists exclude deleted records while owner history remains available.
 - Current health/workout/meal lists use revision-backed keyset pagination ordered by occurrence time, aggregate creation time and UUID descending. Versioned base64url cursors contain only aggregate UUID/revision; the API recovers the immutable owner sort boundary from revision tables, so anchor correction/deletion cannot invalidate continuation. No-query limits remain 100/50/50 for compatibility, editors load 20 at a time, and exact current-resource reads support off-page correction recovery without exposing deleted or foreign targets.
+- Health/workout/meal aggregate histories use revision-keyset pagination with the same minimal cursor envelope, a 20-row default and 50-row maximum. The API requires the path UUID, owner and exact anchor revision to agree before querying the strictly older suffix; editors load 10 at a time, new head revisions do not disturb continuation and soft-deleted aggregates retain owner-visible audit history.
 - Workout session, ordered exercise and ordered set rows form one bounded relational aggregate. Server-side domain rules normalize load, calculate completed-only summaries and derive `completed` only when every persisted set is complete; deprecated client status hints are ignored. Each accepted aggregate state is also stored as an immutable JSON snapshot.
 - A dependency-free versioned starter catalog and owner-scoped custom exercise directory provide aliases, explicit tracking modes and equipment. Catalog create/correct/archive has immutable revisions, while workouts snapshot the selected definition fields instead of live-joining mutable directory content.
 - A versioned starter food catalog plus owner-scoped custom definitions provide searchable aliases, required user-confirmed nutrition provenance, idempotent create, optimistic correction/archive and immutable definition revisions. Nutrition meal/item rows snapshot the selected composition and display/canonical portions; server-side rules calculate totals, owner favorites remain independent snapshots and definition edits cannot rewrite either fact boundary.

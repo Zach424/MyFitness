@@ -116,7 +116,9 @@ test('workout completes create, repeat, update, history and delete lifecycle', a
   await expect(page.locator('.workout-entry').first().getByText('v2')).toBeVisible()
 
   const historyPromise = page.waitForResponse(
-    (response) => response.url().endsWith('/history') && response.request().method() === 'GET',
+    (response) =>
+      new URL(response.url()).pathname.endsWith('/history') &&
+      response.request().method() === 'GET',
   )
   await page.locator('.workout-entry').first().getByRole('button', { name: '历史' }).click()
   expect((await historyPromise).status()).toBe(200)

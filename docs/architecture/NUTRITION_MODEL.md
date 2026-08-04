@@ -1,6 +1,6 @@
 # Nutrition record model
 
-Status: manual meal/photo records, owner-created food definitions, daily observation, explicit occurrence editing and conflict-safe correction recovery implemented through iteration 044
+Status: manual meal/photo records, owner-created food definitions, daily observation, explicit occurrence editing, conflict-safe correction recovery and current/history pagination implemented through iteration 047
 
 Nutrition records are user-confirmed snapshots of food, portion and context. They support personal recall and later deterministic summaries; they are not dietary prescriptions, laboratory measurements or judgments about food quality.
 
@@ -75,6 +75,8 @@ An unsaved meal correction draft carries the meal UUID and base revision beside 
 ## Current-list pagination
 
 `GET /v1/nutrition/meals` accepts optional `limit` (1–50) and an opaque cursor and returns `{ items, nextCursor }`; an omitted limit preserves the former 50-row behavior. Current, non-deleted owner meals use `(occurred_at, created_at, id)` descending. The cursor stores only version/meal UUID/revision and resolves occurrence/creation time from the immutable snapshot, surviving later anchor correction or deletion. `GET /v1/nutrition/meals/:mealId` returns one current owner meal graph for off-page workflows and returns `404` for missing, deleted or cross-owner targets.
+
+`GET /v1/nutrition/meals/:mealId/history` accepts `limit` (default 20, maximum 50) and the same opaque cursor shape, returns immutable revisions newest first and emits a continuation only when an older suffix exists. The API verifies path UUID, owner and exact anchor revision before applying `revision < boundary`. Deleted meals retain their owner history, cross-owner/missing aggregates remain `404` and malformed or cross-resource cursors return `400`. The meal sheet initially renders 10 versions and loads older pages only on demand.
 
 ## Repeat and AI boundaries
 

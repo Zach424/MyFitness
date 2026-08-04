@@ -126,6 +126,7 @@ const NutritionPage = () => {
   const [deleting, setDeleting] = useState<Meal>()
   const [historyMeal, setHistoryMeal] = useState<Meal>()
   const [history, setHistory] = useState<MealHistoryItem[]>()
+  const [historyNextCursor, setHistoryNextCursor] = useState<string | null>(null)
   const [sourceTab, setSourceTab] = useState<'library' | 'custom' | 'favorites' | 'recent'>(
     'library',
   )
@@ -497,11 +498,31 @@ const NutritionPage = () => {
   const openHistory = async (meal: Meal) => {
     setHistoryMeal(meal)
     setHistory(undefined)
+    setHistoryNextCursor(null)
     try {
-      setHistory((await getMealHistory(meal.id)).items)
+      const result = await getMealHistory(meal.id, { limit: 10 })
+      setHistory(result.items)
+      setHistoryNextCursor(result.nextCursor)
     } catch (error) {
       setFeedback(messageOf(error))
       setHistoryMeal(undefined)
+    }
+  }
+
+  const loadOlderHistory = async () => {
+    if (!historyMeal || !historyNextCursor || loadingMore) return
+    setLoadingMore(true)
+    try {
+      const result = await getMealHistory(historyMeal.id, {
+        limit: 10,
+        cursor: historyNextCursor,
+      })
+      setHistory((current) => [...(current ?? []), ...result.items])
+      setHistoryNextCursor(result.nextCursor)
+    } catch (error) {
+      setFeedback(messageOf(error))
+    } finally {
+      setLoadingMore(false)
     }
   }
 
@@ -1185,6 +1206,18 @@ const NutritionPage = () => {
                     </View>
                   </View>
                 ))}
+                {historyNextCursor ? (
+                  <Button
+                    {...buttonA11yProps}
+                    className="record-page-more"
+                    disabled={loadingMore}
+                    onClick={() => void loadOlderHistory()}
+                  >
+                    {loadingMore ? '正在载入…' : '继续载入更早版本'}
+                  </Button>
+                ) : (
+                  <Text className="record-page-end">已载入全部版本</Text>
+                )}
               </View>
             ) : (
               <View className="meal-empty">正在读取历史…</View>

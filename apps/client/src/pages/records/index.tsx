@@ -77,6 +77,7 @@ const RecordsPage = () => {
   const [deleting, setDeleting] = useState<HealthRecord>()
   const [history, setHistory] = useState<HealthRecordHistoryItem[]>()
   const [historyRecord, setHistoryRecord] = useState<HealthRecord>()
+  const [historyNextCursor, setHistoryNextCursor] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [nextCursor, setNextCursor] = useState<string | null>(null)
@@ -273,12 +274,31 @@ const RecordsPage = () => {
   const openHistory = async (record: HealthRecord) => {
     setHistoryRecord(record)
     setHistory(undefined)
+    setHistoryNextCursor(null)
     try {
-      const result = await getHealthRecordHistory(record.id)
+      const result = await getHealthRecordHistory(record.id, { limit: 10 })
       setHistory(result.items)
+      setHistoryNextCursor(result.nextCursor)
     } catch (error) {
       setHistoryRecord(undefined)
       setFeedback(errorMessage(error))
+    }
+  }
+
+  const loadOlderHistory = async () => {
+    if (!historyRecord || !historyNextCursor || loadingMore) return
+    setLoadingMore(true)
+    try {
+      const result = await getHealthRecordHistory(historyRecord.id, {
+        limit: 10,
+        cursor: historyNextCursor,
+      })
+      setHistory((current) => [...(current ?? []), ...result.items])
+      setHistoryNextCursor(result.nextCursor)
+    } catch (error) {
+      setFeedback(errorMessage(error))
+    } finally {
+      setLoadingMore(false)
     }
   }
 
@@ -731,6 +751,18 @@ const RecordsPage = () => {
                     </View>
                   </View>
                 ))}
+                {historyNextCursor ? (
+                  <Button
+                    {...buttonA11yProps}
+                    className="record-page-more"
+                    disabled={loadingMore}
+                    onClick={() => void loadOlderHistory()}
+                  >
+                    {loadingMore ? '正在载入…' : '继续载入更早版本'}
+                  </Button>
+                ) : (
+                  <Text className="record-page-end">已载入全部版本</Text>
+                )}
               </View>
             ) : (
               <View className="log-state">正在读取历史…</View>

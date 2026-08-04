@@ -14,6 +14,7 @@ import type {
   FoodSnapshot,
   Meal,
   MealHistoryItem,
+  MealHistoryQuery,
   MealItemInput,
   MealListQuery,
   UpdateMeal,
@@ -362,12 +363,26 @@ export class NutritionService {
     })
   }
 
-  async history(userId: string, mealId: string) {
+  async history(userId: string, mealId: string, query: MealHistoryQuery = { limit: 20 }) {
+    const cursor = decodeRecordPageCursor(query.cursor, 'meal history')
+    if (cursor && cursor.id !== mealId) {
+      throw new BadRequestException('meal history cursor is invalid or expired')
+    }
     const owned = await this.database.query<{ id: string }>(
       'SELECT id FROM nutrition_meals WHERE id = $1 AND user_id = $2',
       [mealId, userId],
     )
     if (!owned.rows[0]) throw new NotFoundException('meal not found')
+    if (cursor) {
+      const anchor = await this.database.query<{ revision: number }>(
+        `SELECT revision FROM nutrition_meal_revisions
+         WHERE meal_id = $1 AND user_id = $2 AND revision = $3`,
+        [mealId, userId, cursor.revision],
+      )
+      if (!anchor.rows[0]) {
+        throw new BadRequestException('meal history cursor is invalid or expired')
+      }
+    }
     const revisions = await this.database.query<{
       action: MealHistoryItem['action']
       snapshot: Meal
@@ -377,17 +392,25 @@ export class NutritionService {
         SELECT action, snapshot, changed_at
         FROM nutrition_meal_revisions
         WHERE meal_id = $1 AND user_id = $2
+          AND ($3::integer IS NULL OR revision < $3)
         ORDER BY revision DESC
+        LIMIT $4
       `,
-      [mealId, userId],
+      [mealId, userId, cursor?.revision ?? null, query.limit + 1],
     )
+    const hasMore = revisions.rows.length > query.limit
+    const rows = revisions.rows.slice(0, query.limit)
+    const items = rows.map((revision) => ({
+      ...revision.snapshot,
+      action: revision.action,
+      changedAt: revision.changed_at.toISOString(),
+    }))
+    const last = items.at(-1)
     return {
       mealId,
-      items: revisions.rows.map((revision) => ({
-        ...revision.snapshot,
-        action: revision.action,
-        changedAt: revision.changed_at.toISOString(),
-      })),
+      items,
+      nextCursor:
+        hasMore && last ? encodeRecordPageCursor({ id: mealId, revision: last.revision }) : null,
     }
   }
 

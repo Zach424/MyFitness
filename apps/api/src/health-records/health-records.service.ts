@@ -10,6 +10,7 @@ import type {
   CreateHealthRecord,
   HealthRecord,
   HealthRecordHistoryItem,
+  HealthRecordHistoryQuery,
   HealthRecordListQuery,
   MetricCode,
   RecordSource,
@@ -299,12 +300,26 @@ export class HealthRecordsService {
     return mapRow(result.rows[0])
   }
 
-  async history(userId: string, recordId: string) {
+  async history(userId: string, recordId: string, query: HealthRecordHistoryQuery = { limit: 20 }) {
+    const cursor = decodeRecordPageCursor(query.cursor, 'health record history')
+    if (cursor && cursor.id !== recordId) {
+      throw new BadRequestException('health record history cursor is invalid or expired')
+    }
     const owned = await this.database.query<{ id: string }>(
       'SELECT id FROM health_records WHERE id = $1 AND user_id = $2',
       [recordId, userId],
     )
     if (!owned.rows[0]) throw new NotFoundException('health record not found')
+    if (cursor) {
+      const anchor = await this.database.query<{ revision: number }>(
+        `SELECT revision FROM health_record_revisions
+         WHERE record_id = $1 AND user_id = $2 AND revision = $3`,
+        [recordId, userId, cursor.revision],
+      )
+      if (!anchor.rows[0]) {
+        throw new BadRequestException('health record history cursor is invalid or expired')
+      }
+    }
 
     const result = await this.database.query<HealthRecordRevisionRow>(
       `
@@ -315,18 +330,25 @@ export class HealthRecordsService {
           created_at, updated_at, action, changed_at
         FROM health_record_revisions
         WHERE record_id = $1 AND user_id = $2
+          AND ($3::integer IS NULL OR revision < $3)
         ORDER BY revision DESC
+        LIMIT $4
       `,
-      [recordId, userId],
+      [recordId, userId, cursor?.revision ?? null, query.limit + 1],
     )
-
+    const hasMore = result.rows.length > query.limit
+    const rows = result.rows.slice(0, query.limit)
+    const items = rows.map((row) => ({
+      ...mapRow(row),
+      action: row.action,
+      changedAt: row.changed_at.toISOString(),
+    }))
+    const last = items.at(-1)
     return {
       recordId,
-      items: result.rows.map((row) => ({
-        ...mapRow(row),
-        action: row.action,
-        changedAt: row.changed_at.toISOString(),
-      })),
+      items,
+      nextCursor:
+        hasMore && last ? encodeRecordPageCursor({ id: recordId, revision: last.revision }) : null,
     }
   }
 

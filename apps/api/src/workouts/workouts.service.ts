@@ -12,6 +12,7 @@ import type {
   Workout,
   WorkoutExerciseInput,
   WorkoutHistoryItem,
+  WorkoutHistoryQuery,
   WorkoutListQuery,
 } from '@myfitness/contracts'
 import { calculateWorkout } from '@myfitness/domain'
@@ -423,12 +424,26 @@ export class WorkoutsService {
     })
   }
 
-  async history(userId: string, workoutId: string) {
+  async history(userId: string, workoutId: string, query: WorkoutHistoryQuery = { limit: 20 }) {
+    const cursor = decodeRecordPageCursor(query.cursor, 'workout history')
+    if (cursor && cursor.id !== workoutId) {
+      throw new BadRequestException('workout history cursor is invalid or expired')
+    }
     const owned = await this.database.query<{ id: string }>(
       'SELECT id FROM workout_sessions WHERE id = $1 AND user_id = $2',
       [workoutId, userId],
     )
     if (!owned.rows[0]) throw new NotFoundException('workout not found')
+    if (cursor) {
+      const anchor = await this.database.query<{ revision: number }>(
+        `SELECT revision FROM workout_revisions
+         WHERE workout_id = $1 AND user_id = $2 AND revision = $3`,
+        [workoutId, userId, cursor.revision],
+      )
+      if (!anchor.rows[0]) {
+        throw new BadRequestException('workout history cursor is invalid or expired')
+      }
+    }
 
     const revisions = await this.database.query<{
       action: WorkoutHistoryItem['action']
@@ -439,17 +454,25 @@ export class WorkoutsService {
         SELECT action, snapshot, changed_at
         FROM workout_revisions
         WHERE workout_id = $1 AND user_id = $2
+          AND ($3::integer IS NULL OR revision < $3)
         ORDER BY revision DESC
+        LIMIT $4
       `,
-      [workoutId, userId],
+      [workoutId, userId, cursor?.revision ?? null, query.limit + 1],
     )
+    const hasMore = revisions.rows.length > query.limit
+    const rows = revisions.rows.slice(0, query.limit)
+    const items = rows.map((revision) => ({
+      ...revision.snapshot,
+      action: revision.action,
+      changedAt: revision.changed_at.toISOString(),
+    }))
+    const last = items.at(-1)
     return {
       workoutId,
-      items: revisions.rows.map((revision) => ({
-        ...revision.snapshot,
-        action: revision.action,
-        changedAt: revision.changed_at.toISOString(),
-      })),
+      items,
+      nextCursor:
+        hasMore && last ? encodeRecordPageCursor({ id: workoutId, revision: last.revision }) : null,
     }
   }
 

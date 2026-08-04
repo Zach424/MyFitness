@@ -431,6 +431,16 @@ The 390 px production-browser review created 21 health records, showed only 20 i
 
 - [390 × 844 progressive record history](../../output/playwright/iteration-046-progressive-history-mobile.png)
 
+## Progressive revision-sheet review — iteration 047
+
+The body/recovery, training and meal audit sheets now open with the newest 10 immutable versions instead of rendering an aggregate's lifetime correction trail. When an older suffix exists, the established full-width quiet outline action says `继续载入更早版本`; it disables during the request and changes to the low-emphasis `已载入全部版本` terminal label only after exhaustion.
+
+Already loaded revisions remain in newest-first order and visible if continuation fails; errors reuse the page's existing status surface. The interaction deliberately avoids infinite scroll, exact lifetime totals and any suggestion that a later revision is healthier or better. Revision/action/time labels remain evidence metadata rather than scores.
+
+The 390 × 844 production-browser review created versions R1–R12, proved that opening rendered exactly R12–R3, then loaded the stable R2/R1 suffix and terminal state. The screenshot retains the sheet heading and newest versions for orientation; request/page/console error capture remained empty. PostgreSQL coverage separately proves all three domains, concurrent head creation and deletion-history behavior.
+
+- [390 × 844 progressive revision history](../../output/playwright/iteration-047-progressive-revisions-mobile.png)
+
 ## Screenshot review checklist
 
 - The Rhythm Rail remains understandable without color.

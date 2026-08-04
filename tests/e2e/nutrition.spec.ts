@@ -190,7 +190,9 @@ test('meal completes favorite, create, repeat, update, history and delete lifecy
   await expect(page.locator('.meal-entry').first().getByText('v2')).toBeVisible()
 
   const historyPromise = page.waitForResponse(
-    (response) => response.url().endsWith('/history') && response.request().method() === 'GET',
+    (response) =>
+      new URL(response.url()).pathname.endsWith('/history') &&
+      response.request().method() === 'GET',
   )
   await page.locator('.meal-entry').first().getByRole('button', { name: '历史' }).click()
   expect((await historyPromise).status()).toBe(200)
@@ -362,7 +364,9 @@ test('owned food stays reusable and corrections never rewrite the meal draft sna
   await expect(page.getByText('家庭炖牛肉已加入本餐，请确认实际份量。')).toBeVisible()
 
   const historyResponse = page.waitForResponse(
-    (response) => response.url().endsWith('/history') && response.request().method() === 'GET',
+    (response) =>
+      new URL(response.url()).pathname.endsWith('/history') &&
+      response.request().method() === 'GET',
   )
   await page.getByRole('button', { name: '编辑家庭炖牛肉' }).click()
   expect((await historyResponse).status()).toBe(200)
@@ -388,7 +392,9 @@ test('owned food stays reusable and corrections never rewrite the meal draft sna
   await expect(page.getByRole('button', { name: '添加低脂家庭炖牛肉' })).toBeVisible()
 
   const revisedHistoryResponse = page.waitForResponse(
-    (response) => response.url().endsWith('/history') && response.request().method() === 'GET',
+    (response) =>
+      new URL(response.url()).pathname.endsWith('/history') &&
+      response.request().method() === 'GET',
   )
   await page.getByRole('button', { name: '编辑低脂家庭炖牛肉' }).click()
   expect((await revisedHistoryResponse).status()).toBe(200)

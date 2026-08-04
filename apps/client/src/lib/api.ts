@@ -19,12 +19,12 @@ import type {
   GenerateAiExplanation,
   ConfirmFoodPhotoCandidate,
   HealthRecord,
-  HealthRecordHistoryItem,
+  HealthRecordHistory,
   HealthRecordList,
   HealthInsight,
   HistoryCalendar,
   Meal,
-  MealHistoryItem,
+  MealHistory,
   MealList,
   MetricCode,
   NutritionInsight,
@@ -57,7 +57,7 @@ import type {
   WeeklyPlanListItem,
   WeeklyPlanHistoryItem,
   Workout,
-  WorkoutHistoryItem,
+  WorkoutHistory,
   WorkoutList,
   CreateProgressPhoto,
   ProgressPhotoItem,
@@ -341,9 +341,9 @@ export const deleteHealthRecord = (recordId: string, expectedRevision: number) =
     'x-expected-revision': String(expectedRevision),
   })
 
-export const getHealthRecordHistory = async (recordId: string) =>
-  authenticatedRequest<{ recordId: string; items: HealthRecordHistoryItem[] }>(
-    `/health-records/${recordId}/history`,
+export const getHealthRecordHistory = async (recordId: string, options?: RecordListOptions) =>
+  authenticatedRequest<HealthRecordHistory>(
+    recordListPath(`/health-records/${recordId}/history`, options),
     'GET',
   )
 
@@ -366,9 +366,9 @@ export const deleteWorkout = (workoutId: string, expectedRevision: number) =>
     'x-expected-revision': String(expectedRevision),
   })
 
-export const getWorkoutHistory = (workoutId: string) =>
-  authenticatedRequest<{ workoutId: string; items: WorkoutHistoryItem[] }>(
-    `/workouts/${workoutId}/history`,
+export const getWorkoutHistory = (workoutId: string, options?: RecordListOptions) =>
+  authenticatedRequest<WorkoutHistory>(
+    recordListPath(`/workouts/${workoutId}/history`, options),
     'GET',
   )
 
@@ -444,9 +444,9 @@ export const deleteMeal = (mealId: string, expectedRevision: number) =>
     'x-expected-revision': String(expectedRevision),
   })
 
-export const getMealHistory = (mealId: string) =>
-  authenticatedRequest<{ mealId: string; items: MealHistoryItem[] }>(
-    `/nutrition/meals/${mealId}/history`,
+export const getMealHistory = (mealId: string, options?: RecordListOptions) =>
+  authenticatedRequest<MealHistory>(
+    recordListPath(`/nutrition/meals/${mealId}/history`, options),
     'GET',
   )
 

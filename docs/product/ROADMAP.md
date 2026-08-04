@@ -2,7 +2,7 @@
 
 The roadmap is organized as controlled iterations. A round may take several working sessions, but it ends only after implementation, validation, archive update, and a commit.
 
-Progress snapshot (2026-08-05): iterations 0–46 are complete locally. Current health, workout and meal aggregates now use revision-backed opaque keyset cursors, indexed deterministic ordering, 20-row progressive editor pages and exact off-page correction recovery. Anchor correction/deletion remains navigable through immutable revisions; invalid owner/resource cursors fail closed. The timezone-safe 28-day calendar and existing draft/occurrence safeguards remain intact. Reviewed H5/WeApp budgets, 320 px/large-text/keyboard proof and zero critical/high production audit findings remain green. Hosted quality/smoke is green through the iteration-030 exact SHA; later hosted exact-SHA evidence has not been inspected in this round. Owner-operated account, budget, domain, credentials and paid-provider work remains parked while locally reproducible product gaps continue; those release gates remain mandatory.
+Progress snapshot (2026-08-05): iterations 0–47 are complete locally. Current health, workout and meal aggregates use revision-backed opaque keyset cursors, indexed deterministic ordering, 20-row progressive editor pages and exact off-page correction recovery. Their immutable per-aggregate histories now use revision-keyset cursors, bounded 20/50 server pages and 10-row progressive sheets; deleted-owner access and stable older continuation remain intact. The timezone-safe 28-day calendar and existing draft/occurrence safeguards remain intact. Reviewed H5/WeApp budgets, 320 px/large-text/keyboard proof and zero critical/high production audit findings remain green. Hosted quality/smoke is green through the iteration-030 exact SHA; later hosted exact-SHA evidence has not been inspected in this round. Owner-operated account, budget, domain, credentials and paid-provider work remains parked while locally reproducible product gaps continue; those release gates remain mandatory.
 
 | Iteration | Primary scope                                       | Exit evidence                                                                                    |
 | --------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
@@ -54,8 +54,9 @@ Progress snapshot (2026-08-05): iterations 0–46 are complete locally. Current 
 | 45        | Timezone-safe cross-domain history calendar         | Current occurrence projection, explicit missing days and safe past-date backfill entry points    |
 | 46        | Bounded record-list pagination                      | Opaque cursors, stable owner ordering and progressive health/workout/meal client loading         |
 | 47        | Bounded aggregate revision histories                | Stable cursors, deleted-owner access and progressive revision sheets                             |
-| 48        | Managed shared deployment, beta hardening/release   | Real identity/custody/telemetry, rollback, security/a11y/filing review and staged rollout        |
-| 49        | Native App feasibility and device sync              | Retention gate reviewed; HealthKit/Health Connect/Huawei proof of concept                        |
+| 48        | Bounded user-definition revision histories          | Exercise/food definition cursors, archived-owner access and progressive correction sheets        |
+| 49        | Managed shared deployment, beta hardening/release   | Real identity/custody/telemetry, rollback, security/a11y/filing review and staged rollout        |
+| 50        | Native App feasibility and device sync              | Retention gate reviewed; HealthKit/Health Connect/Huawei proof of concept                        |
 
 ## Release gates
 

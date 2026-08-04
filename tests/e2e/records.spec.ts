@@ -114,7 +114,9 @@ test('body record completes create, update, history and delete lifecycle', async
   await expect(page.locator('.records-layout__log').getByText('v2')).toBeVisible()
 
   const historyResponsePromise = page.waitForResponse(
-    (response) => response.url().endsWith('/history') && response.request().method() === 'GET',
+    (response) =>
+      new URL(response.url()).pathname.endsWith('/history') &&
+      response.request().method() === 'GET',
   )
   await page.getByRole('button', { name: '历史' }).click()
   expect((await historyResponsePromise).status()).toBe(200)
@@ -367,6 +369,92 @@ test('health log loads older records and restores a correction beyond the first 
   await expect(page.getByText(/已恢复基于 R1 的修改/)).toBeVisible()
   await page.screenshot({
     path: 'output/playwright/iteration-046-progressive-history-mobile.png',
+    fullPage: false,
+  })
+  expect(browserErrors).toEqual([])
+})
+
+test('health history sheet progressively loads immutable older revisions', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  const browserErrors: string[] = []
+  page.on('console', (message) => {
+    if (message.type() === 'error') browserErrors.push(message.text())
+  })
+  page.on('pageerror', (error) => browserErrors.push(error.message))
+
+  await openRecords(page)
+  const seed = await page.evaluate(async () => {
+    const rawToken = localStorage.getItem('myfitness.auth.accessToken')
+    if (!rawToken) throw new Error('development access token is missing')
+    let decoded: { data?: unknown } = {}
+    try {
+      decoded = JSON.parse(rawToken) as { data?: unknown }
+    } catch {
+      // Legacy H5 storage kept the access token as a plain string.
+    }
+    const token = typeof decoded.data === 'string' ? decoded.data : rawToken
+    const headers = {
+      authorization: `Bearer ${token}`,
+      'content-type': 'application/json',
+    }
+    const payload = (value: number) => ({
+      metric: 'body.weight',
+      value,
+      unit: 'kg',
+      source: { kind: 'manual' },
+      status: 'confirmed',
+      occurredAt: '2026-02-01T04:00:00.000Z',
+      timezone: 'Asia/Shanghai',
+    })
+    const createdResponse = await fetch('http://127.0.0.1:3100/v1/health-records', {
+      method: 'POST',
+      headers: { ...headers, 'x-idempotency-key': 'progressive-revision-history' },
+      body: JSON.stringify(payload(70)),
+    })
+    let current = (await createdResponse.json()) as { id: string; revision: number }
+    const statuses = [createdResponse.status]
+    for (let revision = 2; revision <= 12; revision += 1) {
+      const response = await fetch(`http://127.0.0.1:3100/v1/health-records/${current.id}`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({
+          ...payload(70 + revision / 10),
+          expectedRevision: current.revision,
+        }),
+      })
+      statuses.push(response.status)
+      current = (await response.json()) as { id: string; revision: number }
+    }
+    return { statuses, revision: current.revision }
+  })
+  expect(seed.statuses).toEqual([201, ...Array.from({ length: 11 }, () => 200)])
+  expect(seed.revision).toBe(12)
+
+  await page.reload()
+  const currentEntry = page.locator('.log-entry').first()
+  await expect(currentEntry.getByText('v12')).toBeVisible()
+  const firstPageResponse = page.waitForResponse(
+    (response) =>
+      response.url().includes('/history?limit=10') && response.request().method() === 'GET',
+  )
+  await currentEntry.getByRole('button', { name: '历史' }).click()
+  expect((await firstPageResponse).status()).toBe(200)
+  const historyDialog = page.getByRole('dialog', { name: '记录历史' })
+  await expect(historyDialog.locator('.history-entry')).toHaveCount(10)
+
+  const olderPageResponse = page.waitForResponse(
+    (response) =>
+      response.url().includes('/history?limit=10&cursor=') && response.request().method() === 'GET',
+  )
+  await historyDialog.getByRole('button', { name: '继续载入更早版本' }).click()
+  expect((await olderPageResponse).status()).toBe(200)
+  await expect(historyDialog.locator('.history-entry')).toHaveCount(12)
+  await expect(historyDialog.getByText('已载入全部版本')).toBeVisible()
+  await historyDialog.locator('.history-sheet').evaluate((element) => {
+    element.scrollTop = 0
+  })
+  await page.screenshot({
+    path: 'output/playwright/iteration-047-progressive-revisions-mobile.png',
     fullPage: false,
   })
   expect(browserErrors).toEqual([])

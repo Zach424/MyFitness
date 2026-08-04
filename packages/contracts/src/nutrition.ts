@@ -164,8 +164,13 @@ export const mealHistoryItemSchema = mealSchema.extend({
   changedAt: z.string().datetime({ offset: true }),
 })
 export const mealHistorySchema = z
-  .object({ mealId: z.string().uuid(), items: z.array(mealHistoryItemSchema) })
+  .object({
+    mealId: z.string().uuid(),
+    items: z.array(mealHistoryItemSchema).max(50),
+    nextCursor: recordPageCursorSchema.nullable(),
+  })
   .strict()
+export const mealHistoryQuerySchema = recordListQuerySchema(20, 50)
 
 export const favoriteFoodInputSchema = z
   .object({ food: foodSnapshotSchema, defaultServing: foodServingSchema })
@@ -191,5 +196,7 @@ export type Meal = z.infer<typeof mealSchema>
 export type MealList = z.infer<typeof mealListSchema>
 export type MealListQuery = z.infer<typeof mealListQuerySchema>
 export type MealHistoryItem = z.infer<typeof mealHistoryItemSchema>
+export type MealHistory = z.infer<typeof mealHistorySchema>
+export type MealHistoryQuery = z.infer<typeof mealHistoryQuerySchema>
 export type FavoriteFoodInput = z.infer<typeof favoriteFoodInputSchema>
 export type FavoriteFood = z.infer<typeof favoriteFoodSchema>

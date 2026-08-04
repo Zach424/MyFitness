@@ -164,9 +164,11 @@ export const healthRecordHistoryItemSchema = healthRecordSchema.extend({
 export const healthRecordHistorySchema = z
   .object({
     recordId: z.string().uuid(),
-    items: z.array(healthRecordHistoryItemSchema),
+    items: z.array(healthRecordHistoryItemSchema).max(50),
+    nextCursor: recordPageCursorSchema.nullable(),
   })
   .strict()
+export const healthRecordHistoryQuerySchema = recordListQuerySchema(20, 50)
 
 export const problemDetailsSchema = z
   .object({
@@ -198,3 +200,5 @@ export type HealthRecord = z.infer<typeof healthRecordSchema>
 export type HealthRecordList = z.infer<typeof healthRecordListSchema>
 export type HealthRecordListQuery = z.infer<typeof healthRecordListQuerySchema>
 export type HealthRecordHistoryItem = z.infer<typeof healthRecordHistoryItemSchema>
+export type HealthRecordHistory = z.infer<typeof healthRecordHistorySchema>
+export type HealthRecordHistoryQuery = z.infer<typeof healthRecordHistoryQuerySchema>

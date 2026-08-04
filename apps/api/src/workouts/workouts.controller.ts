@@ -33,6 +33,7 @@ import {
   updateWorkoutBaseSchema,
   updateWorkoutSchema,
   workoutBaseSchema,
+  workoutHistoryQuerySchema,
   workoutHistorySchema,
   workoutIdSchema,
   workoutListSchema,
@@ -158,10 +159,26 @@ export class WorkoutsController {
   @Get(':workoutId/history')
   @ApiOperation({ summary: 'Get immutable workout revisions' })
   @ApiParam({ name: 'workoutId', schema: { type: 'string', format: 'uuid' } })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    schema: { type: 'integer', minimum: 1, maximum: 50 },
+  })
+  @ApiQuery({
+    name: 'cursor',
+    required: false,
+    schema: { type: 'string', minLength: 24, maxLength: 256 },
+  })
   @ApiOkResponse({ schema: openApiSchema(workoutHistorySchema) })
+  @ApiBadRequestResponse({ description: 'Workout identifier, history limit or cursor is invalid.' })
   @ApiNotFoundResponse({ description: 'Workout does not exist for this user.' })
-  async history(@CurrentUser() principal: AuthPrincipal, @Param('workoutId') rawId: string) {
+  async history(
+    @CurrentUser() principal: AuthPrincipal,
+    @Param('workoutId') rawId: string,
+    @Query() query: unknown,
+  ) {
     const id = parse(workoutIdSchema, rawId, 'workoutId must be a UUID')
-    return workoutHistorySchema.parse(await this.workouts.history(principal.userId, id))
+    const parsed = parse(workoutHistoryQuerySchema, query, 'workout history query is invalid')
+    return workoutHistorySchema.parse(await this.workouts.history(principal.userId, id, parsed))
   }
 }
