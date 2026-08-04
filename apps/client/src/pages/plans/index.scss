@@ -215,6 +215,28 @@
   letter-spacing: -0.045em;
 }
 
+.plan-summary__states {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.plan-refresh {
+  width: auto;
+  min-height: 34px;
+  margin: 0;
+  padding: 0 10px;
+  border: 1px dashed rgba(36, 76, 102, 0.28);
+  border-radius: var(--radius-round);
+  color: var(--color-mineral);
+  background: rgba(252, 253, 252, 0.72);
+  font-size: 9px;
+  font-weight: 720;
+  line-height: 32px;
+}
+
 .plan-state {
   padding: 6px 10px;
   border-radius: var(--radius-round);
@@ -236,6 +258,117 @@
 .plan-state--skipped {
   color: var(--color-muted);
   background: var(--color-line);
+}
+
+.plan-freshness {
+  position: relative;
+  overflow: hidden;
+  margin-bottom: 16px;
+  border: 1px solid rgba(169, 104, 33, 0.24);
+  border-radius: var(--radius-card);
+  background:
+    repeating-linear-gradient(
+      -12deg,
+      rgba(169, 104, 33, 0.035) 0,
+      rgba(169, 104, 33, 0.035) 1px,
+      transparent 1px,
+      transparent 12px
+    ),
+    rgba(252, 249, 242, 0.98);
+  box-shadow: 0 8px 24px rgba(92, 67, 34, 0.06);
+}
+
+.plan-freshness::after {
+  position: absolute;
+  top: -18px;
+  right: -18px;
+  width: 58px;
+  height: 58px;
+  border-left: 1px solid rgba(169, 104, 33, 0.24);
+  background: var(--color-mist);
+  content: '';
+  transform: rotate(45deg);
+}
+
+.plan-freshness--eligibility_blocked,
+.plan-freshness--onboarding_required {
+  border-color: rgba(36, 76, 102, 0.24);
+  background:
+    repeating-linear-gradient(
+      -12deg,
+      rgba(36, 76, 102, 0.03) 0,
+      rgba(36, 76, 102, 0.03) 1px,
+      transparent 1px,
+      transparent 12px
+    ),
+    rgba(246, 249, 249, 0.98);
+}
+
+.plan-freshness__seam {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 9px 18px;
+  border-bottom: 1px dashed rgba(169, 104, 33, 0.32);
+  color: var(--color-warning);
+  font-size: 9px;
+  font-weight: 720;
+  letter-spacing: 0.08em;
+}
+
+.plan-freshness--eligibility_blocked .plan-freshness__seam,
+.plan-freshness--onboarding_required .plan-freshness__seam {
+  border-bottom-color: rgba(36, 76, 102, 0.26);
+  color: var(--color-mineral);
+}
+
+.plan-freshness__body {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px;
+}
+
+.plan-freshness__title,
+.plan-freshness__copy {
+  display: block;
+}
+
+.plan-freshness__title {
+  margin-top: 6px;
+  font-size: 18px;
+  font-weight: 770;
+  letter-spacing: -0.035em;
+}
+
+.plan-freshness__copy {
+  max-width: 680px;
+  margin-top: 7px;
+  color: var(--color-muted);
+  font-size: 10px;
+  line-height: 1.65;
+}
+
+.plan-freshness__action {
+  width: auto;
+  min-width: max-content;
+  min-height: 42px;
+  margin: 0;
+  padding: 0 14px;
+  border: 1px solid var(--color-warning);
+  border-radius: var(--radius-control);
+  color: var(--color-paper);
+  background: var(--color-warning);
+  font-size: 10px;
+  font-weight: 740;
+  line-height: 40px;
+}
+
+.plan-freshness--eligibility_blocked .plan-freshness__action,
+.plan-freshness--onboarding_required .plan-freshness__action {
+  border-color: var(--color-mineral);
+  background: var(--color-mineral);
 }
 
 .week-fold {
@@ -448,6 +581,10 @@
   color: var(--color-juniper);
   background: var(--color-juniper-soft);
   font-weight: 720;
+}
+
+.substitution[disabled] {
+  opacity: 0.54;
 }
 
 .day-rest {
@@ -791,6 +928,11 @@
   background: var(--color-juniper-soft);
 }
 
+.ai-consent[aria-disabled='true'] {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .ai-generate {
   width: 100%;
   min-height: 44px;
@@ -899,6 +1041,10 @@ button:focus-visible,
     justify-content: space-between;
   }
 
+  .plan-freshness__body {
+    align-items: flex-start;
+  }
+
   .decision-bar__actions {
     margin-top: 0;
   }
@@ -928,6 +1074,17 @@ button:focus-visible,
 
   .evidence-strip {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 560px) {
+  .plan-freshness__body {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .plan-freshness__action {
+    width: 100%;
   }
 }
 

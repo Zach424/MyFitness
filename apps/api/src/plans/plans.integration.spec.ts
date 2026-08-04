@@ -238,6 +238,20 @@ describe('weekly plan API with PostgreSQL', () => {
       })
       .expect(200)
 
+    const staleList = await request(app.getHttpServer())
+      .get('/v1/plans/weekly')
+      .set('Authorization', `Bearer ${otherToken}`)
+      .expect(200)
+    expect(staleList.body.items[0].freshness).toMatchObject({
+      state: 'profile_changed',
+      planOnboardingRevision: 1,
+      currentOnboardingRevision: 2,
+      canAcceptOrModify: false,
+      canExplainWithAi: false,
+      canSkip: true,
+      recommendedAction: 'regenerate',
+    })
+
     const regenerated = await request(app.getHttpServer())
       .post('/v1/plans/weekly')
       .set('Authorization', `Bearer ${otherToken}`)
@@ -251,11 +265,38 @@ describe('weekly plan API with PostgreSQL', () => {
         .every((day: { session: { plannedMinutes: number } }) => day.session.plannedMinutes === 30),
     ).toBe(true)
 
+    const currentList = await request(app.getHttpServer())
+      .get('/v1/plans/weekly')
+      .set('Authorization', `Bearer ${otherToken}`)
+      .expect(200)
+    expect(currentList.body.items[0].freshness).toMatchObject({
+      state: 'current',
+      planOnboardingRevision: 2,
+      currentOnboardingRevision: 2,
+      canAcceptOrModify: true,
+      canExplainWithAi: true,
+      canSkip: true,
+      recommendedAction: 'none',
+    })
+
     await request(app.getHttpServer())
       .put('/v1/me/onboarding')
       .set('Authorization', `Bearer ${otherToken}`)
       .send({ ...onboarding(['chest_pain']), expectedRevision: 2 })
       .expect(200)
+
+    const blockedList = await request(app.getHttpServer())
+      .get('/v1/plans/weekly')
+      .set('Authorization', `Bearer ${otherToken}`)
+      .expect(200)
+    expect(blockedList.body.items[0].freshness).toMatchObject({
+      state: 'eligibility_blocked',
+      currentOnboardingRevision: 3,
+      canAcceptOrModify: false,
+      canExplainWithAi: false,
+      canSkip: true,
+      recommendedAction: 'review_profile',
+    })
 
     const blockedDecision = await request(app.getHttpServer())
       .put(`/v1/plans/weekly/${generated.body.id}/decision`)

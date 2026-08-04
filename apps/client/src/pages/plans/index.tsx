@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Button, Checkbox, ScrollView, Text, View } from '@tarojs/components'
-import Taro from '@tarojs/taro'
+import Taro, { useDidShow } from '@tarojs/taro'
 import {
   aiPlanConsentVersion,
   type AiExplanation,
+  type PlanFreshness,
   type WeeklyPlan,
   type WeeklyPlanHistoryItem,
 } from '@myfitness/contracts'
@@ -18,7 +19,13 @@ import {
   getWeeklyPlanHistory,
   listWeeklyPlans,
 } from '../../lib/api'
-import { changedPlanSelections, defaultPlanWeekStart, updatePlanSelection } from './plan.model'
+import {
+  changedPlanSelections,
+  currentPlanFreshness,
+  defaultPlanWeekStart,
+  planFreshnessNotice,
+  updatePlanSelection,
+} from './plan.model'
 import './index.scss'
 
 type PlanActivity = NonNullable<WeeklyPlan['days'][number]['session']>['activities'][number]
@@ -104,9 +111,11 @@ const historyTime = (value: string) =>
 
 const ActivityCard = ({
   activity,
+  disabled,
   onSelect,
 }: {
   activity: PlanActivity
+  disabled: boolean
   onSelect: (optionId: string) => void
 }) => {
   const selected =
@@ -134,6 +143,8 @@ const ActivityCard = ({
               {...buttonA11yProps}
               className={`substitution ${candidate.id === activity.selectedOptionId ? 'substitution--selected' : ''}`}
               aria-pressed={candidate.id === activity.selectedOptionId}
+              aria-disabled={disabled}
+              disabled={disabled}
               key={candidate.id}
               onClick={() => onSelect(candidate.id)}
             >
@@ -152,6 +163,7 @@ const ActivityCard = ({
 const PlansPage = () => {
   const [savedPlan, setSavedPlan] = useState<WeeklyPlan>()
   const [draftPlan, setDraftPlan] = useState<WeeklyPlan>()
+  const [freshness, setFreshness] = useState<PlanFreshness>()
   const [history, setHistory] = useState<WeeklyPlanHistoryItem[]>([])
   const [aiHistory, setAiHistory] = useState<AiExplanation[]>([])
   const [aiConsent, setAiConsent] = useState(false)
@@ -159,13 +171,28 @@ const PlansPage = () => {
   const [selectedDate, setSelectedDate] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
   const [feedback, setFeedback] = useState('')
   const pendingKey = useRef('')
   const pendingAiKey = useRef('')
+  const savedPlanRef = useRef<WeeklyPlan>()
+  const freshnessRef = useRef<PlanFreshness>()
+  const refreshInFlight = useRef(false)
+  const lastProjectionCheck = useRef(0)
+  const projectionRefreshRef = useRef<(announce?: boolean, force?: boolean) => Promise<void>>(
+    async () => undefined,
+  )
 
-  const setCurrentPlan = (plan: WeeklyPlan) => {
+  const setCurrentPlan = (
+    plan: WeeklyPlan,
+    nextFreshness: PlanFreshness = currentPlanFreshness(plan),
+  ) => {
+    savedPlanRef.current = plan
+    freshnessRef.current = nextFreshness
     setSavedPlan(plan)
     setDraftPlan(plan)
+    setFreshness(nextFreshness)
+    setAiConsent(false)
     setSelectedDate(
       plan.days.find((day) => day.session)?.date ??
         plan.days.find((day) => day.available)?.date ??
@@ -182,14 +209,65 @@ const PlansPage = () => {
     setAiHistory(explanationHistory)
   }
 
+  const refreshPlanProjection = async (announce = false, force = false) => {
+    const current = savedPlanRef.current
+    if (!current || refreshInFlight.current) return
+    if (!force && Date.now() - lastProjectionCheck.current < 1_500) return
+    refreshInFlight.current = true
+    setRefreshing(true)
+    try {
+      const plans = await listWeeklyPlans()
+      lastProjectionCheck.current = Date.now()
+      const projected = plans.items.find((item) => item.id === current.id) ?? plans.items[0]
+      if (!projected) return
+      const { freshness: nextFreshness, ...plan } = projected
+      const previousFreshness = freshnessRef.current
+      const planChanged = plan.id !== current.id || plan.revision !== current.revision
+      const freshnessChanged =
+        previousFreshness?.state !== nextFreshness.state ||
+        previousFreshness?.currentOnboardingRevision !== nextFreshness.currentOnboardingRevision
+
+      if (planChanged || freshnessChanged) {
+        setCurrentPlan(plan, nextFreshness)
+        if (planChanged) await refreshPlanHistory(plan)
+      } else {
+        freshnessRef.current = nextFreshness
+        setFreshness(nextFreshness)
+      }
+
+      if (previousFreshness?.state === 'current' && nextFreshness.state !== 'current') {
+        setFeedback('检测到计划依据已变化；页面已冻结旧版本的采用、替换和 AI 解释操作。')
+      } else if (announce) {
+        setFeedback(
+          nextFreshness.state === 'current'
+            ? '已向服务端复核：这份计划仍是当前版本。'
+            : '已向服务端复核：请先按页面提示处理这份旧计划。',
+        )
+      }
+    } catch (error) {
+      if (announce) setFeedback(messageOf(error))
+    } finally {
+      refreshInFlight.current = false
+      setRefreshing(false)
+    }
+  }
+
+  projectionRefreshRef.current = refreshPlanProjection
+
+  useDidShow(() => {
+    void projectionRefreshRef.current()
+  })
+
   useEffect(() => {
     void (async () => {
       try {
         const plans = await listWeeklyPlans()
         const latest = plans.items[0]
         if (latest) {
-          setCurrentPlan(latest)
-          await refreshPlanHistory(latest)
+          const { freshness: initialFreshness, ...plan } = latest
+          lastProjectionCheck.current = Date.now()
+          setCurrentPlan(plan, initialFreshness)
+          await refreshPlanHistory(plan)
         }
       } catch (error) {
         setFeedback(messageOf(error))
@@ -199,12 +277,30 @@ const PlansPage = () => {
     })()
   }, [])
 
+  useEffect(() => {
+    if (process.env.TARO_ENV !== 'h5' || typeof window === 'undefined') return undefined
+    const checkWhenVisible = () => {
+      if (typeof document === 'undefined' || document.visibilityState === 'visible') {
+        void projectionRefreshRef.current()
+      }
+    }
+    window.addEventListener('focus', checkWhenVisible)
+    document.addEventListener('visibilitychange', checkWhenVisible)
+    return () => {
+      window.removeEventListener('focus', checkWhenVisible)
+      document.removeEventListener('visibilitychange', checkWhenVisible)
+    }
+  }, [])
+
   const selectedDay = draftPlan?.days.find((day) => day.date === selectedDate)
   const selections = useMemo(
     () => (savedPlan && draftPlan ? changedPlanSelections(savedPlan, draftPlan) : []),
     [savedPlan, draftPlan],
   )
   const dirty = selections.length > 0
+  const planActionable = freshness?.canAcceptOrModify ?? false
+  const aiActionable = freshness?.canExplainWithAi ?? false
+  const freshnessNotice = freshness ? planFreshnessNotice(freshness) : null
 
   const generate = async () => {
     setSaving(true)
@@ -216,7 +312,7 @@ const PlansPage = () => {
         pendingKey.current,
       )
       pendingKey.current = ''
-      setCurrentPlan(plan)
+      setCurrentPlan(plan, currentPlanFreshness(plan))
       await refreshPlanHistory(plan)
       setFeedback('周计划初稿已生成。先看依据和替代动作，再决定是否采用。')
     } catch (error) {
@@ -242,7 +338,10 @@ const PlansPage = () => {
               ? '用户选择本周暂不采用'
               : '用户确认采用当前计划',
       })
-      setCurrentPlan(plan)
+      setCurrentPlan(
+        plan,
+        decision === 'skipped' && freshness ? freshness : currentPlanFreshness(plan),
+      )
       await refreshPlanHistory(plan)
       setFeedback(
         decision === 'modified'
@@ -259,6 +358,7 @@ const PlansPage = () => {
   }
 
   const selectOption = (activityId: string, optionId: string) => {
+    if (!planActionable) return
     setDraftPlan((current) =>
       current ? updatePlanSelection(current, activityId, optionId) : current,
     )
@@ -266,7 +366,7 @@ const PlansPage = () => {
   }
 
   const generateExplanation = async () => {
-    if (!savedPlan || !aiConsent) return
+    if (!savedPlan || !aiConsent || !aiActionable) return
     setAiLoading(true)
     setFeedback('')
     if (!pendingAiKey.current) pendingAiKey.current = aiRequestKey()
@@ -303,7 +403,9 @@ const PlansPage = () => {
     }
   }
 
-  const currentExplanation = aiHistory.find((item) => item.planRevision === draftPlan?.revision)
+  const currentExplanation = aiActionable
+    ? aiHistory.find((item) => item.planRevision === draftPlan?.revision)
+    : undefined
 
   return (
     <View className="plans-page">
@@ -386,10 +488,54 @@ const PlansPage = () => {
                   <Text className="plans-eyebrow">{weekLabel(draftPlan.weekStart)}</Text>
                   <Text className="plan-summary__title">本周折页</Text>
                 </View>
-                <Text className={`plan-state plan-state--${draftPlan.status}`}>
-                  {statusLabels[draftPlan.status]}
-                </Text>
+                <View className="plan-summary__states">
+                  <Text className={`plan-state plan-state--${draftPlan.status}`}>
+                    {statusLabels[draftPlan.status]}
+                  </Text>
+                  <Button
+                    {...buttonA11yProps}
+                    className="plan-refresh"
+                    disabled={refreshing}
+                    onClick={() => void refreshPlanProjection(true, true)}
+                  >
+                    {refreshing ? '复核中…' : '检查版本'}
+                  </Button>
+                </View>
               </View>
+
+              {freshnessNotice && freshness ? (
+                <View className={`plan-freshness plan-freshness--${freshness.state}`} role="alert">
+                  <View className="plan-freshness__seam" aria-hidden="true">
+                    <Text className="metric">PLAN v{freshness.planOnboardingRevision}</Text>
+                    <Text>→</Text>
+                    <Text className="metric">
+                      PROFILE{' '}
+                      {freshness.currentOnboardingRevision
+                        ? `v${freshness.currentOnboardingRevision}`
+                        : '—'}
+                    </Text>
+                  </View>
+                  <View className="plan-freshness__body">
+                    <View>
+                      <Text className="plans-eyebrow">{freshnessNotice.eyebrow}</Text>
+                      <Text className="plan-freshness__title">{freshnessNotice.title}</Text>
+                      <Text className="plan-freshness__copy">{freshnessNotice.body}</Text>
+                    </View>
+                    <Button
+                      {...buttonA11yProps}
+                      className="plan-freshness__action"
+                      disabled={saving}
+                      onClick={() =>
+                        freshness.recommendedAction === 'regenerate'
+                          ? void generate()
+                          : void Taro.navigateTo({ url: '/pages/onboarding/index' })
+                      }
+                    >
+                      {saving ? '处理中…' : freshnessNotice.actionLabel}
+                    </Button>
+                  </View>
+                </View>
+              ) : null}
 
               <View className="week-fold" role="tablist" aria-label="选择计划日期">
                 {draftPlan.days.map((day) => (
@@ -431,6 +577,7 @@ const PlansPage = () => {
                           {selectedDay.session.activities.map((activity) => (
                             <ActivityCard
                               activity={activity}
+                              disabled={!planActionable}
                               key={activity.id}
                               onSelect={(optionId) => selectOption(activity.id, optionId)}
                             />
@@ -455,15 +602,25 @@ const PlansPage = () => {
                   <View className="decision-bar">
                     <View>
                       <Text className="decision-bar__title">
-                        {dirty ? `${selections.length} 项替代动作尚未保存` : '先确认，再让计划生效'}
+                        {!planActionable
+                          ? '这份旧计划只保留查看与“暂不采用”'
+                          : dirty
+                            ? `${selections.length} 项替代动作尚未保存`
+                            : '先确认，再让计划生效'}
                       </Text>
-                      <Text className="decision-bar__hint">每次决定都会留下独立版本。</Text>
+                      <Text className="decision-bar__hint">
+                        {planActionable
+                          ? '每次决定都会留下独立版本。'
+                          : '服务端复核通过前，不会提交采用或替换决定。'}
+                      </Text>
                     </View>
                     <View className="decision-bar__actions">
                       <Button
                         {...buttonA11yProps}
                         className="plan-primary"
-                        disabled={saving || (!dirty && savedPlan?.status === 'accepted')}
+                        disabled={
+                          saving || !planActionable || (!dirty && savedPlan?.status === 'accepted')
+                        }
                         onClick={() => void decide(dirty ? 'modified' : 'accepted')}
                       >
                         {saving
@@ -605,8 +762,11 @@ const PlansPage = () => {
                           {...checkboxA11yProps}
                           className={`ai-consent ${aiConsent ? 'ai-consent--checked' : ''}`}
                           aria-checked={aiConsent}
+                          aria-disabled={!aiActionable}
                           aria-label="同意本次 AI 计划解释数据处理"
-                          onClick={() => setAiConsent((value) => !value)}
+                          onClick={() => {
+                            if (aiActionable) setAiConsent((value) => !value)
+                          }}
                         >
                           <Checkbox checked={aiConsent} value="ai-plan-explanation" aria-hidden />
                           <Text>
@@ -616,8 +776,18 @@ const PlansPage = () => {
                         <Button
                           {...buttonA11yProps}
                           className="ai-generate"
-                          disabled={!aiConsent || aiLoading || draftPlan.status === 'skipped'}
-                          aria-disabled={!aiConsent || aiLoading || draftPlan.status === 'skipped'}
+                          disabled={
+                            !aiConsent ||
+                            aiLoading ||
+                            !aiActionable ||
+                            draftPlan.status === 'skipped'
+                          }
+                          aria-disabled={
+                            !aiConsent ||
+                            aiLoading ||
+                            !aiActionable ||
+                            draftPlan.status === 'skipped'
+                          }
                           onClick={() => void generateExplanation()}
                         >
                           {aiLoading ? '正在生成边注…' : '生成解释边注'}

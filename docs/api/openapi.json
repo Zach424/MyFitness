@@ -5530,6 +5530,167 @@
                             "type": "string",
                             "format": "date-time",
                             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                          },
+                          "freshness": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "checkedAt": {
+                                    "type": "string",
+                                    "format": "date-time",
+                                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                  },
+                                  "planOnboardingRevision": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "exclusiveMinimum": true,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "canSkip": { "type": "boolean", "enum": [true] },
+                                  "state": { "type": "string", "enum": ["current"] },
+                                  "currentOnboardingRevision": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "exclusiveMinimum": true,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "canAcceptOrModify": { "type": "boolean", "enum": [true] },
+                                  "canExplainWithAi": { "type": "boolean", "enum": [true] },
+                                  "recommendedAction": { "type": "string", "enum": ["none"] }
+                                },
+                                "required": [
+                                  "checkedAt",
+                                  "planOnboardingRevision",
+                                  "canSkip",
+                                  "state",
+                                  "currentOnboardingRevision",
+                                  "canAcceptOrModify",
+                                  "canExplainWithAi",
+                                  "recommendedAction"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "checkedAt": {
+                                    "type": "string",
+                                    "format": "date-time",
+                                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                  },
+                                  "planOnboardingRevision": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "exclusiveMinimum": true,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "canSkip": { "type": "boolean", "enum": [true] },
+                                  "state": { "type": "string", "enum": ["profile_changed"] },
+                                  "currentOnboardingRevision": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "exclusiveMinimum": true,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "canAcceptOrModify": { "type": "boolean", "enum": [false] },
+                                  "canExplainWithAi": { "type": "boolean", "enum": [false] },
+                                  "recommendedAction": { "type": "string", "enum": ["regenerate"] }
+                                },
+                                "required": [
+                                  "checkedAt",
+                                  "planOnboardingRevision",
+                                  "canSkip",
+                                  "state",
+                                  "currentOnboardingRevision",
+                                  "canAcceptOrModify",
+                                  "canExplainWithAi",
+                                  "recommendedAction"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "checkedAt": {
+                                    "type": "string",
+                                    "format": "date-time",
+                                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                  },
+                                  "planOnboardingRevision": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "exclusiveMinimum": true,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "canSkip": { "type": "boolean", "enum": [true] },
+                                  "state": { "type": "string", "enum": ["eligibility_blocked"] },
+                                  "currentOnboardingRevision": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "exclusiveMinimum": true,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "canAcceptOrModify": { "type": "boolean", "enum": [false] },
+                                  "canExplainWithAi": { "type": "boolean", "enum": [false] },
+                                  "recommendedAction": {
+                                    "type": "string",
+                                    "enum": ["review_profile"]
+                                  }
+                                },
+                                "required": [
+                                  "checkedAt",
+                                  "planOnboardingRevision",
+                                  "canSkip",
+                                  "state",
+                                  "currentOnboardingRevision",
+                                  "canAcceptOrModify",
+                                  "canExplainWithAi",
+                                  "recommendedAction"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "checkedAt": {
+                                    "type": "string",
+                                    "format": "date-time",
+                                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                  },
+                                  "planOnboardingRevision": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "exclusiveMinimum": true,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "canSkip": { "type": "boolean", "enum": [true] },
+                                  "state": { "type": "string", "enum": ["onboarding_required"] },
+                                  "currentOnboardingRevision": {
+                                    "type": "string",
+                                    "nullable": true,
+                                    "enum": [null]
+                                  },
+                                  "canAcceptOrModify": { "type": "boolean", "enum": [false] },
+                                  "canExplainWithAi": { "type": "boolean", "enum": [false] },
+                                  "recommendedAction": {
+                                    "type": "string",
+                                    "enum": ["complete_profile"]
+                                  }
+                                },
+                                "required": [
+                                  "checkedAt",
+                                  "planOnboardingRevision",
+                                  "canSkip",
+                                  "state",
+                                  "currentOnboardingRevision",
+                                  "canAcceptOrModify",
+                                  "canExplainWithAi",
+                                  "recommendedAction"
+                                ],
+                                "additionalProperties": false
+                              }
+                            ]
                           }
                         },
                         "required": [
@@ -5545,7 +5706,8 @@
                           "status",
                           "revision",
                           "createdAt",
-                          "updatedAt"
+                          "updatedAt",
+                          "freshness"
                         ],
                         "additionalProperties": false
                       }

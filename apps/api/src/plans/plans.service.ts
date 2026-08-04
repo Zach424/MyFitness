@@ -11,6 +11,7 @@ import type {
   GenerateWeeklyPlan,
   PlanDecision,
   OnboardingResponse,
+  PlanFreshness,
   WeeklyPlan,
   WeeklyPlanContent,
   WeeklyPlanHistoryItem,
@@ -65,6 +66,56 @@ const mapPlan = (row: PlanRow): WeeklyPlan => ({
   createdAt: row.created_at.toISOString(),
   updatedAt: row.updated_at.toISOString(),
 })
+
+const projectFreshness = (
+  plan: WeeklyPlan,
+  profile: OnboardingResponse | undefined,
+  checkedAt: string,
+): PlanFreshness => {
+  const base = {
+    checkedAt,
+    planOnboardingRevision: plan.evidence.onboardingRevision,
+    canSkip: true as const,
+  }
+  if (!profile) {
+    return {
+      ...base,
+      state: 'onboarding_required',
+      currentOnboardingRevision: null,
+      canAcceptOrModify: false,
+      canExplainWithAi: false,
+      recommendedAction: 'complete_profile',
+    }
+  }
+  if (!assessPlanEligibility(profile).allowed) {
+    return {
+      ...base,
+      state: 'eligibility_blocked',
+      currentOnboardingRevision: profile.revision,
+      canAcceptOrModify: false,
+      canExplainWithAi: false,
+      recommendedAction: 'review_profile',
+    }
+  }
+  if (profile.revision !== plan.evidence.onboardingRevision) {
+    return {
+      ...base,
+      state: 'profile_changed',
+      currentOnboardingRevision: profile.revision,
+      canAcceptOrModify: false,
+      canExplainWithAi: false,
+      recommendedAction: 'regenerate',
+    }
+  }
+  return {
+    ...base,
+    state: 'current',
+    currentOnboardingRevision: profile.revision,
+    canAcceptOrModify: true,
+    canExplainWithAi: true,
+    recommendedAction: 'none',
+  }
+}
 
 const insertRevision = async (
   executor: QueryExecutor,
@@ -209,7 +260,19 @@ export class PlansService {
       `,
       [userId],
     )
-    return { items: result.rows.map(mapPlan) }
+    let profile: OnboardingResponse | undefined
+    try {
+      profile = await this.onboarding.get(userId)
+    } catch (error) {
+      if (!(error instanceof NotFoundException)) throw error
+    }
+    const checkedAt = new Date().toISOString()
+    return {
+      items: result.rows.map((row) => {
+        const plan = mapPlan(row)
+        return { ...plan, freshness: projectFreshness(plan, profile, checkedAt) }
+      }),
+    }
   }
 
   async getActionableForAi(userId: string, planId: string, expectedRevision: number) {

@@ -190,6 +190,14 @@ Reviewed evidence:
 
 The browser review changed the mobile capture to reset the plan scroll container before taking evidence, preventing a technically correct but contextless mid-page screenshot. Both layouts keep keyboard-visible focus and reduced-motion rules; the responsive CSS includes 320 px handling. Still open: large-text system testing, offline/stale-plan proactive messaging, plan-versus-completed-record reconciliation and a full keyboard traversal audit.
 
+### Proactive freshness review — iteration 033
+
+The Week Fold now treats a stale plan as a physically misaligned notebook leaf rather than a generic error toast. A narrow revision seam reads `PLAN vN → PROFILE vN`, the folded corner and dashed rule reuse the existing paper language, and the state names the reason before offering one bounded action. Profile drift uses the existing amber review color; safety or missing-profile holds use mineral blue and direct the user back to their safety data. No red diagnosis state, score, coach avatar or automatic replacement is introduced.
+
+Stale plans remain readable and skippable, but substitution controls, adoption and AI explanation are disabled from server-projected permission literals. Returning to the page, focusing visible H5 or choosing “检查版本” triggers a bounded refresh; unsaved substitutions are discarded if authority changed. A 320 px stack rule makes the recovery action full width, while focus-visible and reduced-motion behavior reuse the existing controls.
+
+The in-app H5 review first observed an eligible `v1` plan, then used a controlled local profile-revision change and the restarted current API to render `PLAN v1 → PROFILE v2`. DOM evidence confirmed both substitution buttons and adoption were disabled, skip remained enabled and the old AI explanation was no longer current. The known Taro video dependency warning iframe intercepted recovery clicks in the development build; PostgreSQL integration coverage therefore supplies the regeneration/current-state proof for this round rather than claiming a browser click that did not occur. Open items now move to iteration 034: system large text, full keyboard traversal, 320 px visual review and enforceable bundle budgets.
+
 ## Implementation review — iteration 009
 
 The **AI Margin Note / 计划边注** is deliberately a pencil-like annotation inside the Week Fold rather than a chatbot, coach avatar, or competing plan card. A fine diagonal paper pattern, narrow mineral rule and “NEXT REVIEW” footer distinguish explanatory prose from authoritative plan content. Model, fixture and fallback sources use explicit text badges; evidence appears as compact labeled tags, and the safety note says the plan was not automatically modified.

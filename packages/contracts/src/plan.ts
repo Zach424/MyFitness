@@ -160,6 +160,59 @@ export const weeklyPlanSchema = weeklyPlanContentSchema.safeExtend({
   updatedAt: z.string().datetime({ offset: true }),
 })
 
+const planFreshnessBase = {
+  checkedAt: z.string().datetime({ offset: true }),
+  planOnboardingRevision: z.number().int().positive(),
+  canSkip: z.literal(true),
+} as const
+
+export const planFreshnessSchema = z.discriminatedUnion('state', [
+  z
+    .object({
+      ...planFreshnessBase,
+      state: z.literal('current'),
+      currentOnboardingRevision: z.number().int().positive(),
+      canAcceptOrModify: z.literal(true),
+      canExplainWithAi: z.literal(true),
+      recommendedAction: z.literal('none'),
+    })
+    .strict(),
+  z
+    .object({
+      ...planFreshnessBase,
+      state: z.literal('profile_changed'),
+      currentOnboardingRevision: z.number().int().positive(),
+      canAcceptOrModify: z.literal(false),
+      canExplainWithAi: z.literal(false),
+      recommendedAction: z.literal('regenerate'),
+    })
+    .strict(),
+  z
+    .object({
+      ...planFreshnessBase,
+      state: z.literal('eligibility_blocked'),
+      currentOnboardingRevision: z.number().int().positive(),
+      canAcceptOrModify: z.literal(false),
+      canExplainWithAi: z.literal(false),
+      recommendedAction: z.literal('review_profile'),
+    })
+    .strict(),
+  z
+    .object({
+      ...planFreshnessBase,
+      state: z.literal('onboarding_required'),
+      currentOnboardingRevision: z.null(),
+      canAcceptOrModify: z.literal(false),
+      canExplainWithAi: z.literal(false),
+      recommendedAction: z.literal('complete_profile'),
+    })
+    .strict(),
+])
+
+export const weeklyPlanListItemSchema = weeklyPlanSchema.safeExtend({
+  freshness: planFreshnessSchema,
+})
+
 export const generateWeeklyPlanSchema = z
   .object({ weekStart: localDateSchema })
   .strict()
@@ -213,7 +266,7 @@ export const planDecisionSchema = z
     }
   })
 
-export const weeklyPlanListSchema = z.object({ items: z.array(weeklyPlanSchema) }).strict()
+export const weeklyPlanListSchema = z.object({ items: z.array(weeklyPlanListItemSchema) }).strict()
 export const weeklyPlanHistoryItemSchema = weeklyPlanSchema.safeExtend({
   action: planRevisionActionSchema,
   changedAt: z.string().datetime({ offset: true }),
@@ -226,6 +279,8 @@ export const weeklyPlanIdSchema = z.string().uuid()
 
 export type WeeklyPlanContent = z.infer<typeof weeklyPlanContentSchema>
 export type WeeklyPlan = z.infer<typeof weeklyPlanSchema>
+export type PlanFreshness = z.infer<typeof planFreshnessSchema>
+export type WeeklyPlanListItem = z.infer<typeof weeklyPlanListItemSchema>
 export type GenerateWeeklyPlan = z.infer<typeof generateWeeklyPlanSchema>
 export type PlanDecision = z.infer<typeof planDecisionSchema>
 export type WeeklyPlanHistoryItem = z.infer<typeof weeklyPlanHistoryItemSchema>

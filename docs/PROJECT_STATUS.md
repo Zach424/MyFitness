@@ -2,7 +2,7 @@
 
 Last reviewed: 2026-08-04
 
-Stage: internal alpha locally runnable; workout completion is now a server-derived fact from persisted set evidence, and the browser-proven client no longer submits it as authority. Privacy-first progress-photo capture guidance, separate retention consent and user-controlled same-view comparison are also locally implemented. The complete development stack, safe onboarding, deterministic weekly plan and fixture AI explanation were re-exercised on 2026-08-04. Both first-release client candidate contracts, H5 OIDC browser/API trust, immutable workflow dependencies, exact tag/main/CI release-source qualification, combined admission, recoverable erasure receipts, crash-safe AI lifecycle, adversarial output validation and reproducible evaluation artifacts remain locally green. Owner-operated cloud, domain and real-provider work is explicitly parked while locally verifiable product gaps continue.
+Stage: internal alpha locally runnable; weekly plans now carry a server-projected freshness state, and profile-revision or eligibility drift is visible before adoption instead of only after a rejected action. The multi-end client checks on entry, page show, H5 focus and explicit refresh, freezes stale accept/modify/AI actions, preserves skip and offers a bounded regeneration/profile-review path. Server-authoritative workout completion and privacy-first progress photos remain locally implemented. Both first-release client candidate contracts, H5 OIDC browser/API trust, immutable workflow dependencies, exact tag/main/CI release-source qualification, combined admission, recoverable erasure receipts, crash-safe AI lifecycle, adversarial output validation and reproducible evaluation artifacts remain locally green. Owner-operated cloud, domain and real-provider work is explicitly parked while locally verifiable product gaps continue.
 
 Primary release target: WeChat Mini Program + responsive H5
 
@@ -16,15 +16,15 @@ MyFitness / 衡迹 turns body, training, nutrition, and recovery records into sa
 | ----------------------- | ------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------- |
 | Product scope           | Done for MVP baseline           | `docs/product/PRODUCT_BRIEF.md`                                        | Validate with target-user interviews        |
 | Delivery roadmap        | Done for planning baseline      | `docs/product/ROADMAP.md`                                              | Continue local gaps; keep external gates    |
-| Design language         | Partial, thirteen flows tested  | Core flows + H5 sign-in/progress photos + 28 reviewed screenshots      | Large text, keyboard and remaining states   |
+| Design language         | Partial, thirteen flows tested  | Core flows + stale Week Fold state + 28 reviewed screenshots           | Large text, keyboard and remaining states   |
 | Client: Mini Program/H5 | Partial, candidate paths local  | WeApp `wechat` and H5 `oidc` candidate contracts; browser double green | Real providers/domains/device/browser proof |
 | Admin console           | Partial, local slice done       | OIDC BFF, exact lookup, role split and Evidence Rail exercised         | Select IdP, owner, retention and deployment |
 | Business API            | Partial                         | Verified WeChat/OIDC identity plus self-contained OCI runtime          | Shared deployment and real credential proof |
-| Domain rules            | Partial                         | Server-derived workout status + safety/privacy validators              | Add release policy enforcement              |
+| Domain rules            | Partial                         | Workout authority + plan freshness + safety/privacy validators         | Add release policy enforcement              |
 | AI service              | Partial                         | Crash-safe runs + adversarial text/vision validators + 23 evals        | Expert corpus + approved provider canary    |
 | Native App/devices      | Deferred                        | Phase-two decision                                                     | MVP retention gate reached                  |
 | Privacy/compliance      | Partial, durable local proof    | Purpose-scoped photo consent/export/deletion + restore replay tested   | Production retention/provider/legal review  |
-| Testing/observability   | Partial                         | 178 unit, 50 integration, 25 browser tests + real-browser state proofs | Centralize telemetry after account approval |
+| Testing/observability   | Partial                         | 180 unit, 50 integration, 25 browser tests + real-browser state proofs | Centralize telemetry after account approval |
 | Deployment              | Partial, source/admission ready | Immutable actions + tag/main/CI + service/client/environment gates     | Approve dossier, provision and canary       |
 
 Status vocabulary: `Done` means validated for the present stage, `Partial` means usable but missing a named gate, `Pending` means not implemented, and `Deferred` means intentionally outside the current release.
@@ -46,7 +46,7 @@ Status vocabulary: `Done` means validated for the present stage, `Partial` means
 - Transactional relational workout aggregates with ordered exercises/sets, completed-only deterministic summaries, server-authoritative completion status, expected revisions, status-insensitive idempotent creation and immutable JSON snapshots.
 - Transactional nutrition aggregates with food/serving snapshots, canonical grams, deterministic kcal/P/C/F/fiber totals, owner favorites and immutable JSON revisions.
 - Timezone-aware read-only Today projection with confirmed evidence, nullable recovery summary and 7/30/90-day totals.
-- Versioned weekly plans with deterministic availability/load/equipment constraints, evidence snapshots, substitutions, optimistic decisions and immutable history.
+- Versioned weekly plans with deterministic availability/load/equipment constraints, evidence snapshots, substitutions, optimistic decisions and immutable history. The list response adds a non-persisted server freshness projection (`current`, `profile_changed`, `eligibility_blocked`, or defensive `onboarding_required`) from current profile revision and eligibility. Permission literals keep accept/modify and AI explanation closed when stale while skip remains available; generation/decisions and immutable history keep their original aggregate contract.
 - Parameterized `pg` access to PostgreSQL 18.4 with transactional, checksum-protected SQL migrations.
 - React Native for the later native App rather than forcing device integrations into the first client.
 - NestJS modular monolith + PostgreSQL + Redis for business services.
@@ -103,7 +103,7 @@ Status vocabulary: `Done` means validated for the present stage, `Partial` means
 | Starter food values are demonstration data, not release catalog                       | High   | Select licensed/localized versioned provider and attribution before beta                                 |
 | Energy/macro UI can be harmful for eating-disorder risk                               | High   | Maintain scope exclusion; add screening/content review before adaptive nutrition planning                |
 | Deterministic-v1 is explainable but not clinically validated                          | High   | Keep general-guidance claims; add offline evaluation and expert/content review                           |
-| A changed plan may look current until the next server action                          | Medium | Server blocks stale accept/modify; add proactive client stale-state refresh                              |
+| Plan freshness follows profile revision/eligibility, not later workout/meal evidence  | Medium | Define a bounded evidence-refresh policy/fingerprint before labeling record drift as plan staleness      |
 
 ## Quality gates
 
@@ -117,4 +117,4 @@ The MVP cannot enter public beta until all of the following are reproducible:
 
 ## Primary next step
 
-Iteration 33: make stale weekly-plan state proactive instead of waiting for a failed server decision. The client should detect revision/eligibility drift, explain why the displayed plan is no longer current, offer a bounded reload/regenerate path and preserve server authority with focused browser and concurrency tests. Owner-operated cloud account/budget, domain/TLS, real WeChat/OIDC, data-custody owners, centralized telemetry, policy/filing decisions and any approved paid-provider canary remain mandatory external inputs but are parked until the user supplies them; do not describe local MinIO, fixture AI or candidate artifacts as public production.
+Iteration 34: harden the client before adding another data feature. Exercise the existing H5 and WeApp flows at 320 px, system large text and keyboard-only navigation, repair the highest-impact accessible-name/focus/overflow failures, and turn the currently advisory H5/WeApp bundle sizes into explicit measured budgets without hiding the registered Taro warnings. Owner-operated cloud account/budget, domain/TLS, real WeChat/OIDC, data-custody owners, centralized telemetry, policy/filing decisions and any approved paid-provider canary remain mandatory external inputs but are parked until the user supplies them; do not describe local MinIO, fixture AI or candidate artifacts as public production.

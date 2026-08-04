@@ -34,6 +34,7 @@ import type {
   UpdateMeal,
   UpdateWorkout,
   WeeklyPlan,
+  WeeklyPlanListItem,
   WeeklyPlanHistoryItem,
   Workout,
   WorkoutHistoryItem,
@@ -445,7 +446,7 @@ export const getDashboard = (timezone: string) =>
   )
 
 export const listWeeklyPlans = () =>
-  authenticatedRequest<{ items: WeeklyPlan[] }>('/plans/weekly', 'GET')
+  authenticatedRequest<{ items: WeeklyPlanListItem[] }>('/plans/weekly', 'GET')
 
 export const generateWeeklyPlan = (payload: GenerateWeeklyPlan, idempotencyKey: string) =>
   authenticatedRequest<WeeklyPlan>('/plans/weekly', 'POST', payload, {

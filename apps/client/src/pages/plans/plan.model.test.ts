@@ -1,9 +1,24 @@
 import { describe, expect, it } from 'vitest'
 import type { WeeklyPlan } from '@myfitness/contracts'
 
-import { changedPlanSelections, defaultPlanWeekStart, updatePlanSelection } from './plan.model'
+import {
+  changedPlanSelections,
+  currentPlanFreshness,
+  defaultPlanWeekStart,
+  planFreshnessNotice,
+  updatePlanSelection,
+} from './plan.model'
 
 const plan = {
+  evidence: {
+    onboardingRevision: 1,
+    dashboardGeneratedAt: '2026-07-20T08:00:00.000Z',
+    readinessScore: null,
+    recentActiveDays: 0,
+    recentWorkoutCount: 0,
+    recentActiveMinutes: 0,
+    recentMealCount: 0,
+  },
   days: [
     {
       weekday: 'mon',
@@ -48,5 +63,31 @@ describe('plan page model', () => {
       { activityId: 'mon_squat', optionId: 'goblet_squat' },
     ])
     expect(changedPlanSelections(plan, plan)).toEqual([])
+  })
+
+  it('distinguishes a current plan from a stale server projection', () => {
+    const current = currentPlanFreshness(plan, '2026-08-04T08:00:00.000Z')
+    expect(current).toMatchObject({
+      state: 'current',
+      planOnboardingRevision: plan.evidence.onboardingRevision,
+      canAcceptOrModify: true,
+      canExplainWithAi: true,
+    })
+    expect(planFreshnessNotice(current)).toBeNull()
+    expect(
+      planFreshnessNotice({
+        state: 'profile_changed',
+        checkedAt: '2026-08-04T08:00:00.000Z',
+        planOnboardingRevision: 1,
+        currentOnboardingRevision: 2,
+        canAcceptOrModify: false,
+        canExplainWithAi: false,
+        canSkip: true,
+        recommendedAction: 'regenerate',
+      }),
+    ).toMatchObject({
+      eyebrow: 'MISALIGNED FOLD',
+      actionLabel: '按最新资料重排本周',
+    })
   })
 })
