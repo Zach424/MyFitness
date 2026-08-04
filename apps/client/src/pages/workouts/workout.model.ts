@@ -1,12 +1,22 @@
 import type {
+  CreateExerciseCatalogEntry,
   CreateWorkout,
+  ExerciseCatalogItem,
+  ExerciseEquipment,
+  ExerciseTrackingMode,
   UpdateWorkout,
   Workout,
   WorkoutExerciseInput,
 } from '@myfitness/contracts'
-import { exerciseCatalog } from '@myfitness/contracts/workout.constants'
+import { starterExerciseCatalog } from '@myfitness/contracts/exercise-catalog.constants'
 
-export type ExerciseCatalogItem = (typeof exerciseCatalog)[number]
+export type DraftCatalogItem = Pick<
+  ExerciseCatalogItem,
+  'key' | 'name' | 'category' | 'trackingMode'
+> & {
+  equipment: readonly ExerciseEquipment[]
+  equipmentNotes?: string | null
+}
 
 export type WorkoutSetDraft = {
   reps: string
@@ -21,6 +31,9 @@ export type WorkoutExerciseDraft = {
   exerciseKey: string
   name: string
   category: WorkoutExerciseInput['category']
+  trackingMode: ExerciseTrackingMode
+  equipment: ExerciseEquipment[]
+  equipmentNotes: string
   sets: WorkoutSetDraft[]
 }
 
@@ -35,13 +48,26 @@ export type WorkoutDraft = {
   endedAt?: string
 }
 
-export const exerciseMode = (exercise: Pick<WorkoutExerciseDraft, 'exerciseKey' | 'category'>) => {
-  if (exercise.exerciseKey === 'plank' || exercise.category === 'mobility') return 'timed'
-  if (exercise.category === 'cardio') return 'cardio'
+const legacyTrackingMode = (
+  exercise: Pick<WorkoutExerciseDraft, 'exerciseKey' | 'category'>,
+): ExerciseTrackingMode => {
+  if (exercise.exerciseKey === 'plank' || exercise.category === 'mobility') return 'duration'
+  if (exercise.category === 'cardio') return 'duration_distance'
+  return 'reps_load'
+}
+
+export const exerciseMode = (
+  exercise: Pick<WorkoutExerciseDraft, 'exerciseKey' | 'category' | 'trackingMode'>,
+) => {
+  const trackingMode = exercise.trackingMode ?? legacyTrackingMode(exercise)
+  if (trackingMode === 'duration') return 'timed'
+  if (trackingMode === 'duration_distance') return 'cardio'
   return 'strength'
 }
 
-const createSetDraft = (exercise: Pick<WorkoutExerciseDraft, 'exerciseKey' | 'category'>) => {
+const createSetDraft = (
+  exercise: Pick<WorkoutExerciseDraft, 'exerciseKey' | 'category' | 'trackingMode'>,
+) => {
   const mode = exerciseMode(exercise)
   return {
     reps: mode === 'strength' ? '10' : '',
@@ -53,11 +79,14 @@ const createSetDraft = (exercise: Pick<WorkoutExerciseDraft, 'exerciseKey' | 'ca
   }
 }
 
-export const createExerciseDraft = (item: ExerciseCatalogItem): WorkoutExerciseDraft => {
+export const createExerciseDraft = (item: DraftCatalogItem): WorkoutExerciseDraft => {
   const base = {
     exerciseKey: item.key,
     name: item.name,
     category: item.category,
+    trackingMode: item.trackingMode,
+    equipment: [...item.equipment],
+    equipmentNotes: item.equipmentNotes ?? '',
   }
   const set = createSetDraft(base)
   return {
@@ -72,7 +101,7 @@ export const createExerciseDraft = (item: ExerciseCatalogItem): WorkoutExerciseD
 export const initialWorkoutDraft = (): WorkoutDraft => ({
   title: '全身训练 A',
   loadUnit: 'kg',
-  exercises: [createExerciseDraft(exerciseCatalog[0])],
+  exercises: [createExerciseDraft(starterExerciseCatalog[0])],
   painLevel: 0,
   fatigue: 3,
   note: '',
@@ -129,6 +158,9 @@ const exerciseRequest = (
     exerciseKey: exercise.exerciseKey,
     name: exercise.name,
     category: exercise.category,
+    trackingMode: exercise.trackingMode,
+    equipment: exercise.equipment,
+    ...(exercise.equipmentNotes ? { equipmentNotes: exercise.equipmentNotes } : {}),
     sets: exercise.sets.map((set, setIndex) => ({
       position: setIndex + 1,
       kind: 'working',
@@ -181,6 +213,9 @@ export const draftFromWorkout = (workout: Workout, repeat = false): WorkoutDraft
     exerciseKey: exercise.exerciseKey,
     name: exercise.name,
     category: exercise.category,
+    trackingMode: exercise.trackingMode ?? legacyTrackingMode(exercise),
+    equipment: exercise.equipment ?? [],
+    equipmentNotes: exercise.equipmentNotes ?? '',
     sets: exercise.sets.map((set) => ({
       reps: set.reps === undefined ? '' : String(set.reps),
       load: set.load === undefined ? '' : String(set.load),
@@ -221,5 +256,77 @@ export const workoutDraftSummary = (draft: WorkoutDraft) => {
     totalSets,
     volumeKg: Math.round(volumeKg),
     activeMinutes: Math.round(activeMinutes),
+  }
+}
+
+const searchableCatalogText = (item: ExerciseCatalogItem) =>
+  [item.name, ...item.aliases, ...item.equipment, item.equipmentNotes ?? '']
+    .join(' ')
+    .toLocaleLowerCase()
+
+export const filterExerciseCatalog = (items: ExerciseCatalogItem[], query: string) => {
+  const exact = query.trim().toLocaleLowerCase()
+  if (!exact) return items
+  return items.filter((item) => searchableCatalogText(item).includes(exact))
+}
+
+export type ExerciseCatalogDraft = {
+  name: string
+  aliases: string
+  category: CreateExerciseCatalogEntry['category']
+  trackingMode: ExerciseTrackingMode
+  equipment: ExerciseEquipment[]
+  equipmentNotes: string
+}
+
+export const initialExerciseCatalogDraft = (): ExerciseCatalogDraft => ({
+  name: '',
+  aliases: '',
+  category: 'strength',
+  trackingMode: 'reps_load',
+  equipment: ['bodyweight'],
+  equipmentNotes: '',
+})
+
+export const exerciseCatalogDraftFromItem = (item: ExerciseCatalogItem): ExerciseCatalogDraft => ({
+  name: item.name,
+  aliases: item.aliases.join('，'),
+  category: item.category,
+  trackingMode: item.trackingMode,
+  equipment: [...item.equipment],
+  equipmentNotes: item.equipmentNotes ?? '',
+})
+
+export const validateExerciseCatalogDraft = (draft: ExerciseCatalogDraft) => {
+  if (!draft.name.trim()) return '请填写动作名称'
+  if (!draft.equipment.length) return '请至少明确一种器械；徒手请选择“自重”'
+  if (draft.equipment.includes('other') && !draft.equipmentNotes.trim()) {
+    return '选择“其他器械”时请写明具体器械'
+  }
+  const aliases = draft.aliases
+    .split(/[，,]/)
+    .map((value) => value.trim())
+    .filter(Boolean)
+  const labels = [draft.name.trim(), ...aliases].map((value) => value.toLocaleLowerCase())
+  if (new Set(labels).size !== labels.length) return '动作名称和别名不能重复'
+  return ''
+}
+
+export const buildExerciseCatalogRequest = (
+  draft: ExerciseCatalogDraft,
+): CreateExerciseCatalogEntry => {
+  const error = validateExerciseCatalogDraft(draft)
+  if (error) throw new Error(error)
+  const aliases = draft.aliases
+    .split(/[，,]/)
+    .map((value) => value.trim())
+    .filter(Boolean)
+  return {
+    name: draft.name.trim(),
+    ...(aliases.length ? { aliases } : {}),
+    category: draft.category,
+    trackingMode: draft.trackingMode,
+    equipment: draft.equipment,
+    ...(draft.equipmentNotes.trim() ? { equipmentNotes: draft.equipmentNotes.trim() } : {}),
   }
 }

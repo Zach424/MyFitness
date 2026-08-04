@@ -44,6 +44,9 @@ type ExerciseRow = {
   exercise_key: string
   name: string
   category: Workout['exercises'][number]['category']
+  tracking_mode: Workout['exercises'][number]['trackingMode'] | null
+  equipment: NonNullable<Workout['exercises'][number]['equipment']>
+  equipment_notes: string | null
   notes: string | null
 }
 
@@ -129,6 +132,9 @@ const loadWorkouts = async (executor: QueryExecutor, sessions: SessionRow[]) => 
       exerciseKey: exercise.exercise_key,
       name: exercise.name,
       category: exercise.category,
+      ...(exercise.tracking_mode ? { trackingMode: exercise.tracking_mode } : {}),
+      ...(exercise.equipment.length ? { equipment: exercise.equipment } : {}),
+      ...(exercise.equipment_notes ? { equipmentNotes: exercise.equipment_notes } : {}),
       ...(exercise.notes ? { notes: exercise.notes } : {}),
       sets: (setsByExercise.get(exercise.id) ?? []).map((set) => ({
         id: set.id,
@@ -162,8 +168,9 @@ const insertGraph = async (
     await executor.query(
       `
         INSERT INTO workout_exercises (
-          id, workout_id, position, exercise_key, name, category, notes
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+          id, workout_id, position, exercise_key, name, category,
+          tracking_mode, equipment, equipment_notes, notes
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       `,
       [
         exerciseId,
@@ -172,6 +179,9 @@ const insertGraph = async (
         exercise.exerciseKey,
         exercise.name,
         exercise.category,
+        exercise.trackingMode ?? null,
+        exercise.equipment ?? [],
+        exercise.equipmentNotes ?? null,
         exercise.notes ?? null,
       ],
     )

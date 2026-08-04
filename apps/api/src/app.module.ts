@@ -21,6 +21,8 @@ import { AuthController } from './auth/auth.controller'
 import { AuthService } from './auth/auth.service'
 import { SessionAuthGuard } from './auth/session-auth.guard'
 import { DatabaseService } from './database/database.service'
+import { ExerciseCatalogController } from './exercise-catalog/exercise-catalog.controller'
+import { ExerciseCatalogService } from './exercise-catalog/exercise-catalog.service'
 import { HealthRecordsController } from './health-records/health-records.controller'
 import { HealthRecordsService } from './health-records/health-records.service'
 import { InsightsController } from './insights/insights.controller'
@@ -61,6 +63,7 @@ import { WorkoutsService } from './workouts/workouts.service'
     AiController,
     AuthController,
     ErasureReceiptsController,
+    ExerciseCatalogController,
     HealthController,
     HealthRecordsController,
     InsightsController,
@@ -85,6 +88,7 @@ import { WorkoutsService } from './workouts/workouts.service'
     DatabaseService,
     DataOperationsService,
     ErasureLedgerService,
+    ExerciseCatalogService,
     HealthRecordsService,
     InsightsService,
     NutritionService,

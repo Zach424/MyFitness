@@ -2,7 +2,7 @@
 
 The roadmap is organized as controlled iterations. A round may take several working sessions, but it ends only after implementation, validation, archive update, and a commit.
 
-Progress snapshot (2026-08-04): iterations 0–36 are complete locally. An owner can now bind one accepted plan-session revision to one chosen workout revision, see planned versus recorded state in the Week Fold and Today, close the relationship without erasing custody history, and rely on server rejection of cross-owner, stale, unadopted or conflicting links. No title/date/duration matching creates adherence facts. H5/WeApp retain explicit measured bundle budgets, the 320 px/large-text/keyboard proof and zero critical/high production audit findings; workout completion remains server-derived. Hosted quality/smoke is green through the iteration-030 exact SHA; later hosted exact-SHA evidence has not been inspected in this round. Owner-operated account, budget, domain, credentials and paid-provider work remains parked while locally reproducible product gaps continue; those release gates remain mandatory.
+Progress snapshot (2026-08-05): iterations 0–37 are complete locally. The workout editor now combines a versioned starter catalog with owner-created exercises, explicit tracking/equipment semantics, searchable aliases and revision-safe correction/archive. Saved workouts retain their own snapshots after catalog changes, while catalog data joins portable export and account erasure. H5/WeApp retain explicit measured bundle budgets, the 320 px/large-text/keyboard proof and zero critical/high production audit findings; workout completion remains server-derived. Hosted quality/smoke is green through the iteration-030 exact SHA; later hosted exact-SHA evidence has not been inspected in this round. Owner-operated account, budget, domain, credentials and paid-provider work remains parked while locally reproducible product gaps continue; those release gates remain mandatory.
 
 | Iteration | Primary scope                                       | Exit evidence                                                                                    |
 | --------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
@@ -44,8 +44,9 @@ Progress snapshot (2026-08-04): iterations 0–36 are complete locally. An owner
 | 35        | Record-evidence plan freshness                      | Bounded fingerprint/policy, no-op/material drift proof, safe refresh and immutable history       |
 | 36        | Plan-to-actual session linking                      | Explicit user-owned plan/workout link, no inferred adherence, history and H5 proof               |
 | 37        | User-owned exercise catalog                         | Custom exercise/equipment semantics, safe reuse, export/delete and client/PostgreSQL proof       |
-| 38        | Managed shared deployment, beta hardening/release   | Real identity/custody/telemetry, rollback, security/a11y/filing review and staged rollout        |
-| 39        | Native App feasibility and device sync              | Retention gate reviewed; HealthKit/Health Connect/Huawei proof of concept                        |
+| 38        | Exercise-level history and trends                   | Stable-key completed-only metrics, correction-safe grouping and H5/PostgreSQL proof              |
+| 39        | Managed shared deployment, beta hardening/release   | Real identity/custody/telemetry, rollback, security/a11y/filing review and staged rollout        |
+| 40        | Native App feasibility and device sync              | Retention gate reviewed; HealthKit/Health Connect/Huawei proof of concept                        |
 
 ## Release gates
 
@@ -57,14 +58,14 @@ Progress snapshot (2026-08-04): iterations 0–36 are complete locally. An owner
 
 ### Closed beta
 
-- Iterations 9–38 complete.
+- Iterations 9–39 complete.
 - AI evaluation set is versioned and safety validators block known high-risk cases.
 - Data export and deletion are exercised end to end.
 - Support, monitoring, cost limits, rollback, and incident ownership are assigned.
 
 ### Public release
 
-- Iteration 38 complete.
+- Iteration 39 complete.
 - Applicable ICP/APP/Mini Program privacy/AI registration and content-labeling work is reviewed.
 - Store materials match actual data practices and product claims.
 - Release starts with a small cohort and automatic rollback thresholds.

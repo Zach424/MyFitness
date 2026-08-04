@@ -1184,6 +1184,845 @@
         "tags": ["privacy"]
       }
     },
+    "/v1/exercise-catalog": {
+      "get": {
+        "operationId": "ExerciseCatalogController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "starterVersion": { "type": "string", "enum": ["starter-2026-08-05-v1"] },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "oneOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "source": { "type": "string", "enum": ["starter"] },
+                              "id": { "type": "string", "pattern": "^starter:[a-z0-9_]{2,80}$" },
+                              "key": { "type": "string", "pattern": "^[a-z0-9_]{2,80}$" },
+                              "name": { "type": "string", "minLength": 1, "maxLength": 80 },
+                              "aliases": {
+                                "maxItems": 8,
+                                "type": "array",
+                                "items": { "type": "string", "minLength": 1, "maxLength": 80 }
+                              },
+                              "category": {
+                                "type": "string",
+                                "enum": ["strength", "cardio", "mobility"]
+                              },
+                              "trackingMode": {
+                                "type": "string",
+                                "enum": ["reps_load", "duration", "duration_distance"]
+                              },
+                              "equipment": {
+                                "minItems": 1,
+                                "maxItems": 6,
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "enum": [
+                                    "bodyweight",
+                                    "dumbbells",
+                                    "barbell",
+                                    "kettlebell",
+                                    "resistance_band",
+                                    "bench",
+                                    "pull_up_bar",
+                                    "cable_machine",
+                                    "cardio_machine",
+                                    "bicycle",
+                                    "open_space",
+                                    "other"
+                                  ]
+                                }
+                              },
+                              "equipmentNotes": {
+                                "nullable": true,
+                                "type": "string",
+                                "maxLength": 120
+                              },
+                              "catalogVersion": {
+                                "type": "string",
+                                "enum": ["starter-2026-08-05-v1"]
+                              },
+                              "revision": { "type": "number", "enum": [1] },
+                              "editable": { "type": "boolean", "enum": [false] },
+                              "archivedAt": { "type": "string", "nullable": true, "enum": [null] },
+                              "createdAt": { "type": "string", "nullable": true, "enum": [null] },
+                              "updatedAt": { "type": "string", "nullable": true, "enum": [null] }
+                            },
+                            "required": [
+                              "source",
+                              "id",
+                              "key",
+                              "name",
+                              "aliases",
+                              "category",
+                              "trackingMode",
+                              "equipment",
+                              "equipmentNotes",
+                              "catalogVersion",
+                              "revision",
+                              "editable",
+                              "archivedAt",
+                              "createdAt",
+                              "updatedAt"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "source": { "type": "string", "enum": ["custom"] },
+                              "id": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                              },
+                              "userId": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                              },
+                              "key": { "type": "string", "pattern": "^custom_[a-f0-9]{32}$" },
+                              "name": { "type": "string", "minLength": 1, "maxLength": 80 },
+                              "aliases": {
+                                "maxItems": 8,
+                                "type": "array",
+                                "items": { "type": "string", "minLength": 1, "maxLength": 80 }
+                              },
+                              "category": {
+                                "type": "string",
+                                "enum": ["strength", "cardio", "mobility"]
+                              },
+                              "trackingMode": {
+                                "type": "string",
+                                "enum": ["reps_load", "duration", "duration_distance"]
+                              },
+                              "equipment": {
+                                "minItems": 1,
+                                "maxItems": 6,
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "enum": [
+                                    "bodyweight",
+                                    "dumbbells",
+                                    "barbell",
+                                    "kettlebell",
+                                    "resistance_band",
+                                    "bench",
+                                    "pull_up_bar",
+                                    "cable_machine",
+                                    "cardio_machine",
+                                    "bicycle",
+                                    "open_space",
+                                    "other"
+                                  ]
+                                }
+                              },
+                              "equipmentNotes": {
+                                "nullable": true,
+                                "type": "string",
+                                "maxLength": 120
+                              },
+                              "catalogVersion": {
+                                "type": "string",
+                                "nullable": true,
+                                "enum": [null]
+                              },
+                              "revision": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "exclusiveMinimum": true,
+                                "maximum": 9007199254740991
+                              },
+                              "editable": { "type": "boolean", "enum": [true] },
+                              "archivedAt": {
+                                "nullable": true,
+                                "type": "string",
+                                "format": "date-time",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                              },
+                              "createdAt": {
+                                "type": "string",
+                                "format": "date-time",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                              },
+                              "updatedAt": {
+                                "type": "string",
+                                "format": "date-time",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                              }
+                            },
+                            "required": [
+                              "source",
+                              "id",
+                              "userId",
+                              "key",
+                              "name",
+                              "aliases",
+                              "category",
+                              "trackingMode",
+                              "equipment",
+                              "equipmentNotes",
+                              "catalogVersion",
+                              "revision",
+                              "editable",
+                              "archivedAt",
+                              "createdAt",
+                              "updatedAt"
+                            ],
+                            "additionalProperties": false
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  "required": ["starterVersion", "items"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": { "description": "Bearer token is missing, invalid, expired or revoked." }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "List versioned starter and active user-owned exercises",
+        "tags": ["exercise-catalog"]
+      },
+      "post": {
+        "operationId": "ExerciseCatalogController_create",
+        "parameters": [
+          {
+            "name": "x-idempotency-key",
+            "in": "header",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string", "minLength": 1, "maxLength": 80 },
+                  "aliases": {
+                    "maxItems": 8,
+                    "type": "array",
+                    "items": { "type": "string", "minLength": 1, "maxLength": 80 }
+                  },
+                  "category": { "type": "string", "enum": ["strength", "cardio", "mobility"] },
+                  "trackingMode": {
+                    "type": "string",
+                    "enum": ["reps_load", "duration", "duration_distance"]
+                  },
+                  "equipment": {
+                    "minItems": 1,
+                    "maxItems": 6,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "bodyweight",
+                        "dumbbells",
+                        "barbell",
+                        "kettlebell",
+                        "resistance_band",
+                        "bench",
+                        "pull_up_bar",
+                        "cable_machine",
+                        "cardio_machine",
+                        "bicycle",
+                        "open_space",
+                        "other"
+                      ]
+                    }
+                  },
+                  "equipmentNotes": { "type": "string", "minLength": 1, "maxLength": 120 }
+                },
+                "required": ["name", "category", "trackingMode", "equipment"],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "source": { "type": "string", "enum": ["custom"] },
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "userId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "key": { "type": "string", "pattern": "^custom_[a-f0-9]{32}$" },
+                    "name": { "type": "string", "minLength": 1, "maxLength": 80 },
+                    "aliases": {
+                      "maxItems": 8,
+                      "type": "array",
+                      "items": { "type": "string", "minLength": 1, "maxLength": 80 }
+                    },
+                    "category": { "type": "string", "enum": ["strength", "cardio", "mobility"] },
+                    "trackingMode": {
+                      "type": "string",
+                      "enum": ["reps_load", "duration", "duration_distance"]
+                    },
+                    "equipment": {
+                      "minItems": 1,
+                      "maxItems": 6,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "bodyweight",
+                          "dumbbells",
+                          "barbell",
+                          "kettlebell",
+                          "resistance_band",
+                          "bench",
+                          "pull_up_bar",
+                          "cable_machine",
+                          "cardio_machine",
+                          "bicycle",
+                          "open_space",
+                          "other"
+                        ]
+                      }
+                    },
+                    "equipmentNotes": { "nullable": true, "type": "string", "maxLength": 120 },
+                    "catalogVersion": { "type": "string", "nullable": true, "enum": [null] },
+                    "revision": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "exclusiveMinimum": true,
+                      "maximum": 9007199254740991
+                    },
+                    "editable": { "type": "boolean", "enum": [true] },
+                    "archivedAt": {
+                      "nullable": true,
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "updatedAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    }
+                  },
+                  "required": [
+                    "source",
+                    "id",
+                    "userId",
+                    "key",
+                    "name",
+                    "aliases",
+                    "category",
+                    "trackingMode",
+                    "equipment",
+                    "equipmentNotes",
+                    "catalogVersion",
+                    "revision",
+                    "editable",
+                    "archivedAt",
+                    "createdAt",
+                    "updatedAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": { "description": "Exercise definition or equipment semantics are invalid." },
+          "401": { "description": "Bearer token is missing, invalid, expired or revoked." },
+          "409": { "description": "Name or idempotency key is already in use." }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Create an idempotent user-owned exercise definition",
+        "tags": ["exercise-catalog"]
+      }
+    },
+    "/v1/exercise-catalog/{entryId}": {
+      "put": {
+        "operationId": "ExerciseCatalogController_update",
+        "parameters": [
+          {
+            "name": "entryId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string", "minLength": 1, "maxLength": 80 },
+                  "aliases": {
+                    "maxItems": 8,
+                    "type": "array",
+                    "items": { "type": "string", "minLength": 1, "maxLength": 80 }
+                  },
+                  "category": { "type": "string", "enum": ["strength", "cardio", "mobility"] },
+                  "trackingMode": {
+                    "type": "string",
+                    "enum": ["reps_load", "duration", "duration_distance"]
+                  },
+                  "equipment": {
+                    "minItems": 1,
+                    "maxItems": 6,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "bodyweight",
+                        "dumbbells",
+                        "barbell",
+                        "kettlebell",
+                        "resistance_band",
+                        "bench",
+                        "pull_up_bar",
+                        "cable_machine",
+                        "cardio_machine",
+                        "bicycle",
+                        "open_space",
+                        "other"
+                      ]
+                    }
+                  },
+                  "equipmentNotes": { "type": "string", "minLength": 1, "maxLength": 120 },
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "exclusiveMinimum": true,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": ["name", "category", "trackingMode", "equipment", "expectedRevision"],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "source": { "type": "string", "enum": ["custom"] },
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "userId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "key": { "type": "string", "pattern": "^custom_[a-f0-9]{32}$" },
+                    "name": { "type": "string", "minLength": 1, "maxLength": 80 },
+                    "aliases": {
+                      "maxItems": 8,
+                      "type": "array",
+                      "items": { "type": "string", "minLength": 1, "maxLength": 80 }
+                    },
+                    "category": { "type": "string", "enum": ["strength", "cardio", "mobility"] },
+                    "trackingMode": {
+                      "type": "string",
+                      "enum": ["reps_load", "duration", "duration_distance"]
+                    },
+                    "equipment": {
+                      "minItems": 1,
+                      "maxItems": 6,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "bodyweight",
+                          "dumbbells",
+                          "barbell",
+                          "kettlebell",
+                          "resistance_band",
+                          "bench",
+                          "pull_up_bar",
+                          "cable_machine",
+                          "cardio_machine",
+                          "bicycle",
+                          "open_space",
+                          "other"
+                        ]
+                      }
+                    },
+                    "equipmentNotes": { "nullable": true, "type": "string", "maxLength": 120 },
+                    "catalogVersion": { "type": "string", "nullable": true, "enum": [null] },
+                    "revision": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "exclusiveMinimum": true,
+                      "maximum": 9007199254740991
+                    },
+                    "editable": { "type": "boolean", "enum": [true] },
+                    "archivedAt": {
+                      "nullable": true,
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "updatedAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    }
+                  },
+                  "required": [
+                    "source",
+                    "id",
+                    "userId",
+                    "key",
+                    "name",
+                    "aliases",
+                    "category",
+                    "trackingMode",
+                    "equipment",
+                    "equipmentNotes",
+                    "catalogVersion",
+                    "revision",
+                    "editable",
+                    "archivedAt",
+                    "createdAt",
+                    "updatedAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": { "description": "Bearer token is missing, invalid, expired or revoked." },
+          "404": { "description": "Exercise entry does not exist for this user." },
+          "409": { "description": "Expected revision or active name conflicts." }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Correct a user-owned exercise using optimistic revision control",
+        "tags": ["exercise-catalog"]
+      },
+      "delete": {
+        "operationId": "ExerciseCatalogController_archive",
+        "parameters": [
+          {
+            "name": "entryId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "x-expected-revision",
+            "in": "header",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "source": { "type": "string", "enum": ["custom"] },
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "userId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "key": { "type": "string", "pattern": "^custom_[a-f0-9]{32}$" },
+                    "name": { "type": "string", "minLength": 1, "maxLength": 80 },
+                    "aliases": {
+                      "maxItems": 8,
+                      "type": "array",
+                      "items": { "type": "string", "minLength": 1, "maxLength": 80 }
+                    },
+                    "category": { "type": "string", "enum": ["strength", "cardio", "mobility"] },
+                    "trackingMode": {
+                      "type": "string",
+                      "enum": ["reps_load", "duration", "duration_distance"]
+                    },
+                    "equipment": {
+                      "minItems": 1,
+                      "maxItems": 6,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "bodyweight",
+                          "dumbbells",
+                          "barbell",
+                          "kettlebell",
+                          "resistance_band",
+                          "bench",
+                          "pull_up_bar",
+                          "cable_machine",
+                          "cardio_machine",
+                          "bicycle",
+                          "open_space",
+                          "other"
+                        ]
+                      }
+                    },
+                    "equipmentNotes": { "nullable": true, "type": "string", "maxLength": 120 },
+                    "catalogVersion": { "type": "string", "nullable": true, "enum": [null] },
+                    "revision": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "exclusiveMinimum": true,
+                      "maximum": 9007199254740991
+                    },
+                    "editable": { "type": "boolean", "enum": [true] },
+                    "archivedAt": {
+                      "nullable": true,
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "updatedAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    }
+                  },
+                  "required": [
+                    "source",
+                    "id",
+                    "userId",
+                    "key",
+                    "name",
+                    "aliases",
+                    "category",
+                    "trackingMode",
+                    "equipment",
+                    "equipmentNotes",
+                    "catalogVersion",
+                    "revision",
+                    "editable",
+                    "archivedAt",
+                    "createdAt",
+                    "updatedAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": { "description": "Bearer token is missing, invalid, expired or revoked." },
+          "404": { "description": "Exercise entry does not exist for this user." },
+          "409": { "description": "Expected revision does not match." }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Archive a user-owned exercise without rewriting workout snapshots",
+        "tags": ["exercise-catalog"]
+      }
+    },
+    "/v1/exercise-catalog/{entryId}/history": {
+      "get": {
+        "operationId": "ExerciseCatalogController_history",
+        "parameters": [
+          {
+            "name": "entryId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "entryId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "source": { "type": "string", "enum": ["custom"] },
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "userId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "key": { "type": "string", "pattern": "^custom_[a-f0-9]{32}$" },
+                          "name": { "type": "string", "minLength": 1, "maxLength": 80 },
+                          "aliases": {
+                            "maxItems": 8,
+                            "type": "array",
+                            "items": { "type": "string", "minLength": 1, "maxLength": 80 }
+                          },
+                          "category": {
+                            "type": "string",
+                            "enum": ["strength", "cardio", "mobility"]
+                          },
+                          "trackingMode": {
+                            "type": "string",
+                            "enum": ["reps_load", "duration", "duration_distance"]
+                          },
+                          "equipment": {
+                            "minItems": 1,
+                            "maxItems": 6,
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "enum": [
+                                "bodyweight",
+                                "dumbbells",
+                                "barbell",
+                                "kettlebell",
+                                "resistance_band",
+                                "bench",
+                                "pull_up_bar",
+                                "cable_machine",
+                                "cardio_machine",
+                                "bicycle",
+                                "open_space",
+                                "other"
+                              ]
+                            }
+                          },
+                          "equipmentNotes": {
+                            "nullable": true,
+                            "type": "string",
+                            "maxLength": 120
+                          },
+                          "catalogVersion": { "type": "string", "nullable": true, "enum": [null] },
+                          "revision": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "exclusiveMinimum": true,
+                            "maximum": 9007199254740991
+                          },
+                          "editable": { "type": "boolean", "enum": [true] },
+                          "archivedAt": {
+                            "nullable": true,
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                          },
+                          "updatedAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                          },
+                          "action": {
+                            "type": "string",
+                            "enum": ["created", "updated", "archived"]
+                          },
+                          "changedAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                          }
+                        },
+                        "required": [
+                          "source",
+                          "id",
+                          "userId",
+                          "key",
+                          "name",
+                          "aliases",
+                          "category",
+                          "trackingMode",
+                          "equipment",
+                          "equipmentNotes",
+                          "catalogVersion",
+                          "revision",
+                          "editable",
+                          "archivedAt",
+                          "createdAt",
+                          "updatedAt",
+                          "action",
+                          "changedAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": ["entryId", "items"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": { "description": "Bearer token is missing, invalid, expired or revoked." },
+          "404": { "description": "Exercise entry does not exist for this user." }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Read immutable user-owned exercise definition revisions",
+        "tags": ["exercise-catalog"]
+      }
+    },
     "/v1/health/live": {
       "get": {
         "operationId": "HealthController_liveness",
@@ -7594,7 +8433,7 @@
                       "properties": {
                         "schemaVersion": {
                           "type": "string",
-                          "enum": ["myfitness-portable-export-v2"]
+                          "enum": ["myfitness-portable-export-v3"]
                         },
                         "contentType": { "type": "string", "enum": ["application/json"] },
                         "includesHistory": { "type": "boolean", "enum": [true] },
@@ -7894,6 +8733,32 @@
                           "type": "string",
                           "enum": ["strength", "cardio", "mobility"]
                         },
+                        "trackingMode": {
+                          "type": "string",
+                          "enum": ["reps_load", "duration", "duration_distance"]
+                        },
+                        "equipment": {
+                          "maxItems": 6,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "enum": [
+                              "bodyweight",
+                              "dumbbells",
+                              "barbell",
+                              "kettlebell",
+                              "resistance_band",
+                              "bench",
+                              "pull_up_bar",
+                              "cable_machine",
+                              "cardio_machine",
+                              "bicycle",
+                              "open_space",
+                              "other"
+                            ]
+                          }
+                        },
+                        "equipmentNotes": { "type": "string", "minLength": 1, "maxLength": 120 },
                         "notes": { "type": "string", "maxLength": 300 },
                         "sets": {
                           "minItems": 1,
@@ -8010,6 +8875,32 @@
                             "type": "string",
                             "enum": ["strength", "cardio", "mobility"]
                           },
+                          "trackingMode": {
+                            "type": "string",
+                            "enum": ["reps_load", "duration", "duration_distance"]
+                          },
+                          "equipment": {
+                            "maxItems": 6,
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "enum": [
+                                "bodyweight",
+                                "dumbbells",
+                                "barbell",
+                                "kettlebell",
+                                "resistance_band",
+                                "bench",
+                                "pull_up_bar",
+                                "cable_machine",
+                                "cardio_machine",
+                                "bicycle",
+                                "open_space",
+                                "other"
+                              ]
+                            }
+                          },
+                          "equipmentNotes": { "type": "string", "minLength": 1, "maxLength": 120 },
                           "notes": { "type": "string", "maxLength": 300 },
                           "sets": {
                             "type": "array",
@@ -8219,6 +9110,36 @@
                                 "category": {
                                   "type": "string",
                                   "enum": ["strength", "cardio", "mobility"]
+                                },
+                                "trackingMode": {
+                                  "type": "string",
+                                  "enum": ["reps_load", "duration", "duration_distance"]
+                                },
+                                "equipment": {
+                                  "maxItems": 6,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "enum": [
+                                      "bodyweight",
+                                      "dumbbells",
+                                      "barbell",
+                                      "kettlebell",
+                                      "resistance_band",
+                                      "bench",
+                                      "pull_up_bar",
+                                      "cable_machine",
+                                      "cardio_machine",
+                                      "bicycle",
+                                      "open_space",
+                                      "other"
+                                    ]
+                                  }
+                                },
+                                "equipmentNotes": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 120
                                 },
                                 "notes": { "type": "string", "maxLength": 300 },
                                 "sets": {
@@ -8439,6 +9360,32 @@
                           "type": "string",
                           "enum": ["strength", "cardio", "mobility"]
                         },
+                        "trackingMode": {
+                          "type": "string",
+                          "enum": ["reps_load", "duration", "duration_distance"]
+                        },
+                        "equipment": {
+                          "maxItems": 6,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "enum": [
+                              "bodyweight",
+                              "dumbbells",
+                              "barbell",
+                              "kettlebell",
+                              "resistance_band",
+                              "bench",
+                              "pull_up_bar",
+                              "cable_machine",
+                              "cardio_machine",
+                              "bicycle",
+                              "open_space",
+                              "other"
+                            ]
+                          }
+                        },
+                        "equipmentNotes": { "type": "string", "minLength": 1, "maxLength": 120 },
                         "notes": { "type": "string", "maxLength": 300 },
                         "sets": {
                           "minItems": 1,
@@ -8562,6 +9509,32 @@
                             "type": "string",
                             "enum": ["strength", "cardio", "mobility"]
                           },
+                          "trackingMode": {
+                            "type": "string",
+                            "enum": ["reps_load", "duration", "duration_distance"]
+                          },
+                          "equipment": {
+                            "maxItems": 6,
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "enum": [
+                                "bodyweight",
+                                "dumbbells",
+                                "barbell",
+                                "kettlebell",
+                                "resistance_band",
+                                "bench",
+                                "pull_up_bar",
+                                "cable_machine",
+                                "cardio_machine",
+                                "bicycle",
+                                "open_space",
+                                "other"
+                              ]
+                            }
+                          },
+                          "equipmentNotes": { "type": "string", "minLength": 1, "maxLength": 120 },
                           "notes": { "type": "string", "maxLength": 300 },
                           "sets": {
                             "type": "array",
@@ -8811,6 +9784,36 @@
                                 "category": {
                                   "type": "string",
                                   "enum": ["strength", "cardio", "mobility"]
+                                },
+                                "trackingMode": {
+                                  "type": "string",
+                                  "enum": ["reps_load", "duration", "duration_distance"]
+                                },
+                                "equipment": {
+                                  "maxItems": 6,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "enum": [
+                                      "bodyweight",
+                                      "dumbbells",
+                                      "barbell",
+                                      "kettlebell",
+                                      "resistance_band",
+                                      "bench",
+                                      "pull_up_bar",
+                                      "cable_machine",
+                                      "cardio_machine",
+                                      "bicycle",
+                                      "open_space",
+                                      "other"
+                                    ]
+                                  }
+                                },
+                                "equipmentNotes": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 120
                                 },
                                 "notes": { "type": "string", "maxLength": 300 },
                                 "sets": {

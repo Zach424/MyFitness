@@ -12,6 +12,8 @@ const workout = {
       exerciseKey: 'goblet_squat',
       name: '高脚杯深蹲',
       category: 'strength',
+      trackingMode: 'reps_load',
+      equipment: ['dumbbells'],
       sets: [
         {
           position: 1,
@@ -68,5 +70,15 @@ describe('workout contracts', () => {
         exercises: [...workout.exercises, workout.exercises[0]],
       }).success,
     ).toBe(false)
+  })
+
+  it('requires details for other equipment and rejects duplicate equipment snapshots', () => {
+    const unnamed = structuredClone(workout)
+    unnamed.exercises[0]!.equipment = ['other'] as never
+    expect(createWorkoutSchema.safeParse(unnamed).success).toBe(false)
+
+    const duplicate = structuredClone(workout)
+    duplicate.exercises[0]!.equipment = ['dumbbells', 'dumbbells'] as never
+    expect(createWorkoutSchema.safeParse(duplicate).success).toBe(false)
   })
 })

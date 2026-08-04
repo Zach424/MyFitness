@@ -6,6 +6,12 @@ export default defineConfig({
   resolve: {
     alias: [
       {
+        find: '@myfitness/contracts/exercise-catalog.constants',
+        replacement: fileURLToPath(
+          new URL('./packages/contracts/src/exercise-catalog.constants.ts', import.meta.url),
+        ),
+      },
+      {
         find: '@myfitness/contracts/ai.constants',
         replacement: fileURLToPath(
           new URL('./packages/contracts/src/ai.constants.ts', import.meta.url),

@@ -1,6 +1,6 @@
 # Workout record model
 
-Status: implemented in iteration 005; server-authoritative completion hardened in iteration 032; explicit plan-session relationship added in iteration 036
+Status: implemented in iteration 005; server-authoritative completion hardened in iteration 032; explicit plan-session relationship added in iteration 036; user-owned exercise catalog and snapshot semantics added in iteration 037
 
 Workout records are user-owned observations of what was actually attempted and completed. They are not exercise prescriptions, readiness diagnoses or claims that greater volume is always better.
 
@@ -13,7 +13,8 @@ workout session
 ├─ source: manual | imported
 ├─ pain 0–10, fatigue 1–5, optional note
 └─ ordered exercises (1–30)
-   ├─ catalog key, display name, category, optional notes
+   ├─ catalog key, display name, category, tracking mode
+   ├─ equipment list, optional equipment notes, optional exercise notes
    └─ ordered sets (1–50 per API contract)
       ├─ kind: warmup | working | cooldown
       ├─ reps and optional display load/unit
@@ -23,6 +24,8 @@ workout session
 ```
 
 The API accepts strength, cardio and mobility structures through one explicit set contract. A set must contain repetitions, duration or distance. Load and unit are paired, and a loaded set also requires repetitions. Exercise positions are unique within a session and set positions are unique within an exercise.
+
+`trackingMode` is one of `reps_load`, `duration` or `duration_distance`. Equipment uses a bounded vocabulary; `other` requires `equipmentNotes`. New clients send both fields explicitly. Older snapshots that predate iteration 037 remain readable through category-based client fallback, but that inference is not written back as new evidence.
 
 ## Facts and derived values
 
@@ -47,6 +50,14 @@ The JSON revision is intentionally immutable evidence, not a second writable sou
 
 Migration `0021_authoritative_workout_status.sql` backfills the relational status cache from persisted set flags without rewriting immutable revision history. API reads also derive current status from the loaded set graph, so a stale cache cannot become the response authority. Historical snapshots created before this rule remain original accepted evidence; every snapshot created after the hardening contains the server-derived status.
 
+Migration `0023_user_exercise_catalog.sql` adds tracking/equipment snapshot columns to `workout_exercises`. These fields describe what the user selected when the workout was recorded; they are not joined to a current catalog definition at read time.
+
+## Exercise catalog and history boundary
+
+The active picker combines the versioned `starter-2026-08-05-v1` catalog with owner-created entries. A custom definition has a stable key, display name, aliases, category, tracking mode, equipment and optional equipment notes. Creation is idempotent, correction uses an expected revision, and archive removes the definition from active search while keeping immutable definition revisions.
+
+Selecting an entry copies its visible semantics into the workout draft and then the saved exercise snapshot. Renaming, changing equipment or archiving the definition does not update an open draft or any stored workout. The workout `catalogKey` can support later grouping, but there is deliberately no live foreign key that grants a mutable directory authority over historical fact display.
+
 ## Repeat-last semantics
 
 “Repeat” copies exercise identity, order, set kind, reps, display load, duration, distance and RPE into a new draft. It deliberately resets:
@@ -56,6 +67,8 @@ Migration `0021_authoritative_workout_status.sql` backfills the relational statu
 - pain, fatigue, note and prior server identity/revision.
 
 This makes the previous workout a convenient structure template without presenting yesterday's completion, symptoms or notes as today's facts. Saving creates a new idempotent session; it never links by mutating or cloning the previous database row.
+
+Repeat also copies the recorded tracking mode and equipment snapshot. It does not refresh the exercise from the current catalog, so a repeated draft remains visibly based on the earlier workout until the user selects another definition.
 
 ## Plan relationship
 
@@ -68,5 +81,6 @@ A later workout correction advances the workout aggregate normally while the lin
 - Pain at 6 or above triggers clear stop/escalation copy; the app does not diagnose injury.
 - Volume is labeled as an observation aid, not a quality score or progression mandate.
 - Imported workouts are allowed by contract for later adapters, but there is no import UI or provider integration yet.
-- Rest intervals, tempo, supersets, equipment and a custom exercise library remain deferred; plan linkage is explicit and never inferred.
+- Rest intervals, tempo and supersets remain deferred; plan linkage is explicit and never inferred.
+- Starter definitions and user-entered catalog fields are descriptive content, not coaching validation or a claim that an exercise is safe for a particular user.
 - Privacy erasure remains separate from soft deletion and must cover revisions and backups before public release.

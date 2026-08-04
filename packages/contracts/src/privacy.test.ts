@@ -95,7 +95,7 @@ describe('privacy contracts', () => {
       })),
       consents: [],
       portableExport: {
-        schemaVersion: 'myfitness-portable-export-v2',
+        schemaVersion: 'myfitness-portable-export-v3',
         contentType: 'application/json',
         includesHistory: true,
         includesActiveSanitizedPhotos: true,

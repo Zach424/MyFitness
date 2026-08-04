@@ -2,7 +2,7 @@
 
 面向普通健身人群的多端记录与 AI 规划产品。产品把身体、训练、饮食和恢复数据整理为可解释、可调整、可持续执行的个人计划。
 
-> 当前阶段：首个服务候选 `v0.1.0-rc.1` 已发布验证；本地产品还完成了隐私优先的进度照、服务端训练完成状态，以及计划训练版本到用户所选实际训练版本的显式关联。Week Fold 与 Today 只在用户主动选择后显示“已记录”，不会根据标题、日期或时长推断完成情况。H5 OIDC 已完成本地/provider-double 验收，H5 与 WeApp 均有来源绑定、实际字节校验的 `candidate` 确定性 TAR 契约。CI/发布工作流的 27 个外部 action 调用已固定到 12 个经核验的完整提交，下一候选的远端标签、当前 `main` 祖先关系与同提交成功 CI 也是镜像发布前的强制资格门。现有 `v0.1.0-rc.1` 仍是“仅服务”历史记录；托管账号、真实微信/OIDC 凭据、精确回调域名/TLS/CORS、集中遥测、数据托管和责任人仍是上线门槛，当前没有声称已经承载公网流量。
+> 当前阶段：首个服务候选 `v0.1.0-rc.1` 已发布验证；本地产品还完成了用户自建动作目录、显式器械/记录方式、隐私优先的进度照、服务端训练完成状态，以及计划训练到实际训练的显式关联。动作目录支持搜索、修正、归档和导出，目录变化不会改写已保存训练；Week Fold 与 Today 也不会根据标题、日期或时长推断完成情况。H5 OIDC 已完成本地/provider-double 验收，H5 与 WeApp 均有来源绑定、实际字节校验的 `candidate` 确定性 TAR 契约。现有 `v0.1.0-rc.1` 仍是“仅服务”历史记录；托管账号、真实微信/OIDC 凭据、精确回调域名/TLS/CORS、集中遥测、数据托管和责任人仍是上线门槛，当前没有声称已经承载公网流量。
 
 ## 产品边界
 
@@ -164,6 +164,7 @@ Playwright 会复用或启动 API、H5 与管理员预览服务。`pnpm db:down`
 - [架构决策 0032](docs/architecture/decisions/0032-client-runtime-and-measured-bundle-boundary.md)
 - [架构决策 0033](docs/architecture/decisions/0033-bounded-record-evidence-plan-freshness.md)
 - [架构决策 0034](docs/architecture/decisions/0034-explicit-plan-workout-link.md)
+- [架构决策 0035](docs/architecture/decisions/0035-user-owned-exercise-catalog.md)
 - [健康记录数据模型](docs/architecture/HEALTH_RECORD_MODEL.md)
 - [训练记录数据模型](docs/architecture/WORKOUT_MODEL.md)
 - [饮食记录数据模型](docs/architecture/NUTRITION_MODEL.md)
@@ -218,6 +219,7 @@ Playwright 会复用或启动 API、H5 与管理员预览服务。`pnpm db:down`
 - [第 34 轮档案](docs/iterations/034-client-accessibility-and-bundle-hardening.md)
 - [第 35 轮档案](docs/iterations/035-bounded-record-evidence-plan-freshness.md)
 - [第 36 轮档案](docs/iterations/036-explicit-plan-workout-link.md)
+- [第 37 轮档案](docs/iterations/037-user-owned-exercise-catalog.md)
 - [移动端视觉证据](output/playwright/iteration-001-mobile.png)
 - [宽屏视觉证据](output/playwright/iteration-001-wide.png)
 - [建档移动端证据](output/playwright/iteration-003-onboarding-mobile.png)
@@ -233,6 +235,7 @@ Playwright 会复用或启动 API、H5 与管理员预览服务。`pnpm db:down`
 - [周计划移动端证据](output/playwright/iteration-008-plans-mobile.png)
 - [周计划证据变化移动端证据](output/playwright/iteration-035-evidence-shift-mobile.png)
 - [计划/实际训练显式关联移动端证据](output/playwright/iteration-036-plan-link-mobile.png)
+- [自定义动作目录移动端证据](output/playwright/iteration-037-user-exercise-catalog-mobile.png)
 - [周计划宽屏证据](output/playwright/iteration-008-plans-wide.png)
 - [AI 边注移动端证据](output/playwright/iteration-009-ai-mobile.png)
 - [AI 边注宽屏证据](output/playwright/iteration-009-ai-wide.png)

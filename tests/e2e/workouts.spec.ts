@@ -146,3 +146,75 @@ test('workout log remains useful at wide viewport', async ({ page }) => {
   })
   expect(browserErrors).toEqual([])
 })
+
+test('user creates, searches, corrects and archives an owned exercise snapshot', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  const browserErrors = collectBrowserErrors(page)
+
+  await openWorkouts(page)
+  await expect(page.getByRole('button', { name: '添加高脚杯深蹲' })).toBeVisible()
+  await page.getByRole('button', { name: '自定义动作' }).click()
+  const editor = page.getByRole('dialog', { name: '自定义动作编辑器' })
+  await expect(editor).toBeVisible()
+  await editor.locator('[aria-label="自定义动作名称"] input').fill('壶铃摆动')
+  await editor.locator('[aria-label="自定义动作别名"] input').fill('Kettlebell Swing，KB Swing')
+  await editor.getByRole('button', { name: '自重' }).click()
+  await editor.getByRole('button', { name: '壶铃' }).click()
+
+  const createDefinition = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/v1/exercise-catalog') && response.request().method() === 'POST',
+  )
+  await editor.getByRole('button', { name: '创建并加入目录' }).click()
+  expect((await createDefinition).status()).toBe(201)
+  await expect(editor).not.toBeVisible()
+  await page.locator('[aria-label="搜索动作目录"] input').fill('KB Swing')
+  await expect(page.getByRole('button', { name: '添加壶铃摆动' })).toBeVisible()
+  await page.getByRole('button', { name: '添加壶铃摆动' }).click()
+  await expect(page.locator('.exercise-card__equipment').filter({ hasText: '壶铃' })).toBeVisible()
+
+  const createWorkout = page.waitForResponse(
+    (response) => response.url().endsWith('/v1/workouts') && response.request().method() === 'POST',
+  )
+  await page.getByRole('button', { name: '保存训练', exact: true }).click()
+  expect((await createWorkout).status()).toBe(201)
+  const recorded = page.locator('.workout-entry').first()
+  await expect(recorded.getByText(/高脚杯深蹲 · 壶铃摆动/)).toBeVisible()
+
+  await page.getByRole('button', { name: '编辑自定义动作壶铃摆动' }).click()
+  await editor.locator('[aria-label="自定义动作名称"] input').fill('双手壶铃摆动')
+  const updateDefinition = page.waitForResponse(
+    (response) =>
+      /\/v1\/exercise-catalog\/[0-9a-f-]{36}$/.test(response.url()) &&
+      response.request().method() === 'PUT',
+  )
+  await editor.getByRole('button', { name: '保存定义新版本' }).click()
+  expect((await updateDefinition).status()).toBe(200)
+  const correctedCatalogEntry = page.getByRole('button', { name: '添加双手壶铃摆动' })
+  await expect(correctedCatalogEntry).toBeVisible()
+  await expect(correctedCatalogEntry).toBeEnabled()
+  await expect(correctedCatalogEntry).toHaveCSS('opacity', '1')
+  await expect(recorded.getByText(/高脚杯深蹲 · 壶铃摆动/)).toBeVisible()
+  await page.locator('.catalog-block').scrollIntoViewIfNeeded()
+  await page.screenshot({
+    path: 'output/playwright/iteration-037-user-exercise-catalog-mobile.png',
+    fullPage: true,
+  })
+
+  await page.getByRole('button', { name: '编辑自定义动作双手壶铃摆动' }).click()
+  const archiveDefinition = page.waitForResponse(
+    (response) =>
+      /\/v1\/exercise-catalog\/[0-9a-f-]{36}$/.test(response.url()) &&
+      response.request().method() === 'DELETE',
+  )
+  await editor.getByRole('button', { name: '停用动作' }).click()
+  expect((await archiveDefinition).status()).toBe(200)
+  await expect(
+    page.getByText('动作已从未来选择中停用；当前草稿和历史训练快照没有被改写。'),
+  ).toBeVisible()
+  await expect(page.getByRole('button', { name: '添加双手壶铃摆动' })).not.toBeVisible()
+  await expect(recorded.getByText(/高脚杯深蹲 · 壶铃摆动/)).toBeVisible()
+  expect(browserErrors).toEqual([])
+})

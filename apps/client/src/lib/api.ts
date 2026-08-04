@@ -1,6 +1,7 @@
 import type {
   AiExplanation,
   CreateHealthRecord,
+  CreateExerciseCatalogEntry,
   CreateMeal,
   CreatePlanWorkoutLink,
   CreateWorkout,
@@ -33,7 +34,11 @@ import type {
   AccountDeletionResult,
   AccountDeletionIntent,
   ErasureReceiptStatus,
+  ExerciseCatalogEntryHistoryItem,
+  ExerciseCatalogItem,
+  CustomExerciseCatalogEntry,
   UpdateHealthRecord,
+  UpdateExerciseCatalogEntry,
   UpdateMeal,
   UpdateWorkout,
   WeeklyPlan,
@@ -315,6 +320,37 @@ export const deleteWorkout = (workoutId: string, expectedRevision: number) =>
 export const getWorkoutHistory = (workoutId: string) =>
   authenticatedRequest<{ workoutId: string; items: WorkoutHistoryItem[] }>(
     `/workouts/${workoutId}/history`,
+    'GET',
+  )
+
+export const listExerciseCatalog = () =>
+  authenticatedRequest<{ starterVersion: string; items: ExerciseCatalogItem[] }>(
+    '/exercise-catalog',
+    'GET',
+  )
+
+export const createExerciseCatalogEntry = (
+  payload: CreateExerciseCatalogEntry,
+  idempotencyKey: string,
+) =>
+  authenticatedRequest<CustomExerciseCatalogEntry>('/exercise-catalog', 'POST', payload, {
+    'x-idempotency-key': idempotencyKey,
+  })
+
+export const updateExerciseCatalogEntry = (entryId: string, payload: UpdateExerciseCatalogEntry) =>
+  authenticatedRequest<CustomExerciseCatalogEntry>(`/exercise-catalog/${entryId}`, 'PUT', payload)
+
+export const archiveExerciseCatalogEntry = (entryId: string, expectedRevision: number) =>
+  authenticatedRequest<CustomExerciseCatalogEntry>(
+    `/exercise-catalog/${entryId}`,
+    'DELETE',
+    undefined,
+    { 'x-expected-revision': String(expectedRevision) },
+  )
+
+export const getExerciseCatalogEntryHistory = (entryId: string) =>
+  authenticatedRequest<{ entryId: string; items: ExerciseCatalogEntryHistoryItem[] }>(
+    `/exercise-catalog/${entryId}/history`,
     'GET',
   )
 

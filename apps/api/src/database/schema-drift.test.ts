@@ -12,6 +12,9 @@ import {
   dietaryPreferenceOptions,
   equipmentOptions,
   exerciseCategories,
+  exerciseCatalogRevisionActions,
+  exerciseEquipmentOptions,
+  exerciseTrackingModes,
   foodCategories,
   foodPhotoConsentPurpose,
   foodPhotoPromptVersions,
@@ -124,6 +127,10 @@ const authoritativeWorkoutStatusMigrationPath = path.resolve(
   __dirname,
   '../../../../infra/postgres/migrations/0021_authoritative_workout_status.sql',
 )
+const exerciseCatalogMigrationPath = path.resolve(
+  __dirname,
+  '../../../../infra/postgres/migrations/0023_user_exercise_catalog.sql',
+)
 
 describe('health-record migration drift', () => {
   it('contains every contract metric, unit and source kind', async () => {
@@ -186,6 +193,22 @@ describe('health-record migration drift', () => {
     expect(migration).toContain('BOOL_AND(set_row.completed)')
     expect(migration).toContain('COUNT(set_row.id) > 0')
     expect(migration).toContain('Server-derived cache')
+  })
+
+  it('contains every exercise catalog lifecycle, tracking and equipment enum', async () => {
+    const migration = await readFile(exerciseCatalogMigrationPath, 'utf8')
+    for (const value of [
+      ...exerciseCatalogRevisionActions,
+      ...exerciseTrackingModes,
+      ...exerciseEquipmentOptions,
+    ]) {
+      expect(migration, `${value} is missing from the exercise catalog migration`).toContain(
+        `'${value}'`,
+      )
+    }
+    expect(migration).toContain('user_exercise_catalog_active_name_unique')
+    expect(migration).toContain('user_exercise_catalog_revision_owner_fk')
+    expect(migration).toContain('workout_exercises_other_equipment_notes_check')
   })
 
   it('contains every nutrition lifecycle enum at the snapshot boundary', async () => {

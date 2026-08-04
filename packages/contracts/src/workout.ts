@@ -1,5 +1,6 @@
 import * as z from 'zod'
 
+import { exerciseEquipmentSchema, exerciseTrackingModeSchema } from './exercise-catalog'
 import {
   exerciseCategories,
   loadUnits,
@@ -81,6 +82,9 @@ export const workoutExerciseInputSchema = z
       .regex(/^[a-z0-9_]{2,80}$/),
     name: z.string().trim().min(1).max(80),
     category: exerciseCategorySchema,
+    trackingMode: exerciseTrackingModeSchema.optional(),
+    equipment: z.array(exerciseEquipmentSchema).max(6).optional(),
+    equipmentNotes: z.string().trim().min(1).max(120).optional(),
     notes: z.string().trim().max(300).optional(),
     sets: z.array(workoutSetInputSchema).min(1).max(50),
   })
@@ -136,6 +140,20 @@ const validateWorkout = (workout: z.infer<typeof workoutBaseSchema>, ctx: z.Refi
     })
   }
   workout.exercises.forEach((exercise, exerciseIndex) => {
+    if (exercise.equipment && new Set(exercise.equipment).size !== exercise.equipment.length) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'exercise equipment must not contain duplicates',
+        path: ['exercises', exerciseIndex, 'equipment'],
+      })
+    }
+    if (exercise.equipment?.includes('other') && !exercise.equipmentNotes) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'equipmentNotes is required when equipment contains other',
+        path: ['exercises', exerciseIndex, 'equipmentNotes'],
+      })
+    }
     const setPositions = exercise.sets.map((set) => set.position)
     if (new Set(setPositions).size !== setPositions.length) {
       ctx.addIssue({

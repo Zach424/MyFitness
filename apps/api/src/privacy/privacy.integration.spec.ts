@@ -190,7 +190,7 @@ describe('privacy ownership API with PostgreSQL and private media', () => {
         progressPhotos: unknown[]
       }
     }
-    expect(payload.schemaVersion).toBe('myfitness-portable-export-v2')
+    expect(payload.schemaVersion).toBe('myfitness-portable-export-v3')
     expect(payload.data.healthRecords).toHaveLength(1)
     expect(payload.data.healthRecordRevisions).toHaveLength(1)
     expect(payload.data.foodPhotoAnalyses[0]?.media).toMatchObject({ encoding: 'base64' })

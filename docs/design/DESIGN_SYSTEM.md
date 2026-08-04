@@ -1,6 +1,6 @@
 # Design system baseline
 
-Status: implemented and visually validated through iteration-034 client hardening evidence
+Status: implemented and visually validated through iteration-037 exercise-catalog evidence
 
 Working brand: 衡迹 / MyFitness
 
@@ -310,6 +310,18 @@ Today adds a compact planned/recorded card before the confirmed evidence rail. I
 Reviewed evidence:
 
 - [390 × 844 explicit plan/workout link](../../output/playwright/iteration-036-plan-link-mobile.png)
+
+## Exercise-catalog review — iteration 037
+
+The workout sheet now separates the reusable movement directory from the factual set ledger. A compact search field scans starter names, aliases, equipment and owner notes; starter and custom entries share the same quiet paper-card language, while `我的动作` and explicit version copy keep ownership visible. Choosing a definition copies its tracking mode and equipment into the draft instead of leaving users to infer fields from a broad category.
+
+Custom creation and correction use a focused sheet with category, tracking mode and multi-select equipment. Selecting `其他` reveals a required explanation. Correction copy says that the current draft and saved workouts keep their earlier snapshot; archive copy says the entry leaves search while old training evidence remains. No popularity score, unsafe exercise ranking or automatic plan recommendation is introduced.
+
+The 390 px production-browser review created `壶铃摆动`, found it through the alias `KB Swing`, added and saved it with explicit `次数 / 负重` and `壶铃`, then corrected the directory name while confirming that the saved workout retained the original name. It also caught a Taro H5 attribute/CSS mismatch: `disabled="false"` still matched `[disabled]` and visually faded an enabled selection. The final component emits the attribute only when selected and uses an explicit selected class, with the browser asserting that the action is enabled and full-opacity.
+
+Reviewed evidence:
+
+- [390 × 844 custom exercise catalog](../../output/playwright/iteration-037-user-exercise-catalog-mobile.png)
 
 ## Screenshot review checklist
 

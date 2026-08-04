@@ -1,6 +1,6 @@
 # Privacy ownership model
 
-Status: durable local ownership/erasure boundary with lost-response recovery and purpose-separated progress-photo custody implemented through iteration 031
+Status: durable local ownership/erasure boundary with lost-response recovery, purpose-separated progress-photo custody and exercise-catalog history implemented through iteration 037
 
 ## User-owned surface
 
@@ -10,12 +10,12 @@ The inventory has eight stable user-facing categories: profile/goals, health/rec
 
 ## Portable export
 
-`GET /v1/me/privacy/export` creates `myfitness-portable-export-v2` directly from a repeatable-read PostgreSQL snapshot. The JSON attachment is marked `no-store`, is not persisted as a server artifact and contains:
+`GET /v1/me/privacy/export` creates `myfitness-portable-export-v3` directly from a repeatable-read PostgreSQL snapshot. The JSON attachment is marked `no-store`, is not persisted as a server artifact and contains:
 
 - Account lifecycle fields and provider identities.
 - Profile, goals and every consent acceptance/revocation event.
 - Current and soft-deleted health records plus immutable revisions.
-- Workouts with exercises, sets and immutable history.
+- Workouts with exercises, sets and immutable history, plus active/archived custom exercise definitions and their immutable revisions.
 - Meals with item snapshots/history and owner favorites.
 - Weekly plans with decision history and AI explanations with provenance.
 - Food-photo candidate/selection provenance and any still-retained sanitized JPEG as base64.
