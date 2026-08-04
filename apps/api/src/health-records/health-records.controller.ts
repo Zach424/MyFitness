@@ -10,6 +10,7 @@ import {
   Param,
   Post,
   Put,
+  Query,
 } from '@nestjs/common'
 import {
   ApiBadRequestResponse,
@@ -22,6 +23,7 @@ import {
   ApiOkResponse,
   ApiOperation,
   ApiParam,
+  ApiQuery,
   ApiTags,
 } from '@nestjs/swagger'
 import {
@@ -29,6 +31,7 @@ import {
   createHealthRecordSchema,
   expectedRevisionHeaderSchema,
   healthRecordHistorySchema,
+  healthRecordListQuerySchema,
   healthRecordListSchema,
   healthRecordSchema,
   idempotencyKeySchema,
@@ -107,10 +110,33 @@ export class HealthRecordsController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'List the latest 100 measurements for the authenticated user' })
+  @ApiOperation({ summary: 'List one stable cursor page of current owner measurements' })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    schema: { type: 'integer', minimum: 1, maximum: 100 },
+  })
+  @ApiQuery({
+    name: 'cursor',
+    required: false,
+    schema: { type: 'string', minLength: 24, maxLength: 256 },
+  })
   @ApiOkResponse({ schema: openApiSchema(healthRecordListSchema) })
-  async list(@CurrentUser() principal: AuthPrincipal) {
-    return healthRecordListSchema.parse(await this.records.list(principal.userId))
+  @ApiBadRequestResponse({ description: 'Pagination limit or cursor is invalid.' })
+  async list(@CurrentUser() principal: AuthPrincipal, @Query() query: unknown) {
+    const parsed = parseBody(healthRecordListQuerySchema, query, 'health record list is invalid')
+    return healthRecordListSchema.parse(await this.records.list(principal.userId, parsed))
+  }
+
+  @Get(':recordId')
+  @ApiOperation({ summary: 'Get one current owner-visible measurement by exact identifier' })
+  @ApiParam({ name: 'recordId', schema: { type: 'string', format: 'uuid' } })
+  @ApiOkResponse({ schema: openApiSchema(healthRecordSchema) })
+  @ApiNotFoundResponse({ description: 'Record does not exist for the authenticated user.' })
+  async get(@CurrentUser() principal: AuthPrincipal, @Param('recordId') rawRecordId: string) {
+    return healthRecordSchema.parse(
+      await this.records.get(principal.userId, parseRecordId(rawRecordId)),
+    )
   }
 
   @Put(':recordId')

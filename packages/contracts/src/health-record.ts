@@ -1,5 +1,7 @@
 import * as z from 'zod'
 
+import { recordListQuerySchema, recordPageCursorSchema } from './pagination'
+
 import {
   metricCodes,
   recordStatuses,
@@ -147,9 +149,12 @@ export const healthRecordSchema = z
 
 export const healthRecordListSchema = z
   .object({
-    items: z.array(healthRecordSchema),
+    items: z.array(healthRecordSchema).max(100),
+    nextCursor: recordPageCursorSchema.nullable(),
   })
   .strict()
+
+export const healthRecordListQuerySchema = recordListQuerySchema(100, 100)
 
 export const healthRecordHistoryItemSchema = healthRecordSchema.extend({
   action: revisionActionSchema,
@@ -190,4 +195,6 @@ export type RecordSource = z.infer<typeof recordSourceSchema>
 export type CreateHealthRecord = z.infer<typeof createHealthRecordSchema>
 export type UpdateHealthRecord = z.infer<typeof updateHealthRecordSchema>
 export type HealthRecord = z.infer<typeof healthRecordSchema>
+export type HealthRecordList = z.infer<typeof healthRecordListSchema>
+export type HealthRecordListQuery = z.infer<typeof healthRecordListQuerySchema>
 export type HealthRecordHistoryItem = z.infer<typeof healthRecordHistoryItemSchema>

@@ -10,6 +10,7 @@ import type {
   CreateHealthRecord,
   HealthRecord,
   HealthRecordHistoryItem,
+  HealthRecordListQuery,
   MetricCode,
   RecordSource,
   UnitCode,
@@ -19,6 +20,7 @@ import { MeasurementError, normalizeMeasurement } from '@myfitness/domain'
 import type { PoolClient } from 'pg'
 
 import { DatabaseService } from '../database/database.service'
+import { decodeRecordPageCursor, encodeRecordPageCursor } from '../pagination/record-page-cursor'
 
 type HealthRecordDataRow = {
   id: string
@@ -241,18 +243,60 @@ export class HealthRecordsService {
     })
   }
 
-  async list(userId: string) {
+  async list(userId: string, query: HealthRecordListQuery = { limit: 100 }) {
+    const cursor = decodeRecordPageCursor(query.cursor, 'health record')
+    let boundary: { occurred_at: Date; created_at: Date; id: string } | undefined
+    if (cursor) {
+      const result = await this.database.query<{
+        occurred_at: Date
+        created_at: Date
+        id: string
+      }>(
+        `SELECT occurred_at, created_at, record_id AS id
+         FROM health_record_revisions
+         WHERE user_id = $1 AND record_id = $2 AND revision = $3`,
+        [userId, cursor.id, cursor.revision],
+      )
+      boundary = result.rows[0]
+      if (!boundary) throw new BadRequestException('health record cursor is invalid or expired')
+    }
     const result = await this.database.query<HealthRecordRow>(
       `
         SELECT * FROM health_records
         WHERE user_id = $1 AND deleted_at IS NULL
-        ORDER BY occurred_at DESC, created_at DESC
-        LIMIT 100
+          AND (
+            $2::timestamptz IS NULL OR
+            (occurred_at, created_at, id) < ($2::timestamptz, $3::timestamptz, $4::uuid)
+          )
+        ORDER BY occurred_at DESC, created_at DESC, id DESC
+        LIMIT $5
       `,
-      [userId],
+      [
+        userId,
+        boundary?.occurred_at ?? null,
+        boundary?.created_at ?? null,
+        boundary?.id ?? null,
+        query.limit + 1,
+      ],
     )
+    const hasMore = result.rows.length > query.limit
+    const rows = result.rows.slice(0, query.limit)
+    const items = rows.map(mapRow)
+    const last = items.at(-1)
+    return {
+      items,
+      nextCursor:
+        hasMore && last ? encodeRecordPageCursor({ id: last.id, revision: last.revision }) : null,
+    }
+  }
 
-    return { items: result.rows.map(mapRow) }
+  async get(userId: string, recordId: string) {
+    const result = await this.database.query<HealthRecordRow>(
+      'SELECT * FROM health_records WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL',
+      [recordId, userId],
+    )
+    if (!result.rows[0]) throw new NotFoundException('health record not found')
+    return mapRow(result.rows[0])
   }
 
   async history(userId: string, recordId: string) {

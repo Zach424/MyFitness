@@ -421,6 +421,16 @@ Reviewed evidence:
 
 - [390 × 844 timezone-safe history calendar](../../output/playwright/iteration-045-history-calendar-mobile.png)
 
+## Progressive record-history review — iteration 046
+
+The three record ledgers now open with 20 current aggregates and state `已载入 N` rather than implying an exact lifetime total. A full-width quiet outline action continues into older pages; once exhausted, a low-emphasis end label makes the list state explicit. The same global control style is used by body/recovery, training and meals so pagination does not introduce a new visual dialect.
+
+Loading older data is user-initiated, disables the action while in flight and appends without rearranging the visible page. Errors reuse each editor's existing status region and leave already loaded evidence intact. No infinite scroll is used: explicit control is easier to discover, focus does not jump, and a long ledger does not trigger hidden network work.
+
+The 390 px production-browser review created 21 health records, showed only 20 initially, loaded the oldest entry, edited it, reloaded and restored the off-page correction through one exact owner read. The visible saved-on-device notice retained the base revision and safety copy; request/page/console error capture remained empty. Training and meal pages share the same control contract, while PostgreSQL coverage proves all three cursors.
+
+- [390 × 844 progressive record history](../../output/playwright/iteration-046-progressive-history-mobile.png)
+
 ## Screenshot review checklist
 
 - The Rhythm Rail remains understandable without color.

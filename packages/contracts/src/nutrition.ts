@@ -1,5 +1,7 @@
 import * as z from 'zod'
 
+import { recordListQuerySchema, recordPageCursorSchema } from './pagination'
+
 import {
   foodCategories,
   foodPortionUnits,
@@ -153,7 +155,10 @@ export const mealSchema = z
   })
   .strict()
 
-export const mealListSchema = z.object({ items: z.array(mealSchema) }).strict()
+export const mealListSchema = z
+  .object({ items: z.array(mealSchema).max(50), nextCursor: recordPageCursorSchema.nullable() })
+  .strict()
+export const mealListQuerySchema = recordListQuerySchema(50, 50)
 export const mealHistoryItemSchema = mealSchema.extend({
   action: mealRevisionActionSchema,
   changedAt: z.string().datetime({ offset: true }),
@@ -183,6 +188,8 @@ export type MealItemInput = z.infer<typeof mealItemInputSchema>
 export type CreateMeal = z.infer<typeof createMealSchema>
 export type UpdateMeal = z.infer<typeof updateMealSchema>
 export type Meal = z.infer<typeof mealSchema>
+export type MealList = z.infer<typeof mealListSchema>
+export type MealListQuery = z.infer<typeof mealListQuerySchema>
 export type MealHistoryItem = z.infer<typeof mealHistoryItemSchema>
 export type FavoriteFoodInput = z.infer<typeof favoriteFoodInputSchema>
 export type FavoriteFood = z.infer<typeof favoriteFoodSchema>

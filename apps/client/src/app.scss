@@ -22,3 +22,25 @@ button {
 button::after {
   border: 0;
 }
+
+.record-page-more {
+  width: 100%;
+  min-height: 46px;
+  margin: 14px 0 0;
+  border: 1px solid rgba(36, 76, 102, 0.2);
+  border-radius: 12px;
+  color: var(--color-mineral);
+  background: transparent;
+  font-size: 12px;
+  font-weight: 720;
+  letter-spacing: 0.04em;
+}
+
+.record-page-end {
+  display: block;
+  padding-top: 16px;
+  color: var(--color-muted);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-align: center;
+}

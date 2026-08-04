@@ -23,6 +23,7 @@ import {
   deleteFoodPhotoCandidate,
   deleteFavoriteFood,
   deleteMeal,
+  getMeal,
   getMealHistory,
   listFoodPhotoCandidates,
   listFoodCatalog,
@@ -34,6 +35,7 @@ import {
   updateMeal,
   uploadFoodPhoto,
 } from '../../lib/api'
+import { appendOlderRecords, includeExactRecord } from '../../lib/record-pages'
 import { useRecoverableDraft } from '../../lib/use-local-draft'
 import {
   buildMealRequest,
@@ -129,6 +131,8 @@ const NutritionPage = () => {
   )
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [nextCursor, setNextCursor] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [feedback, setFeedback] = useState('')
   const [photoConsent, setPhotoConsent] = useState(false)
@@ -158,11 +162,12 @@ const NutritionPage = () => {
     void (async () => {
       try {
         const [mealResult, favoriteResult, photoResult] = await Promise.all([
-          listMeals(),
+          listMeals({ limit: 20 }),
           listFavoriteFoods(),
           listFoodPhotoCandidates(),
         ])
         setMeals(mealResult.items)
+        setNextCursor(mealResult.nextCursor)
         setFavorites(favoriteResult.items)
         const reviewable =
           photoResult.items.find((item) => item.status === 'ready') ?? photoResult.items[0]
@@ -180,6 +185,20 @@ const NutritionPage = () => {
       .then((result) => setFoodCatalog(result.items))
       .catch((error: unknown) => setFeedback(messageOf(error)))
   })
+
+  const loadOlderMeals = async () => {
+    if (!nextCursor || loadingMore) return
+    setLoadingMore(true)
+    try {
+      const result = await listMeals({ limit: 20, cursor: nextCursor })
+      setMeals((current) => appendOlderRecords(current, result.items))
+      setNextCursor(result.nextCursor)
+    } catch (error) {
+      setFeedback(messageOf(error))
+    } finally {
+      setLoadingMore(false)
+    }
+  }
 
   const recoverableDraft = useRecoverableDraft({
     kind: 'meal',
@@ -204,14 +223,14 @@ const NutritionPage = () => {
       return
     }
     try {
-      const result = await listMeals()
-      const target = currentCorrectionTarget(result.items, correction)
-      setMeals(result.items)
+      const exact = await getMeal(correction.aggregateId)
+      const target = currentCorrectionTarget([exact], correction)
       if (!target) {
         recoverableDraft.clear()
         setFeedback('这份修改基于旧版本或已删除餐次，已安全放弃；当前餐次没有被覆盖。')
         return
       }
+      setMeals((current) => includeExactRecord(current, target))
       const restored = recoverableDraft.restore()
       if (!restored) return
       setEditing(target)
@@ -219,6 +238,11 @@ const NutritionPage = () => {
       pendingKey.current = ''
       setFeedback(`已恢复基于 R${correction.baseRevision} 的餐次修改；保存仍会校验当前版本。`)
     } catch (error) {
+      if (error instanceof ApiError && error.statusCode === 404) {
+        recoverableDraft.clear()
+        setFeedback('这份修改对应的餐次已删除，已安全放弃；当前餐次没有被覆盖。')
+        return
+      }
       setFeedback(`暂时无法核对原餐次，修改草稿仍保留。${messageOf(error)}`)
     }
   }
@@ -1002,7 +1026,7 @@ const NutritionPage = () => {
                   <Text className="nutrition-eyebrow">RECENT MEALS</Text>
                   <Text className="nutrition-panel-title">饮食记录簿</Text>
                 </View>
-                <Text className="meal-ledger__count metric">{meals.length}</Text>
+                <Text className="meal-ledger__count metric">已载入 {meals.length}</Text>
               </View>
               {loading ? (
                 <View className="meal-empty">正在整理餐次…</View>
@@ -1076,6 +1100,18 @@ const NutritionPage = () => {
                   <Text className="meal-empty__body">加入食物、确认份量，保存第一餐。</Text>
                 </View>
               )}
+              {nextCursor ? (
+                <Button
+                  {...buttonA11yProps}
+                  className="record-page-more"
+                  disabled={loadingMore}
+                  onClick={() => void loadOlderMeals()}
+                >
+                  {loadingMore ? '正在载入…' : '继续载入更早餐次'}
+                </Button>
+              ) : meals.length ? (
+                <Text className="record-page-end">已载入当前全部餐次</Text>
+              ) : null}
             </View>
           </View>
 

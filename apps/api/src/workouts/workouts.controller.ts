@@ -10,6 +10,7 @@ import {
   Param,
   Post,
   Put,
+  Query,
 } from '@nestjs/common'
 import {
   ApiBadRequestResponse,
@@ -22,6 +23,7 @@ import {
   ApiOkResponse,
   ApiOperation,
   ApiParam,
+  ApiQuery,
   ApiTags,
 } from '@nestjs/swagger'
 import {
@@ -34,6 +36,7 @@ import {
   workoutHistorySchema,
   workoutIdSchema,
   workoutListSchema,
+  workoutListQuerySchema,
   workoutSchema,
   type CreateWorkout,
   type UpdateWorkout,
@@ -84,10 +87,32 @@ export class WorkoutsController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'List the latest 50 workout sessions' })
+  @ApiOperation({ summary: 'List one stable cursor page of current owner workout sessions' })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    schema: { type: 'integer', minimum: 1, maximum: 50 },
+  })
+  @ApiQuery({
+    name: 'cursor',
+    required: false,
+    schema: { type: 'string', minLength: 24, maxLength: 256 },
+  })
   @ApiOkResponse({ schema: openApiSchema(workoutListSchema) })
-  async list(@CurrentUser() principal: AuthPrincipal) {
-    return workoutListSchema.parse(await this.workouts.list(principal.userId))
+  @ApiBadRequestResponse({ description: 'Pagination limit or cursor is invalid.' })
+  async list(@CurrentUser() principal: AuthPrincipal, @Query() query: unknown) {
+    const parsed = parse(workoutListQuerySchema, query, 'workout list is invalid')
+    return workoutListSchema.parse(await this.workouts.list(principal.userId, parsed))
+  }
+
+  @Get(':workoutId')
+  @ApiOperation({ summary: 'Get one current owner-visible workout by exact identifier' })
+  @ApiParam({ name: 'workoutId', schema: { type: 'string', format: 'uuid' } })
+  @ApiOkResponse({ schema: openApiSchema(workoutSchema) })
+  @ApiNotFoundResponse({ description: 'Workout does not exist for this user.' })
+  async get(@CurrentUser() principal: AuthPrincipal, @Param('workoutId') rawId: string) {
+    const id = parse(workoutIdSchema, rawId, 'workoutId must be a UUID')
+    return workoutSchema.parse(await this.workouts.get(principal.userId, id))
   }
 
   @Put(':workoutId')

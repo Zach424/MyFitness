@@ -286,3 +286,88 @@ test('health correction draft restores the exact revision and clears after updat
   ).toBeNull()
   expect(browserErrors).toEqual([])
 })
+
+test('health log loads older records and restores a correction beyond the first page', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  const browserErrors: string[] = []
+  page.on('console', (message) => {
+    if (message.type() === 'error') browserErrors.push(message.text())
+  })
+  page.on('pageerror', (error) => browserErrors.push(error.message))
+
+  await openRecords(page)
+  const createStatuses = await page.evaluate(async () => {
+    const rawToken = localStorage.getItem('myfitness.auth.accessToken')
+    if (!rawToken) throw new Error('development access token is missing')
+    let decoded: { data?: unknown } = {}
+    try {
+      decoded = JSON.parse(rawToken) as { data?: unknown }
+    } catch {
+      // Legacy H5 storage kept the access token as a plain string.
+    }
+    const token = typeof decoded.data === 'string' ? decoded.data : rawToken
+    const statuses: number[] = []
+    for (let day = 1; day <= 21; day += 1) {
+      const response = await fetch('http://127.0.0.1:3100/v1/health-records', {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+          'x-idempotency-key': `pagination-health-${day}`,
+        },
+        body: JSON.stringify({
+          metric: 'body.weight',
+          value: 60 + day,
+          unit: 'kg',
+          source: { kind: 'manual' },
+          status: 'confirmed',
+          occurredAt: `2026-01-${String(day).padStart(2, '0')}T04:00:00.000Z`,
+          timezone: 'Asia/Shanghai',
+        }),
+      })
+      statuses.push(response.status)
+    }
+    return statuses
+  })
+  expect(createStatuses).toEqual(Array.from({ length: 21 }, () => 201))
+
+  await page.reload()
+  await expect(page.locator('.records-layout__log').getByText('已载入 20')).toBeVisible()
+  await expect(page.locator('.records-layout__log').getByText('61 kg')).not.toBeVisible()
+
+  const olderPageResponse = page.waitForResponse(
+    (response) =>
+      response.url().includes('/v1/health-records?limit=20&cursor=') &&
+      response.request().method() === 'GET',
+  )
+  await page.getByRole('button', { name: '继续载入更早记录' }).click()
+  expect((await olderPageResponse).status()).toBe(200)
+  const oldestEntry = page.locator('.log-entry').filter({ hasText: '61 kg' })
+  await expect(oldestEntry).toBeVisible()
+  await expect(page.getByText('已载入当前全部记录')).toBeVisible()
+
+  await oldestEntry.getByRole('button', { name: '修改' }).click()
+  const input = page.locator('[aria-label="体重数值"] input')
+  await input.fill('61.5')
+  await expect(page.getByText('未保存修改已暂存')).toBeVisible()
+
+  await page.reload()
+  await expect(page.locator('.records-layout__log').getByText('已载入 20')).toBeVisible()
+  await expect(page.getByText('发现一份未完成修改')).toBeVisible()
+  const exactRecordResponse = page.waitForResponse(
+    (response) =>
+      /\/v1\/health-records\/[0-9a-f-]{36}$/.test(response.url()) &&
+      response.request().method() === 'GET',
+  )
+  await page.getByRole('button', { name: '恢复修改' }).click()
+  expect((await exactRecordResponse).status()).toBe(200)
+  await expect(input).toHaveValue('61.5')
+  await expect(page.getByText(/已恢复基于 R1 的修改/)).toBeVisible()
+  await page.screenshot({
+    path: 'output/playwright/iteration-046-progressive-history-mobile.png',
+    fullPage: false,
+  })
+  expect(browserErrors).toEqual([])
+})

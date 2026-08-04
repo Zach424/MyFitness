@@ -86,7 +86,11 @@ This makes the previous workout a convenient structure template without presenti
 
 Repeat also copies the recorded tracking mode and equipment snapshot. It does not refresh the exercise from the current catalog, so a repeated draft remains visibly based on the earlier workout until the user selects another definition.
 
-Correction drafts are distinct from repeat drafts. A correction retains the workout UUID and base revision and can be restored only after the current owner-visible list still reports that exact revision; stale/deleted targets are abandoned without a write. Saving a restored correction continues to send `expectedRevision`, while cancel/discard removes the local copy. Repeat drops all correction identity and creates a new session.
+Correction drafts are distinct from repeat drafts. A correction retains the workout UUID and base revision and can be restored only after an exact current owner read still reports that revision; stale/deleted targets are abandoned without a write even when the workout is outside the first list page. Saving a restored correction continues to send `expectedRevision`, while cancel/discard removes the local copy. Repeat drops all correction identity and creates a new session.
+
+## Current-list pagination
+
+`GET /v1/workouts` accepts optional `limit` (1–50) and an opaque cursor and returns `{ items, nextCursor }`; an omitted limit preserves the former 50-row behavior. Current, non-deleted owner sessions use `(started_at, created_at, id)` descending. A cursor stores only version/workout UUID/revision and resolves the immutable snapshot's `startedAt`/`createdAt`, so anchor correction or deletion does not erase the boundary. `GET /v1/workouts/:workoutId` loads one current owner aggregate graph for off-page workflows and conceals missing, deleted and cross-owner targets as `404`.
 
 ## Cross-domain history-calendar participation
 

@@ -10,6 +10,7 @@ import {
   Param,
   Post,
   Put,
+  Query,
 } from '@nestjs/common'
 import {
   ApiBadRequestResponse,
@@ -22,6 +23,7 @@ import {
   ApiOkResponse,
   ApiOperation,
   ApiParam,
+  ApiQuery,
   ApiTags,
 } from '@nestjs/swagger'
 import {
@@ -36,6 +38,7 @@ import {
   mealHistorySchema,
   mealIdSchema,
   mealListSchema,
+  mealListQuerySchema,
   mealSchema,
   updateMealBaseSchema,
   updateMealSchema,
@@ -89,10 +92,32 @@ export class NutritionController {
   }
 
   @Get('meals')
-  @ApiOperation({ summary: 'List the latest 50 meals' })
+  @ApiOperation({ summary: 'List one stable cursor page of current owner meals' })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    schema: { type: 'integer', minimum: 1, maximum: 50 },
+  })
+  @ApiQuery({
+    name: 'cursor',
+    required: false,
+    schema: { type: 'string', minLength: 24, maxLength: 256 },
+  })
   @ApiOkResponse({ schema: openApiSchema(mealListSchema) })
-  async list(@CurrentUser() principal: AuthPrincipal) {
-    return mealListSchema.parse(await this.nutrition.list(principal.userId))
+  @ApiBadRequestResponse({ description: 'Pagination limit or cursor is invalid.' })
+  async list(@CurrentUser() principal: AuthPrincipal, @Query() query: unknown) {
+    const parsed = parse(mealListQuerySchema, query, 'meal list is invalid')
+    return mealListSchema.parse(await this.nutrition.list(principal.userId, parsed))
+  }
+
+  @Get('meals/:mealId')
+  @ApiOperation({ summary: 'Get one current owner-visible meal by exact identifier' })
+  @ApiParam({ name: 'mealId', schema: { type: 'string', format: 'uuid' } })
+  @ApiOkResponse({ schema: openApiSchema(mealSchema) })
+  @ApiNotFoundResponse({ description: 'Meal does not exist for this user.' })
+  async get(@CurrentUser() principal: AuthPrincipal, @Param('mealId') rawId: string) {
+    const id = parse(mealIdSchema, rawId, 'mealId must be a UUID')
+    return mealSchema.parse(await this.nutrition.get(principal.userId, id))
   }
 
   @Put('meals/:mealId')

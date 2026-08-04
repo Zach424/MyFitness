@@ -1,17 +1,24 @@
 import { createHash, randomUUID } from 'node:crypto'
 
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common'
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common'
 import type {
   CreateWorkout,
   UpdateWorkout,
   Workout,
   WorkoutExerciseInput,
   WorkoutHistoryItem,
+  WorkoutListQuery,
 } from '@myfitness/contracts'
 import { calculateWorkout } from '@myfitness/domain'
 import type { QueryResult, QueryResultRow } from 'pg'
 
 import { DatabaseService } from '../database/database.service'
+import { decodeRecordPageCursor, encodeRecordPageCursor } from '../pagination/record-page-cursor'
 
 type QueryExecutor = {
   query<T extends QueryResultRow>(text: string, values?: unknown[]): Promise<QueryResult<T>>
@@ -293,17 +300,62 @@ export class WorkoutsService {
     })
   }
 
-  async list(userId: string) {
+  async list(userId: string, query: WorkoutListQuery = { limit: 50 }) {
+    const cursor = decodeRecordPageCursor(query.cursor, 'workout')
+    let boundary: { started_at: Date; created_at: Date; id: string } | undefined
+    if (cursor) {
+      const result = await this.database.query<{
+        started_at: Date
+        created_at: Date
+        id: string
+      }>(
+        `SELECT (snapshot->>'startedAt')::timestamptz AS started_at,
+                (snapshot->>'createdAt')::timestamptz AS created_at,
+                workout_id AS id
+         FROM workout_revisions
+         WHERE user_id = $1 AND workout_id = $2 AND revision = $3`,
+        [userId, cursor.id, cursor.revision],
+      )
+      boundary = result.rows[0]
+      if (!boundary) throw new BadRequestException('workout cursor is invalid or expired')
+    }
     const sessions = await this.database.query<SessionRow>(
       `
         SELECT * FROM workout_sessions
         WHERE user_id = $1 AND deleted_at IS NULL
-        ORDER BY started_at DESC, created_at DESC
-        LIMIT 50
+          AND (
+            $2::timestamptz IS NULL OR
+            (started_at, created_at, id) < ($2::timestamptz, $3::timestamptz, $4::uuid)
+          )
+        ORDER BY started_at DESC, created_at DESC, id DESC
+        LIMIT $5
       `,
-      [userId],
+      [
+        userId,
+        boundary?.started_at ?? null,
+        boundary?.created_at ?? null,
+        boundary?.id ?? null,
+        query.limit + 1,
+      ],
     )
-    return { items: await loadWorkouts(this.database, sessions.rows) }
+    const hasMore = sessions.rows.length > query.limit
+    const rows = sessions.rows.slice(0, query.limit)
+    const items = await loadWorkouts(this.database, rows)
+    const last = items.at(-1)
+    return {
+      items,
+      nextCursor:
+        hasMore && last ? encodeRecordPageCursor({ id: last.id, revision: last.revision }) : null,
+    }
+  }
+
+  async get(userId: string, workoutId: string) {
+    const result = await this.database.query<SessionRow>(
+      'SELECT * FROM workout_sessions WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL',
+      [workoutId, userId],
+    )
+    if (!result.rows[0]) throw new NotFoundException('workout not found')
+    return (await loadWorkouts(this.database, [result.rows[0]]))[0]!
   }
 
   async update(userId: string, workoutId: string, input: UpdateWorkout) {

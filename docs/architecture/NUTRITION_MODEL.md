@@ -70,7 +70,11 @@ Owner list/history/mutations are enforced by the API. Cross-user and absent reso
 
 The meal editor accepts an explicit local minute and IANA timezone. It rejects invalid calendars/zones, DST gaps, unresolved repeated minutes and future instants before submission; the shared write contract independently rejects future occurrence instants. An untouched correction resubmits the exact original timestamp rather than truncating its seconds/milliseconds to the visible minute.
 
-An unsaved meal correction draft carries the meal UUID and base revision beside its bounded form fields. The client re-lists current owner meals before restore and refuses a missing or different revision; later concurrent change remains protected by `expectedRevision` on update. Repeat intentionally removes correction identity, so it remains a new meal rather than a recoverable replacement.
+An unsaved meal correction draft carries the meal UUID and base revision beside its bounded form fields. The client reads that exact current owner meal before restore and refuses a missing or different revision even when the meal is outside the first list page; later concurrent change remains protected by `expectedRevision` on update. Repeat intentionally removes correction identity, so it remains a new meal rather than a recoverable replacement.
+
+## Current-list pagination
+
+`GET /v1/nutrition/meals` accepts optional `limit` (1–50) and an opaque cursor and returns `{ items, nextCursor }`; an omitted limit preserves the former 50-row behavior. Current, non-deleted owner meals use `(occurred_at, created_at, id)` descending. The cursor stores only version/meal UUID/revision and resolves occurrence/creation time from the immutable snapshot, surviving later anchor correction or deletion. `GET /v1/nutrition/meals/:mealId` returns one current owner meal graph for off-page workflows and returns `404` for missing, deleted or cross-owner targets.
 
 ## Repeat and AI boundaries
 

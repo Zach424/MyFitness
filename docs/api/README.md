@@ -30,13 +30,16 @@ Local routes after `pnpm db:up`, `pnpm db:migrate`, and `pnpm dev:api`:
 - Permanent account erasure: `DELETE http://127.0.0.1:3100/v1/me/privacy/account` with intent UUID and `X-Erasure-Intent-Token`
 - Secret-gated erasure receipt: `GET http://127.0.0.1:3100/v1/privacy/erasure-receipts/:receiptId` with `X-Erasure-Receipt-Token`
 - Lost-response receipt recovery: `POST http://127.0.0.1:3100/v1/privacy/erasure-receipts/recover` with `X-Erasure-Receipt-Token`
-- Measurements: `GET/POST http://127.0.0.1:3100/v1/health-records`
+- Measurements: `GET http://127.0.0.1:3100/v1/health-records?limit=20&cursor=...` / `POST http://127.0.0.1:3100/v1/health-records`
+- Exact current measurement: `GET http://127.0.0.1:3100/v1/health-records/:recordId`
 - Measurement lifecycle: `PUT/DELETE http://127.0.0.1:3100/v1/health-records/:recordId`
 - Measurement history: `GET http://127.0.0.1:3100/v1/health-records/:recordId/history`
-- Workouts: `GET/POST http://127.0.0.1:3100/v1/workouts`
+- Workouts: `GET http://127.0.0.1:3100/v1/workouts?limit=20&cursor=...` / `POST http://127.0.0.1:3100/v1/workouts`
+- Exact current workout: `GET http://127.0.0.1:3100/v1/workouts/:workoutId`
 - Workout lifecycle: `PUT/DELETE http://127.0.0.1:3100/v1/workouts/:workoutId`
 - Workout history: `GET http://127.0.0.1:3100/v1/workouts/:workoutId/history`
-- Meals: `GET/POST http://127.0.0.1:3100/v1/nutrition/meals`
+- Meals: `GET http://127.0.0.1:3100/v1/nutrition/meals?limit=20&cursor=...` / `POST http://127.0.0.1:3100/v1/nutrition/meals`
+- Exact current meal: `GET http://127.0.0.1:3100/v1/nutrition/meals/:mealId`
 - Meal lifecycle: `PUT/DELETE http://127.0.0.1:3100/v1/nutrition/meals/:mealId`
 - Meal history: `GET http://127.0.0.1:3100/v1/nutrition/meals/:mealId/history`
 - Favorite foods: `GET http://127.0.0.1:3100/v1/nutrition/favorites`
@@ -58,6 +61,8 @@ Local routes after `pnpm db:up`, `pnpm db:migrate`, and `pnpm dev:api`:
 Protected routes require `Authorization: Bearer <opaque-token>`. The local issuer accepts a stable development subject and is disabled in production. The WeChat route accepts only a short-lived Mini Program code, verifies it server-side with `code2Session`, namespaces the returned `openid` by AppID, discards `session_key`, and returns the same seven-day opaque principal shape with `provider` and `isNewUser`. PostgreSQL stores only token hashes. Production enables `wechat` but never `dev`; real credentials/device/domain proof remain deployment gates.
 
 Administrator routes use the independent OpenAPI `adminBearer` scheme and `mf_admin_*` sessions. User and administrator tokens cannot be exchanged or reused across guards. Production OIDC exchange verifies remote JWKS signature, issuer, audience, maximum age and a matching nonce, accepts only pre-provisioned active subjects/roles, and consumes each ID-token hash once. Administrator support lookup requires one exact UUID, ticket reference and enumerated reason; it returns only lifecycle/aggregate/custody evidence. Audit targets are HMAC references and audit rows reject update/delete. The local administrator issuer is also production-disabled and its denied use is audited. See [administrator support model](../architecture/ADMIN_SUPPORT_MODEL.md).
+
+The three current aggregate lists return `{ items, nextCursor }`. `limit` is optional and bounded to 100 for health records and 50 for workouts/meals; omitted values preserve those historical defaults. The opaque base64url cursor carries only a version, aggregate UUID and revision. It is not authorization: the server resolves the exact owner revision, recovers its immutable sort boundary and rejects malformed, missing, foreign or cross-resource cursors with `400`. Exact aggregate reads return only current owner-visible data and conceal missing, deleted and cross-owner targets as `404`.
 
 Every routed response exposes `X-Request-ID`. A caller UUIDv4 is preserved and normalized; missing or invalid values are replaced. Redis applies an IP ingress window before authentication and then a standard or sensitive route window after authentication. Rate responses expose `RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset` and, on `429`, `Retry-After`. If Redis is unavailable, business routes return a request-correlated `503`; `/health/live` remains available while `/health` reports dependency failure.
 

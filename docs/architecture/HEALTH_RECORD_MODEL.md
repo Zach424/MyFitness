@@ -1,6 +1,6 @@
 # Health record model — measurement foundation
 
-Status: create/edit/history/delete, exact-metric observation, explicit occurrence editing and conflict-safe correction recovery implemented through iteration 044
+Status: create/edit/history/delete, exact-metric observation, explicit occurrence editing, conflict-safe correction recovery and current-list pagination implemented through iteration 046
 
 ## Purpose and boundary
 
@@ -59,7 +59,11 @@ This overlap is intentional: a future worker, import path or administrative tool
 
 Occurrence time and timezone remain user-domain facts; `createdAt`, `updatedAt` and `changedAt` are server timestamps. The client accepts an explicit local minute and IANA zone, rejects DST gaps/future instants and requires an offset choice for repeated minutes. On correction it preserves the exact original seconds/milliseconds unless the user changes local time, timezone or offset. Later import/admin paths must add actor/reason metadata before they may mutate records.
 
-An unsaved correction draft retains the record UUID and the revision used to open the editor. Restore first refreshes the owner list and requires the same current revision; a changed or deleted record is not restored or submitted. The subsequent update still sends `expectedRevision`, so a race after restore produces the normal `409` rather than overwriting newer evidence. The draft metadata never enters the health-record write contract or revision history.
+An unsaved correction draft retains the record UUID and the revision used to open the editor. Restore reads that exact current owner record and requires the same revision; a changed or deleted record is not restored or submitted even when the aggregate is older than the first list page. The subsequent update still sends `expectedRevision`, so a race after restore produces the normal `409` rather than overwriting newer evidence. The draft metadata never enters the health-record write contract or revision history.
+
+## Current-list pagination
+
+`GET /v1/health-records` accepts optional `limit` (1–100) and an opaque cursor and returns `{ items, nextCursor }`; an omitted limit preserves the former 100-row behavior. Current, non-deleted owner rows use `(occurred_at, created_at, id)` descending. The cursor contains only a version, record UUID and revision; the API obtains the old sort tuple from the immutable owner revision, so later occurrence correction or deletion of the anchor does not invalidate continuation. `GET /v1/health-records/:recordId` returns one current owner-visible record for off-page workflows and returns `404` for missing, deleted or cross-owner targets.
 
 ## Exact-metric observation
 

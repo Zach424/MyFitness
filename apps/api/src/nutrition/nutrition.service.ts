@@ -1,6 +1,11 @@
 import { createHash, randomUUID } from 'node:crypto'
 
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common'
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common'
 import type {
   CreateMeal,
   FavoriteFood,
@@ -10,12 +15,14 @@ import type {
   Meal,
   MealHistoryItem,
   MealItemInput,
+  MealListQuery,
   UpdateMeal,
 } from '@myfitness/contracts'
 import { calculateMeal } from '@myfitness/domain'
 import type { QueryResult, QueryResultRow } from 'pg'
 
 import { DatabaseService } from '../database/database.service'
+import { decodeRecordPageCursor, encodeRecordPageCursor } from '../pagination/record-page-cursor'
 
 type QueryExecutor = {
   query<T extends QueryResultRow>(text: string, values?: unknown[]): Promise<QueryResult<T>>
@@ -245,17 +252,62 @@ export class NutritionService {
     })
   }
 
-  async list(userId: string) {
+  async list(userId: string, query: MealListQuery = { limit: 50 }) {
+    const cursor = decodeRecordPageCursor(query.cursor, 'meal')
+    let boundary: { occurred_at: Date; created_at: Date; id: string } | undefined
+    if (cursor) {
+      const result = await this.database.query<{
+        occurred_at: Date
+        created_at: Date
+        id: string
+      }>(
+        `SELECT (snapshot->>'occurredAt')::timestamptz AS occurred_at,
+                (snapshot->>'createdAt')::timestamptz AS created_at,
+                meal_id AS id
+         FROM nutrition_meal_revisions
+         WHERE user_id = $1 AND meal_id = $2 AND revision = $3`,
+        [userId, cursor.id, cursor.revision],
+      )
+      boundary = result.rows[0]
+      if (!boundary) throw new BadRequestException('meal cursor is invalid or expired')
+    }
     const meals = await this.database.query<MealRow>(
       `
         SELECT * FROM nutrition_meals
         WHERE user_id = $1 AND deleted_at IS NULL
-        ORDER BY occurred_at DESC, created_at DESC
-        LIMIT 50
+          AND (
+            $2::timestamptz IS NULL OR
+            (occurred_at, created_at, id) < ($2::timestamptz, $3::timestamptz, $4::uuid)
+          )
+        ORDER BY occurred_at DESC, created_at DESC, id DESC
+        LIMIT $5
       `,
-      [userId],
+      [
+        userId,
+        boundary?.occurred_at ?? null,
+        boundary?.created_at ?? null,
+        boundary?.id ?? null,
+        query.limit + 1,
+      ],
     )
-    return { items: await loadMeals(this.database, meals.rows) }
+    const hasMore = meals.rows.length > query.limit
+    const rows = meals.rows.slice(0, query.limit)
+    const items = await loadMeals(this.database, rows)
+    const last = items.at(-1)
+    return {
+      items,
+      nextCursor:
+        hasMore && last ? encodeRecordPageCursor({ id: last.id, revision: last.revision }) : null,
+    }
+  }
+
+  async get(userId: string, mealId: string) {
+    const result = await this.database.query<MealRow>(
+      'SELECT * FROM nutrition_meals WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL',
+      [mealId, userId],
+    )
+    if (!result.rows[0]) throw new NotFoundException('meal not found')
+    return (await loadMeals(this.database, [result.rows[0]]))[0]!
   }
 
   async update(userId: string, mealId: string, input: UpdateMeal) {

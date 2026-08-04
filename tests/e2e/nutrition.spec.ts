@@ -274,15 +274,14 @@ test('meal correction draft refuses a stale server revision without overwriting 
 
   await page.reload()
   await expect(page.getByText('发现一份未完成修改')).toBeVisible()
-  await page.route('**/v1/nutrition/meals', async (route) => {
+  await page.route(/\/v1\/nutrition\/meals\/[0-9a-f-]{36}$/, async (route) => {
     if (route.request().method() !== 'GET') {
       await route.continue()
       return
     }
     const response = await route.fetch()
-    const body = (await response.json()) as { items: Array<{ revision: number }> }
-    body.items = body.items.map((item) => ({ ...item, revision: item.revision + 1 }))
-    await route.fulfill({ response, json: body })
+    const body = (await response.json()) as { revision: number }
+    await route.fulfill({ response, json: { ...body, revision: body.revision + 1 } })
   })
   await page.getByRole('button', { name: '恢复修改' }).click()
   await expect(page.getByText(/修改基于旧版本或已删除餐次/)).toBeVisible()

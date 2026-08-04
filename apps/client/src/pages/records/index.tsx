@@ -17,10 +17,12 @@ import {
   ApiError,
   createHealthRecord,
   deleteHealthRecord,
+  getHealthRecord,
   getHealthRecordHistory,
   listHealthRecords,
   updateHealthRecord,
 } from '../../lib/api'
+import { appendOlderRecords, includeExactRecord } from '../../lib/record-pages'
 import { useRecoverableDraft } from '../../lib/use-local-draft'
 import {
   buildRecordRequest,
@@ -76,6 +78,8 @@ const RecordsPage = () => {
   const [history, setHistory] = useState<HealthRecordHistoryItem[]>()
   const [historyRecord, setHistoryRecord] = useState<HealthRecord>()
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [nextCursor, setNextCursor] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [feedback, setFeedback] = useState('')
   const requestKey = useRef('')
@@ -84,8 +88,9 @@ const RecordsPage = () => {
     setLoading(true)
     setFeedback('')
     try {
-      const result = await listHealthRecords()
+      const result = await listHealthRecords({ limit: 20 })
       setRecords(result.items)
+      setNextCursor(result.nextCursor)
     } catch (error) {
       setFeedback(errorMessage(error))
     } finally {
@@ -96,6 +101,20 @@ const RecordsPage = () => {
   useEffect(() => {
     void loadRecords()
   }, [])
+
+  const loadOlderRecords = async () => {
+    if (!nextCursor || loadingMore) return
+    setLoadingMore(true)
+    try {
+      const result = await listHealthRecords({ limit: 20, cursor: nextCursor })
+      setRecords((current) => appendOlderRecords(current, result.items))
+      setNextCursor(result.nextCursor)
+    } catch (error) {
+      setFeedback(errorMessage(error))
+    } finally {
+      setLoadingMore(false)
+    }
+  }
 
   const recoverableDraft = useRecoverableDraft({
     kind: 'health-record',
@@ -121,14 +140,14 @@ const RecordsPage = () => {
       return
     }
     try {
-      const result = await listHealthRecords()
-      const target = currentCorrectionTarget(result.items, correction)
-      setRecords(result.items)
+      const exact = await getHealthRecord(correction.aggregateId)
+      const target = currentCorrectionTarget([exact], correction)
       if (!target) {
         recoverableDraft.clear()
         setFeedback('这份修改基于旧版本或已删除记录，已安全放弃；当前记录没有被覆盖。')
         return
       }
+      setRecords((current) => includeExactRecord(current, target))
       const restored = recoverableDraft.restore()
       if (!restored) return
       setGroup(metricUiDefinitions[target.metric].group)
@@ -137,6 +156,11 @@ const RecordsPage = () => {
       requestKey.current = ''
       setFeedback(`已恢复基于 R${correction.baseRevision} 的修改；保存仍会校验当前版本。`)
     } catch (error) {
+      if (error instanceof ApiError && error.statusCode === 404) {
+        recoverableDraft.clear()
+        setFeedback('这份修改对应的记录已删除，已安全放弃；当前记录没有被覆盖。')
+        return
+      }
       setFeedback(`暂时无法核对原记录，修改草稿仍保留。${errorMessage(error)}`)
     }
   }
@@ -558,7 +582,7 @@ const RecordsPage = () => {
                   <Text className="panel-eyebrow">RECENT LOG</Text>
                   <Text className="panel-title">最近记录</Text>
                 </View>
-                <Text className="log-heading__count metric">{groupRecords.length}</Text>
+                <Text className="log-heading__count metric">已载入 {groupRecords.length}</Text>
               </View>
 
               {loading ? (
@@ -616,6 +640,18 @@ const RecordsPage = () => {
                   <Text className="log-state__body">从左侧选择一项，写下今天的第一笔。</Text>
                 </View>
               )}
+              {nextCursor ? (
+                <Button
+                  {...buttonA11yProps}
+                  className="record-page-more"
+                  disabled={loadingMore}
+                  onClick={() => void loadOlderRecords()}
+                >
+                  {loadingMore ? '正在载入…' : '继续载入更早记录'}
+                </Button>
+              ) : records.length ? (
+                <Text className="record-page-end">已载入当前全部记录</Text>
+              ) : null}
             </View>
           </View>
 

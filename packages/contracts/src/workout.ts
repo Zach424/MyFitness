@@ -1,5 +1,7 @@
 import * as z from 'zod'
 
+import { recordListQuerySchema, recordPageCursorSchema } from './pagination'
+
 import { exerciseEquipmentSchema, exerciseTrackingModeSchema } from './exercise-catalog'
 import {
   exerciseCategories,
@@ -236,7 +238,10 @@ export const workoutSchema = z
   })
   .strict()
 
-export const workoutListSchema = z.object({ items: z.array(workoutSchema) }).strict()
+export const workoutListSchema = z
+  .object({ items: z.array(workoutSchema).max(50), nextCursor: recordPageCursorSchema.nullable() })
+  .strict()
+export const workoutListQuerySchema = recordListQuerySchema(50, 50)
 export const workoutHistoryItemSchema = workoutSchema.extend({
   action: workoutRevisionActionSchema,
   changedAt: z.string().datetime({ offset: true }),
@@ -252,4 +257,6 @@ export type WorkoutExerciseInput = z.infer<typeof workoutExerciseInputSchema>
 export type CreateWorkout = z.infer<typeof createWorkoutSchema>
 export type UpdateWorkout = z.infer<typeof updateWorkoutSchema>
 export type Workout = z.infer<typeof workoutSchema>
+export type WorkoutList = z.infer<typeof workoutListSchema>
+export type WorkoutListQuery = z.infer<typeof workoutListQuerySchema>
 export type WorkoutHistoryItem = z.infer<typeof workoutHistoryItemSchema>

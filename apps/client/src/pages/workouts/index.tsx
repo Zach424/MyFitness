@@ -21,12 +21,14 @@ import {
   createExerciseCatalogEntry,
   createWorkout,
   deleteWorkout,
+  getWorkout,
   getWorkoutHistory,
   listExerciseCatalog,
   listWorkouts,
   updateExerciseCatalogEntry,
   updateWorkout,
 } from '../../lib/api'
+import { appendOlderRecords, includeExactRecord } from '../../lib/record-pages'
 import { useRecoverableDraft } from '../../lib/use-local-draft'
 import {
   buildExerciseCatalogRequest,
@@ -116,6 +118,8 @@ const WorkoutsPage = () => {
   const [historyWorkout, setHistoryWorkout] = useState<Workout>()
   const [history, setHistory] = useState<WorkoutHistoryItem[]>()
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [nextCursor, setNextCursor] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [feedback, setFeedback] = useState('')
   const pendingKey = useRef('')
@@ -125,10 +129,11 @@ const WorkoutsPage = () => {
     void (async () => {
       try {
         const [workoutResult, catalogResult] = await Promise.all([
-          listWorkouts(),
+          listWorkouts({ limit: 20 }),
           listExerciseCatalog(),
         ])
         setWorkouts(workoutResult.items)
+        setNextCursor(workoutResult.nextCursor)
         setCatalogItems(catalogResult.items)
       } catch (error) {
         setFeedback(messageOf(error))
@@ -137,6 +142,20 @@ const WorkoutsPage = () => {
       }
     })()
   }, [])
+
+  const loadOlderWorkouts = async () => {
+    if (!nextCursor || loadingMore) return
+    setLoadingMore(true)
+    try {
+      const result = await listWorkouts({ limit: 20, cursor: nextCursor })
+      setWorkouts((current) => appendOlderRecords(current, result.items))
+      setNextCursor(result.nextCursor)
+    } catch (error) {
+      setFeedback(messageOf(error))
+    } finally {
+      setLoadingMore(false)
+    }
+  }
 
   const recoverableDraft = useRecoverableDraft({
     kind: 'workout',
@@ -161,14 +180,14 @@ const WorkoutsPage = () => {
       return
     }
     try {
-      const result = await listWorkouts()
-      const target = currentCorrectionTarget(result.items, correction)
-      setWorkouts(result.items)
+      const exact = await getWorkout(correction.aggregateId)
+      const target = currentCorrectionTarget([exact], correction)
       if (!target) {
         recoverableDraft.clear()
         setFeedback('这份修改基于旧版本或已删除训练，已安全放弃；当前训练没有被覆盖。')
         return
       }
+      setWorkouts((current) => includeExactRecord(current, target))
       const restored = recoverableDraft.restore()
       if (!restored) return
       setEditing(target)
@@ -176,6 +195,11 @@ const WorkoutsPage = () => {
       pendingKey.current = ''
       setFeedback(`已恢复基于 R${correction.baseRevision} 的训练修改；保存仍会校验当前版本。`)
     } catch (error) {
+      if (error instanceof ApiError && error.statusCode === 404) {
+        recoverableDraft.clear()
+        setFeedback('这份修改对应的训练已删除，已安全放弃；当前训练没有被覆盖。')
+        return
+      }
       setFeedback(`暂时无法核对原训练，修改草稿仍保留。${messageOf(error)}`)
     }
   }
@@ -954,7 +978,7 @@ const WorkoutsPage = () => {
                   <Text className="workouts-eyebrow">RECENT SESSIONS</Text>
                   <Text className="workout-panel-title">训练记录簿</Text>
                 </View>
-                <Text className="workout-ledger__count metric">{workouts.length}</Text>
+                <Text className="workout-ledger__count metric">已载入 {workouts.length}</Text>
               </View>
               {loading ? (
                 <View className="workout-empty">正在整理训练…</View>
@@ -1041,6 +1065,18 @@ const WorkoutsPage = () => {
                       </View>
                     </View>
                   ))}
+                  {nextCursor ? (
+                    <Button
+                      {...buttonA11yProps}
+                      className="record-page-more"
+                      disabled={loadingMore}
+                      onClick={() => void loadOlderWorkouts()}
+                    >
+                      {loadingMore ? '正在载入…' : '继续载入更早训练'}
+                    </Button>
+                  ) : (
+                    <Text className="record-page-end">已载入当前全部训练</Text>
+                  )}
                 </View>
               ) : (
                 <View className="workout-empty">

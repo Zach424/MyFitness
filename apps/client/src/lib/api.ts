@@ -20,10 +20,12 @@ import type {
   ConfirmFoodPhotoCandidate,
   HealthRecord,
   HealthRecordHistoryItem,
+  HealthRecordList,
   HealthInsight,
   HistoryCalendar,
   Meal,
   MealHistoryItem,
+  MealList,
   MetricCode,
   NutritionInsight,
   OidcAuthorizationConfig,
@@ -56,6 +58,7 @@ import type {
   WeeklyPlanHistoryItem,
   Workout,
   WorkoutHistoryItem,
+  WorkoutList,
   CreateProgressPhoto,
   ProgressPhotoItem,
   ProgressPhotoTicket,
@@ -80,6 +83,20 @@ const LEGACY_TOKEN_KEY = legacyDevAccessTokenStorageKey
 const SUBJECT_KEY = devSubjectStorageKey
 const USER_ID_KEY = authUserIdStorageKey
 const ERASURE_RECEIPT_KEY = erasureReceiptStorageKey
+
+export type RecordListOptions = {
+  limit?: number
+  cursor?: string
+}
+
+const recordListPath = (path: string, options: RecordListOptions = {}) => {
+  let query = ''
+  if (options.limit !== undefined) query = `limit=${encodeURIComponent(String(options.limit))}`
+  if (options.cursor !== undefined) {
+    query += `${query ? '&' : ''}cursor=${encodeURIComponent(options.cursor)}`
+  }
+  return query ? `${path}?${query}` : path
+}
 
 type StoredErasureReceipt = {
   intentId: string
@@ -305,8 +322,11 @@ export const getOnboarding = async (): Promise<OnboardingResponse | undefined> =
 export const saveOnboarding = (payload: OnboardingRequest) =>
   authenticatedRequest<OnboardingResponse>('/me/onboarding', 'PUT', payload)
 
-export const listHealthRecords = () =>
-  authenticatedRequest<{ items: HealthRecord[] }>('/health-records', 'GET')
+export const listHealthRecords = (options?: RecordListOptions) =>
+  authenticatedRequest<HealthRecordList>(recordListPath('/health-records', options), 'GET')
+
+export const getHealthRecord = (recordId: string) =>
+  authenticatedRequest<HealthRecord>(`/health-records/${recordId}`, 'GET')
 
 export const createHealthRecord = (payload: CreateHealthRecord, idempotencyKey: string) =>
   authenticatedRequest<HealthRecord>('/health-records', 'POST', payload, {
@@ -327,7 +347,11 @@ export const getHealthRecordHistory = async (recordId: string) =>
     'GET',
   )
 
-export const listWorkouts = () => authenticatedRequest<{ items: Workout[] }>('/workouts', 'GET')
+export const listWorkouts = (options?: RecordListOptions) =>
+  authenticatedRequest<WorkoutList>(recordListPath('/workouts', options), 'GET')
+
+export const getWorkout = (workoutId: string) =>
+  authenticatedRequest<Workout>(`/workouts/${workoutId}`, 'GET')
 
 export const createWorkout = (payload: CreateWorkout, idempotencyKey: string) =>
   authenticatedRequest<Workout>('/workouts', 'POST', payload, {
@@ -401,7 +425,11 @@ export const getFoodCatalogEntryHistory = (entryId: string) =>
     'GET',
   )
 
-export const listMeals = () => authenticatedRequest<{ items: Meal[] }>('/nutrition/meals', 'GET')
+export const listMeals = (options?: RecordListOptions) =>
+  authenticatedRequest<MealList>(recordListPath('/nutrition/meals', options), 'GET')
+
+export const getMeal = (mealId: string) =>
+  authenticatedRequest<Meal>(`/nutrition/meals/${mealId}`, 'GET')
 
 export const createMeal = (payload: CreateMeal, idempotencyKey: string) =>
   authenticatedRequest<Meal>('/nutrition/meals', 'POST', payload, {
