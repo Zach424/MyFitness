@@ -58,6 +58,15 @@ describe('health-record contract', () => {
     ).toBe(false)
   })
 
+  it('rejects future occurrence instants', () => {
+    expect(
+      createHealthRecordSchema.safeParse({
+        ...manualRecord,
+        occurredAt: '2100-01-01T00:00:00+08:00',
+      }).success,
+    ).toBe(false)
+  })
+
   it('requires a positive optimistic revision for updates and deletes', () => {
     expect(updateHealthRecordSchema.parse({ ...manualRecord, expectedRevision: 2 })).toMatchObject({
       expectedRevision: 2,

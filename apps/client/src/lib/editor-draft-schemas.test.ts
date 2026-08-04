@@ -8,9 +8,12 @@ describe('recoverable editor draft schemas', () => {
   it('accepts the three bounded editor shapes, including incomplete numeric input', () => {
     const workout = initialWorkoutDraft()
     workout.exercises[0]!.sets[0]!.load = ''
+    workout.startedLocal = '2026-08-05 06:30'
     const meal = initialMealDraft()
+    meal.occurredLocal = '2026-08-05 07:15'
     const record = createDraft('body.weight')
     record.value = ''
+    record.occurredLocal = '2026-08-05 08:00'
 
     expect(isWorkoutDraft(workout)).toBe(true)
     expect(isMealDraft(meal)).toBe(true)
@@ -25,10 +28,10 @@ describe('recoverable editor draft schemas', () => {
   })
 
   it('rejects unknown metrics, invalid units and unbounded collections', () => {
-    expect(isRecordDraft({ metric: 'medical.diagnosis', value: '1', unit: 'score_1_5' })).toBe(
+    expect(isRecordDraft({ ...createDraft('body.weight'), metric: 'medical.diagnosis' })).toBe(
       false,
     )
-    expect(isRecordDraft({ metric: 'body.weight', value: '70', unit: 'bpm' })).toBe(false)
+    expect(isRecordDraft({ ...createDraft('body.weight'), unit: 'bpm' })).toBe(false)
     const workout = initialWorkoutDraft()
     workout.exercises = Array.from({ length: 31 }, () => workout.exercises[0]!)
     expect(isWorkoutDraft(workout)).toBe(false)

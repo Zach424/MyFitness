@@ -97,6 +97,13 @@ const validateMeal = (meal: z.infer<typeof mealBaseSchema>, ctx: z.RefinementCtx
       path: ['timezone'],
     })
   }
+  if (Date.parse(meal.occurredAt) > Date.now()) {
+    ctx.addIssue({
+      code: 'custom',
+      message: 'occurredAt must not be in the future',
+      path: ['occurredAt'],
+    })
+  }
   const positions = meal.items.map((item) => item.position)
   if (new Set(positions).size !== positions.length) {
     ctx.addIssue({

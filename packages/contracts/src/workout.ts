@@ -125,6 +125,21 @@ const validateWorkout = (workout: z.infer<typeof workoutBaseSchema>, ctx: z.Refi
       path: ['timezone'],
     })
   }
+  const now = Date.now()
+  if (Date.parse(workout.startedAt) > now) {
+    ctx.addIssue({
+      code: 'custom',
+      message: 'startedAt must not be in the future',
+      path: ['startedAt'],
+    })
+  }
+  if (Date.parse(workout.endedAt) > now) {
+    ctx.addIssue({
+      code: 'custom',
+      message: 'endedAt must not be in the future',
+      path: ['endedAt'],
+    })
+  }
   if (new Date(workout.endedAt).getTime() < new Date(workout.startedAt).getTime()) {
     ctx.addIssue({
       code: 'custom',

@@ -1,6 +1,6 @@
 # Health record model — measurement foundation
 
-Status: create/edit/history/delete plus exact-metric observation implemented through iteration 041
+Status: create/edit/history/delete, exact-metric observation and explicit occurrence editing implemented through iteration 043
 
 ## Purpose and boundary
 
@@ -41,7 +41,7 @@ Guardrails reject obvious unit/input errors; they are not clinical normal ranges
 
 ## Defense in depth
 
-1. Zod rejects malformed time, timezone, status and provenance combinations at the HTTP boundary.
+1. Zod rejects malformed/future time, timezone, status and provenance combinations at the HTTP boundary.
 2. Domain functions validate metric/unit compatibility, convert to canonical units and reject implausible values.
 3. Parameterized SQL prevents payload interpolation into queries.
 4. PostgreSQL constraints independently prevent AI-confirmed rows, missing AI provenance, invalid confidence/status values and duplicate idempotency keys.
@@ -57,7 +57,7 @@ This overlap is intentional: a future worker, import path or administrative tool
 - `GET /v1/health-records/:recordId/history` returns snapshots newest first, including after soft deletion, but only to the authenticated owner. Cross-user reads and mutations return `404`.
 - `health_record_revisions` repeats the metric/unit/source/status safety constraints. A unique `(record_id, revision)` key prevents two accepted states from claiming the same version.
 
-Occurrence time and timezone remain user-domain facts; `createdAt`, `updatedAt` and `changedAt` are server timestamps. The current client edits the value/unit while retaining the original occurrence time. Later import/admin paths must add actor/reason metadata before they may mutate records.
+Occurrence time and timezone remain user-domain facts; `createdAt`, `updatedAt` and `changedAt` are server timestamps. The client accepts an explicit local minute and IANA zone, rejects DST gaps/future instants and requires an offset choice for repeated minutes. On correction it preserves the exact original seconds/milliseconds unless the user changes local time, timezone or offset. Later import/admin paths must add actor/reason metadata before they may mutate records.
 
 ## Exact-metric observation
 

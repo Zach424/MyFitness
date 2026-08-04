@@ -78,13 +78,13 @@ describe('nutrition insight API with PostgreSQL', () => {
   })
 
   it('uses local days and current meals, then recomputes corrections and deletion', async () => {
-    const recent = await createMeal(meal('2026-08-04T16:30:00.000Z', 100))
-    const older = await createMeal(meal('2026-07-26T04:00:00.000Z', 300, 4))
-    await createMeal(meal('2026-08-05T13:00:00.000Z', 900, 9))
-    await createMeal(meal('2026-08-04T17:00:00.000Z', 700, 7), otherToken)
+    const recent = await createMeal(meal('2025-08-04T16:30:00.000Z', 100))
+    const older = await createMeal(meal('2025-07-26T04:00:00.000Z', 300, 4))
+    await createMeal(meal('2025-08-05T13:00:00.000Z', 900, 9))
+    await createMeal(meal('2025-08-04T17:00:00.000Z', 700, 7), otherToken)
 
     const endpoint =
-      '/v1/insights/nutrition?timezone=Asia%2FShanghai&at=2026-08-05T12%3A00%3A00.000Z'
+      '/v1/insights/nutrition?timezone=Asia%2FShanghai&at=2025-08-05T12%3A00%3A00.000Z'
     const initial = await request(app.getHttpServer())
       .get(endpoint)
       .set('Authorization', `Bearer ${token}`)
@@ -92,12 +92,12 @@ describe('nutrition insight API with PostgreSQL', () => {
 
     expect(initial.body.series).toHaveLength(90)
     expect(initial.body.series[0]).toMatchObject({
-      localDate: '2026-05-08',
+      localDate: '2025-05-08',
       hasEvidence: false,
       nutrients: { energyKcal: null },
     })
     expect(initial.body.series[89]).toMatchObject({
-      localDate: '2026-08-05',
+      localDate: '2025-08-05',
       mealCount: 1,
       itemCount: 1,
       fiberKnownItemCount: 0,
@@ -118,7 +118,7 @@ describe('nutrition insight API with PostgreSQL', () => {
     await request(app.getHttpServer())
       .put(`/v1/nutrition/meals/${String(recent.body.id)}`)
       .set('Authorization', `Bearer ${token}`)
-      .send({ ...meal('2026-08-04T16:30:00.000Z', 200, 3), expectedRevision: 1 })
+      .send({ ...meal('2025-08-04T16:30:00.000Z', 200, 3), expectedRevision: 1 })
       .expect(200)
 
     const corrected = await request(app.getHttpServer())

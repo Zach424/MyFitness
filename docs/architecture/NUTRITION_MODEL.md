@@ -1,6 +1,6 @@
 # Nutrition record model
 
-Status: manual meal/photo records, owner-created food definitions and daily observation implemented through iteration 040
+Status: manual meal/photo records, owner-created food definitions, daily observation and explicit occurrence editing implemented through iteration 043
 
 Nutrition records are user-confirmed snapshots of food, portion and context. They support personal recall and later deterministic summaries; they are not dietary prescriptions, laboratory measurements or judgments about food quality.
 
@@ -65,6 +65,8 @@ The client may calculate a recorded-day average from a window total divided by `
 The current aggregate is normalized into `nutrition_meals` and ordered `nutrition_meal_items`. Creation uses a per-user idempotency key/request hash. Full replacement requires the current revision; deletion is soft deletion from routine lists. Every accepted create/update/delete appends a complete JSON snapshot to `nutrition_meal_revisions` in the same transaction.
 
 Owner list/history/mutations are enforced by the API. Cross-user and absent resources both return `404`; stale writes return `409`. Soft deletion is an audit behavior, not completion of the privacy-erasure workflow.
+
+The meal editor accepts an explicit local minute and IANA timezone. It rejects invalid calendars/zones, DST gaps, unresolved repeated minutes and future instants before submission; the shared write contract independently rejects future occurrence instants. An untouched correction resubmits the exact original timestamp rather than truncating its seconds/milliseconds to the visible minute.
 
 ## Repeat and AI boundaries
 

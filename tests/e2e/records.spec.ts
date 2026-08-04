@@ -65,6 +65,26 @@ test('body record completes create, update, history and delete lifecycle', async
   await openRecords(page)
   await expect(page.getByText('还没有身体记录')).toBeVisible()
   await page.locator('[aria-label="体重数值"] input').fill('72.4')
+  const occurrenceInput = page.locator('[aria-label="发生时间，年-月-日 时:分"] input')
+  const occurrenceZone = page.locator('[aria-label="发生时间使用的 IANA 时区"] input')
+  await occurrenceZone.fill('Asia/Shanghai')
+  await occurrenceInput.fill('2100-01-01 00:00')
+  await expect(page.getByText('发生时间不能晚于现在')).toBeVisible()
+  await page.getByRole('button', { name: '保存记录' }).click()
+  await expect(page.getByRole('status').getByText('发生时间不能晚于现在')).toBeVisible()
+  await occurrenceZone.fill('America/New_York')
+  await occurrenceInput.fill('2025-11-02 01:30')
+  await expect(page.getByText('夏令时重复，请选择 UTC 偏移')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'UTC-04:00' })).toBeVisible()
+  await page.getByRole('button', { name: 'UTC-05:00' }).click()
+  await expect(page.getByText('UTC-05:00 · 保存为准确时刻')).toBeVisible()
+  await occurrenceZone.fill('Asia/Shanghai')
+  await occurrenceInput.fill('2026-07-18 16:00')
+  await expect(page.getByRole('status').getByText('发生时间不能晚于现在')).not.toBeVisible()
+  await page.screenshot({
+    path: 'output/playwright/iteration-043-occurrence-time-mobile.png',
+    fullPage: true,
+  })
 
   const createResponsePromise = page.waitForResponse(
     (response) =>
@@ -73,6 +93,10 @@ test('body record completes create, update, history and delete lifecycle', async
   await page.getByRole('button', { name: '保存记录' }).click()
   const createResponse = await createResponsePromise
   expect(createResponse.status()).toBe(201)
+  expect(createResponse.request().postDataJSON()).toMatchObject({
+    occurredAt: '2026-07-18T08:00:00.000Z',
+    timezone: 'Asia/Shanghai',
+  })
   await expect(page.locator('.records-layout__log').getByText('72.4 kg')).toBeVisible()
 
   await page.getByRole('button', { name: '修改' }).click()

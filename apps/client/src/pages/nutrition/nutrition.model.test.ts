@@ -89,6 +89,8 @@ describe('nutrition page model', () => {
     draft.items = [draftFromCatalog(starterFoodCatalog[0])]
     const created = {
       ...buildMealRequest(draft),
+      occurredAt: '2026-07-18T04:00:42.789Z',
+      timezone: 'Asia/Shanghai',
       id: '00000000-0000-4000-8000-000000000001',
       userId: '00000000-0000-4000-8000-000000000002',
       items: buildMealRequest(draft).items.map((item) => ({
@@ -114,9 +116,22 @@ describe('nutrition page model', () => {
       createdAt: '2026-07-18T04:00:00.000Z',
       updatedAt: '2026-07-18T04:00:00.000Z',
     }
+    const correction = draftFromMeal(created)
+    expect(buildMealRequest(correction, 1).occurredAt).toBe('2026-07-18T04:00:42.789Z')
     const repeated = draftFromMeal(created, true)
     expect(repeated.note).toBe('')
-    expect(repeated.occurredAt).toBeUndefined()
+    expect(repeated.occurredLocal).toBe('')
     expect(repeated.items[0]?.amount).toBe('120')
+  })
+
+  it('converts an explicit local meal time into an offset instant', () => {
+    const draft = initialMealDraft()
+    draft.items = [draftFromCatalog(starterFoodCatalog[0])]
+    draft.occurredLocal = '2026-07-18 12:30'
+    draft.timezone = 'Asia/Shanghai'
+    expect(buildMealRequest(draft)).toMatchObject({
+      occurredAt: '2026-07-18T04:30:00.000Z',
+      timezone: 'Asia/Shanghai',
+    })
   })
 })

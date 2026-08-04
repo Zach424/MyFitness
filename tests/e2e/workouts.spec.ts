@@ -71,12 +71,21 @@ test('workout completes create, repeat, update, history and delete lifecycle', a
   await expect(page.getByText('还没有训练记录')).toBeVisible()
   await expect(page.getByLabel('本次训练汇总预览').getByText('3/3')).toBeVisible()
   await expect(page.getByLabel('本次训练汇总预览').getByText('360')).toBeVisible()
+  await page.locator('[aria-label="开始时间使用的 IANA 时区"] input').fill('Asia/Shanghai')
+  await page.locator('[aria-label="开始时间，年-月-日 时:分"] input').fill('2026-07-18 18:00')
+  await page.locator('[aria-label="结束时间，年-月-日 时:分"] input').fill('2026-07-18 18:45')
 
   const firstCreatePromise = page.waitForResponse(
     (response) => response.url().endsWith('/v1/workouts') && response.request().method() === 'POST',
   )
   await page.getByRole('button', { name: '保存训练', exact: true }).click()
-  expect((await firstCreatePromise).status()).toBe(201)
+  const firstCreate = await firstCreatePromise
+  expect(firstCreate.status()).toBe(201)
+  expect(firstCreate.request().postDataJSON()).toMatchObject({
+    startedAt: '2026-07-18T10:00:00.000Z',
+    endedAt: '2026-07-18T10:45:00.000Z',
+    timezone: 'Asia/Shanghai',
+  })
   await expect(page.locator('.workout-entry')).toHaveCount(1)
   await expect(page.locator('.workout-entry').first().getByText('360')).toBeVisible()
 

@@ -1,6 +1,6 @@
 # Privacy ownership model
 
-Status: durable local ownership/erasure boundary with lost-response recovery, purpose-separated photo custody, catalog history and expiring editor drafts implemented through iteration 042
+Status: durable local ownership/erasure boundary with lost-response recovery, purpose-separated photo custody, catalog history and expiring occurrence-aware editor drafts implemented through iteration 043
 
 ## User-owned surface
 
@@ -39,7 +39,7 @@ Consent rows remain append-oriented: dropping the old purpose/version uniqueness
 
 Workout, meal and health-record create forms may keep one owner-scoped `myfitness-sensitive-draft/v1` envelope in platform application storage for at most 24 hours. The client requires the verified user UUID, or the production-disabled development subject fallback, before writing. A different owner, missing scope, incompatible version, invalid structure, expiry or size above 96 KiB prevents restoration and removes the value.
 
-Each page validates only its explicit form fields and asks before restoring. Raw or temporary photo material, authorization state/tokens, erasure intent/receipt secrets, idempotency/request state and AI candidate sheets have no draft field. Successful save, explicit cancel/discard, logout and account-erasure initiation clear drafts; erasure receipt storage remains separate so a lost destructive response can still be recovered. These copies are not included in the server export because they are client-local and ephemeral.
+Each page validates only its explicit form fields and asks before restoring. Occurrence-local input, IANA timezone, optional DST offset and a bounded original instant are included because they are necessary to recover or precisely correct the user's fact; they receive the same owner/expiry/size handling as other sensitive draft fields. Raw or temporary photo material, authorization state/tokens, erasure intent/receipt secrets, idempotency/request state and AI candidate sheets have no draft field. Successful save, explicit cancel/discard, logout and account-erasure initiation clear drafts; erasure receipt storage remains separate so a lost destructive response can still be recovered. These copies are not included in the server export because they are client-local and ephemeral.
 
 ## Account erasure
 

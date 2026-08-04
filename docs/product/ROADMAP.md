@@ -2,7 +2,7 @@
 
 The roadmap is organized as controlled iterations. A round may take several working sessions, but it ends only after implementation, validation, archive update, and a commit.
 
-Progress snapshot (2026-08-05): iterations 0–42 are complete locally. Workout, meal and health-record create editors now retain an explicit owner-scoped 24-hour local draft across refresh, validate before restore and clear on save/cancel/logout/erasure initiation without retaining photos, authorization material, receipts or AI candidate sheets. Measured H5/WeApp budgets, 320 px/large-text/keyboard proof and zero critical/high production audit findings remain green. Hosted quality/smoke is green through the iteration-030 exact SHA; later hosted exact-SHA evidence has not been inspected in this round. Owner-operated account, budget, domain, credentials and paid-provider work remains parked while locally reproducible product gaps continue; those release gates remain mandatory.
+Progress snapshot (2026-08-05): iterations 0–43 are complete locally. Workout, meal and health-record editors now resolve explicit local occurrence time through an IANA timezone, reject invalid/DST-gap/future values, require an offset choice for repeated minutes and preserve exact untouched correction timestamps. These fields remain covered by the owner-scoped 24-hour draft boundary. Measured H5/WeApp budgets, 320 px/large-text/keyboard proof and zero critical/high production audit findings remain green. Hosted quality/smoke is green through the iteration-030 exact SHA; later hosted exact-SHA evidence has not been inspected in this round. Owner-operated account, budget, domain, credentials and paid-provider work remains parked while locally reproducible product gaps continue; those release gates remain mandatory.
 
 | Iteration | Primary scope                                       | Exit evidence                                                                                    |
 | --------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
@@ -50,8 +50,9 @@ Progress snapshot (2026-08-05): iterations 0–42 are complete locally. Workout,
 | 41        | Metric-specific body/recovery observation           | Unit-safe current evidence, revision detail, correction/deletion and non-diagnostic client proof |
 | 42        | Recoverable sensitive editor drafts                 | Versioned/expiring local drafts, visible recovery and save/cancel/logout/erasure clearing proof  |
 | 43        | Explicit occurrence-time recording                  | Local-time input/backfill/correction with timezone/DST validation across three record editors    |
-| 44        | Managed shared deployment, beta hardening/release   | Real identity/custody/telemetry, rollback, security/a11y/filing review and staged rollout        |
-| 45        | Native App feasibility and device sync              | Retention gate reviewed; HealthKit/Health Connect/Huawei proof of concept                        |
+| 44        | Conflict-safe correction draft recovery             | Owner/aggregate/base-revision binding, stale refusal and lifecycle clearing across three editors |
+| 45        | Managed shared deployment, beta hardening/release   | Real identity/custody/telemetry, rollback, security/a11y/filing review and staged rollout        |
+| 46        | Native App feasibility and device sync              | Retention gate reviewed; HealthKit/Health Connect/Huawei proof of concept                        |
 
 ## Release gates
 
@@ -63,14 +64,14 @@ Progress snapshot (2026-08-05): iterations 0–42 are complete locally. Workout,
 
 ### Closed beta
 
-- Iterations 9–44 complete.
+- Iterations 9–45 complete.
 - AI evaluation set is versioned and safety validators block known high-risk cases.
 - Data export and deletion are exercised end to end.
 - Support, monitoring, cost limits, rollback, and incident ownership are assigned.
 
 ### Public release
 
-- Iteration 44 complete.
+- Iteration 45 complete.
 - Applicable ICP/APP/Mini Program privacy/AI registration and content-labeling work is reviewed.
 - Store materials match actual data practices and product claims.
 - Release starts with a small cohort and automatic rollback thresholds.

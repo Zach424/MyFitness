@@ -232,7 +232,7 @@ describe('weekly plan API with PostgreSQL', () => {
       .post('/v1/plans/weekly')
       .set('Authorization', `Bearer ${token}`)
       .set('x-idempotency-key', `plan-${randomUUID()}`)
-      .send({ weekStart: '2026-08-10' })
+      .send({ weekStart: '2026-06-15' })
       .expect(201)
     const sessionDate = generated.body.days.find((day: { session: unknown }) => day.session)
       .date as string
@@ -314,7 +314,7 @@ describe('weekly plan API with PostgreSQL', () => {
       .post('/v1/plans/weekly')
       .set('Authorization', `Bearer ${token}`)
       .set('x-idempotency-key', `plan-${randomUUID()}`)
-      .send({ weekStart: '2026-08-10' })
+      .send({ weekStart: '2026-06-15' })
       .expect(201)
     const linkablePlan = await request(app.getHttpServer())
       .put(`/v1/plans/weekly/${generated.body.id}/decision`)
@@ -394,7 +394,10 @@ describe('weekly plan API with PostgreSQL', () => {
       .get('/v1/plans/weekly')
       .set('Authorization', `Bearer ${token}`)
       .expect(200)
-    expect(linkedList.body.items[0].sessionLinks[0]).toMatchObject({
+    const linkedListPlan = linkedList.body.items.find(
+      (item: { id: string }) => item.id === generated.body.id,
+    )
+    expect(linkedListPlan.sessionLinks[0]).toMatchObject({
       id: linked.body.id,
       workoutRevision: 1,
       currentWorkoutRevision: 2,
@@ -410,7 +413,10 @@ describe('weekly plan API with PostgreSQL', () => {
       .get('/v1/plans/weekly')
       .set('Authorization', `Bearer ${token}`)
       .expect(200)
-    expect(unlinkedList.body.items[0].sessionLinks).toEqual([])
+    const unlinkedListPlan = unlinkedList.body.items.find(
+      (item: { id: string }) => item.id === generated.body.id,
+    )
+    expect(unlinkedListPlan.sessionLinks).toEqual([])
 
     const relinked = await request(app.getHttpServer())
       .post(`/v1/plans/weekly/${generated.body.id}/session-links`)

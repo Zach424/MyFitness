@@ -135,7 +135,7 @@ describe('user food catalog API with PostgreSQL', () => {
             serving: created.body.defaultServing,
           },
         ],
-        occurredAt: '2026-08-05T19:00:00+08:00',
+        occurredAt: '2026-07-18T19:00:00+08:00',
         timezone: 'Asia/Shanghai',
       })
       .expect(201)

@@ -1,0 +1,86 @@
+.occurrence-field {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+  padding: 14px;
+  border: 1px solid rgba(36, 76, 102, 0.13);
+  border-left: 3px solid var(--color-juniper);
+  background: rgba(237, 243, 241, 0.58);
+}
+
+.occurrence-field__heading {
+  display: flex;
+  justify-content: space-between;
+}
+
+.occurrence-field__label {
+  font-size: 11px;
+  font-weight: 740;
+}
+
+.occurrence-field__zone {
+  color: var(--color-muted);
+  font-size: 9px;
+}
+
+.occurrence-field__input,
+.occurrence-field__zone-input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0 12px;
+  font-family: var(--font-metric);
+}
+
+.occurrence-field__input {
+  min-height: 46px;
+  border: 1px solid rgba(36, 76, 102, 0.15);
+  color: var(--color-ink);
+  background: var(--color-paper);
+  font-size: 13px;
+}
+
+.occurrence-field__zone-input {
+  min-height: 38px;
+  border: 0;
+  border-bottom: 1px solid rgba(36, 76, 102, 0.16);
+  color: var(--color-mineral);
+  font-size: 10px;
+}
+
+.occurrence-field__input--error {
+  border-color: var(--color-coral);
+}
+
+.occurrence-field__choices {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.occurrence-field__choice {
+  min-height: 40px;
+  margin: 0;
+  padding: 0 10px;
+  border: 1px solid rgba(36, 76, 102, 0.18);
+  border-radius: 0;
+  color: var(--color-mineral);
+  background: var(--color-paper);
+  font-size: 10px;
+  line-height: 38px;
+}
+
+.occurrence-field__choice--active {
+  border-color: var(--color-mineral);
+  color: var(--color-paper);
+  background: var(--color-mineral);
+}
+
+.occurrence-field__note {
+  color: var(--color-muted);
+  font-size: 9px;
+  line-height: 1.55;
+}
+
+.occurrence-field__note--error {
+  color: var(--color-coral);
+}

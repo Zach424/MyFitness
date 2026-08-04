@@ -7,15 +7,20 @@ describe('record page model', () => {
     expect(createDraft('recovery.sleep_duration')).toMatchObject({
       value: '7.5',
       unit: 'hour',
+      occurredLocal: '',
     })
   })
 
   it('validates canonical ranges and whole-number scores', () => {
-    expect(validateRecordDraft({ metric: 'body.weight', value: '10', unit: 'kg' })).toContain(
-      '20.0',
-    )
     expect(
-      validateRecordDraft({ metric: 'recovery.energy', value: '3.5', unit: 'score_1_5' }),
+      validateRecordDraft({ ...createDraft('body.weight'), value: '10', unit: 'kg' }),
+    ).toContain('20.0')
+    expect(
+      validateRecordDraft({
+        ...createDraft('recovery.energy'),
+        value: '3.5',
+        unit: 'score_1_5',
+      }),
     ).toContain('整数')
   })
 
@@ -25,7 +30,9 @@ describe('record page model', () => {
         metric: 'body.weight',
         value: '72.4',
         unit: 'kg',
-        occurredAt: '2026-07-18T08:00:00.000Z',
+        occurredLocal: '2026-07-18 16:00',
+        timezone: 'Asia/Shanghai',
+        occurrenceOffsetMinutes: 480,
       },
       3,
     )
@@ -36,6 +43,13 @@ describe('record page model', () => {
       status: 'confirmed',
       expectedRevision: 3,
       occurredAt: '2026-07-18T08:00:00.000Z',
+      timezone: 'Asia/Shanghai',
     })
+  })
+
+  it('rejects a future local occurrence time', () => {
+    const draft = createDraft('body.weight')
+    draft.occurredLocal = '2100-01-01 00:00'
+    expect(validateRecordDraft(draft)).toContain('晚于现在')
   })
 })

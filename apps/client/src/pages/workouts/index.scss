@@ -389,6 +389,11 @@
   font-weight: 740;
 }
 
+.workout-occurrence-grid {
+  display: grid;
+  gap: 10px;
+}
+
 .exercise-card__equipment {
   display: block;
   max-width: 230px;
@@ -1055,6 +1060,10 @@ textarea:focus-visible {
 @media (min-width: 860px) {
   .workouts-shell {
     padding: 28px 32px 64px;
+  }
+
+  .workout-occurrence-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .workouts-intro {

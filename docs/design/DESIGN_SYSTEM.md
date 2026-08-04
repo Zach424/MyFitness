@@ -1,6 +1,6 @@
 # Design system baseline
 
-Status: implemented and visually validated through iteration-038 exercise-observation evidence
+Status: implemented and visually validated through iteration-043 occurrence-time evidence
 
 Working brand: 衡迹 / MyFitness
 
@@ -384,6 +384,18 @@ The 390 px production-browser flow changed a weight value, observed the debounce
 Reviewed evidence:
 
 - [390 × 844 recoverable health draft](../../output/playwright/iteration-042-recoverable-draft-mobile.png)
+
+## Explicit occurrence-time review — iteration 043
+
+The three record sheets now use one compact **LOCAL TIME / IANA ZONE** field group beneath their factual inputs. Local minute is the primary control; the quieter zone line makes conversion visible without turning the editor into a scheduling interface. Blank copy says “now,” resolved copy names the exact UTC offset and invalid/future/DST-gap copy stays inline at the fact being corrected.
+
+A repeated daylight-saving minute expands into two equal UTC-offset choices. Neither is visually recommended, and saving stays blocked until the user chooses. Workout renders separate start/end groups; correction shows the stored minute/zone while preserving invisible seconds unless a control changes. Repeat clears the old occurrence rather than presenting it as today's fact.
+
+The 390 px production-browser review first rejected a future value, then showed both `UTC-04:00` and `UTC-05:00` for New York's repeated `2025-11-02 01:30` minute. The final reviewed state uses `2026-07-18 16:00 · Asia/Shanghai`, states `UTC+08:00` and submits `2026-07-18T08:00:00.000Z`. Meal and workout lifecycle tests prove their corresponding instants without adding visual target/adherence language.
+
+Reviewed evidence:
+
+- [390 × 844 explicit occurrence time](../../output/playwright/iteration-043-occurrence-time-mobile.png)
 
 ## Screenshot review checklist
 

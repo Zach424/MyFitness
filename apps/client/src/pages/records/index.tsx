@@ -10,6 +10,7 @@ import type {
 
 import { buttonA11yProps } from '../../lib/accessibility'
 import { LocalDraftNotice } from '../../components/local-draft-notice'
+import { OccurrenceField } from '../../components/occurrence-field'
 import {
   ApiError,
   createHealthRecord,
@@ -396,9 +397,39 @@ const RecordsPage = () => {
                   </View>
                 ) : null}
 
+                <OccurrenceField
+                  label="发生时间"
+                  value={draft.occurredLocal}
+                  timeZone={draft.timezone}
+                  selectedOffsetMinutes={draft.occurrenceOffsetMinutes}
+                  onChange={(occurredLocal) => {
+                    setDraft((current) => ({
+                      ...current,
+                      occurredLocal,
+                      originalOccurredAt: undefined,
+                    }))
+                    requestKey.current = ''
+                    setFeedback('')
+                  }}
+                  onTimeZoneChange={(timezone) => {
+                    setDraft((current) => ({ ...current, timezone, originalOccurredAt: undefined }))
+                    requestKey.current = ''
+                    setFeedback('')
+                  }}
+                  onOffsetChange={(occurrenceOffsetMinutes) => {
+                    setDraft((current) => ({
+                      ...current,
+                      occurrenceOffsetMinutes,
+                      originalOccurredAt: undefined,
+                    }))
+                    requestKey.current = ''
+                    setFeedback('')
+                  }}
+                />
+
                 <View className="editor-meta">
                   <Text>来源 · 手动记录</Text>
-                  <Text>{editing ? `版本 ${editing.revision}` : '时间 · 现在'}</Text>
+                  <Text>{editing ? `版本 ${editing.revision}` : '时间 · 可回填'}</Text>
                 </View>
 
                 {feedback ? (

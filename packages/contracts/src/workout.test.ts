@@ -79,6 +79,16 @@ describe('workout contracts', () => {
     expect(createWorkoutSchema.safeParse(duplicateKey).success).toBe(false)
   })
 
+  it('rejects future session bounds', () => {
+    expect(
+      createWorkoutSchema.safeParse({
+        ...workout,
+        startedAt: '2100-01-01T18:00:00+08:00',
+        endedAt: '2100-01-01T18:45:00+08:00',
+      }).success,
+    ).toBe(false)
+  })
+
   it('requires details for other equipment and rejects duplicate equipment snapshots', () => {
     const unnamed = structuredClone(workout)
     unnamed.exercises[0]!.equipment = ['other'] as never

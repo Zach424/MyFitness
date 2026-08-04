@@ -138,6 +138,8 @@ test('meal completes favorite, create, repeat, update, history and delete lifecy
   await expect(page.getByText('还没有饮食记录')).toBeVisible()
   await page.getByRole('button', { name: '添加熟鸡胸肉' }).click()
   await page.getByRole('button', { name: '添加熟米饭' }).click()
+  await page.locator('[aria-label="进餐时间使用的 IANA 时区"] input').fill('Asia/Shanghai')
+  await page.locator('[aria-label="进餐时间，年-月-日 时:分"] input').fill('2026-07-18 12:30')
   await expect(page.getByLabel('本餐营养汇总预览').getByText('393')).toBeVisible()
   await expect(page.getByLabel('本餐营养汇总预览').getByText('41.3')).toBeVisible()
 
@@ -155,7 +157,12 @@ test('meal completes favorite, create, repeat, update, history and delete lifecy
       response.url().endsWith('/v1/nutrition/meals') && response.request().method() === 'POST',
   )
   await page.getByRole('button', { name: '保存餐次', exact: true }).click()
-  expect((await firstCreatePromise).status()).toBe(201)
+  const firstCreate = await firstCreatePromise
+  expect(firstCreate.status()).toBe(201)
+  expect(firstCreate.request().postDataJSON()).toMatchObject({
+    occurredAt: '2026-07-18T04:30:00.000Z',
+    timezone: 'Asia/Shanghai',
+  })
   await expect(page.locator('.meal-entry')).toHaveCount(1)
   await expect(page.locator('.meal-entry').first().getByText('393')).toBeVisible()
 

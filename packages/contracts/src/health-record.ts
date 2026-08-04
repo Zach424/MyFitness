@@ -67,6 +67,14 @@ const validateRecordRules = (
     })
   }
 
+  if (Date.parse(record.occurredAt) > Date.now()) {
+    ctx.addIssue({
+      code: 'custom',
+      message: 'occurredAt must not be in the future',
+      path: ['occurredAt'],
+    })
+  }
+
   if (record.source.kind === 'ai_estimate') {
     if (record.status !== 'candidate') {
       ctx.addIssue({

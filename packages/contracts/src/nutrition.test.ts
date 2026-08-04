@@ -46,6 +46,12 @@ describe('nutrition contracts', () => {
     ).toBe(false)
   })
 
+  it('rejects future meal occurrence instants', () => {
+    expect(
+      createMealSchema.safeParse({ ...meal, occurredAt: '2100-01-01T00:00:00+08:00' }).success,
+    ).toBe(false)
+  })
+
   it('requires positive portions, plausible nutrient density and revision', () => {
     expect(
       updateMealSchema.safeParse({

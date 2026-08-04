@@ -6,6 +6,15 @@ import type {
   UpdateHealthRecord,
 } from '@myfitness/contracts'
 
+import {
+  detectedTimeZone,
+  formatZonedOccurrence,
+  isBoundedOccurrenceInstant,
+  occurrenceValidationMessage,
+  preservedOccurrenceInstant,
+  preservedOccurrenceValidationMessage,
+} from '../../lib/occurrence-time'
+
 export type RecordGroup = 'body' | 'recovery'
 
 type MetricUiDefinition = {
@@ -160,7 +169,10 @@ export type RecordDraft = {
   metric: MetricCode
   value: string
   unit: UnitCode
-  occurredAt?: string
+  occurredLocal: string
+  timezone: string
+  occurrenceOffsetMinutes?: number
+  originalOccurredAt?: string
 }
 
 export const createDraft = (metric: MetricCode): RecordDraft => {
@@ -169,6 +181,8 @@ export const createDraft = (metric: MetricCode): RecordDraft => {
     metric,
     value: definition.defaultValue,
     unit: definition.defaultUnit,
+    occurredLocal: '',
+    timezone: detectedTimeZone(),
   }
 }
 
@@ -177,30 +191,34 @@ export const isRecordDraft = (value: unknown): value is RecordDraft => {
   const candidate = value as Record<string, unknown>
   if (
     !Object.keys(candidate).every((key) =>
-      ['metric', 'value', 'unit', 'occurredAt'].includes(key),
+      [
+        'metric',
+        'value',
+        'unit',
+        'occurredLocal',
+        'timezone',
+        'occurrenceOffsetMinutes',
+        'originalOccurredAt',
+      ].includes(key),
     ) ||
     typeof candidate.metric !== 'string' ||
     !(candidate.metric in metricUiDefinitions) ||
     typeof candidate.value !== 'string' ||
     candidate.value.length > 32 ||
     typeof candidate.unit !== 'string' ||
-    (candidate.occurredAt !== undefined &&
-      (typeof candidate.occurredAt !== 'string' ||
-        candidate.occurredAt.length > 40 ||
-        !Number.isFinite(Date.parse(candidate.occurredAt))))
+    typeof candidate.occurredLocal !== 'string' ||
+    candidate.occurredLocal.length > 16 ||
+    typeof candidate.timezone !== 'string' ||
+    candidate.timezone.length > 64 ||
+    (candidate.occurrenceOffsetMinutes !== undefined &&
+      (!Number.isInteger(candidate.occurrenceOffsetMinutes) ||
+        Math.abs(candidate.occurrenceOffsetMinutes as number) > 1_080)) ||
+    !isBoundedOccurrenceInstant(candidate.originalOccurredAt)
   ) {
     return false
   }
   const definition = metricUiDefinitions[candidate.metric as MetricCode]
   return definition.units.includes(candidate.unit as UnitCode)
-}
-
-const getTimezone = () => {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Shanghai'
-  } catch {
-    return 'Asia/Shanghai'
-  }
 }
 
 const displayRange = (metric: MetricCode, unit: UnitCode): [number, number] => {
@@ -219,6 +237,19 @@ export const validateRecordDraft = (draft: RecordDraft) => {
   const [min, max] = displayRange(draft.metric, draft.unit)
   if (value < min || value > max) return `请输入 ${min.toFixed(1)}–${max.toFixed(1)} 之间的数值`
   if (definition.integer && !Number.isInteger(value)) return '该项目需要填写整数'
+  const occurrenceError = occurrenceValidationMessage(
+    draft.occurredLocal,
+    draft.timezone,
+    draft.occurrenceOffsetMinutes,
+  )
+  if (occurrenceError) return occurrenceError
+  const preservedError = preservedOccurrenceValidationMessage(
+    draft.originalOccurredAt,
+    draft.occurredLocal,
+    draft.timezone,
+    draft.occurrenceOffsetMinutes,
+  )
+  if (preservedError) return preservedError
   return ''
 }
 
@@ -237,18 +268,29 @@ export function buildRecordRequest(
     unit: draft.unit,
     source: { kind: 'manual' },
     status: 'confirmed',
-    occurredAt: draft.occurredAt ?? new Date().toISOString(),
-    timezone: getTimezone(),
+    occurredAt: preservedOccurrenceInstant(
+      draft.originalOccurredAt,
+      draft.occurredLocal,
+      draft.timezone,
+      draft.occurrenceOffsetMinutes,
+    ),
+    timezone: draft.timezone,
     ...(expectedRevision === undefined ? {} : { expectedRevision }),
   }
 }
 
-export const draftFromRecord = (record: HealthRecord): RecordDraft => ({
-  metric: record.metric,
-  value: String(record.displayValue),
-  unit: record.displayUnit,
-  occurredAt: record.occurredAt,
-})
+export const draftFromRecord = (record: HealthRecord): RecordDraft => {
+  const occurrence = formatZonedOccurrence(record.occurredAt, record.timezone)
+  return {
+    metric: record.metric,
+    value: String(record.displayValue),
+    unit: record.displayUnit,
+    occurredLocal: occurrence.local,
+    timezone: record.timezone,
+    occurrenceOffsetMinutes: occurrence.offsetMinutes,
+    originalOccurredAt: record.occurredAt,
+  }
+}
 
 export const formatRecordValue = (record: Pick<HealthRecord, 'displayValue' | 'displayUnit'>) =>
   `${Number(record.displayValue).toLocaleString('zh-CN', { maximumFractionDigits: 2 })} ${unitLabels[record.displayUnit]}`

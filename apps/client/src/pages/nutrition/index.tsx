@@ -13,6 +13,7 @@ import type {
 
 import { buttonA11yProps } from '../../lib/accessibility'
 import { LocalDraftNotice } from '../../components/local-draft-notice'
+import { OccurrenceField } from '../../components/occurrence-field'
 import {
   ApiError,
   confirmFoodPhotoCandidate,
@@ -539,6 +540,36 @@ const NutritionPage = () => {
                   }
                 />
               </View>
+
+              <OccurrenceField
+                label="进餐时间"
+                value={draft.occurredLocal}
+                timeZone={draft.timezone}
+                selectedOffsetMinutes={draft.occurrenceOffsetMinutes}
+                onChange={(occurredLocal) => {
+                  setDraft((current) => ({
+                    ...current,
+                    occurredLocal,
+                    originalOccurredAt: undefined,
+                  }))
+                  pendingKey.current = ''
+                  setFeedback('')
+                }}
+                onTimeZoneChange={(timezone) => {
+                  setDraft((current) => ({ ...current, timezone, originalOccurredAt: undefined }))
+                  pendingKey.current = ''
+                  setFeedback('')
+                }}
+                onOffsetChange={(occurrenceOffsetMinutes) => {
+                  setDraft((current) => ({
+                    ...current,
+                    occurrenceOffsetMinutes,
+                    originalOccurredAt: undefined,
+                  }))
+                  pendingKey.current = ''
+                  setFeedback('')
+                }}
+              />
 
               <View className="photo-proof">
                 <View className="photo-proof__heading">

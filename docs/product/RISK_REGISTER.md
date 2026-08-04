@@ -1,6 +1,6 @@
 # Product risk register
 
-Last reviewed: 2026-08-04, iteration 032
+Last reviewed: 2026-08-05, iteration 043
 
 This register tracks release-affecting uncertainty. A mitigation is evidence to collect, not a claim that the risk is gone.
 
@@ -19,7 +19,7 @@ This register tracks release-affecting uncertainty. A mitigation is evidence to 
 | R-012 | PostgreSQL, object storage and providers cross transaction boundaries                  | Medium | Durable outbox/leases/retry/fault tests exist; add shared alerts, dead-letter ownership and provider evidence                                                 |
 | R-013 | Synchronous JSON export can exceed API memory or Mini Program 50 MiB limits            | Medium | Measure closed-beta account sizes; move to encrypted expiring archive jobs before the threshold is reachable                                                  |
 | R-014 | Fixed-window limits and proxy-hop trust are not traffic/topology calibrated            | Medium | Load-test boundaries and verify exact `TRUST_PROXY_HOPS` in the shared environment before opening traffic                                                     |
-| R-015 | Production audit retains 6 moderate Taro build/development-chain advisories            | Medium | Critical/high are zero; remove esbuild/webpack-dev-server/uuid findings through a supported Taro upgrade and rerun full graph/dual-client/E2E evidence        |
+| R-015 | Production audit retains 9 moderate Taro build/development-chain advisories            | Medium | Critical/high are zero; remove remaining build-chain findings through a supported Taro upgrade and rerun full graph/dual-client/E2E evidence                  |
 | R-016 | Enterprise operator identity and access governance are not configured                  | High   | Select OIDC tenant/client and named owner; exercise dual-reviewed provisioning, recertification, disablement, revocation and shared login before use          |
 | R-017 | Administrator audit is immutable only inside the primary database                      | High   | Define retention and owner; export to independently protected storage, include restore evidence and alert on write/access anomalies before real access        |
 | R-019 | Erasure ledger/secret loss would invalidate user and provider-identity suppression     | High   | Independently retain/replicate ledger and recover HMAC secret; implement dual-read version rotation and exercise loss scenarios                               |
@@ -32,5 +32,6 @@ This register tracks release-affecting uncertainty. A mitigation is evidence to 
 | R-026 | Reviewed GitHub Action pins can age or miss upstream security/compatibility fixes      | Medium | Dependabot proposes weekly; verify exact upstream tag/source, update lock and every use together, then require complete hosted CI before merge                |
 | R-027 | End-user OIDC tenant, recovery, linking and provider data policy are unapproved        | High   | Select tenant/client and owners; review region/retention/recovery; keep cross-provider linking off; exercise JWKS rotation and incident paths before beta     |
 | R-028 | Progress photos can be over-interpreted or create long-lived sensitive-media custody   | High   | Keep capture-only checks/no body score, separate analysis/retention consent and scoped deletion; require real-user research, policy and managed custody proof |
+| R-029 | Client occurrence conversion depends on platform `Intl` timezone data                  | Medium | Gap/overlap/future tests pass; verify supported H5 browsers and real WeChat devices across representative IANA zones before closed beta                       |
 
 Resolved implementation defects remain documented in their iteration archive rather than removed from history. Product-level risks close only when the named release evidence exists.

@@ -1,6 +1,6 @@
 # Workout record model
 
-Status: implemented in iteration 005; server-authoritative completion hardened in iteration 032; explicit plan-session relationship added in iteration 036; user-owned exercise catalog and snapshot semantics added in iteration 037; stable-key exercise observation added in iteration 038
+Status: implemented in iteration 005; server-authoritative completion hardened in iteration 032; explicit plan-session relationship added in iteration 036; user-owned exercise catalog and snapshot semantics added in iteration 037; stable-key exercise observation added in iteration 038; explicit occurrence editing added in iteration 043
 
 Workout records are user-owned observations of what was actually attempted and completed. They are not exercise prescriptions, readiness diagnoses or claims that greater volume is always better.
 
@@ -48,6 +48,8 @@ Creation is protected by a per-user idempotency key and request hash. Replacemen
 
 The JSON revision is intentionally immutable evidence, not a second writable source of truth. Current relational rows are rebuilt transactionally on replacement, and their database constraints repeat the main contract invariants.
 
+The editor resolves separate local start/end minutes through one explicit IANA timezone. DST gaps and unresolved repeated minutes cannot submit; a repeated minute needs its UTC-offset choice. Both instants must be no later than now and end remains at or after start. If both create fields are blank, the client records a 45-minute session ending at submission; if one is blank, it derives the missing endpoint. Correction preserves each exact original instant while its displayed minute/zone/offset remains untouched.
+
 Migration `0021_authoritative_workout_status.sql` backfills the relational status cache from persisted set flags without rewriting immutable revision history. API reads also derive current status from the loaded set graph, so a stale cache cannot become the response authority. Historical snapshots created before this rule remain original accepted evidence; every snapshot created after the hardening contains the server-derived status.
 
 Migration `0023_user_exercise_catalog.sql` adds tracking/equipment snapshot columns to `workout_exercises`. These fields describe what the user selected when the workout was recorded; they are not joined to a current catalog definition at read time.
@@ -77,7 +79,7 @@ The client charts one unit at a time according to the newest recorded tracking m
 “Repeat” copies exercise identity, order, set kind, reps, display load, duration, distance and RPE into a new draft. It deliberately resets:
 
 - every `completed` flag;
-- start/end time to the current session;
+- start/end time to blank/current-session behavior;
 - pain, fatigue, note and prior server identity/revision.
 
 This makes the previous workout a convenient structure template without presenting yesterday's completion, symptoms or notes as today's facts. Saving creates a new idempotent session; it never links by mutating or cloning the previous database row.

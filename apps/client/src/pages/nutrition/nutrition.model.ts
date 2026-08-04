@@ -10,6 +10,15 @@ import type {
 } from '@myfitness/contracts'
 import { starterFoodCatalog } from '@myfitness/contracts/nutrition.constants'
 
+import {
+  detectedTimeZone,
+  formatZonedOccurrence,
+  isBoundedOccurrenceInstant,
+  occurrenceValidationMessage,
+  preservedOccurrenceInstant,
+  preservedOccurrenceValidationMessage,
+} from '../../lib/occurrence-time'
+
 export type StarterFood = (typeof starterFoodCatalog)[number]
 
 export type FoodDraft = {
@@ -24,7 +33,10 @@ export type MealDraft = {
   title: string
   items: FoodDraft[]
   note: string
-  occurredAt?: string
+  occurredLocal: string
+  timezone: string
+  occurrenceOffsetMinutes?: number
+  originalOccurredAt?: string
 }
 
 export const mealTypeLabels: Record<MealDraft['mealType'], string> = {
@@ -39,6 +51,8 @@ export const initialMealDraft = (): MealDraft => ({
   title: '午餐',
   items: [],
   note: '',
+  occurredLocal: '',
+  timezone: detectedTimeZone(),
 })
 
 const isDraftObject = (value: unknown): value is Record<string, unknown> =>
@@ -49,9 +63,6 @@ const draftString = (value: unknown, max: number) =>
   typeof value === 'string' && value.length <= max
 const draftNumber = (value: unknown, min: number, max: number) =>
   typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max
-const draftTimestamp = (value: unknown) =>
-  value === undefined ||
-  (typeof value === 'string' && value.length <= 40 && Number.isFinite(Date.parse(value)))
 const draftMealTypes = ['breakfast', 'lunch', 'dinner', 'snack'] as const
 const draftServingUnits = ['g', 'ml', 'piece', 'serving'] as const
 const draftFoodCategories = [
@@ -92,14 +103,28 @@ const isFoodDraft = (value: unknown) =>
 
 export const isMealDraft = (value: unknown): value is MealDraft =>
   isDraftObject(value) &&
-  hasOnlyDraftKeys(value, ['mealType', 'title', 'items', 'note', 'occurredAt']) &&
+  hasOnlyDraftKeys(value, [
+    'mealType',
+    'title',
+    'items',
+    'note',
+    'occurredLocal',
+    'timezone',
+    'occurrenceOffsetMinutes',
+    'originalOccurredAt',
+  ]) &&
   draftMealTypes.includes(value.mealType as (typeof draftMealTypes)[number]) &&
   draftString(value.title, 120) &&
   Array.isArray(value.items) &&
   value.items.length <= 50 &&
   value.items.every(isFoodDraft) &&
   draftString(value.note, 2_000) &&
-  draftTimestamp(value.occurredAt)
+  draftString(value.occurredLocal, 16) &&
+  draftString(value.timezone, 64) &&
+  (value.occurrenceOffsetMinutes === undefined ||
+    (draftNumber(value.occurrenceOffsetMinutes, -1_080, 1_080) &&
+      Number.isInteger(value.occurrenceOffsetMinutes))) &&
+  isBoundedOccurrenceInstant(value.originalOccurredAt)
 
 const finitePositive = (value: string) =>
   value.trim() !== '' && Number.isFinite(Number(value)) && Number(value) > 0
@@ -142,6 +167,19 @@ export const draftsFromPhotoConfirmation = (
 
 export const validateMealDraft = (draft: MealDraft) => {
   if (!draft.title.trim()) return '请填写餐次名称'
+  const occurrenceError = occurrenceValidationMessage(
+    draft.occurredLocal,
+    draft.timezone,
+    draft.occurrenceOffsetMinutes,
+  )
+  if (occurrenceError) return occurrenceError
+  const preservedError = preservedOccurrenceValidationMessage(
+    draft.originalOccurredAt,
+    draft.occurredLocal,
+    draft.timezone,
+    draft.occurrenceOffsetMinutes,
+  )
+  if (preservedError) return preservedError
   if (!draft.items.length) return '请至少添加一种食物'
   for (const item of draft.items) {
     if (!finitePositive(item.amount)) return `${item.food.name}的份量需大于 0`
@@ -151,14 +189,6 @@ export const validateMealDraft = (draft: MealDraft) => {
     }
   }
   return ''
-}
-
-const timezone = () => {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Shanghai'
-  } catch {
-    return 'Asia/Shanghai'
-  }
 }
 
 const mealItems = (draft: MealDraft): MealItemInput[] =>
@@ -185,25 +215,36 @@ export function buildMealRequest(
     title: draft.title.trim(),
     source: { kind: 'manual' },
     items: mealItems(draft),
-    occurredAt: draft.occurredAt ?? new Date().toISOString(),
-    timezone: timezone(),
+    occurredAt: preservedOccurrenceInstant(
+      draft.originalOccurredAt,
+      draft.occurredLocal,
+      draft.timezone,
+      draft.occurrenceOffsetMinutes,
+    ),
+    timezone: draft.timezone,
     ...(draft.note.trim() ? { note: draft.note.trim() } : {}),
     ...(expectedRevision === undefined ? {} : { expectedRevision }),
   }
 }
 
-export const draftFromMeal = (meal: Meal, repeat = false): MealDraft => ({
-  mealType: meal.mealType,
-  title: meal.title,
-  items: meal.items.map((item) => ({
-    food: item.food,
-    amount: String(item.serving.amount),
-    unit: item.serving.unit,
-    gramsPerUnit: item.serving.grams / item.serving.amount,
-  })),
-  note: repeat ? '' : (meal.note ?? ''),
-  ...(repeat ? {} : { occurredAt: meal.occurredAt }),
-})
+export const draftFromMeal = (meal: Meal, repeat = false): MealDraft => {
+  const occurrence = repeat ? null : formatZonedOccurrence(meal.occurredAt, meal.timezone)
+  return {
+    mealType: meal.mealType,
+    title: meal.title,
+    items: meal.items.map((item) => ({
+      food: item.food,
+      amount: String(item.serving.amount),
+      unit: item.serving.unit,
+      gramsPerUnit: item.serving.grams / item.serving.amount,
+    })),
+    note: repeat ? '' : (meal.note ?? ''),
+    occurredLocal: occurrence?.local ?? '',
+    timezone: occurrence ? meal.timezone : detectedTimeZone(),
+    ...(occurrence ? { occurrenceOffsetMinutes: occurrence.offsetMinutes } : {}),
+    ...(occurrence ? { originalOccurredAt: meal.occurredAt } : {}),
+  }
+}
 
 const round = (value: number, precision = 1) => {
   const factor = 10 ** precision

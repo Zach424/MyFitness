@@ -95,6 +95,24 @@ const addReleaseMetadata = (chain: WebpackChain) => {
   }
 }
 
+const configureH5 = (chain: WebpackChain) => {
+  addReleaseMetadata(chain)
+  const current = chain.optimization.get('splitChunks') ?? {}
+  chain.optimization.splitChunks({
+    ...current,
+    cacheGroups: {
+      ...current.cacheGroups,
+      occurrenceField: {
+        test: /[\\/]src[\\/]components[\\/]occurrence-field[\\/]/,
+        name: 'occurrence-field',
+        chunks: 'async',
+        enforce: true,
+        reuseExistingChunk: true,
+      },
+    },
+  })
+}
+
 const config: UserConfigExport = {
   projectName: 'myfitness-client',
   date: '2026-07-18',
@@ -152,7 +170,7 @@ const config: UserConfigExport = {
   h5: {
     publicPath: '/',
     staticDirectory: 'static',
-    webpackChain: addReleaseMetadata,
+    webpackChain: configureH5,
   },
 }
 

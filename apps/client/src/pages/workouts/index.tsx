@@ -12,6 +12,7 @@ import { exerciseEquipmentOptions } from '@myfitness/contracts/exercise-catalog.
 
 import { buttonA11yProps } from '../../lib/accessibility'
 import { LocalDraftNotice } from '../../components/local-draft-notice'
+import { OccurrenceField } from '../../components/occurrence-field'
 import {
   ApiError,
   archiveExerciseCatalogEntry,
@@ -497,6 +498,79 @@ const WorkoutsPage = () => {
                     onInput={(event) => {
                       setDraft((current) => ({ ...current, title: event.detail.value }))
                       pendingKey.current = ''
+                    }}
+                  />
+                </View>
+
+                <View className="workout-occurrence-grid">
+                  <OccurrenceField
+                    label="开始时间"
+                    value={draft.startedLocal}
+                    timeZone={draft.timezone}
+                    selectedOffsetMinutes={draft.startedOffsetMinutes}
+                    onChange={(startedLocal) => {
+                      setDraft((current) => ({
+                        ...current,
+                        startedLocal,
+                        originalStartedAt: undefined,
+                      }))
+                      pendingKey.current = ''
+                      setFeedback('')
+                    }}
+                    onTimeZoneChange={(timezone) => {
+                      setDraft((current) => ({
+                        ...current,
+                        timezone,
+                        endedOffsetMinutes: undefined,
+                        originalStartedAt: undefined,
+                        originalEndedAt: undefined,
+                      }))
+                      pendingKey.current = ''
+                      setFeedback('')
+                    }}
+                    onOffsetChange={(startedOffsetMinutes) => {
+                      setDraft((current) => ({
+                        ...current,
+                        startedOffsetMinutes,
+                        originalStartedAt: undefined,
+                      }))
+                      pendingKey.current = ''
+                      setFeedback('')
+                    }}
+                  />
+                  <OccurrenceField
+                    label="结束时间"
+                    value={draft.endedLocal}
+                    timeZone={draft.timezone}
+                    selectedOffsetMinutes={draft.endedOffsetMinutes}
+                    onChange={(endedLocal) => {
+                      setDraft((current) => ({
+                        ...current,
+                        endedLocal,
+                        originalEndedAt: undefined,
+                      }))
+                      pendingKey.current = ''
+                      setFeedback('')
+                    }}
+                    onTimeZoneChange={(timezone) => {
+                      setDraft((current) => ({
+                        ...current,
+                        timezone,
+                        startedOffsetMinutes: undefined,
+                        originalStartedAt: undefined,
+                        originalEndedAt: undefined,
+                      }))
+                      pendingKey.current = ''
+                      setFeedback('')
+                    }}
+                    onOffsetChange={(endedOffsetMinutes) => {
+                      setDraft((current) => ({
+                        ...current,
+                        endedOffsetMinutes,
+                        originalEndedAt: undefined,
+                      }))
+                      pendingKey.current = ''
+                      setFeedback('')
                     }}
                   />
                 </View>

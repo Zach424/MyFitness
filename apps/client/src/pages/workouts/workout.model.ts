@@ -13,6 +13,15 @@ import {
   starterExerciseCatalog,
 } from '@myfitness/contracts/exercise-catalog.constants'
 
+import {
+  detectedTimeZone,
+  formatZonedOccurrence,
+  isBoundedOccurrenceInstant,
+  occurrenceValidationMessage,
+  preservedOccurrenceInstant,
+  preservedOccurrenceValidationMessage,
+} from '../../lib/occurrence-time'
+
 export type DraftCatalogItem = Pick<
   ExerciseCatalogItem,
   'key' | 'name' | 'category' | 'trackingMode'
@@ -47,8 +56,13 @@ export type WorkoutDraft = {
   painLevel: number
   fatigue: number
   note: string
-  startedAt?: string
-  endedAt?: string
+  startedLocal: string
+  endedLocal: string
+  timezone: string
+  startedOffsetMinutes?: number
+  endedOffsetMinutes?: number
+  originalStartedAt?: string
+  originalEndedAt?: string
 }
 
 const legacyTrackingMode = (
@@ -108,6 +122,9 @@ export const initialWorkoutDraft = (): WorkoutDraft => ({
   painLevel: 0,
   fatigue: 3,
   note: '',
+  startedLocal: '',
+  endedLocal: '',
+  timezone: detectedTimeZone(),
 })
 
 const isDraftObject = (value: unknown): value is Record<string, unknown> =>
@@ -118,9 +135,6 @@ const draftString = (value: unknown, max: number) =>
   typeof value === 'string' && value.length <= max
 const draftNumber = (value: unknown, min: number, max: number) =>
   typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max
-const draftTimestamp = (value: unknown) =>
-  value === undefined ||
-  (typeof value === 'string' && value.length <= 40 && Number.isFinite(Date.parse(value)))
 const workoutCategories = ['strength', 'cardio', 'mobility'] as const
 const workoutTrackingModes = ['reps_load', 'duration', 'duration_distance'] as const
 
@@ -168,8 +182,13 @@ export const isWorkoutDraft = (value: unknown): value is WorkoutDraft =>
     'painLevel',
     'fatigue',
     'note',
-    'startedAt',
-    'endedAt',
+    'startedLocal',
+    'endedLocal',
+    'timezone',
+    'startedOffsetMinutes',
+    'endedOffsetMinutes',
+    'originalStartedAt',
+    'originalEndedAt',
   ]) &&
   draftString(value.title, 120) &&
   (value.loadUnit === 'kg' || value.loadUnit === 'lb') &&
@@ -179,13 +198,63 @@ export const isWorkoutDraft = (value: unknown): value is WorkoutDraft =>
   draftNumber(value.painLevel, 0, 10) &&
   draftNumber(value.fatigue, 1, 5) &&
   draftString(value.note, 2_000) &&
-  draftTimestamp(value.startedAt) &&
-  draftTimestamp(value.endedAt)
+  draftString(value.startedLocal, 16) &&
+  draftString(value.endedLocal, 16) &&
+  draftString(value.timezone, 64) &&
+  (value.startedOffsetMinutes === undefined ||
+    (draftNumber(value.startedOffsetMinutes, -1_080, 1_080) &&
+      Number.isInteger(value.startedOffsetMinutes))) &&
+  (value.endedOffsetMinutes === undefined ||
+    (draftNumber(value.endedOffsetMinutes, -1_080, 1_080) &&
+      Number.isInteger(value.endedOffsetMinutes))) &&
+  isBoundedOccurrenceInstant(value.originalStartedAt) &&
+  isBoundedOccurrenceInstant(value.originalEndedAt)
 
 const finite = (value: string) => value.trim() !== '' && Number.isFinite(Number(value))
 
 export const validateWorkoutDraft = (draft: WorkoutDraft) => {
   if (!draft.title.trim()) return '请填写训练名称'
+  const startedError = occurrenceValidationMessage(
+    draft.startedLocal,
+    draft.timezone,
+    draft.startedOffsetMinutes,
+  )
+  if (startedError) return `开始时间：${startedError}`
+  const preservedStartError = preservedOccurrenceValidationMessage(
+    draft.originalStartedAt,
+    draft.startedLocal,
+    draft.timezone,
+    draft.startedOffsetMinutes,
+  )
+  if (preservedStartError) return `开始时间：${preservedStartError}`
+  const endedError = occurrenceValidationMessage(
+    draft.endedLocal,
+    draft.timezone,
+    draft.endedOffsetMinutes,
+  )
+  if (endedError) return `结束时间：${endedError}`
+  const preservedEndError = preservedOccurrenceValidationMessage(
+    draft.originalEndedAt,
+    draft.endedLocal,
+    draft.timezone,
+    draft.endedOffsetMinutes,
+  )
+  if (preservedEndError) return `结束时间：${preservedEndError}`
+  if (draft.startedLocal && draft.endedLocal) {
+    const startedAt = preservedOccurrenceInstant(
+      draft.originalStartedAt,
+      draft.startedLocal,
+      draft.timezone,
+      draft.startedOffsetMinutes,
+    )
+    const endedAt = preservedOccurrenceInstant(
+      draft.originalEndedAt,
+      draft.endedLocal,
+      draft.timezone,
+      draft.endedOffsetMinutes,
+    )
+    if (Date.parse(endedAt) < Date.parse(startedAt)) return '结束时间不能早于开始时间'
+  }
   if (!draft.exercises.length) return '请至少添加一个动作'
   for (const exercise of draft.exercises) {
     if (!exercise.sets.length) return `${exercise.name}至少需要一组`
@@ -212,14 +281,6 @@ export const validateWorkoutDraft = (draft: WorkoutDraft) => {
     }
   }
   return ''
-}
-
-const timezone = () => {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Shanghai'
-  } catch {
-    return 'Asia/Shanghai'
-  }
 }
 
 const exerciseRequest = (
@@ -259,9 +320,36 @@ export function buildWorkoutRequest(
 ): CreateWorkout | UpdateWorkout {
   const error = validateWorkoutDraft(draft)
   if (error) throw new Error(error)
-  const endedAt = draft.endedAt ?? new Date().toISOString()
+  const now = Date.now()
+  const explicitStartedAt =
+    draft.originalStartedAt || draft.startedLocal
+      ? preservedOccurrenceInstant(
+          draft.originalStartedAt,
+          draft.startedLocal,
+          draft.timezone,
+          draft.startedOffsetMinutes,
+          now,
+        )
+      : undefined
+  const explicitEndedAt =
+    draft.originalEndedAt || draft.endedLocal
+      ? preservedOccurrenceInstant(
+          draft.originalEndedAt,
+          draft.endedLocal,
+          draft.timezone,
+          draft.endedOffsetMinutes,
+          now,
+        )
+      : undefined
+  const defaultDuration = 45 * 60 * 1_000
+  const endedAt =
+    explicitEndedAt ??
+    new Date(
+      explicitStartedAt ? Math.min(Date.parse(explicitStartedAt) + defaultDuration, now) : now,
+    ).toISOString()
   const startedAt =
-    draft.startedAt ?? new Date(new Date(endedAt).getTime() - 45 * 60 * 1_000).toISOString()
+    explicitStartedAt ?? new Date(Date.parse(endedAt) - defaultDuration).toISOString()
+  if (Date.parse(endedAt) < Date.parse(startedAt)) throw new Error('结束时间不能早于开始时间')
   const exercises = draft.exercises.map((exercise, index) =>
     exerciseRequest(exercise, index, draft.loadUnit),
   )
@@ -271,7 +359,7 @@ export function buildWorkoutRequest(
     exercises,
     startedAt,
     endedAt,
-    timezone: timezone(),
+    timezone: draft.timezone,
     painLevel: draft.painLevel,
     fatigue: draft.fatigue,
     ...(draft.note.trim() ? { note: draft.note.trim() } : {}),
@@ -279,32 +367,42 @@ export function buildWorkoutRequest(
   }
 }
 
-export const draftFromWorkout = (workout: Workout, repeat = false): WorkoutDraft => ({
-  title: workout.title,
-  loadUnit:
-    workout.exercises.flatMap((exercise) => exercise.sets).find((set) => set.loadUnit)?.loadUnit ??
-    'kg',
-  exercises: workout.exercises.map((exercise) => ({
-    exerciseKey: exercise.exerciseKey,
-    name: exercise.name,
-    category: exercise.category,
-    trackingMode: exercise.trackingMode ?? legacyTrackingMode(exercise),
-    equipment: exercise.equipment ?? [],
-    equipmentNotes: exercise.equipmentNotes ?? '',
-    sets: exercise.sets.map((set) => ({
-      reps: set.reps === undefined ? '' : String(set.reps),
-      load: set.load === undefined ? '' : String(set.load),
-      durationMinutes: set.durationSeconds === undefined ? '' : String(set.durationSeconds / 60),
-      distanceKm: set.distanceMeters === undefined ? '' : String(set.distanceMeters / 1_000),
-      rpe: set.rpe === undefined ? '7' : String(set.rpe),
-      completed: repeat ? false : set.completed,
+export const draftFromWorkout = (workout: Workout, repeat = false): WorkoutDraft => {
+  const started = repeat ? null : formatZonedOccurrence(workout.startedAt, workout.timezone)
+  const ended = repeat ? null : formatZonedOccurrence(workout.endedAt, workout.timezone)
+  return {
+    title: workout.title,
+    loadUnit:
+      workout.exercises.flatMap((exercise) => exercise.sets).find((set) => set.loadUnit)
+        ?.loadUnit ?? 'kg',
+    exercises: workout.exercises.map((exercise) => ({
+      exerciseKey: exercise.exerciseKey,
+      name: exercise.name,
+      category: exercise.category,
+      trackingMode: exercise.trackingMode ?? legacyTrackingMode(exercise),
+      equipment: exercise.equipment ?? [],
+      equipmentNotes: exercise.equipmentNotes ?? '',
+      sets: exercise.sets.map((set) => ({
+        reps: set.reps === undefined ? '' : String(set.reps),
+        load: set.load === undefined ? '' : String(set.load),
+        durationMinutes: set.durationSeconds === undefined ? '' : String(set.durationSeconds / 60),
+        distanceKm: set.distanceMeters === undefined ? '' : String(set.distanceMeters / 1_000),
+        rpe: set.rpe === undefined ? '7' : String(set.rpe),
+        completed: repeat ? false : set.completed,
+      })),
     })),
-  })),
-  painLevel: repeat ? 0 : workout.painLevel,
-  fatigue: repeat ? 3 : workout.fatigue,
-  note: repeat ? '' : (workout.note ?? ''),
-  ...(repeat ? {} : { startedAt: workout.startedAt, endedAt: workout.endedAt }),
-})
+    painLevel: repeat ? 0 : workout.painLevel,
+    fatigue: repeat ? 3 : workout.fatigue,
+    note: repeat ? '' : (workout.note ?? ''),
+    startedLocal: started?.local ?? '',
+    endedLocal: ended?.local ?? '',
+    timezone: repeat ? detectedTimeZone() : workout.timezone,
+    ...(started ? { startedOffsetMinutes: started.offsetMinutes } : {}),
+    ...(ended ? { endedOffsetMinutes: ended.offsetMinutes } : {}),
+    ...(started ? { originalStartedAt: workout.startedAt } : {}),
+    ...(ended ? { originalEndedAt: workout.endedAt } : {}),
+  }
+}
 
 export const workoutDraftSummary = (draft: WorkoutDraft) => {
   let completedSets = 0

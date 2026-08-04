@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
   buildExerciseCatalogRequest,
@@ -14,6 +14,8 @@ import {
 import { starterExerciseCatalog } from '@myfitness/contracts/exercise-catalog.constants'
 
 describe('workout page model', () => {
+  afterEach(() => vi.useRealTimers())
+
   it('builds ordered completed strength sets', () => {
     const draft = initialWorkoutDraft()
     const request = buildWorkoutRequest(draft)
@@ -34,6 +36,54 @@ describe('workout page model', () => {
     expect(request.exercises[0]?.sets[0]).toMatchObject({
       durationSeconds: 1200,
       distanceMeters: 3000,
+    })
+  })
+
+  it('converts explicit local session bounds and rejects reversed times', () => {
+    const draft = initialWorkoutDraft()
+    draft.timezone = 'Asia/Shanghai'
+    draft.startedLocal = '2026-07-18 18:00'
+    draft.endedLocal = '2026-07-18 18:45'
+    expect(buildWorkoutRequest(draft)).toMatchObject({
+      startedAt: '2026-07-18T10:00:00.000Z',
+      endedAt: '2026-07-18T10:45:00.000Z',
+      timezone: 'Asia/Shanghai',
+    })
+    draft.endedLocal = '2026-07-18 17:59'
+    expect(validateWorkoutDraft(draft)).toContain('不能早于')
+  })
+
+  it('derives bounded session endpoints when occurrence fields are incomplete', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime('2026-07-18T12:00:00.000Z')
+
+    const onlyStart = initialWorkoutDraft()
+    onlyStart.timezone = 'Asia/Shanghai'
+    onlyStart.startedLocal = '2026-07-18 18:00'
+    expect(buildWorkoutRequest(onlyStart)).toMatchObject({
+      startedAt: '2026-07-18T10:00:00.000Z',
+      endedAt: '2026-07-18T10:45:00.000Z',
+    })
+
+    const recentStart = initialWorkoutDraft()
+    recentStart.timezone = 'Asia/Shanghai'
+    recentStart.startedLocal = '2026-07-18 19:45'
+    expect(buildWorkoutRequest(recentStart)).toMatchObject({
+      startedAt: '2026-07-18T11:45:00.000Z',
+      endedAt: '2026-07-18T12:00:00.000Z',
+    })
+
+    const onlyEnd = initialWorkoutDraft()
+    onlyEnd.timezone = 'Asia/Shanghai'
+    onlyEnd.endedLocal = '2026-07-18 19:30'
+    expect(buildWorkoutRequest(onlyEnd)).toMatchObject({
+      startedAt: '2026-07-18T10:45:00.000Z',
+      endedAt: '2026-07-18T11:30:00.000Z',
+    })
+
+    expect(buildWorkoutRequest(initialWorkoutDraft())).toMatchObject({
+      startedAt: '2026-07-18T11:15:00.000Z',
+      endedAt: '2026-07-18T12:00:00.000Z',
     })
   })
 
