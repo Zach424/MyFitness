@@ -147,6 +147,67 @@ test('workout log remains useful at wide viewport', async ({ page }) => {
   expect(browserErrors).toEqual([])
 })
 
+test('exercise observation uses completed sets and refreshes corrected evidence', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  const browserErrors = collectBrowserErrors(page)
+
+  await openWorkouts(page)
+  await page.getByRole('button', { name: '高脚杯深蹲第2组已完成' }).click()
+  await page.locator('[aria-label="高脚杯深蹲第2组负重"] input').fill('99')
+
+  const createWorkout = page.waitForResponse(
+    (response) => response.url().endsWith('/v1/workouts') && response.request().method() === 'POST',
+  )
+  await page.getByRole('button', { name: '保存训练', exact: true }).click()
+  expect((await createWorkout).status()).toBe(201)
+  const initialInsightPromise = page.waitForResponse(
+    (response) =>
+      response.url().includes('/v1/insights/exercises/goblet_squat') &&
+      response.request().method() === 'GET',
+  )
+  await page.getByRole('button', { name: '查看高脚杯深蹲趋势' }).click()
+  const initialInsight = await initialInsightPromise
+  expect(initialInsight.status()).toBe(200)
+
+  const observation = page.getByLabel('单动作历史与趋势')
+  await expect(observation.getByRole('button', { name: '高脚杯深蹲' })).toBeVisible()
+  await expect(observation.getByText('有完成组的训练')).toBeVisible()
+  await expect(observation.getByText('2', { exact: true })).toBeVisible()
+  await expect(observation.getByText('240', { exact: true })).toBeVisible()
+  await expect(observation.getByText(/完成 2\/3 组 · 次数 20 · 训练量 240 kg/)).toBeVisible()
+
+  await page.getByRole('button', { name: '返回训练记录' }).click()
+  await page.locator('.workout-entry').first().getByRole('button', { name: '修改' }).click()
+  await page.locator('[aria-label="高脚杯深蹲第1组负重"] input').fill('15')
+  const correctedWorkout = page.waitForResponse(
+    (response) =>
+      /\/v1\/workouts\/[0-9a-f-]{36}$/.test(response.url()) &&
+      response.request().method() === 'PUT',
+  )
+  await page.getByRole('button', { name: '保存训练新版本' }).click()
+  expect((await correctedWorkout).status()).toBe(200)
+  const correctedInsightPromise = page.waitForResponse(
+    (response) =>
+      response.url().includes('/v1/insights/exercises/goblet_squat') &&
+      response.request().method() === 'GET',
+  )
+  await page.getByRole('button', { name: '查看高脚杯深蹲趋势' }).click()
+  const correctedInsight = await correctedInsightPromise
+  expect(correctedInsight.status()).toBe(200)
+  await expect(observation.getByText('270', { exact: true })).toBeVisible()
+  await expect(observation.getByText(/训练 v2/)).toBeVisible()
+  await expect(observation.getByText(/完成 2\/3 组 · 次数 20 · 训练量 270 kg/)).toBeVisible()
+
+  await observation.scrollIntoViewIfNeeded()
+  await page.screenshot({
+    path: 'output/playwright/iteration-038-exercise-trend-mobile.png',
+    fullPage: true,
+  })
+  expect(browserErrors).toEqual([])
+})
+
 test('user creates, searches, corrects and archives an owned exercise snapshot', async ({
   page,
 }) => {

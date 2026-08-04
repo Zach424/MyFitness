@@ -682,6 +682,27 @@
   white-space: nowrap;
 }
 
+.workout-entry__insight-links {
+  display: flex;
+  margin-top: 7px;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.exercise-observation-link {
+  width: auto;
+  min-height: 32px;
+  margin: 0;
+  padding: 0 9px;
+  border: 1px solid rgba(63, 117, 107, 0.24);
+  border-radius: var(--radius-round);
+  color: var(--color-juniper);
+  background: var(--color-juniper-soft);
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 30px;
+}
+
 .workout-entry__numbers {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

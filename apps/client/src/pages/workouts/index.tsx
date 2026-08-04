@@ -802,6 +802,23 @@ const WorkoutsPage = () => {
                       <Text className="workout-entry__exercises">
                         {workout.exercises.map((exercise) => exercise.name).join(' · ')}
                       </Text>
+                      <View className="workout-entry__insight-links" aria-label="查看单动作趋势">
+                        {workout.exercises.map((exercise) => (
+                          <Button
+                            {...buttonA11yProps}
+                            className="exercise-observation-link"
+                            key={exercise.id}
+                            aria-label={`查看${exercise.name}趋势`}
+                            onClick={() =>
+                              void Taro.navigateTo({
+                                url: `/pages/exercise-insights/index?exerciseKey=${encodeURIComponent(exercise.exerciseKey)}`,
+                              })
+                            }
+                          >
+                            {exercise.name}趋势 →
+                          </Button>
+                        ))}
+                      </View>
                       <View className="workout-entry__numbers">
                         <View>
                           <Text className="workout-entry__number metric">

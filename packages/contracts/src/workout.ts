@@ -18,6 +18,10 @@ export const workoutSetKindSchema = z.enum(workoutSetKinds)
 export const loadUnitSchema = z.enum(loadUnits)
 export const workoutSourceKindSchema = z.enum(workoutSourceKinds)
 export const workoutRevisionActionSchema = z.enum(workoutRevisionActions)
+export const exerciseKeySchema = z
+  .string()
+  .trim()
+  .regex(/^[a-z0-9_]{2,80}$/)
 
 export const workoutSourceSchema = z
   .object({
@@ -76,10 +80,7 @@ export const workoutSetInputSchema = z
 export const workoutExerciseInputSchema = z
   .object({
     position: z.number().int().min(1).max(50),
-    exerciseKey: z
-      .string()
-      .trim()
-      .regex(/^[a-z0-9_]{2,80}$/),
+    exerciseKey: exerciseKeySchema,
     name: z.string().trim().min(1).max(80),
     category: exerciseCategorySchema,
     trackingMode: exerciseTrackingModeSchema.optional(),
@@ -136,6 +137,14 @@ const validateWorkout = (workout: z.infer<typeof workoutBaseSchema>, ctx: z.Refi
     ctx.addIssue({
       code: 'custom',
       message: 'exercise positions must be unique',
+      path: ['exercises'],
+    })
+  }
+  const exerciseKeys = workout.exercises.map((exercise) => exercise.exerciseKey)
+  if (new Set(exerciseKeys).size !== exerciseKeys.length) {
+    ctx.addIssue({
+      code: 'custom',
+      message: 'exercise keys must be unique within a workout',
       path: ['exercises'],
     })
   }

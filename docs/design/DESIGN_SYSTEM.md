@@ -1,6 +1,6 @@
 # Design system baseline
 
-Status: implemented and visually validated through iteration-037 exercise-catalog evidence
+Status: implemented and visually validated through iteration-038 exercise-observation evidence
 
 Working brand: 衡迹 / MyFitness
 
@@ -322,6 +322,18 @@ The 390 px production-browser review created `壶铃摆动`, found it through th
 Reviewed evidence:
 
 - [390 × 844 custom exercise catalog](../../output/playwright/iteration-037-user-exercise-catalog-mobile.png)
+
+## Exercise-observation review — iteration 038
+
+The workout ledger now keeps only small per-exercise trend links, while a dedicated lazy page gives one stable movement enough room for identity, 7/30/90-day evidence, one-unit comparison and revision detail. This separation was both an information-design and performance decision: the first embedded panel exceeded the WeApp page-JavaScript budget; the final workout page returned below the gate without hiding the feature.
+
+The observation screen states `仅完成组` in the top rail and repeats that same-name movements are not merged. Equal visible labels receive a short stable-key suffix. The summary separates sessions with completed evidence, completed sets and the tracking-mode-appropriate metric. The restrained bar plot compares only kilograms, minutes or kilometers at a time; below it, the evidence ledger exposes completed/total sets, repetitions, volume, duration, distance and workout revision so a chart never becomes an unexplained score.
+
+The 390 px production-browser review recorded three sets while leaving a `99 kg` set incomplete. The screen displayed `2/3`, `20` repetitions and `240 kg`, then a workout correction changed one completed load and the reopened projection showed `270 kg · 训练 v2`. Copy does not celebrate maxima, grade technique or advise adding load. Browser request/page/console error capture remained empty.
+
+Reviewed evidence:
+
+- [390 × 844 stable-key exercise observation](../../output/playwright/iteration-038-exercise-trend-mobile.png)
 
 ## Screenshot review checklist
 

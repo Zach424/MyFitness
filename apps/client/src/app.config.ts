@@ -6,6 +6,7 @@ export default defineAppConfig({
     'pages/records/index',
     'pages/progress-photos/index',
     'pages/workouts/index',
+    'pages/exercise-insights/index',
     'pages/nutrition/index',
     'pages/plans/index',
     'pages/privacy/index',

@@ -50,6 +50,7 @@ describe('OpenAPI document', () => {
     expect(document.paths['/v1/nutrition/favorites/{foodKey}']?.put).toBeDefined()
     expect(document.paths['/v1/nutrition/favorites/{foodKey}']?.delete).toBeDefined()
     expect(document.paths['/v1/insights/dashboard']?.get).toBeDefined()
+    expect(document.paths['/v1/insights/exercises/{exerciseKey}']?.get).toBeDefined()
     expect(document.paths['/v1/plans/weekly']?.post).toBeDefined()
     expect(document.paths['/v1/plans/weekly']?.get).toBeDefined()
     expect(document.paths['/v1/plans/weekly/{planId}/decision']?.put).toBeDefined()

@@ -1,6 +1,12 @@
-import { BadRequestException, Controller, Get, Query } from '@nestjs/common'
+import { BadRequestException, Controller, Get, Param, Query } from '@nestjs/common'
 import { ApiBadRequestResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger'
-import { dashboardQuerySchema, dashboardSchema } from '@myfitness/contracts'
+import {
+  dashboardQuerySchema,
+  dashboardSchema,
+  exerciseInsightQuerySchema,
+  exerciseInsightSchema,
+  exerciseKeySchema,
+} from '@myfitness/contracts'
 
 import { Auth } from '../auth/auth.decorator'
 import { CurrentUser } from '../auth/current-user.decorator'
@@ -38,6 +44,51 @@ export class InsightsController {
         principal.userId,
         parsed.data.timezone,
         parsed.data.at ? new Date(parsed.data.at) : new Date(),
+      ),
+    )
+  }
+
+  @Get('exercises/:exerciseKey')
+  @ApiOperation({
+    summary: 'Aggregate completed-set evidence for one stable exercise identity',
+  })
+  @ApiOkResponse({ schema: openApiSchema(exerciseInsightSchema) })
+  @ApiBadRequestResponse({
+    description: 'Exercise key, timezone or reference timestamp is invalid.',
+  })
+  async exercise(
+    @CurrentUser() principal: AuthPrincipal,
+    @Param('exerciseKey') exerciseKey: string,
+    @Query('timezone') timezone: string | undefined,
+    @Query('at') at: string | undefined,
+  ) {
+    const parsedKey = exerciseKeySchema.safeParse(exerciseKey)
+    const parsedQuery = exerciseInsightQuerySchema.safeParse({ timezone, ...(at ? { at } : {}) })
+    if (!parsedKey.success || !parsedQuery.success) {
+      throw new BadRequestException({
+        message: 'exercise insight query is invalid',
+        issues: [
+          ...(parsedKey.success
+            ? []
+            : parsedKey.error.issues.map((issue) => ({
+                path: 'exerciseKey',
+                message: issue.message,
+              }))),
+          ...(parsedQuery.success
+            ? []
+            : parsedQuery.error.issues.map((issue) => ({
+                path: issue.path.join('.'),
+                message: issue.message,
+              }))),
+        ],
+      })
+    }
+    return exerciseInsightSchema.parse(
+      await this.insights.exercise(
+        principal.userId,
+        parsedKey.data,
+        parsedQuery.data.timezone,
+        parsedQuery.data.at ? new Date(parsedQuery.data.at) : new Date(),
       ),
     )
   }

@@ -6,6 +6,7 @@ import type {
   CreatePlanWorkoutLink,
   CreateWorkout,
   Dashboard,
+  ExerciseInsight,
   DevSession,
   VerifiedSession,
   FavoriteFood,
@@ -484,6 +485,12 @@ export const deleteProgressPhoto = (photoId: string) =>
 export const getDashboard = (timezone: string) =>
   authenticatedRequest<Dashboard>(
     `/insights/dashboard?timezone=${encodeURIComponent(timezone)}`,
+    'GET',
+  )
+
+export const getExerciseInsight = (exerciseKey: string, timezone: string) =>
+  authenticatedRequest<ExerciseInsight>(
+    `/insights/exercises/${encodeURIComponent(exerciseKey)}?timezone=${encodeURIComponent(timezone)}`,
     'GET',
   )
 

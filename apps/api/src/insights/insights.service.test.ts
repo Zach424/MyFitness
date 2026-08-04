@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildDashboard, type InsightRows } from './insights.service'
+import { buildDashboard, buildExerciseInsight, type InsightRows } from './insights.service'
 
 describe('dashboard aggregation', () => {
   it('builds local-day evidence, readiness and bounded trends', () => {
@@ -79,5 +79,57 @@ describe('dashboard aggregation', () => {
     )
     expect(dashboard.readiness.score).toBeNull()
     expect(dashboard.today.items).toEqual([])
+  })
+})
+
+describe('exercise insight projection', () => {
+  it('maps bounded completed-set rows without replacing snapshot history', () => {
+    const at = new Date('2026-08-05T12:00:00.000Z')
+    const points = Array.from({ length: 181 }, (_, index) => ({
+      workout_id: `00000000-0000-4000-${String(8_000 + index).padStart(4, '0')}-000000000001`,
+      workout_revision: index === 0 ? 2 : 1,
+      occurred_at: new Date(at.getTime() - index * 3_600_000),
+      name: index === 0 ? '纠正后的名称' : '历史名称',
+      category: 'strength' as const,
+      tracking_mode: 'reps_load' as const,
+      equipment: ['dumbbells' as const],
+      equipment_notes: null,
+      completed_set_count: '2',
+      total_set_count: '3',
+      total_reps: '20',
+      volume_kg: '240.126',
+      active_seconds: '0',
+      distance_meters: '0',
+    }))
+    const insight = buildExerciseInsight(
+      'goblet_squat',
+      [
+        {
+          days: 7,
+          session_count: '2',
+          completed_set_count: '4',
+          total_reps: '40',
+          volume_kg: '480.252',
+          active_seconds: '0',
+          distance_meters: '0',
+        },
+      ],
+      points,
+      'Asia/Shanghai',
+      at,
+    )
+
+    expect(insight.identity?.name).toBe('纠正后的名称')
+    expect(insight.windows[0]).toMatchObject({ days: 7, sessionCount: 2, volumeKg: 480.25 })
+    expect(insight.windows[1]).toMatchObject({ days: 30, sessionCount: 0 })
+    expect(insight.series).toHaveLength(180)
+    expect(insight.series[0]).toMatchObject({
+      localDate: '2026-08-05',
+      workoutRevision: 2,
+      completedSetCount: 2,
+      totalSetCount: 3,
+      volumeKg: 240.13,
+    })
+    expect(insight.hasMore).toBe(true)
   })
 })

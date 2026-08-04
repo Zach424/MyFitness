@@ -1,5 +1,12 @@
 import { Injectable } from '@nestjs/common'
-import type { Dashboard, TodayEvidence, TrendWindow } from '@myfitness/contracts'
+import type {
+  Dashboard,
+  ExerciseInsight,
+  ExerciseInsightPoint,
+  ExerciseInsightWindow,
+  TodayEvidence,
+  TrendWindow,
+} from '@myfitness/contracts'
 
 import { DatabaseService } from '../database/database.service'
 
@@ -38,6 +45,33 @@ export type InsightRows = {
   health: HealthRow[]
   workouts: WorkoutRow[]
   meals: MealRow[]
+}
+
+type ExerciseWindowRow = {
+  days: number
+  session_count: string
+  completed_set_count: string
+  total_reps: string
+  volume_kg: string
+  active_seconds: string
+  distance_meters: string
+}
+
+type ExercisePointRow = {
+  workout_id: string
+  workout_revision: number
+  occurred_at: Date
+  name: string
+  category: ExerciseInsightPoint['identity']['category']
+  tracking_mode: ExerciseInsightPoint['identity']['trackingMode']
+  equipment: ExerciseInsightPoint['identity']['equipment']
+  equipment_notes: string | null
+  completed_set_count: string
+  total_set_count: string
+  total_reps: string
+  volume_kg: string
+  active_seconds: string
+  distance_meters: string
 }
 
 const metricLabels: Record<string, string> = {
@@ -91,6 +125,60 @@ const localDay = (date: Date, timezone: string) => {
 }
 
 const timeValue = (value: Date) => value.getTime()
+
+const exerciseWindow = (days: 7 | 30 | 90, row?: ExerciseWindowRow): ExerciseInsightWindow => ({
+  days,
+  sessionCount: Number(row?.session_count ?? 0),
+  completedSetCount: Number(row?.completed_set_count ?? 0),
+  totalReps: Number(row?.total_reps ?? 0),
+  volumeKg: round(Number(row?.volume_kg ?? 0), 2),
+  activeMinutes: round(Number(row?.active_seconds ?? 0) / 60, 1),
+  distanceKm: round(Number(row?.distance_meters ?? 0) / 1_000, 2),
+})
+
+const exercisePoint = (row: ExercisePointRow, timezone: string): ExerciseInsightPoint => ({
+  workoutId: row.workout_id,
+  workoutRevision: row.workout_revision,
+  occurredAt: row.occurred_at.toISOString(),
+  localDate: localDay(row.occurred_at, timezone),
+  identity: {
+    name: row.name,
+    category: row.category,
+    trackingMode: row.tracking_mode,
+    equipment: row.equipment,
+    equipmentNotes: row.equipment_notes,
+  },
+  completedSetCount: Number(row.completed_set_count),
+  totalSetCount: Number(row.total_set_count),
+  totalReps: Number(row.total_reps),
+  volumeKg: round(Number(row.volume_kg), 2),
+  activeMinutes: round(Number(row.active_seconds) / 60, 1),
+  distanceKm: round(Number(row.distance_meters) / 1_000, 2),
+})
+
+export const buildExerciseInsight = (
+  exerciseKey: string,
+  windowRows: ExerciseWindowRow[],
+  pointRows: ExercisePointRow[],
+  timezone: string,
+  at = new Date(),
+): ExerciseInsight => {
+  const series = pointRows.slice(0, 180).map((row) => exercisePoint(row, timezone))
+  return {
+    generatedAt: at.toISOString(),
+    timezone,
+    exerciseKey,
+    identity: series[0]?.identity ?? null,
+    windows: ([7, 30, 90] as const).map((days) =>
+      exerciseWindow(
+        days,
+        windowRows.find((row) => row.days === days),
+      ),
+    ),
+    series,
+    hasMore: pointRows.length > 180,
+  }
+}
 
 export const buildDashboard = (rows: InsightRows, timezone: string, at = new Date()): Dashboard => {
   const today = localDay(at, timezone)
@@ -252,5 +340,68 @@ export class InsightsService {
       timezone,
       at,
     )
+  }
+
+  async exercise(userId: string, exerciseKey: string, timezone: string, at = new Date()) {
+    const [windows, points] = await Promise.all([
+      this.database.query<ExerciseWindowRow>(
+        `
+          WITH windows(days) AS (VALUES (7), (30), (90))
+          SELECT windows.days,
+            COUNT(DISTINCT w.id) FILTER (WHERE s.id IS NOT NULL)::text AS session_count,
+            COUNT(s.id)::text AS completed_set_count,
+            COALESCE(SUM(s.reps), 0)::text AS total_reps,
+            COALESCE(SUM(s.canonical_load_kg * s.reps), 0)::text AS volume_kg,
+            COALESCE(SUM(s.duration_seconds), 0)::text AS active_seconds,
+            COALESCE(SUM(s.distance_meters), 0)::text AS distance_meters
+          FROM windows
+          LEFT JOIN workout_sessions w
+            ON w.user_id = $1
+            AND w.deleted_at IS NULL
+            AND w.started_at <= $3
+            AND w.started_at >= $3::timestamptz - make_interval(days => windows.days)
+          LEFT JOIN workout_exercises e
+            ON e.workout_id = w.id AND e.exercise_key = $2
+          LEFT JOIN workout_sets s
+            ON s.exercise_id = e.id AND s.completed = TRUE
+          GROUP BY windows.days
+          ORDER BY windows.days
+        `,
+        [userId, exerciseKey, at],
+      ),
+      this.database.query<ExercisePointRow>(
+        `
+          SELECT w.id AS workout_id, w.revision AS workout_revision,
+            w.started_at AS occurred_at,
+            (ARRAY_AGG(e.name ORDER BY e.position, e.id))[1] AS name,
+            (ARRAY_AGG(e.category ORDER BY e.position, e.id))[1] AS category,
+            (ARRAY_AGG(e.tracking_mode ORDER BY e.position, e.id))[1] AS tracking_mode,
+            (JSONB_AGG(e.equipment ORDER BY e.position, e.id)->0) AS equipment,
+            (ARRAY_AGG(e.equipment_notes ORDER BY e.position, e.id))[1] AS equipment_notes,
+            COUNT(s.id) FILTER (WHERE s.completed)::text AS completed_set_count,
+            COUNT(s.id)::text AS total_set_count,
+            COALESCE(SUM(s.reps) FILTER (WHERE s.completed), 0)::text AS total_reps,
+            COALESCE(
+              SUM(s.canonical_load_kg * s.reps) FILTER (WHERE s.completed), 0
+            )::text AS volume_kg,
+            COALESCE(SUM(s.duration_seconds) FILTER (WHERE s.completed), 0)::text AS active_seconds,
+            COALESCE(SUM(s.distance_meters) FILTER (WHERE s.completed), 0)::text AS distance_meters
+          FROM workout_sessions w
+          JOIN workout_exercises e ON e.workout_id = w.id AND e.exercise_key = $2
+          JOIN workout_sets s ON s.exercise_id = e.id
+          WHERE w.user_id = $1
+            AND w.deleted_at IS NULL
+            AND w.started_at <= $3
+            AND w.started_at >= $3::timestamptz - INTERVAL '90 days'
+          GROUP BY w.id
+          HAVING COUNT(s.id) FILTER (WHERE s.completed) > 0
+          ORDER BY w.started_at DESC, w.created_at DESC, w.id DESC
+          LIMIT 181
+        `,
+        [userId, exerciseKey, at],
+      ),
+    ])
+
+    return buildExerciseInsight(exerciseKey, windows.rows, points.rows, timezone, at)
   }
 }

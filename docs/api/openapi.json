@@ -3109,6 +3109,256 @@
         "tags": ["insights"]
       }
     },
+    "/v1/insights/exercises/{exerciseKey}": {
+      "get": {
+        "operationId": "InsightsController_exercise",
+        "parameters": [
+          { "name": "exerciseKey", "required": true, "in": "path", "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "generatedAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "timezone": { "type": "string", "minLength": 1, "maxLength": 64 },
+                    "exerciseKey": { "type": "string", "pattern": "^[a-z0-9_]{2,80}$" },
+                    "identity": {
+                      "nullable": true,
+                      "type": "object",
+                      "properties": {
+                        "name": { "type": "string", "minLength": 1, "maxLength": 80 },
+                        "category": {
+                          "type": "string",
+                          "enum": ["strength", "cardio", "mobility"]
+                        },
+                        "trackingMode": {
+                          "nullable": true,
+                          "type": "string",
+                          "enum": ["reps_load", "duration", "duration_distance"]
+                        },
+                        "equipment": {
+                          "maxItems": 6,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "enum": [
+                              "bodyweight",
+                              "dumbbells",
+                              "barbell",
+                              "kettlebell",
+                              "resistance_band",
+                              "bench",
+                              "pull_up_bar",
+                              "cable_machine",
+                              "cardio_machine",
+                              "bicycle",
+                              "open_space",
+                              "other"
+                            ]
+                          }
+                        },
+                        "equipmentNotes": {
+                          "nullable": true,
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 120
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "category",
+                        "trackingMode",
+                        "equipment",
+                        "equipmentNotes"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "windows": {
+                      "minItems": 3,
+                      "maxItems": 3,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "sessionCount": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "completedSetCount": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "totalReps": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "volumeKg": { "type": "number", "minimum": 0 },
+                          "activeMinutes": { "type": "number", "minimum": 0 },
+                          "distanceKm": { "type": "number", "minimum": 0 },
+                          "days": {
+                            "anyOf": [
+                              { "type": "number", "enum": [7] },
+                              { "type": "number", "enum": [30] },
+                              { "type": "number", "enum": [90] }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "sessionCount",
+                          "completedSetCount",
+                          "totalReps",
+                          "volumeKg",
+                          "activeMinutes",
+                          "distanceKm",
+                          "days"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "series": {
+                      "maxItems": 180,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "completedSetCount": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "totalReps": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "volumeKg": { "type": "number", "minimum": 0 },
+                          "activeMinutes": { "type": "number", "minimum": 0 },
+                          "distanceKm": { "type": "number", "minimum": 0 },
+                          "workoutId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "workoutRevision": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "exclusiveMinimum": true,
+                            "maximum": 9007199254740991
+                          },
+                          "occurredAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                          },
+                          "localDate": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+                          "identity": {
+                            "type": "object",
+                            "properties": {
+                              "name": { "type": "string", "minLength": 1, "maxLength": 80 },
+                              "category": {
+                                "type": "string",
+                                "enum": ["strength", "cardio", "mobility"]
+                              },
+                              "trackingMode": {
+                                "nullable": true,
+                                "type": "string",
+                                "enum": ["reps_load", "duration", "duration_distance"]
+                              },
+                              "equipment": {
+                                "maxItems": 6,
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "enum": [
+                                    "bodyweight",
+                                    "dumbbells",
+                                    "barbell",
+                                    "kettlebell",
+                                    "resistance_band",
+                                    "bench",
+                                    "pull_up_bar",
+                                    "cable_machine",
+                                    "cardio_machine",
+                                    "bicycle",
+                                    "open_space",
+                                    "other"
+                                  ]
+                                }
+                              },
+                              "equipmentNotes": {
+                                "nullable": true,
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 120
+                              }
+                            },
+                            "required": [
+                              "name",
+                              "category",
+                              "trackingMode",
+                              "equipment",
+                              "equipmentNotes"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "totalSetCount": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "exclusiveMinimum": true,
+                            "maximum": 9007199254740991
+                          }
+                        },
+                        "required": [
+                          "completedSetCount",
+                          "totalReps",
+                          "volumeKg",
+                          "activeMinutes",
+                          "distanceKm",
+                          "workoutId",
+                          "workoutRevision",
+                          "occurredAt",
+                          "localDate",
+                          "identity",
+                          "totalSetCount"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "hasMore": { "type": "boolean" }
+                  },
+                  "required": [
+                    "generatedAt",
+                    "timezone",
+                    "exerciseKey",
+                    "identity",
+                    "windows",
+                    "series",
+                    "hasMore"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": { "description": "Exercise key, timezone or reference timestamp is invalid." },
+          "401": { "description": "Bearer token is missing, invalid, expired or revoked." }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Aggregate completed-set evidence for one stable exercise identity",
+        "tags": ["insights"]
+      }
+    },
     "/v1/nutrition/meals": {
       "post": {
         "operationId": "NutritionController_create",

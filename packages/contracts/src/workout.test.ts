@@ -62,7 +62,7 @@ describe('workout contracts', () => {
     expect(createWorkoutSchema.safeParse(missingUnit).success).toBe(false)
   })
 
-  it('rejects reversed time and duplicate positions', () => {
+  it('rejects reversed time, duplicate positions and duplicate exercise identities', () => {
     expect(
       createWorkoutSchema.safeParse({
         ...workout,
@@ -70,6 +70,13 @@ describe('workout contracts', () => {
         exercises: [...workout.exercises, workout.exercises[0]],
       }).success,
     ).toBe(false)
+
+    const duplicateKey = structuredClone(workout)
+    duplicateKey.exercises.push({
+      ...structuredClone(workout.exercises[0]!),
+      position: 2,
+    })
+    expect(createWorkoutSchema.safeParse(duplicateKey).success).toBe(false)
   })
 
   it('requires details for other equipment and rejects duplicate equipment snapshots', () => {

@@ -1,5 +1,8 @@
 import * as z from 'zod'
 
+import { exerciseEquipmentSchema, exerciseTrackingModeSchema } from './exercise-catalog'
+import { exerciseCategorySchema, exerciseKeySchema } from './workout'
+
 export const evidenceKindSchema = z.enum(['body', 'recovery', 'workout', 'nutrition'])
 
 export const todayEvidenceSchema = z
@@ -69,6 +72,60 @@ export const dashboardQuerySchema = z
     }
   })
 
+const exerciseInsightMetricsSchema = z
+  .object({
+    sessionCount: z.number().int().min(0),
+    completedSetCount: z.number().int().min(0),
+    totalReps: z.number().int().min(0),
+    volumeKg: z.number().finite().min(0),
+    activeMinutes: z.number().finite().min(0),
+    distanceKm: z.number().finite().min(0),
+  })
+  .strict()
+
+export const exerciseInsightWindowSchema = exerciseInsightMetricsSchema.safeExtend({
+  days: z.union([z.literal(7), z.literal(30), z.literal(90)]),
+})
+
+export const exerciseInsightIdentitySchema = z
+  .object({
+    name: z.string().trim().min(1).max(80),
+    category: exerciseCategorySchema,
+    trackingMode: exerciseTrackingModeSchema.nullable(),
+    equipment: z.array(exerciseEquipmentSchema).max(6),
+    equipmentNotes: z.string().trim().min(1).max(120).nullable(),
+  })
+  .strict()
+
+export const exerciseInsightPointSchema = exerciseInsightMetricsSchema
+  .omit({ sessionCount: true })
+  .safeExtend({
+    workoutId: z.string().uuid(),
+    workoutRevision: z.number().int().positive(),
+    occurredAt: z.string().datetime({ offset: true }),
+    localDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    identity: exerciseInsightIdentitySchema,
+    totalSetCount: z.number().int().positive(),
+  })
+  .strict()
+
+export const exerciseInsightSchema = z
+  .object({
+    generatedAt: z.string().datetime({ offset: true }),
+    timezone: z.string().trim().min(1).max(64),
+    exerciseKey: exerciseKeySchema,
+    identity: exerciseInsightIdentitySchema.nullable(),
+    windows: z.array(exerciseInsightWindowSchema).length(3),
+    series: z.array(exerciseInsightPointSchema).max(180),
+    hasMore: z.boolean(),
+  })
+  .strict()
+
+export const exerciseInsightQuerySchema = dashboardQuerySchema
+
 export type Dashboard = z.infer<typeof dashboardSchema>
 export type TodayEvidence = z.infer<typeof todayEvidenceSchema>
 export type TrendWindow = z.infer<typeof trendWindowSchema>
+export type ExerciseInsight = z.infer<typeof exerciseInsightSchema>
+export type ExerciseInsightWindow = z.infer<typeof exerciseInsightWindowSchema>
+export type ExerciseInsightPoint = z.infer<typeof exerciseInsightPointSchema>

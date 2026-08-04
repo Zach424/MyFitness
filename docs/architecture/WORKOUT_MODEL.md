@@ -1,6 +1,6 @@
 # Workout record model
 
-Status: implemented in iteration 005; server-authoritative completion hardened in iteration 032; explicit plan-session relationship added in iteration 036; user-owned exercise catalog and snapshot semantics added in iteration 037
+Status: implemented in iteration 005; server-authoritative completion hardened in iteration 032; explicit plan-session relationship added in iteration 036; user-owned exercise catalog and snapshot semantics added in iteration 037; stable-key exercise observation added in iteration 038
 
 Workout records are user-owned observations of what was actually attempted and completed. They are not exercise prescriptions, readiness diagnoses or claims that greater volume is always better.
 
@@ -23,7 +23,7 @@ workout session
       └─ completed flag
 ```
 
-The API accepts strength, cardio and mobility structures through one explicit set contract. A set must contain repetitions, duration or distance. Load and unit are paired, and a loaded set also requires repetitions. Exercise positions are unique within a session and set positions are unique within an exercise.
+The API accepts strength, cardio and mobility structures through one explicit set contract. A set must contain repetitions, duration or distance. Load and unit are paired, and a loaded set also requires repetitions. Exercise positions and stable exercise keys are unique within a session, and set positions are unique within an exercise.
 
 `trackingMode` is one of `reps_load`, `duration` or `duration_distance`. Equipment uses a bounded vocabulary; `other` requires `equipmentNotes`. New clients send both fields explicitly. Older snapshots that predate iteration 037 remain readable through category-based client fallback, but that inference is not written back as new evidence.
 
@@ -52,11 +52,25 @@ Migration `0021_authoritative_workout_status.sql` backfills the relational statu
 
 Migration `0023_user_exercise_catalog.sql` adds tracking/equipment snapshot columns to `workout_exercises`. These fields describe what the user selected when the workout was recorded; they are not joined to a current catalog definition at read time.
 
+Migration `0024_exercise_insight_index.sql` adds `(workout_id, exercise_key)` lookup support for the read projection. It stores no duplicate trend data.
+
 ## Exercise catalog and history boundary
 
 The active picker combines the versioned `starter-2026-08-05-v1` catalog with owner-created entries. A custom definition has a stable key, display name, aliases, category, tracking mode, equipment and optional equipment notes. Creation is idempotent, correction uses an expected revision, and archive removes the definition from active search while keeping immutable definition revisions.
 
 Selecting an entry copies its visible semantics into the workout draft and then the saved exercise snapshot. Renaming, changing equipment or archiving the definition does not update an open draft or any stored workout. The workout `catalogKey` can support later grouping, but there is deliberately no live foreign key that grants a mutable directory authority over historical fact display.
+
+## Exercise observation projection
+
+`GET /v1/insights/exercises/:exerciseKey` groups by the exact stable key, never by display name. It reads only current, non-deleted workout rows. A corrected workout therefore contributes its latest relational graph, while soft deletion removes it from the projection without deleting immutable workout history.
+
+Every metric is gated by `completed = true`. A workout counts as an exercise session only when that exact exercise has at least one completed set. Returned points still expose completed and total set counts, so partial evidence such as `2/3` remains visible without the third set affecting repetitions, canonical volume, duration or distance.
+
+PostgreSQL returns full 7/30/90 elapsed-day summaries plus at most 181 recent rows from the 90-day window. The API emits the newest 180 and an explicit `hasMore` flag. Occurrence instants determine ordering/window membership; a validated IANA timezone produces each point's display `localDate`.
+
+Each point carries its saved name, category, tracking mode, equipment and optional note plus the current workout revision. The response's top-level identity is only the newest point's convenience snapshot. Same-name different-key exercises remain separate, and a catalog rename cannot rewrite earlier point labels.
+
+The client charts one unit at a time according to the newest recorded tracking mode and lists all completed-only metrics separately. The projection does not calculate estimated maximums, infer movement quality, label progress or prescribe load changes. See [ADR-0036](decisions/0036-stable-key-exercise-insights.md).
 
 ## Repeat-last semantics
 

@@ -48,7 +48,7 @@ Implemented foundation:
 - Workout session, ordered exercise and ordered set rows form one bounded relational aggregate. Server-side domain rules normalize load, calculate completed-only summaries and derive `completed` only when every persisted set is complete; deprecated client status hints are ignored. Each accepted aggregate state is also stored as an immutable JSON snapshot.
 - A dependency-free versioned starter catalog and owner-scoped custom exercise directory provide aliases, explicit tracking modes and equipment. Catalog create/correct/archive has immutable revisions, while workouts snapshot the selected definition fields instead of live-joining mutable directory content.
 - Nutrition meal/item rows snapshot food composition and display/canonical portions. Server-side rules calculate nutrient totals; owner favorites are independent snapshots and each meal revision retains the full accepted aggregate.
-- A read-only insights projection queries confirmed source rows for the requested timezone and produces Today evidence, nullable three-day readiness and 7/30/90-day totals without persisted duplicate state.
+- Read-only insight projections query confirmed/current source rows without persisted duplicate state. The dashboard produces Today evidence, nullable three-day readiness and cross-domain 7/30/90-day totals; the exercise endpoint groups only by an exact stable exercise key, gates every metric/session on completed sets, returns snapshot-bound points and recomputes after workout correction/deletion.
 - A deterministic weekly-plan aggregate snapshots onboarding revision and evidence, stores the current JSONB plan plus immutable revisions, and re-checks current eligibility before an accept/modify transition.
 - A FastAPI worker exposes an authenticated provider-neutral explanation endpoint. Local fixture and OpenAI Responses adapters share a strict schema; the business API owns consent, authorization, idempotency, validation, fallback and persistence.
 - AI explanation runs are minimized, fingerprinted and bound to the exact plan revision plus prompt/model/validator/consent provenance. Raw prompts and input payloads are not persisted.
@@ -88,7 +88,7 @@ The implemented identity, profile, goal, risk and consent invariants are documen
 
 ADR-0004 records the health-record replacement, append-only snapshot, soft-delete and optimistic-concurrency decision.
 
-The workout aggregate, derived-value rules, exercise-catalog boundary and safe repeat semantics are documented in [WORKOUT_MODEL.md](WORKOUT_MODEL.md). ADR-0005 records the normalized current graph plus immutable-snapshot decision; ADR-0030 makes set evidence authoritative for workout completion status; ADR-0035 keeps mutable exercise definitions separate from workout fact snapshots.
+The workout aggregate, derived-value rules, exercise-catalog boundary, exercise observation and safe repeat semantics are documented in [WORKOUT_MODEL.md](WORKOUT_MODEL.md). ADR-0005 records the normalized current graph plus immutable-snapshot decision; ADR-0030 makes set evidence authoritative for workout completion status; ADR-0035 keeps mutable exercise definitions separate from workout fact snapshots; ADR-0036 defines stable-key completed-only insight projection.
 
 The meal snapshot, canonical-gram, catalog/favorite and photo-candidate boundaries are documented in [NUTRITION_MODEL.md](NUTRITION_MODEL.md). ADR-0006 records why mutable catalogs cannot be historical truth.
 
