@@ -2,7 +2,7 @@
 
 面向普通健身人群的多端记录与 AI 规划产品。产品把身体、训练、饮食和恢复数据整理为可解释、可调整、可持续执行的个人计划。
 
-> 当前阶段：首个服务候选 `v0.1.0-rc.1` 已发布验证；本地产品已完成身体/训练/饮食观察、用户自建动作与食物目录、隐私优先进度照、计划到实际训练的显式关联，以及三类记录编辑器的 24 小时账号隔离草稿恢复。新建与修改草稿均可恢复；修改草稿绑定聚合 ID 和基础修订号，只在服务器仍是同一版本时恢复，旧版本或已删除目标会被安全拒绝。用户还可用本地时间 + IANA 时区回填/纠正记录；无效、夏令时缺口、未选择的重复时刻和未来时间会被拒绝，未改动的历史时间保留原始秒/毫秒。H5 OIDC 已完成本地/provider-double 验收，H5 与 WeApp 均有来源绑定、实际字节校验的 `candidate` 确定性 TAR 契约。现有 `v0.1.0-rc.1` 仍是“仅服务”历史记录；托管账号、真实微信/OIDC 凭据、精确回调域名/TLS/CORS、集中遥测、数据托管和责任人仍是上线门槛，当前没有声称已经承载公网流量。
+> 当前阶段：首个服务候选 `v0.1.0-rc.1` 已发布验证；本地产品已完成身体/训练/饮食观察、用户自建动作与食物目录、隐私优先进度照、计划到实际训练的显式关联，以及三类记录编辑器的 24 小时账号隔离草稿恢复。Today 可打开按 IANA 时区生成的 28 天跨域历史日历；空白只表示没有记录，选择过去日期可进入任一编辑器，但必须补充真实时分才能保存。新建与修改草稿均可恢复；修改草稿绑定聚合 ID 和基础修订号，只在服务器仍是同一版本时恢复，旧版本或已删除目标会被安全拒绝。无效、夏令时缺口、未选择的重复时刻和未来时间会被拒绝，未改动的历史时间保留原始秒/毫秒。H5 OIDC 已完成本地/provider-double 验收，H5 与 WeApp 均有来源绑定、实际字节校验的 `candidate` 确定性 TAR 契约。现有 `v0.1.0-rc.1` 仍是“仅服务”历史记录；托管账号、真实微信/OIDC 凭据、精确回调域名/TLS/CORS、集中遥测、数据托管和责任人仍是上线门槛，当前没有声称已经承载公网流量。
 
 ## 产品边界
 
@@ -172,6 +172,7 @@ Playwright 会复用或启动 API、H5 与管理员预览服务。`pnpm db:down`
 - [架构决策 0040](docs/architecture/decisions/0040-recoverable-sensitive-local-drafts.md)
 - [架构决策 0041](docs/architecture/decisions/0041-explicit-occurrence-time.md)
 - [架构决策 0042](docs/architecture/decisions/0042-conflict-safe-correction-drafts.md)
+- [架构决策 0043](docs/architecture/decisions/0043-timezone-safe-history-calendar.md)
 - [健康记录数据模型](docs/architecture/HEALTH_RECORD_MODEL.md)
 - [训练记录数据模型](docs/architecture/WORKOUT_MODEL.md)
 - [饮食记录数据模型](docs/architecture/NUTRITION_MODEL.md)
@@ -234,6 +235,7 @@ Playwright 会复用或启动 API、H5 与管理员预览服务。`pnpm db:down`
 - [第 42 轮档案](docs/iterations/042-recoverable-sensitive-local-drafts.md)
 - [第 43 轮档案](docs/iterations/043-explicit-occurrence-time.md)
 - [第 44 轮档案](docs/iterations/044-conflict-safe-correction-drafts.md)
+- [第 45 轮档案](docs/iterations/045-timezone-safe-history-calendar.md)
 - [移动端视觉证据](output/playwright/iteration-001-mobile.png)
 - [宽屏视觉证据](output/playwright/iteration-001-wide.png)
 - [建档移动端证据](output/playwright/iteration-003-onboarding-mobile.png)
@@ -257,6 +259,7 @@ Playwright 会复用或启动 API、H5 与管理员预览服务。`pnpm db:down`
 - [可恢复本地草稿移动端证据](output/playwright/iteration-042-recoverable-draft-mobile.png)
 - [明确发生时间移动端证据](output/playwright/iteration-043-occurrence-time-mobile.png)
 - [冲突安全修改草稿移动端证据](output/playwright/iteration-044-correction-draft-mobile.png)
+- [时区安全历史日历移动端证据](output/playwright/iteration-045-history-calendar-mobile.png)
 - [周计划宽屏证据](output/playwright/iteration-008-plans-wide.png)
 - [AI 边注移动端证据](output/playwright/iteration-009-ai-mobile.png)
 - [AI 边注宽屏证据](output/playwright/iteration-009-ai-wide.png)

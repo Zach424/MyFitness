@@ -1,6 +1,6 @@
 # Architecture baseline
 
-Status: accepted and implemented through the iteration-044 conflict-safe correction-draft boundary; changes require an ADR.
+Status: accepted and implemented through the iteration-045 timezone-safe history-calendar boundary; changes require an ADR.
 
 ## System shape
 
@@ -51,6 +51,7 @@ Implemented foundation:
 - A dependency-free versioned starter catalog and owner-scoped custom exercise directory provide aliases, explicit tracking modes and equipment. Catalog create/correct/archive has immutable revisions, while workouts snapshot the selected definition fields instead of live-joining mutable directory content.
 - A versioned starter food catalog plus owner-scoped custom definitions provide searchable aliases, required user-confirmed nutrition provenance, idempotent create, optimistic correction/archive and immutable definition revisions. Nutrition meal/item rows snapshot the selected composition and display/canonical portions; server-side rules calculate totals, owner favorites remain independent snapshots and definition edits cannot rewrite either fact boundary.
 - Read-only insight projections query confirmed/current source rows without persisted duplicate state. The dashboard produces Today evidence, nullable three-day readiness and cross-domain totals; exercise groups one stable key/completed sets; nutrition generates 90 local dates with null missing evidence; health groups one exact confirmed metric in its canonical unit while retaining display/source/timezone/revision provenance. Every projection recomputes after source correction/deletion.
+- The cross-domain history calendar is a separate bounded read model: PostgreSQL generates exactly 28 local dates in the requested IANA timezone and left-joins owner-visible current health, workout and meal occurrence facts no later than the reference instant. It returns counts and `hasRecords`, never zero-behavior/adherence claims, and persists no duplicate calendar state. A client backfill intent carries only a validated local date (at most 90 days old) and timezone; editors keep that date incomplete until the user supplies a real minute and the existing occurrence resolver maps it to an instant.
 - A deterministic weekly-plan aggregate snapshots onboarding revision and evidence, stores the current JSONB plan plus immutable revisions, and re-checks current eligibility before an accept/modify transition.
 - A FastAPI worker exposes an authenticated provider-neutral explanation endpoint. Local fixture and OpenAI Responses adapters share a strict schema; the business API owns consent, authorization, idempotency, validation, fallback and persistence.
 - AI explanation runs are minimized, fingerprinted and bound to the exact plan revision plus prompt/model/validator/consent provenance. Raw prompts and input payloads are not persisted.

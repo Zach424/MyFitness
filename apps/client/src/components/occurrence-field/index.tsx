@@ -1,7 +1,11 @@
 import { Button, Input, Text, View } from '@tarojs/components'
 
 import { buttonA11yProps } from '../../lib/accessibility'
-import { occurrenceValidationMessage, resolveLocalOccurrence } from '../../lib/occurrence-time'
+import {
+  isOccurrenceDateOnly,
+  occurrenceValidationMessage,
+  resolveLocalOccurrence,
+} from '../../lib/occurrence-time'
 import './index.scss'
 
 type OccurrenceFieldProps = {
@@ -23,8 +27,9 @@ export const OccurrenceField = ({
   onTimeZoneChange,
   onOffsetChange,
 }: OccurrenceFieldProps) => {
+  const dateOnly = isOccurrenceDateOnly(value)
   const inspection = resolveLocalOccurrence(value, timeZone)
-  const error = occurrenceValidationMessage(value, timeZone, selectedOffsetMinutes)
+  const error = dateOnly ? '' : occurrenceValidationMessage(value, timeZone, selectedOffsetMinutes)
   const selected = resolveLocalOccurrence(value, timeZone, selectedOffsetMinutes)
 
   return (
@@ -76,10 +81,12 @@ export const OccurrenceField = ({
         </View>
       ) : null}
       <Text className={`occurrence-field__note ${error ? 'occurrence-field__note--error' : ''}`}>
-        {error ||
-          (selected.status === 'resolved'
-            ? `${selected.candidate.offsetLabel} · 保存为准确时刻`
-            : '留空保存为现在；可回填过去记录。')}
+        {dateOnly
+          ? '历史日期已带入；请补充 HH:mm 后再保存。'
+          : error ||
+            (selected.status === 'resolved'
+              ? `${selected.candidate.offsetLabel} · 保存为准确时刻`
+              : '留空保存为现在；可回填过去记录。')}
       </Text>
     </View>
   )

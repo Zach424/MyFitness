@@ -1,6 +1,54 @@
 import { describe, expect, it } from 'vitest'
 
-import { exerciseInsightSchema, healthInsightSchema, nutritionInsightSchema } from './insights'
+import {
+  exerciseInsightSchema,
+  healthInsightSchema,
+  historyCalendarSchema,
+  nutritionInsightSchema,
+} from './insights'
+
+describe('history calendar contract', () => {
+  const days = Array.from({ length: 28 }, (_, index) => {
+    const localDate = new Date(Date.UTC(2026, 6, 9 + index)).toISOString().slice(0, 10)
+    return {
+      localDate,
+      hasRecords: index === 27,
+      healthRecordCount: index === 27 ? 2 : 0,
+      workoutCount: 0,
+      mealCount: index === 27 ? 1 : 0,
+    }
+  })
+
+  it('keeps exactly 28 ascending current-record days and explicit empty dates', () => {
+    const parsed = historyCalendarSchema.parse({
+      generatedAt: '2026-08-05T12:00:00.000Z',
+      timezone: 'Asia/Shanghai',
+      startDate: '2026-07-09',
+      endDate: '2026-08-05',
+      series: days,
+    })
+
+    expect(parsed.series).toHaveLength(28)
+    expect(parsed.series[0]).toMatchObject({ hasRecords: false, healthRecordCount: 0 })
+    expect(parsed.series[27]).toMatchObject({
+      hasRecords: true,
+      healthRecordCount: 2,
+      mealCount: 1,
+    })
+  })
+
+  it('rejects a zero-count day marked as recorded and mismatched range labels', () => {
+    expect(
+      historyCalendarSchema.safeParse({
+        generatedAt: '2026-08-05T12:00:00.000Z',
+        timezone: 'Asia/Shanghai',
+        startDate: '2026-07-10',
+        endDate: '2026-08-05',
+        series: days.map((day, index) => (index === 0 ? { ...day, hasRecords: true } : day)),
+      }).success,
+    ).toBe(false)
+  })
+})
 
 describe('exercise insight contract', () => {
   it('keeps evidence windows and snapshot identity explicit', () => {

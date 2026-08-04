@@ -68,3 +68,7 @@ An unsaved correction draft retains the record UUID and the revision used to ope
 The latest 180 current points retain canonical value/unit and the original display value/unit, source provenance, occurrence instant, original record timezone and current revision. Correction and soft deletion recompute the projection from `health_records`; immutable revisions remain history rather than simultaneous trend facts. No rollup is persisted or added to privacy export.
 
 The dedicated client page may position values on a relative calibration strip, but higher/lower carries no positive or negative meaning. It must not combine metrics/units, include candidates, diagnose, define normal ranges, grade goals, compare people or prescribe behavior. ADR-0039 records this boundary.
+
+## Cross-domain history-calendar participation
+
+`GET /v1/insights/history-calendar` counts each current, non-deleted, confirmed health record on the local date obtained from `occurred_at` in the requested IANA timezone. It intentionally combines body and recovery into one source count and exposes neither values nor metric labels. Candidate rows, later-than-reference rows, immutable revisions and other owners never contribute. Correction can move the count to another local date; soft deletion removes it on the next read. A selected calendar day may prefill the editor's date and timezone, but no occurrence instant exists until the user adds a valid local minute.

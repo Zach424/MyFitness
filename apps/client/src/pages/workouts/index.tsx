@@ -11,6 +11,7 @@ import type {
 import { exerciseEquipmentOptions } from '@myfitness/contracts/exercise-catalog.constants'
 
 import { buttonA11yProps } from '../../lib/accessibility'
+import { parseBackfillIntent } from '../../lib/backfill-intent'
 import { LocalDraftNotice } from '../../components/local-draft-notice'
 import { OccurrenceField } from '../../components/occurrence-field'
 import { currentCorrectionTarget } from '../../lib/correction-draft'
@@ -93,7 +94,15 @@ const catalogRequestKey = () =>
   `exercise-${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`}`
 
 const WorkoutsPage = () => {
-  const [draft, setDraft] = useState<WorkoutDraft>(initialWorkoutDraft)
+  const backfill = useRef(parseBackfillIntent(Taro.getCurrentInstance().router?.params)).current
+  const [draft, setDraft] = useState<WorkoutDraft>(() => {
+    const next = initialWorkoutDraft()
+    if (backfill) {
+      next.startedLocal = backfill.localDate
+      next.timezone = backfill.timezone
+    }
+    return next
+  })
   const [workouts, setWorkouts] = useState<Workout[]>([])
   const [catalogItems, setCatalogItems] = useState<ExerciseCatalogItem[]>([])
   const [catalogQuery, setCatalogQuery] = useState('')

@@ -299,6 +299,10 @@ test('user explicitly reconciles a planned session with one actual workout', asy
   await page.getByRole('button', { name: '采用这份计划' }).click()
   await expect(page.getByText('已采用', { exact: true })).toBeVisible()
 
+  const localMidnight = Date.parse(`${sessionDate}T00:00:00+08:00`)
+  const actualWorkoutEnd = Math.min(localMidnight + 30 * 60_000, Date.now() - 1_000)
+  const actualWorkoutStart = Math.max(localMidnight, actualWorkoutEnd - 30 * 60_000)
+
   const workout = await page.request.post('http://127.0.0.1:3100/v1/workouts', {
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -316,8 +320,8 @@ test('user explicitly reconciles a planned session with one actual workout', asy
           sets: [{ position: 1, kind: 'working', reps: 8, completed: true }],
         },
       ],
-      startedAt: `${sessionDate}T10:00:00+08:00`,
-      endedAt: `${sessionDate}T10:30:00+08:00`,
+      startedAt: new Date(actualWorkoutStart).toISOString(),
+      endedAt: new Date(actualWorkoutEnd).toISOString(),
       timezone: 'Asia/Shanghai',
       painLevel: 0,
       fatigue: 2,

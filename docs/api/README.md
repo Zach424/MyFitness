@@ -46,6 +46,7 @@ Local routes after `pnpm db:up`, `pnpm db:migrate`, and `pnpm dev:api`:
 - Food-photo signed preview: `GET http://127.0.0.1:3100/v1/nutrition/photo-candidates/:photoId/preview?token=...`
 - Food-photo confirm/delete: `POST .../:photoId/confirm` / `DELETE .../:photoId`
 - Today and trends: `GET http://127.0.0.1:3100/v1/insights/dashboard?timezone=Asia%2FShanghai`
+- Cross-domain 28-day history: `GET http://127.0.0.1:3100/v1/insights/history-calendar?timezone=Asia%2FShanghai`
 - Weekly-plan generation/list: `POST/GET http://127.0.0.1:3100/v1/plans/weekly`
 - Weekly-plan decision: `PUT http://127.0.0.1:3100/v1/plans/weekly/:planId/decision`
 - Weekly-plan history: `GET http://127.0.0.1:3100/v1/plans/weekly/:planId/history`

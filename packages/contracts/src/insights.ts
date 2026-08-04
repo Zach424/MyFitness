@@ -73,6 +73,49 @@ export const dashboardQuerySchema = z
     }
   })
 
+export const historyCalendarDaySchema = z
+  .object({
+    localDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    hasRecords: z.boolean(),
+    healthRecordCount: z.number().int().min(0),
+    workoutCount: z.number().int().min(0),
+    mealCount: z.number().int().min(0),
+  })
+  .strict()
+  .superRefine((day, ctx) => {
+    const count = day.healthRecordCount + day.workoutCount + day.mealCount
+    if (day.hasRecords !== count > 0) {
+      ctx.addIssue({ code: 'custom', message: 'hasRecords must match current record counts' })
+    }
+  })
+
+export const historyCalendarSchema = z
+  .object({
+    generatedAt: z.string().datetime({ offset: true }),
+    timezone: z.string().trim().min(1).max(64),
+    startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    series: z.array(historyCalendarDaySchema).length(28),
+  })
+  .strict()
+  .superRefine((calendar, ctx) => {
+    if (calendar.series[0]?.localDate !== calendar.startDate) {
+      ctx.addIssue({ code: 'custom', message: 'startDate must match the first calendar day' })
+    }
+    if (calendar.series.at(-1)?.localDate !== calendar.endDate) {
+      ctx.addIssue({ code: 'custom', message: 'endDate must match the final calendar day' })
+    }
+    if (
+      calendar.series.some(
+        (day, index) => index > 0 && day.localDate <= (calendar.series[index - 1]?.localDate ?? ''),
+      )
+    ) {
+      ctx.addIssue({ code: 'custom', message: 'calendar days must be strictly ascending' })
+    }
+  })
+
+export const historyCalendarQuerySchema = dashboardQuerySchema
+
 const exerciseInsightMetricsSchema = z
   .object({
     sessionCount: z.number().int().min(0),
@@ -285,6 +328,8 @@ export const healthInsightSchema = z
 export const healthInsightQuerySchema = dashboardQuerySchema
 
 export type Dashboard = z.infer<typeof dashboardSchema>
+export type HistoryCalendar = z.infer<typeof historyCalendarSchema>
+export type HistoryCalendarDay = z.infer<typeof historyCalendarDaySchema>
 export type TodayEvidence = z.infer<typeof todayEvidenceSchema>
 export type TrendWindow = z.infer<typeof trendWindowSchema>
 export type ExerciseInsight = z.infer<typeof exerciseInsightSchema>

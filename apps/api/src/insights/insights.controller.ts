@@ -8,6 +8,8 @@ import {
   exerciseKeySchema,
   healthInsightQuerySchema,
   healthInsightSchema,
+  historyCalendarQuerySchema,
+  historyCalendarSchema,
   metricCodeSchema,
   nutritionInsightQuerySchema,
   nutritionInsightSchema,
@@ -46,6 +48,36 @@ export class InsightsController {
     }
     return dashboardSchema.parse(
       await this.insights.dashboard(
+        principal.userId,
+        parsed.data.timezone,
+        parsed.data.at ? new Date(parsed.data.at) : new Date(),
+      ),
+    )
+  }
+
+  @Get('history-calendar')
+  @ApiOperation({
+    summary: 'Project 28 current owner-visible local days across health, meals and workouts',
+  })
+  @ApiOkResponse({ schema: openApiSchema(historyCalendarSchema) })
+  @ApiBadRequestResponse({ description: 'Timezone or reference timestamp is invalid.' })
+  async historyCalendar(
+    @CurrentUser() principal: AuthPrincipal,
+    @Query('timezone') timezone: string | undefined,
+    @Query('at') at: string | undefined,
+  ) {
+    const parsed = historyCalendarQuerySchema.safeParse({ timezone, ...(at ? { at } : {}) })
+    if (!parsed.success) {
+      throw new BadRequestException({
+        message: 'history calendar query is invalid',
+        issues: parsed.error.issues.map((issue) => ({
+          path: issue.path.join('.'),
+          message: issue.message,
+        })),
+      })
+    }
+    return historyCalendarSchema.parse(
+      await this.insights.historyCalendar(
         principal.userId,
         parsed.data.timezone,
         parsed.data.at ? new Date(parsed.data.at) : new Date(),

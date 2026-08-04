@@ -7,6 +7,8 @@ import type {
   HealthInsight,
   HealthInsightPoint,
   HealthInsightWindow,
+  HistoryCalendar,
+  HistoryCalendarDay,
   MetricCode,
   NutritionInsight,
   NutritionInsightDay,
@@ -114,6 +116,13 @@ type HealthPointRow = {
   display_unit: UnitCode
   source_kind: HealthInsightPoint['source']['kind']
   source_metadata: Record<string, string>
+}
+
+type HistoryCalendarDayRow = {
+  local_date: string
+  health_record_count: string
+  workout_count: string
+  meal_count: string
 }
 
 const metricLabels: Record<string, string> = {
@@ -350,6 +359,34 @@ export const buildHealthInsight = (
   }
 }
 
+const historyCalendarDay = (row: HistoryCalendarDayRow): HistoryCalendarDay => {
+  const healthRecordCount = Number(row.health_record_count)
+  const workoutCount = Number(row.workout_count)
+  const mealCount = Number(row.meal_count)
+  return {
+    localDate: row.local_date,
+    hasRecords: healthRecordCount + workoutCount + mealCount > 0,
+    healthRecordCount,
+    workoutCount,
+    mealCount,
+  }
+}
+
+export const buildHistoryCalendar = (
+  rows: HistoryCalendarDayRow[],
+  timezone: string,
+  at = new Date(),
+): HistoryCalendar => {
+  const series = rows.map(historyCalendarDay)
+  return {
+    generatedAt: at.toISOString(),
+    timezone,
+    startDate: series[0]!.localDate,
+    endDate: series.at(-1)!.localDate,
+    series,
+  }
+}
+
 export const buildDashboard = (rows: InsightRows, timezone: string, at = new Date()): Dashboard => {
   const today = localDay(at, timezone)
   const evidence: TodayEvidence[] = [
@@ -510,6 +547,70 @@ export class InsightsService {
       timezone,
       at,
     )
+  }
+
+  async historyCalendar(userId: string, timezone: string, at = new Date()) {
+    const days = await this.database.query<HistoryCalendarDayRow>(
+      `
+        WITH day_series AS (
+          SELECT generate_series(
+            (($3::timestamptz AT TIME ZONE $2)::date - 27)::timestamp,
+            (($3::timestamptz AT TIME ZONE $2)::date)::timestamp,
+            INTERVAL '1 day'
+          )::date AS local_date
+        ), facts AS (
+          SELECT (occurred_at AT TIME ZONE $2)::date AS local_date,
+            COUNT(*)::bigint AS health_record_count,
+            0::bigint AS workout_count,
+            0::bigint AS meal_count
+          FROM health_records
+          WHERE user_id = $1
+            AND deleted_at IS NULL
+            AND status = 'confirmed'
+            AND occurred_at <= $3
+            AND occurred_at >= (
+              (($3::timestamptz AT TIME ZONE $2)::date - 27)::timestamp AT TIME ZONE $2
+            )
+          GROUP BY local_date
+          UNION ALL
+          SELECT (started_at AT TIME ZONE $2)::date AS local_date,
+            0::bigint,
+            COUNT(*)::bigint,
+            0::bigint
+          FROM workout_sessions
+          WHERE user_id = $1
+            AND deleted_at IS NULL
+            AND started_at <= $3
+            AND started_at >= (
+              (($3::timestamptz AT TIME ZONE $2)::date - 27)::timestamp AT TIME ZONE $2
+            )
+          GROUP BY local_date
+          UNION ALL
+          SELECT (occurred_at AT TIME ZONE $2)::date AS local_date,
+            0::bigint,
+            0::bigint,
+            COUNT(*)::bigint
+          FROM nutrition_meals
+          WHERE user_id = $1
+            AND deleted_at IS NULL
+            AND occurred_at <= $3
+            AND occurred_at >= (
+              (($3::timestamptz AT TIME ZONE $2)::date - 27)::timestamp AT TIME ZONE $2
+            )
+          GROUP BY local_date
+        )
+        SELECT day_series.local_date::text AS local_date,
+          COALESCE(SUM(facts.health_record_count), 0)::text AS health_record_count,
+          COALESCE(SUM(facts.workout_count), 0)::text AS workout_count,
+          COALESCE(SUM(facts.meal_count), 0)::text AS meal_count
+        FROM day_series
+        LEFT JOIN facts ON facts.local_date = day_series.local_date
+        GROUP BY day_series.local_date
+        ORDER BY day_series.local_date
+      `,
+      [userId, timezone, at],
+    )
+    return buildHistoryCalendar(days.rows, timezone, at)
   }
 
   async exercise(userId: string, exerciseKey: string, timezone: string, at = new Date()) {

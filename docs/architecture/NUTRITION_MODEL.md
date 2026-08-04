@@ -60,6 +60,8 @@ No-meal days return record counts of zero but nutrient values of `null`. They me
 
 The client may calculate a recorded-day average from a window total divided by `recordedDays`, and must label it exactly as such. It must not divide by missing days, infer complete intake, set targets, calculate adherence, compare users, judge food quality or provide diet/medical advice. ADR-0038 records the calendar, uncertainty and non-prescriptive boundary.
 
+The separate cross-domain 28-day calendar counts current, non-deleted meal aggregates rather than nutrients or items. It uses each meal's occurrence local date in the requested timezone, excludes later-than-reference facts and recomputes after correction/deletion. Zero meals on a returned day means only no qualifying record, exactly matching the daily observation's missing-evidence rule. A selected date can open a new meal draft with that date and timezone, but save is blocked until the user supplies the actual local minute.
+
 ## Revisions and ownership
 
 The current aggregate is normalized into `nutrition_meals` and ordered `nutrition_meal_items`. Creation uses a per-user idempotency key/request hash. Full replacement requires the current revision; deletion is soft deletion from routine lists. Every accepted create/update/delete appends a complete JSON snapshot to `nutrition_meal_revisions` in the same transaction.

@@ -4,9 +4,32 @@ import {
   buildDashboard,
   buildExerciseInsight,
   buildHealthInsight,
+  buildHistoryCalendar,
   buildNutritionInsight,
   type InsightRows,
 } from './insights.service'
+
+describe('history calendar projection', () => {
+  it('keeps 28 ascending local days and derives recorded state only from counts', () => {
+    const rows = Array.from({ length: 28 }, (_, index) => ({
+      local_date: new Date(Date.UTC(2026, 6, 9 + index)).toISOString().slice(0, 10),
+      health_record_count: index === 27 ? '2' : '0',
+      workout_count: index === 26 ? '1' : '0',
+      meal_count: '0',
+    }))
+
+    const calendar = buildHistoryCalendar(
+      rows,
+      'Asia/Shanghai',
+      new Date('2026-08-05T12:00:00.000Z'),
+    )
+
+    expect(calendar).toMatchObject({ startDate: '2026-07-09', endDate: '2026-08-05' })
+    expect(calendar.series[0]).toMatchObject({ hasRecords: false })
+    expect(calendar.series[26]).toMatchObject({ hasRecords: true, workoutCount: 1 })
+    expect(calendar.series[27]).toMatchObject({ hasRecords: true, healthRecordCount: 2 })
+  })
+})
 
 describe('dashboard aggregation', () => {
   it('builds local-day evidence, readiness and bounded trends', () => {

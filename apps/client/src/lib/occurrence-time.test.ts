@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   formatZonedOccurrence,
+  isOccurrenceDateOnly,
   occurrenceInstant,
   occurrenceValidationMessage,
   preservedOccurrenceInstant,
@@ -9,6 +10,12 @@ import {
 } from './occurrence-time'
 
 describe('occurrence time boundary', () => {
+  it('keeps a valid date-only backfill value incomplete until time is supplied', () => {
+    expect(isOccurrenceDateOnly('2026-08-01')).toBe(true)
+    expect(isOccurrenceDateOnly('2026-02-30')).toBe(false)
+    expect(occurrenceValidationMessage('2026-08-01', 'Asia/Shanghai')).toContain('补充发生时分')
+  })
+
   it('resolves and formats an ordinary IANA-zoned local minute', () => {
     expect(resolveLocalOccurrence('2026-08-05 12:30', 'Asia/Shanghai')).toEqual({
       status: 'resolved',

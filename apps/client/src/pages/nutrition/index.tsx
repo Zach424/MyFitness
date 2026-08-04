@@ -12,6 +12,7 @@ import type {
 } from '@myfitness/contracts'
 
 import { buttonA11yProps } from '../../lib/accessibility'
+import { parseBackfillIntent } from '../../lib/backfill-intent'
 import { LocalDraftNotice } from '../../components/local-draft-notice'
 import { OccurrenceField } from '../../components/occurrence-field'
 import { currentCorrectionTarget } from '../../lib/correction-draft'
@@ -107,7 +108,15 @@ const catalogFoodSnapshot = (entry: FoodCatalogItem): FoodSnapshot => ({
 const confidenceLabels = { low: '低置信', medium: '中置信', high: '高置信' } as const
 
 const NutritionPage = () => {
-  const [draft, setDraft] = useState<MealDraft>(initialMealDraft)
+  const backfill = useRef(parseBackfillIntent(Taro.getCurrentInstance().router?.params)).current
+  const [draft, setDraft] = useState<MealDraft>(() => {
+    const next = initialMealDraft()
+    if (backfill) {
+      next.occurredLocal = backfill.localDate
+      next.timezone = backfill.timezone
+    }
+    return next
+  })
   const [meals, setMeals] = useState<Meal[]>([])
   const [favorites, setFavorites] = useState<FavoriteFood[]>([])
   const [foodCatalog, setFoodCatalog] = useState<FoodCatalogItem[]>([])

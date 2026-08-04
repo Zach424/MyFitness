@@ -34,6 +34,7 @@ const openRecords = () => void Taro.navigateTo({ url: '/pages/records/index' })
 const openWorkouts = () => void Taro.navigateTo({ url: '/pages/workouts/index' })
 const openNutrition = () => void Taro.navigateTo({ url: '/pages/nutrition/index' })
 const openPlans = () => void Taro.navigateTo({ url: '/pages/plans/index' })
+const openHistory = () => void Taro.navigateTo({ url: '/pages/history/index' })
 
 const timezone = () => {
   try {
@@ -258,6 +259,9 @@ const IndexPage = () => {
                 <Text className="reason-card__body">
                   只汇总已确认、未删除的数据；这些是观察窗口，不是目标或处方。
                 </Text>
+                <Button {...buttonA11yProps} className="text-action" onClick={openHistory}>
+                  打开 28 天历史日历 →
+                </Button>
                 <View className="trend-tabs">
                   {([7, 30, 90] as const).map((days) => (
                     <Button

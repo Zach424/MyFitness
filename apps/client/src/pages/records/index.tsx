@@ -9,6 +9,7 @@ import type {
 } from '@myfitness/contracts'
 
 import { buttonA11yProps } from '../../lib/accessibility'
+import { parseBackfillIntent } from '../../lib/backfill-intent'
 import { LocalDraftNotice } from '../../components/local-draft-notice'
 import { OccurrenceField } from '../../components/occurrence-field'
 import { currentCorrectionTarget } from '../../lib/correction-draft'
@@ -58,8 +59,17 @@ const errorMessage = (error: unknown) =>
   error instanceof ApiError || error instanceof Error ? error.message : '操作失败，请稍后重试'
 
 const RecordsPage = () => {
+  const backfill = useRef(parseBackfillIntent(Taro.getCurrentInstance().router?.params))
+  const newDraft = (metric: MetricCode) => {
+    const next = createDraft(metric)
+    if (backfill.current) {
+      next.occurredLocal = backfill.current.localDate
+      next.timezone = backfill.current.timezone
+    }
+    return next
+  }
   const [group, setGroup] = useState<RecordGroup>('body')
-  const [draft, setDraft] = useState<RecordDraft>(() => createDraft('body.weight'))
+  const [draft, setDraft] = useState<RecordDraft>(() => newDraft('body.weight'))
   const [records, setRecords] = useState<HealthRecord[]>([])
   const [editing, setEditing] = useState<HealthRecord>()
   const [deleting, setDeleting] = useState<HealthRecord>()
@@ -151,14 +161,14 @@ const RecordsPage = () => {
   const switchGroup = (nextGroup: RecordGroup) => {
     setGroup(nextGroup)
     setEditing(undefined)
-    setDraft(createDraft(groupMetrics[nextGroup][0]!))
+    setDraft(newDraft(groupMetrics[nextGroup][0]!))
     setFeedback('')
     requestKey.current = ''
   }
 
   const selectMetric = (metric: MetricCode) => {
     setEditing(undefined)
-    setDraft(createDraft(metric))
+    setDraft(newDraft(metric))
     setFeedback('')
     requestKey.current = ''
   }
@@ -188,6 +198,7 @@ const RecordsPage = () => {
         if (!requestKey.current) requestKey.current = createRequestKey()
         const created = await createHealthRecord(buildRecordRequest(draft), requestKey.current)
         recoverableDraft.clear()
+        backfill.current = null
         setRecords((current) => [created, ...current])
         setDraft(createDraft(created.metric))
         requestKey.current = ''
@@ -206,6 +217,7 @@ const RecordsPage = () => {
       Taro.pageScrollTo({ scrollTop: 0, duration: 240 })
       return
     }
+    backfill.current = null
     const nextGroup = metricUiDefinitions[record.metric].group
     setGroup(nextGroup)
     setDraft(draftFromRecord(record))
@@ -288,6 +300,7 @@ const RecordsPage = () => {
               }}
               onDiscard={() => {
                 recoverableDraft.clear()
+                backfill.current = null
                 setDraft(createDraft(draft.metric))
                 requestKey.current = ''
                 setFeedback('本地身体记录草稿已清除。')
@@ -300,6 +313,7 @@ const RecordsPage = () => {
               correctionRevision={recoverableDraft.saved.payload.correction?.baseRevision}
               onDiscard={() => {
                 recoverableDraft.clear()
+                backfill.current = null
                 setEditing(undefined)
                 setDraft(createDraft(draft.metric))
                 requestKey.current = ''

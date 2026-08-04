@@ -21,6 +21,7 @@ import type {
   HealthRecord,
   HealthRecordHistoryItem,
   HealthInsight,
+  HistoryCalendar,
   Meal,
   MealHistoryItem,
   MetricCode,
@@ -530,6 +531,12 @@ export const deleteProgressPhoto = (photoId: string) =>
 export const getDashboard = (timezone: string) =>
   authenticatedRequest<Dashboard>(
     `/insights/dashboard?timezone=${encodeURIComponent(timezone)}`,
+    'GET',
+  )
+
+export const getHistoryCalendar = (timezone: string) =>
+  authenticatedRequest<HistoryCalendar>(
+    `/insights/history-calendar?timezone=${encodeURIComponent(timezone)}`,
     'GET',
   )
 

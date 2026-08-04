@@ -1,6 +1,6 @@
 # Design system baseline
 
-Status: implemented and visually validated through iteration-044 correction-draft evidence
+Status: implemented and visually validated through iteration-045 history-calendar evidence
 
 Working brand: 衡迹 / MyFitness
 
@@ -408,6 +408,18 @@ The reviewed 390 px capture shows the recovery decision before the body editor, 
 Reviewed evidence:
 
 - [390 × 844 conflict-safe correction draft](../../output/playwright/iteration-044-correction-draft-mobile.png)
+
+## Timezone-safe history-calendar review — iteration 045
+
+Today's trend card now opens a separate **HISTORY LEDGER / 28D** sheet. The upper evidence map keeps all 28 local dates present: recorded days use the existing mineral/juniper vocabulary, while open days remain visible and quiet rather than disappearing. Every cell has a full accessible label; compact `身 / 训 / 餐` marks are reinforced by a text legend and never encode completion.
+
+The lower selected-day card deliberately says that an empty day is an evidence gap, not a behavioral conclusion. Its three backfill actions share one hierarchy, with body/recovery as the primary action and training/nutrition still directly available. Routing carries date and timezone only. In the destination editor the date-only value is explained as incomplete, avoids an alarming invalid style and still cannot save until `HH:mm` is entered.
+
+The 390 × 844 production-browser review seeded one day with one record from each domain, verified all 28 controls and the explicit blank-day copy, then opened body backfill. Date-only save failed visibly, a real minute saved successfully and returning to the calendar changed that day's source count without a reload workaround. Request, page and console error capture remained empty.
+
+Reviewed evidence:
+
+- [390 × 844 timezone-safe history calendar](../../output/playwright/iteration-045-history-calendar-mobile.png)
 
 ## Screenshot review checklist
 

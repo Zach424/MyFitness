@@ -46,6 +46,9 @@ const parseLocalParts = (value: string): LocalParts | null => {
   return { year, month, day, hour, minute }
 }
 
+export const isOccurrenceDateOnly = (value: string) =>
+  Boolean(value.trim() && parseLocalParts(`${value.trim()} 00:00`))
+
 const formatterFor = (timeZone: string) =>
   new Intl.DateTimeFormat('en-CA', {
     calendar: 'gregory',
@@ -165,6 +168,7 @@ export const occurrenceValidationMessage = (
   preferredOffsetMinutes?: number,
   now = Date.now(),
 ) => {
+  if (isOccurrenceDateOnly(value)) return '已带入日期，请补充发生时分（HH:mm）'
   const result = resolveLocalOccurrence(value, timeZone, preferredOffsetMinutes)
   if (result.status === 'empty') return ''
   if (result.status === 'invalid_format') return '请填写有效的 YYYY-MM-DD HH:mm'

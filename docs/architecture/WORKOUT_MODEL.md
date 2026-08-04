@@ -88,6 +88,10 @@ Repeat also copies the recorded tracking mode and equipment snapshot. It does no
 
 Correction drafts are distinct from repeat drafts. A correction retains the workout UUID and base revision and can be restored only after the current owner-visible list still reports that exact revision; stale/deleted targets are abandoned without a write. Saving a restored correction continues to send `expectedRevision`, while cancel/discard removes the local copy. Repeat drops all correction identity and creates a new session.
 
+## Cross-domain history-calendar participation
+
+`GET /v1/insights/history-calendar` counts each current, non-deleted workout once on the requested-timezone local date of `started_at`, regardless of partial or complete derived status. It does not sum sets, minutes or volume and does not infer that an unrecorded day lacked training. Corrections and soft deletions immediately change the source projection; immutable workout revisions remain historical audit evidence. Calendar backfill passes only date/timezone to a new draft, so the user must enter a real start minute and the normal independent end-time validation remains authoritative.
+
 ## Plan relationship
 
 The workout aggregate contains no plan fields. A separate owner-controlled link records the exact workout revision that the user selected for an accepted plan session revision. This avoids changing workout request hashes or allowing an older full-replacement client to remove a relationship it cannot represent.
