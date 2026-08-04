@@ -1,6 +1,6 @@
 # Nutrition record model
 
-Status: manual meal/photo records plus owner-created food definitions implemented through iteration 039
+Status: manual meal/photo records, owner-created food definitions and daily observation implemented through iteration 040
 
 Nutrition records are user-confirmed snapshots of food, portion and context. They support personal recall and later deterministic summaries; they are not dietary prescriptions, laboratory measurements or judgments about food quality.
 
@@ -49,6 +49,16 @@ Owner-created foods now live in a separate versioned definition aggregate. The s
 Selecting a definition copies its current values into the existing meal draft/snapshot. Later correction or archive cannot rewrite that draft, a persisted meal, meal history or a favorite. Archived definitions leave normal search but stay in owner history/export until account erasure. Owner values remain reference data, not verified provider or laboratory facts.
 
 The definition register is a dedicated H5/WeApp route; the meal page refreshes active entries on show and searches owner aliases. Food-photo candidates remain limited to the controlled starter catalog. Barcode/provider search, branded variants, recipes, non-gram household conversion rules and catalog reconciliation are deferred.
+
+## Daily observation
+
+`GET /v1/insights/nutrition` projects the current owner-visible meal/item graph into exactly 90 consecutive dates in one requested IANA timezone. The final date contains records no later than the optional reference instant. Each 7/30/90-day window is a suffix of that same series, so the daily ribbon and summary cannot disagree about which calendar days belong to the period.
+
+A saved meal is user-confirmed evidence; an editor draft or photo candidate is not. Correction replaces the current item graph and soft deletion removes a meal from the projection, while immutable meal revisions remain audit history. The projection persists no rollup and creates no new export/erasure collection.
+
+No-meal days return record counts of zero but nutrient values of `null`. They mean “no record,” never zero intake. Energy, protein, carbohydrate and fat are complete only for the saved items. Fiber additionally exposes known-label item count against total item count; known values may be summed, but no label produces `null`, not `0 g`.
+
+The client may calculate a recorded-day average from a window total divided by `recordedDays`, and must label it exactly as such. It must not divide by missing days, infer complete intake, set targets, calculate adherence, compare users, judge food quality or provide diet/medical advice. ADR-0038 records the calendar, uncertainty and non-prescriptive boundary.
 
 ## Revisions and ownership
 

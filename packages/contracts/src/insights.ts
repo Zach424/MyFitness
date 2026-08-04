@@ -123,9 +123,114 @@ export const exerciseInsightSchema = z
 
 export const exerciseInsightQuerySchema = dashboardQuerySchema
 
+const nutritionInsightNutrientsSchema = z
+  .object({
+    energyKcal: z.number().finite().min(0).nullable(),
+    proteinG: z.number().finite().min(0).nullable(),
+    carbohydrateG: z.number().finite().min(0).nullable(),
+    fatG: z.number().finite().min(0).nullable(),
+    fiberG: z.number().finite().min(0).nullable(),
+  })
+  .strict()
+
+const validateNutritionEvidence = (
+  evidence: {
+    mealCount: number
+    itemCount: number
+    fiberKnownItemCount: number
+    nutrients: z.infer<typeof nutritionInsightNutrientsSchema>
+  },
+  ctx: z.RefinementCtx,
+) => {
+  if (evidence.fiberKnownItemCount > evidence.itemCount) {
+    ctx.addIssue({
+      code: 'custom',
+      message: 'fiberKnownItemCount cannot exceed itemCount',
+      path: ['fiberKnownItemCount'],
+    })
+  }
+  const required = [
+    evidence.nutrients.energyKcal,
+    evidence.nutrients.proteinG,
+    evidence.nutrients.carbohydrateG,
+    evidence.nutrients.fatG,
+  ]
+  if (
+    evidence.mealCount === 0 &&
+    (evidence.itemCount !== 0 || required.some((value) => value !== null))
+  ) {
+    ctx.addIssue({ code: 'custom', message: 'missing evidence must keep required nutrients null' })
+  }
+  if (
+    evidence.mealCount > 0 &&
+    (evidence.itemCount === 0 || required.some((value) => value === null))
+  ) {
+    ctx.addIssue({ code: 'custom', message: 'recorded evidence requires item and nutrient totals' })
+  }
+  if ((evidence.fiberKnownItemCount === 0) !== (evidence.nutrients.fiberG === null)) {
+    ctx.addIssue({
+      code: 'custom',
+      message: 'fiber total is present only when at least one item has fiber evidence',
+      path: ['nutrients', 'fiberG'],
+    })
+  }
+}
+
+export const nutritionInsightDaySchema = z
+  .object({
+    localDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    hasEvidence: z.boolean(),
+    mealCount: z.number().int().min(0),
+    itemCount: z.number().int().min(0),
+    fiberKnownItemCount: z.number().int().min(0),
+    nutrients: nutritionInsightNutrientsSchema,
+  })
+  .strict()
+  .superRefine((day, ctx) => {
+    validateNutritionEvidence(day, ctx)
+    if (day.hasEvidence !== day.mealCount > 0) {
+      ctx.addIssue({ code: 'custom', message: 'hasEvidence must match mealCount' })
+    }
+  })
+
+export const nutritionInsightWindowSchema = z
+  .object({
+    days: z.union([z.literal(7), z.literal(30), z.literal(90)]),
+    recordedDays: z.number().int().min(0),
+    missingDays: z.number().int().min(0),
+    mealCount: z.number().int().min(0),
+    itemCount: z.number().int().min(0),
+    fiberKnownItemCount: z.number().int().min(0),
+    nutrients: nutritionInsightNutrientsSchema,
+  })
+  .strict()
+  .superRefine((window, ctx) => {
+    validateNutritionEvidence(window, ctx)
+    if (window.recordedDays + window.missingDays !== window.days) {
+      ctx.addIssue({ code: 'custom', message: 'recorded and missing days must fill the window' })
+    }
+    if ((window.recordedDays === 0) !== (window.mealCount === 0)) {
+      ctx.addIssue({ code: 'custom', message: 'recordedDays must match meal evidence' })
+    }
+  })
+
+export const nutritionInsightSchema = z
+  .object({
+    generatedAt: z.string().datetime({ offset: true }),
+    timezone: z.string().trim().min(1).max(64),
+    windows: z.array(nutritionInsightWindowSchema).length(3),
+    series: z.array(nutritionInsightDaySchema).length(90),
+  })
+  .strict()
+
+export const nutritionInsightQuerySchema = dashboardQuerySchema
+
 export type Dashboard = z.infer<typeof dashboardSchema>
 export type TodayEvidence = z.infer<typeof todayEvidenceSchema>
 export type TrendWindow = z.infer<typeof trendWindowSchema>
 export type ExerciseInsight = z.infer<typeof exerciseInsightSchema>
 export type ExerciseInsightWindow = z.infer<typeof exerciseInsightWindowSchema>
 export type ExerciseInsightPoint = z.infer<typeof exerciseInsightPointSchema>
+export type NutritionInsight = z.infer<typeof nutritionInsightSchema>
+export type NutritionInsightDay = z.infer<typeof nutritionInsightDaySchema>
+export type NutritionInsightWindow = z.infer<typeof nutritionInsightWindowSchema>

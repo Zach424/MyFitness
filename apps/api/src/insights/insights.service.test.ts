@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildDashboard, buildExerciseInsight, type InsightRows } from './insights.service'
+import {
+  buildDashboard,
+  buildExerciseInsight,
+  buildNutritionInsight,
+  type InsightRows,
+} from './insights.service'
 
 describe('dashboard aggregation', () => {
   it('builds local-day evidence, readiness and bounded trends', () => {
@@ -131,5 +136,66 @@ describe('exercise insight projection', () => {
       volumeKg: 240.13,
     })
     expect(insight.hasMore).toBe(true)
+  })
+})
+
+describe('nutrition insight projection', () => {
+  it('fills 90 local days without turning missing records into zero intake', () => {
+    const rows = Array.from({ length: 90 }, (_, index) => ({
+      local_date: new Date(Date.UTC(2026, 4, 8 + index)).toISOString().slice(0, 10),
+      meal_count: '0',
+      item_count: '0',
+      fiber_known_item_count: '0',
+      energy_kcal: null,
+      protein_g: null,
+      carbohydrate_g: null,
+      fat_g: null,
+      fiber_g: null,
+    }))
+    rows[84] = {
+      ...rows[84]!,
+      meal_count: '1',
+      item_count: '2',
+      fiber_known_item_count: '1',
+      energy_kcal: '420.126',
+      protein_g: '32.555',
+      carbohydrate_g: '48',
+      fat_g: '11',
+      fiber_g: '4.499',
+    }
+    rows[89] = {
+      ...rows[89]!,
+      meal_count: '2',
+      item_count: '3',
+      fiber_known_item_count: '0',
+      energy_kcal: '800',
+      protein_g: '50',
+      carbohydrate_g: '90',
+      fat_g: '25',
+      fiber_g: null,
+    }
+
+    const insight = buildNutritionInsight(
+      rows,
+      'Asia/Shanghai',
+      new Date('2026-08-05T12:00:00.000Z'),
+    )
+
+    expect(insight.series).toHaveLength(90)
+    expect(insight.series[0]).toMatchObject({
+      localDate: '2026-05-08',
+      hasEvidence: false,
+      nutrients: { energyKcal: null, fiberG: null },
+    })
+    expect(insight.windows[0]).toMatchObject({
+      days: 7,
+      recordedDays: 2,
+      missingDays: 5,
+      mealCount: 3,
+      itemCount: 5,
+      fiberKnownItemCount: 1,
+      nutrients: { energyKcal: 1220.13, fiberG: 4.5 },
+    })
+    expect(insight.windows[1]).toMatchObject({ days: 30, recordedDays: 2 })
   })
 })

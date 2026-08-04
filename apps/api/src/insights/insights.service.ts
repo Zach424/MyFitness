@@ -4,6 +4,9 @@ import type {
   ExerciseInsight,
   ExerciseInsightPoint,
   ExerciseInsightWindow,
+  NutritionInsight,
+  NutritionInsightDay,
+  NutritionInsightWindow,
   TodayEvidence,
   TrendWindow,
 } from '@myfitness/contracts'
@@ -72,6 +75,18 @@ type ExercisePointRow = {
   volume_kg: string
   active_seconds: string
   distance_meters: string
+}
+
+type NutritionDayRow = {
+  local_date: string
+  meal_count: string
+  item_count: string
+  fiber_known_item_count: string
+  energy_kcal: string | null
+  protein_g: string | null
+  carbohydrate_g: string | null
+  fat_g: string | null
+  fiber_g: string | null
 }
 
 const metricLabels: Record<string, string> = {
@@ -177,6 +192,80 @@ export const buildExerciseInsight = (
     ),
     series,
     hasMore: pointRows.length > 180,
+  }
+}
+
+const nullableRound = (value: string | null, precision = 2) =>
+  value === null ? null : round(Number(value), precision)
+
+const nutritionDay = (row: NutritionDayRow): NutritionInsightDay => {
+  const mealCount = Number(row.meal_count)
+  return {
+    localDate: row.local_date,
+    hasEvidence: mealCount > 0,
+    mealCount,
+    itemCount: Number(row.item_count),
+    fiberKnownItemCount: Number(row.fiber_known_item_count),
+    nutrients: {
+      energyKcal: nullableRound(row.energy_kcal),
+      proteinG: nullableRound(row.protein_g),
+      carbohydrateG: nullableRound(row.carbohydrate_g),
+      fatG: nullableRound(row.fat_g),
+      fiberG: nullableRound(row.fiber_g),
+    },
+  }
+}
+
+const sumRecordedNutrient = (
+  days: NutritionInsightDay[],
+  nutrient: keyof NutritionInsightDay['nutrients'],
+) => {
+  const values = days.flatMap((day) => {
+    const value = day.nutrients[nutrient]
+    return value === null ? [] : [value]
+  })
+  return values.length
+    ? round(
+        values.reduce((total, value) => total + value, 0),
+        2,
+      )
+    : null
+}
+
+const nutritionWindow = (
+  series: NutritionInsightDay[],
+  days: 7 | 30 | 90,
+): NutritionInsightWindow => {
+  const selected = series.slice(-days)
+  const recordedDays = selected.filter((day) => day.hasEvidence).length
+  return {
+    days,
+    recordedDays,
+    missingDays: days - recordedDays,
+    mealCount: selected.reduce((total, day) => total + day.mealCount, 0),
+    itemCount: selected.reduce((total, day) => total + day.itemCount, 0),
+    fiberKnownItemCount: selected.reduce((total, day) => total + day.fiberKnownItemCount, 0),
+    nutrients: {
+      energyKcal: sumRecordedNutrient(selected, 'energyKcal'),
+      proteinG: sumRecordedNutrient(selected, 'proteinG'),
+      carbohydrateG: sumRecordedNutrient(selected, 'carbohydrateG'),
+      fatG: sumRecordedNutrient(selected, 'fatG'),
+      fiberG: sumRecordedNutrient(selected, 'fiberG'),
+    },
+  }
+}
+
+export const buildNutritionInsight = (
+  rows: NutritionDayRow[],
+  timezone: string,
+  at = new Date(),
+): NutritionInsight => {
+  const series = rows.map(nutritionDay)
+  return {
+    generatedAt: at.toISOString(),
+    timezone,
+    windows: ([7, 30, 90] as const).map((days) => nutritionWindow(series, days)),
+    series,
   }
 }
 
@@ -403,5 +492,44 @@ export class InsightsService {
     ])
 
     return buildExerciseInsight(exerciseKey, windows.rows, points.rows, timezone, at)
+  }
+
+  async nutrition(userId: string, timezone: string, at = new Date()) {
+    const days = await this.database.query<NutritionDayRow>(
+      `
+        WITH day_series AS (
+          SELECT generate_series(
+            (($3::timestamptz AT TIME ZONE $2)::date - 89)::timestamp,
+            (($3::timestamptz AT TIME ZONE $2)::date)::timestamp,
+            INTERVAL '1 day'
+          )::date AS local_date
+        )
+        SELECT day_series.local_date::text AS local_date,
+          COUNT(DISTINCT meals.id)::text AS meal_count,
+          COUNT(items.id)::text AS item_count,
+          COUNT(items.id) FILTER (WHERE items.fiber_g_per_100g IS NOT NULL)::text
+            AS fiber_known_item_count,
+          SUM(items.energy_kcal_per_100g * items.canonical_grams / 100)::text AS energy_kcal,
+          SUM(items.protein_g_per_100g * items.canonical_grams / 100)::text AS protein_g,
+          SUM(items.carbohydrate_g_per_100g * items.canonical_grams / 100)::text
+            AS carbohydrate_g,
+          SUM(items.fat_g_per_100g * items.canonical_grams / 100)::text AS fat_g,
+          SUM(items.fiber_g_per_100g * items.canonical_grams / 100)::text AS fiber_g
+        FROM day_series
+        LEFT JOIN nutrition_meals meals
+          ON meals.user_id = $1
+          AND meals.deleted_at IS NULL
+          AND meals.occurred_at <= $3
+          AND meals.occurred_at >= (
+            (($3::timestamptz AT TIME ZONE $2)::date - 89)::timestamp AT TIME ZONE $2
+          )
+          AND (meals.occurred_at AT TIME ZONE $2)::date = day_series.local_date
+        LEFT JOIN nutrition_meal_items items ON items.meal_id = meals.id
+        GROUP BY day_series.local_date
+        ORDER BY day_series.local_date
+      `,
+      [userId, timezone, at],
+    )
+    return buildNutritionInsight(days.rows, timezone, at)
   }
 }

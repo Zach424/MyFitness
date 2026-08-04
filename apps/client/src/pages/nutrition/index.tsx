@@ -431,7 +431,14 @@ const NutritionPage = () => {
               <Text>衡迹</Text>
               <Text className="nutrition-wordmark__en">MEAL NOTE</Text>
             </View>
-            <Text className="nutrition-count metric">{meals.length}</Text>
+            <Button
+              {...buttonA11yProps}
+              className="nutrition-observation-link"
+              aria-label="查看每日营养趋势"
+              onClick={() => void Taro.navigateTo({ url: '/pages/nutrition-insights/index' })}
+            >
+              趋势 →
+            </Button>
           </View>
 
           <View className="nutrition-hero">

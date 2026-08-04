@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { exerciseInsightSchema } from './insights'
+import { exerciseInsightSchema, nutritionInsightSchema } from './insights'
 
 describe('exercise insight contract', () => {
   it('keeps evidence windows and snapshot identity explicit', () => {
@@ -60,6 +60,80 @@ describe('exercise insight contract', () => {
       windows: [],
       series: [],
       hasMore: false,
+    })
+
+    expect(result.success).toBe(false)
+  })
+})
+
+describe('nutrition insight contract', () => {
+  const missingDay = (index: number) => ({
+    localDate: `2026-07-${String(index + 1).padStart(2, '0')}`,
+    hasEvidence: false,
+    mealCount: 0,
+    itemCount: 0,
+    fiberKnownItemCount: 0,
+    nutrients: {
+      energyKcal: null,
+      proteinG: null,
+      carbohydrateG: null,
+      fatG: null,
+      fiberG: null,
+    },
+  })
+
+  it('keeps missing intake evidence nullable and fiber coverage explicit', () => {
+    const series = Array.from({ length: 90 }, (_, index) => missingDay(index))
+    series[89] = {
+      localDate: '2026-09-29',
+      hasEvidence: true,
+      mealCount: 2,
+      itemCount: 3,
+      fiberKnownItemCount: 2,
+      nutrients: {
+        energyKcal: 860,
+        proteinG: 54,
+        carbohydrateG: 95,
+        fatG: 24,
+        fiberG: 9,
+      },
+    }
+    const parsed = nutritionInsightSchema.parse({
+      generatedAt: '2026-09-29T12:00:00.000Z',
+      timezone: 'Asia/Shanghai',
+      windows: [7, 30, 90].map((days) => ({
+        days,
+        recordedDays: 1,
+        missingDays: days - 1,
+        mealCount: 2,
+        itemCount: 3,
+        fiberKnownItemCount: 2,
+        nutrients: {
+          energyKcal: 860,
+          proteinG: 54,
+          carbohydrateG: 95,
+          fatG: 24,
+          fiberG: 9,
+        },
+      })),
+      series,
+    })
+
+    expect(parsed.series[0]?.nutrients.energyKcal).toBeNull()
+    expect(parsed.series[89]).toMatchObject({ fiberKnownItemCount: 2, itemCount: 3 })
+  })
+
+  it('rejects zero-filled missing days and invented fiber totals', () => {
+    const series = Array.from({ length: 90 }, (_, index) => missingDay(index))
+    series[0] = {
+      ...series[0]!,
+      nutrients: { ...series[0]!.nutrients, energyKcal: 0, fiberG: 0 },
+    }
+    const result = nutritionInsightSchema.safeParse({
+      generatedAt: '2026-09-29T12:00:00.000Z',
+      timezone: 'Asia/Shanghai',
+      windows: [],
+      series,
     })
 
     expect(result.success).toBe(false)

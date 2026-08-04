@@ -347,6 +347,20 @@ Reviewed evidence:
 
 - [390 × 844 owner-food register](../../output/playwright/iteration-039-user-food-catalog-mobile.png)
 
+## Daily nutrition-observation review — iteration 040
+
+The meal ledger links to a dedicated **NUTRITION OBSERVATION** page whose signature is an **Evidence Ribbon**, not a target ring. Every compact cell is one requested-timezone local date. Juniper depth shows relative recorded magnitude for the selected nutrient; diagonal hatching means no meal record; a centered dot means meals exist but that nutrient is unlabelled. Pattern and shape carry the state before color does.
+
+The 7/30/90 controls change both the complete date ribbon and the summary. Four quiet fields expose recorded days, missing days, saved meals and an explicitly labelled recorded-day-only average. Energy/P/C/F/fiber switches never introduce green/red thresholds, goal percentages or food-quality language. A separate label-coverage note names known fiber items against all food items, while the seven-day text ledger repeats “no record does not mean zero intake.”
+
+The 390 px production-browser review saved one current meal, opened the default 30-day ribbon, proved one recorded day and 29 missing days, then switched to seven days and fiber. The first assertion found two equal visible values named only `1`; the final summary fields expose distinct accessible names such as `有记录日 1` and `已保存餐次 1`. Request/page/console error capture remained empty.
+
+The new lazy route raises only total trees. H5 entry, largest async JavaScript, WeApp vendor and largest page JavaScript remain under their unchanged ceilings. The visual direction follows the existing Mineral/Juniper logbook language but spends its one expressive device on the evidence ribbon rather than adding decoration.
+
+Reviewed evidence:
+
+- [390 × 844 daily nutrition observation](../../output/playwright/iteration-040-nutrition-observation-mobile.png)
+
 ## Screenshot review checklist
 
 - The Rhythm Rail remains understandable without color.

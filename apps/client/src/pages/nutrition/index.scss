@@ -20,7 +20,7 @@
 
 .nutrition-topbar {
   display: grid;
-  grid-template-columns: 44px 1fr 44px;
+  grid-template-columns: 44px 1fr auto;
   align-items: center;
 }
 
@@ -60,10 +60,18 @@
   letter-spacing: 0.17em;
 }
 
-.nutrition-count {
-  color: var(--color-muted);
-  font-size: 11px;
-  text-align: right;
+.nutrition-observation-link {
+  width: auto;
+  min-height: 38px;
+  margin: 0;
+  padding: 0 10px;
+  border: 1px solid rgba(36, 76, 102, 0.18);
+  border-radius: var(--radius-round);
+  color: var(--color-mineral);
+  background: rgba(252, 253, 252, 0.94);
+  font-size: 9px;
+  font-weight: 720;
+  line-height: 36px;
 }
 
 .nutrition-hero {

@@ -1,0 +1,253 @@
+import { useEffect, useMemo, useState } from 'react'
+import { Button, ScrollView, Text, View } from '@tarojs/components'
+import Taro from '@tarojs/taro'
+import type { NutritionInsight } from '@myfitness/contracts'
+
+import { buttonA11yProps } from '../../lib/accessibility'
+import { ApiError, getNutritionInsight } from '../../lib/api'
+import {
+  nutritionEvidenceLevel,
+  nutritionInsightDays,
+  nutritionInsightMetricLabels,
+  nutritionInsightTimezone,
+  nutritionInsightValue,
+  recordedDayAverage,
+  type NutritionInsightMetric,
+} from '../nutrition/nutrition-insight.model'
+import './index.scss'
+
+const metrics: NutritionInsightMetric[] = [
+  'energyKcal',
+  'proteinG',
+  'carbohydrateG',
+  'fatG',
+  'fiberG',
+]
+
+const shortMetricLabels: Record<NutritionInsightMetric, string> = {
+  energyKcal: '能量',
+  proteinG: '蛋白质',
+  carbohydrateG: '碳水',
+  fatG: '脂肪',
+  fiberG: '纤维',
+}
+
+const messageOf = (error: unknown) =>
+  error instanceof ApiError || error instanceof Error ? error.message : '营养观察加载失败'
+
+const displayValue = (value: number | null) => {
+  if (value === null) return '—'
+  return Number.isInteger(value) ? String(value) : value.toFixed(1).replace(/\.0$/, '')
+}
+
+const NutritionInsightsPage = () => {
+  const [days, setDays] = useState<7 | 30 | 90>(30)
+  const [metric, setMetric] = useState<NutritionInsightMetric>('energyKcal')
+  const [insight, setInsight] = useState<NutritionInsight>()
+  const [loading, setLoading] = useState(true)
+  const [feedback, setFeedback] = useState('')
+
+  useEffect(() => {
+    let active = true
+    void getNutritionInsight(nutritionInsightTimezone())
+      .then((result) => {
+        if (active) setInsight(result)
+      })
+      .catch((error: unknown) => {
+        if (active) setFeedback(messageOf(error))
+      })
+      .finally(() => {
+        if (active) setLoading(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [])
+
+  const window = insight?.windows.find((candidate) => candidate.days === days)
+  const points = useMemo(
+    () => (insight ? nutritionInsightDays(insight, days) : []),
+    [days, insight],
+  )
+  const maximum = Math.max(
+    0,
+    ...points.flatMap((point) => {
+      const value = nutritionInsightValue(point, metric)
+      return value === null ? [] : [value]
+    }),
+  )
+  const average = window ? recordedDayAverage(window, metric) : null
+  const recentDays = points.slice(-7).reverse()
+
+  return (
+    <View className="nutrition-observation-page">
+      <ScrollView className="nutrition-observation-scroll" scrollY enhanced showScrollbar={false}>
+        <View className="nutrition-observation-shell" aria-label="每日营养记录趋势">
+          <View className="nutrition-observation-topbar">
+            <Button
+              {...buttonA11yProps}
+              className="nutrition-observation-back"
+              aria-label="返回餐食记录"
+              onClick={() => void Taro.navigateBack()}
+            >
+              ←
+            </Button>
+            <View className="nutrition-observation-wordmark">
+              <Text>衡迹</Text>
+              <Text className="nutrition-observation-wordmark__en">NUTRITION OBSERVATION</Text>
+            </View>
+            <Text className="nutrition-observation-proof">当前餐次</Text>
+          </View>
+
+          <View className="nutrition-observation-intro">
+            <Text className="nutrition-observation-eyebrow">
+              LOCAL DAYS · EVIDENCE, NOT TARGETS
+            </Text>
+            <Text className="nutrition-observation-title">
+              看见记录留下的形状，也看见没有记录的空白。
+            </Text>
+            <Text className="nutrition-observation-lead">
+              每格是一个本地自然日。餐次更正或删除后会重新计算；空白只表示没有记录，不代表零摄入。这里不设目标、不判定达标，也不评价食物好坏。
+            </Text>
+          </View>
+
+          <View className="nutrition-observation-card">
+            <View className="nutrition-observation-windows" aria-label="观察时间范围">
+              {([7, 30, 90] as const).map((windowDays) => (
+                <Button
+                  {...buttonA11yProps}
+                  className={`nutrition-observation-window ${days === windowDays ? 'nutrition-observation-window--active' : ''}`}
+                  key={windowDays}
+                  aria-pressed={days === windowDays}
+                  onClick={() => setDays(windowDays)}
+                >
+                  {windowDays} 天
+                </Button>
+              ))}
+            </View>
+
+            {loading ? (
+              <View className="nutrition-observation-empty">正在按本地日期整理餐次证据…</View>
+            ) : feedback ? (
+              <View className="nutrition-observation-error" role="status">
+                {feedback}
+              </View>
+            ) : insight && window ? (
+              <>
+                <View className="nutrition-observation-summary">
+                  <View aria-label={`有记录日 ${window.recordedDays}`}>
+                    <Text className="nutrition-observation-value metric">
+                      {window.recordedDays}
+                    </Text>
+                    <Text>有记录日</Text>
+                  </View>
+                  <View aria-label={`无记录日 ${window.missingDays}`}>
+                    <Text className="nutrition-observation-value metric">{window.missingDays}</Text>
+                    <Text>无记录日</Text>
+                  </View>
+                  <View aria-label={`已保存餐次 ${window.mealCount}`}>
+                    <Text className="nutrition-observation-value metric">{window.mealCount}</Text>
+                    <Text>已保存餐次</Text>
+                  </View>
+                  <View
+                    aria-label={`仅已记录日均 ${displayValue(average)} ${nutritionInsightMetricLabels[metric]}`}
+                  >
+                    <Text className="nutrition-observation-value metric">
+                      {displayValue(average)}
+                    </Text>
+                    <Text>仅已记录日均 · {nutritionInsightMetricLabels[metric]}</Text>
+                  </View>
+                </View>
+
+                <View className="nutrition-observation-metrics" aria-label="选择观察指标">
+                  {metrics.map((candidate) => (
+                    <Button
+                      {...buttonA11yProps}
+                      className={`nutrition-observation-metric ${metric === candidate ? 'nutrition-observation-metric--active' : ''}`}
+                      key={candidate}
+                      aria-pressed={metric === candidate}
+                      onClick={() => setMetric(candidate)}
+                    >
+                      {shortMetricLabels[candidate]}
+                    </Button>
+                  ))}
+                </View>
+
+                <View className="nutrition-evidence-sheet">
+                  <View className="nutrition-evidence-heading">
+                    <View>
+                      <Text className="nutrition-observation-eyebrow">EVIDENCE RIBBON</Text>
+                      <Text className="nutrition-evidence-title">
+                        {days} 天 · {nutritionInsightMetricLabels[metric]}
+                      </Text>
+                    </View>
+                    <Text className="nutrition-evidence-timezone">{insight.timezone}</Text>
+                  </View>
+                  <View className="nutrition-evidence-grid">
+                    {points.map((point) => {
+                      const level = nutritionEvidenceLevel(point, metric, maximum)
+                      const value = nutritionInsightValue(point, metric)
+                      return (
+                        <View
+                          className={`nutrition-evidence-day nutrition-evidence-day--${level}`}
+                          key={point.localDate}
+                          aria-label={
+                            point.hasEvidence
+                              ? `${point.localDate}，${point.mealCount}餐，${shortMetricLabels[metric]}${displayValue(value)}`
+                              : `${point.localDate}，没有餐次记录`
+                          }
+                        >
+                          <Text>{point.localDate.slice(8)}</Text>
+                        </View>
+                      )
+                    })}
+                  </View>
+                  <View className="nutrition-evidence-legend">
+                    <Text>斜纹：无记录</Text>
+                    <Text>圆点：该营养项未标注</Text>
+                    <Text>颜色深浅：当期相对记录量</Text>
+                  </View>
+                </View>
+
+                <View className="nutrition-observation-coverage">
+                  <Text className="nutrition-observation-eyebrow">LABEL COVERAGE</Text>
+                  <Text>
+                    纤维有标注 {window.fiberKnownItemCount}/{window.itemCount}{' '}
+                    个食物条目。未标注部分不会按 0 g 计入。
+                  </Text>
+                </View>
+
+                <View className="nutrition-observation-ledger">
+                  <Text className="nutrition-observation-eyebrow">RECENT LOCAL DAYS</Text>
+                  {recentDays.map((point) => (
+                    <View className="nutrition-observation-day-row" key={point.localDate}>
+                      <Text className="metric">{point.localDate}</Text>
+                      {point.hasEvidence ? (
+                        <Text>
+                          {point.mealCount} 餐 · {displayValue(point.nutrients.energyKcal)} kcal · P{' '}
+                          {displayValue(point.nutrients.proteinG)} · C{' '}
+                          {displayValue(point.nutrients.carbohydrateG)} · F{' '}
+                          {displayValue(point.nutrients.fatG)}
+                        </Text>
+                      ) : (
+                        <Text className="nutrition-observation-missing-copy">
+                          无记录，不等于零摄入
+                        </Text>
+                      )}
+                    </View>
+                  ))}
+                </View>
+              </>
+            ) : null}
+          </View>
+
+          <Text className="nutrition-observation-safety">
+            本页仅整理你保存的餐次快照，不推断完整摄入、营养状态或疾病风险。需要治疗性饮食建议时，请咨询具备资质的专业人员。
+          </Text>
+        </View>
+      </ScrollView>
+    </View>
+  )
+}
+
+export default NutritionInsightsPage

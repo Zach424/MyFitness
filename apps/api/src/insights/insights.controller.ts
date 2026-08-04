@@ -6,6 +6,8 @@ import {
   exerciseInsightQuerySchema,
   exerciseInsightSchema,
   exerciseKeySchema,
+  nutritionInsightQuerySchema,
+  nutritionInsightSchema,
 } from '@myfitness/contracts'
 
 import { Auth } from '../auth/auth.decorator'
@@ -41,6 +43,36 @@ export class InsightsController {
     }
     return dashboardSchema.parse(
       await this.insights.dashboard(
+        principal.userId,
+        parsed.data.timezone,
+        parsed.data.at ? new Date(parsed.data.at) : new Date(),
+      ),
+    )
+  }
+
+  @Get('nutrition')
+  @ApiOperation({
+    summary: 'Aggregate current meal evidence into 90 timezone-aware local days',
+  })
+  @ApiOkResponse({ schema: openApiSchema(nutritionInsightSchema) })
+  @ApiBadRequestResponse({ description: 'Timezone or reference timestamp is invalid.' })
+  async nutrition(
+    @CurrentUser() principal: AuthPrincipal,
+    @Query('timezone') timezone: string | undefined,
+    @Query('at') at: string | undefined,
+  ) {
+    const parsed = nutritionInsightQuerySchema.safeParse({ timezone, ...(at ? { at } : {}) })
+    if (!parsed.success) {
+      throw new BadRequestException({
+        message: 'nutrition insight query is invalid',
+        issues: parsed.error.issues.map((issue) => ({
+          path: issue.path.join('.'),
+          message: issue.message,
+        })),
+      })
+    }
+    return nutritionInsightSchema.parse(
+      await this.insights.nutrition(
         principal.userId,
         parsed.data.timezone,
         parsed.data.at ? new Date(parsed.data.at) : new Date(),

@@ -22,6 +22,7 @@ import type {
   HealthRecordHistoryItem,
   Meal,
   MealHistoryItem,
+  NutritionInsight,
   OidcAuthorizationConfig,
   OidcSessionRequest,
   OnboardingRequest,
@@ -518,6 +519,12 @@ export const getDashboard = (timezone: string) =>
 export const getExerciseInsight = (exerciseKey: string, timezone: string) =>
   authenticatedRequest<ExerciseInsight>(
     `/insights/exercises/${encodeURIComponent(exerciseKey)}?timezone=${encodeURIComponent(timezone)}`,
+    'GET',
+  )
+
+export const getNutritionInsight = (timezone: string) =>
+  authenticatedRequest<NutritionInsight>(
+    `/insights/nutrition?timezone=${encodeURIComponent(timezone)}`,
     'GET',
   )
 

@@ -1,0 +1,386 @@
+.nutrition-observation-page {
+  min-height: 100vh;
+  background:
+    linear-gradient(0deg, rgba(36, 76, 102, 0.03) 1px, transparent 1px) 0 0 / 100% 31px,
+    radial-gradient(circle at 16% 0, rgba(63, 117, 107, 0.2), transparent 29rem),
+    var(--color-mist);
+}
+
+.nutrition-observation-scroll {
+  height: 100vh;
+}
+
+.nutrition-observation-shell {
+  width: 100%;
+  max-width: 880px;
+  min-height: 100vh;
+  margin: 0 auto;
+  padding: calc(18px + env(safe-area-inset-top)) 16px calc(42px + env(safe-area-inset-bottom));
+}
+
+.nutrition-observation-topbar {
+  display: grid;
+  grid-template-columns: 44px 1fr auto;
+  gap: 9px;
+  align-items: center;
+}
+
+.nutrition-observation-back {
+  display: flex;
+  width: 42px;
+  height: 42px;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  border: 1px solid rgba(36, 76, 102, 0.18);
+  border-radius: 50%;
+  color: var(--color-mineral);
+  background: rgba(252, 253, 252, 0.92);
+  font-size: 18px;
+  line-height: 1;
+}
+
+.nutrition-observation-wordmark {
+  display: flex;
+  gap: 7px;
+  align-items: baseline;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 780;
+  letter-spacing: 0.12em;
+}
+
+.nutrition-observation-wordmark__en,
+.nutrition-observation-eyebrow {
+  color: var(--color-muted);
+  font-family: var(--font-display);
+  font-size: 9px;
+  font-weight: 720;
+  letter-spacing: 0.13em;
+}
+
+.nutrition-observation-proof {
+  padding: 5px 8px;
+  border-radius: var(--radius-round);
+  color: var(--color-juniper);
+  background: var(--color-juniper-soft);
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.nutrition-observation-intro {
+  margin: 48px 2px 25px;
+}
+
+.nutrition-observation-eyebrow,
+.nutrition-observation-title,
+.nutrition-observation-lead,
+.nutrition-observation-value,
+.nutrition-evidence-title,
+.nutrition-observation-safety {
+  display: block;
+}
+
+.nutrition-observation-title {
+  max-width: 700px;
+  margin-top: 9px;
+  font-size: clamp(31px, 8.5vw, 52px);
+  font-weight: 790;
+  letter-spacing: -0.06em;
+  line-height: 1.1;
+}
+
+.nutrition-observation-lead {
+  max-width: 650px;
+  margin-top: 14px;
+  color: var(--color-muted);
+  font-size: 13px;
+  line-height: 1.75;
+}
+
+.nutrition-observation-card {
+  padding: 20px;
+  border: 1px solid rgba(20, 36, 38, 0.085);
+  border-radius: var(--radius-card);
+  background: rgba(252, 253, 252, 0.98);
+  box-shadow: 0 2px 0 rgba(20, 36, 38, 0.025);
+}
+
+.nutrition-observation-windows,
+.nutrition-observation-metrics {
+  display: flex;
+  gap: 7px;
+  overflow-x: auto;
+}
+
+.nutrition-observation-window,
+.nutrition-observation-metric {
+  width: auto;
+  min-height: 36px;
+  flex: none;
+  margin: 0;
+  padding: 0 12px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-round);
+  color: var(--color-muted);
+  background: var(--color-paper);
+  font-size: 9px;
+  line-height: 34px;
+}
+
+.nutrition-observation-window--active,
+.nutrition-observation-metric--active {
+  border-color: var(--color-mineral);
+  color: var(--color-paper);
+  background: var(--color-mineral);
+}
+
+.nutrition-observation-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 7px;
+  margin-top: 20px;
+}
+
+.nutrition-observation-summary > view,
+.nutrition-observation-summary > taro-view-core {
+  min-width: 0;
+  padding: 12px 9px;
+  border-radius: 12px;
+  color: var(--color-muted);
+  background: var(--color-mist);
+  font-size: 8px;
+}
+
+.nutrition-observation-summary > view:last-child,
+.nutrition-observation-summary > taro-view-core:last-child {
+  grid-column: 1 / -1;
+  border-left: 3px solid var(--color-juniper);
+}
+
+.nutrition-observation-value {
+  margin-bottom: 4px;
+  overflow: hidden;
+  color: var(--color-ink);
+  font-family: var(--font-metric);
+  font-size: 20px;
+  font-weight: 730;
+  text-overflow: ellipsis;
+}
+
+.nutrition-observation-metrics {
+  margin-top: 13px;
+}
+
+.nutrition-evidence-sheet {
+  margin-top: 18px;
+  padding: 16px 13px 13px;
+  border: 1px solid var(--color-line);
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(240, 246, 244, 0.75), var(--color-paper));
+}
+
+.nutrition-evidence-heading {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  justify-content: space-between;
+}
+
+.nutrition-evidence-title {
+  margin-top: 4px;
+  font-size: 17px;
+  font-weight: 750;
+  letter-spacing: -0.025em;
+}
+
+.nutrition-evidence-timezone {
+  color: var(--color-muted);
+  font-family: var(--font-metric);
+  font-size: 7px;
+}
+
+.nutrition-evidence-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 5px;
+  margin-top: 15px;
+}
+
+.nutrition-evidence-day {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  height: 29px;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px solid rgba(36, 76, 102, 0.09);
+  border-radius: 7px;
+  color: var(--color-paper);
+  background: var(--color-juniper);
+  font-family: var(--font-metric);
+  font-size: 7px;
+}
+
+.nutrition-evidence-day--1 {
+  color: var(--color-mineral);
+  background: rgba(63, 117, 107, 0.18);
+}
+
+.nutrition-evidence-day--2 {
+  background: rgba(63, 117, 107, 0.42);
+}
+
+.nutrition-evidence-day--3 {
+  background: rgba(63, 117, 107, 0.68);
+}
+
+.nutrition-evidence-day--4 {
+  background: var(--color-juniper);
+}
+
+.nutrition-evidence-day--missing {
+  color: var(--color-muted);
+  background: repeating-linear-gradient(
+    -45deg,
+    rgba(36, 76, 102, 0.025),
+    rgba(36, 76, 102, 0.025) 3px,
+    rgba(36, 76, 102, 0.09) 3px,
+    rgba(36, 76, 102, 0.09) 4px
+  );
+}
+
+.nutrition-evidence-day--unknown {
+  color: var(--color-mineral);
+  background: var(--color-mist);
+}
+
+.nutrition-evidence-day--unknown::after {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--color-mineral);
+  content: '';
+}
+
+.nutrition-evidence-day--unknown text,
+.nutrition-evidence-day--unknown taro-text-core {
+  opacity: 0.22;
+}
+
+.nutrition-evidence-legend {
+  display: flex;
+  margin-top: 10px;
+  gap: 5px 11px;
+  flex-wrap: wrap;
+  color: var(--color-muted);
+  font-size: 7px;
+  line-height: 1.5;
+}
+
+.nutrition-observation-coverage {
+  margin-top: 14px;
+  padding: 12px 13px;
+  border-left: 3px solid var(--color-mineral);
+  border-radius: 0 10px 10px 0;
+  color: var(--color-muted);
+  background: var(--color-mist);
+  font-size: 9px;
+  line-height: 1.65;
+}
+
+.nutrition-observation-coverage .nutrition-observation-eyebrow {
+  margin-bottom: 4px;
+}
+
+.nutrition-observation-ledger {
+  margin-top: 20px;
+}
+
+.nutrition-observation-day-row {
+  display: grid;
+  grid-template-columns: 79px 1fr;
+  gap: 10px;
+  padding: 11px 0;
+  border-top: 1px solid var(--color-line);
+  color: var(--color-muted);
+  font-size: 8px;
+  line-height: 1.55;
+}
+
+.nutrition-observation-day-row:first-of-type {
+  margin-top: 8px;
+}
+
+.nutrition-observation-day-row .metric {
+  color: var(--color-ink);
+}
+
+.nutrition-observation-missing-copy {
+  font-style: italic;
+}
+
+.nutrition-observation-empty,
+.nutrition-observation-error {
+  margin-top: 15px;
+  padding: 23px 15px;
+  border: 1px dashed var(--color-line);
+  border-radius: 13px;
+  color: var(--color-muted);
+  background: var(--color-mist);
+  font-size: 10px;
+  line-height: 1.7;
+  text-align: center;
+}
+
+.nutrition-observation-error {
+  border-color: rgba(154, 87, 78, 0.35);
+  color: #9a574e;
+  background: var(--color-warning-soft);
+}
+
+.nutrition-observation-safety {
+  padding: 21px 9px 0;
+  color: var(--color-muted);
+  font-size: 9px;
+  line-height: 1.6;
+  text-align: center;
+}
+
+button:focus-visible {
+  outline: 3px solid rgba(36, 76, 102, 0.3);
+  outline-offset: 2px;
+}
+
+@media (min-width: 720px) {
+  .nutrition-observation-shell {
+    padding: 28px 30px 64px;
+  }
+
+  .nutrition-observation-intro {
+    margin-top: 65px;
+    margin-bottom: 32px;
+  }
+
+  .nutrition-observation-card {
+    padding: 29px;
+  }
+
+  .nutrition-evidence-day {
+    height: 36px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

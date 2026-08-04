@@ -223,6 +223,43 @@ test('meal editor and ledger remain balanced at wide viewport', async ({ page })
   expect(browserErrors).toEqual([])
 })
 
+test('daily nutrition observation keeps recorded and missing local days explicit', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  const browserErrors = collectBrowserErrors(page)
+  await openNutrition(page)
+
+  await page.getByRole('button', { name: '添加熟鸡胸肉' }).click()
+  await page.getByRole('button', { name: '保存餐次', exact: true }).click()
+  await expect(page.locator('.meal-entry')).toHaveCount(1)
+
+  const insightResponse = page.waitForResponse(
+    (response) =>
+      response.url().includes('/v1/insights/nutrition') && response.request().method() === 'GET',
+  )
+  await page.getByRole('button', { name: '查看每日营养趋势' }).click()
+  expect((await insightResponse).status()).toBe(200)
+  await expect(page.getByText('看见记录留下的形状，也看见没有记录的空白。')).toBeVisible()
+  await expect(page.locator('.nutrition-evidence-day')).toHaveCount(30)
+  await expect(page.getByText('无记录，不等于零摄入')).toHaveCount(6)
+  await expect(
+    page.getByText('纤维有标注 1/1 个食物条目。未标注部分不会按 0 g 计入。'),
+  ).toBeVisible()
+  await page.screenshot({
+    path: 'output/playwright/iteration-040-nutrition-observation-mobile.png',
+    fullPage: true,
+  })
+
+  await page.getByRole('button', { name: '7 天' }).click()
+  await expect(page.locator('.nutrition-evidence-day')).toHaveCount(7)
+  await expect(page.getByLabel('有记录日 1')).toBeVisible()
+  await expect(page.getByLabel('无记录日 6')).toBeVisible()
+  await page.getByRole('button', { name: '纤维' }).click()
+  await expect(page.getByText('7 天 · 纤维 g')).toBeVisible()
+  expect(browserErrors).toEqual([])
+})
+
 test('owned food stays reusable and corrections never rewrite the meal draft snapshot', async ({
   page,
 }) => {
