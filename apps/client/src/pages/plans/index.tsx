@@ -1,15 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Button, Checkbox, ScrollView, Text, View } from '@tarojs/components'
 import Taro, { useDidShow } from '@tarojs/taro'
-import {
-  aiPlanConsentVersion,
-  type AiExplanation,
-  type PlanFreshness,
-  type WeeklyPlan,
-  type WeeklyPlanHistoryItem,
+import type {
+  AiExplanation,
+  PlanFreshness,
+  WeeklyPlan,
+  WeeklyPlanHistoryItem,
 } from '@myfitness/contracts'
+import { aiPlanConsentVersion } from '@myfitness/contracts/ai.constants'
 
-import { buttonA11yProps, checkboxA11yProps } from '../../lib/accessibility'
+import {
+  buttonA11yProps,
+  checkboxA11yProps,
+  keyboardActivationProps,
+} from '../../lib/accessibility'
 import {
   ApiError,
   decideWeeklyPlan,
@@ -301,6 +305,9 @@ const PlansPage = () => {
   const planActionable = freshness?.canAcceptOrModify ?? false
   const aiActionable = freshness?.canExplainWithAi ?? false
   const freshnessNotice = freshness ? planFreshnessNotice(freshness) : null
+  const toggleAiConsent = () => {
+    if (aiActionable) setAiConsent((value) => !value)
+  }
 
   const generate = async () => {
     setSaving(true)
@@ -758,21 +765,20 @@ const PlansPage = () => {
                           只发送当前计划的精简摘要，不含姓名、用户编号或未选动作。AI
                           只做解释，不能改动计划。
                         </Text>
-                        <View
+                        <Button
                           {...checkboxA11yProps}
+                          {...keyboardActivationProps(toggleAiConsent, !aiActionable)}
                           className={`ai-consent ${aiConsent ? 'ai-consent--checked' : ''}`}
                           aria-checked={aiConsent}
                           aria-disabled={!aiActionable}
                           aria-label="同意本次 AI 计划解释数据处理"
-                          onClick={() => {
-                            if (aiActionable) setAiConsent((value) => !value)
-                          }}
+                          onClick={toggleAiConsent}
                         >
                           <Checkbox checked={aiConsent} value="ai-plan-explanation" aria-hidden />
                           <Text>
                             我同意本次将精简计划摘要发送给配置的 AI 服务，并记录本次授权版本。
                           </Text>
-                        </View>
+                        </Button>
                         <Button
                           {...buttonA11yProps}
                           className="ai-generate"

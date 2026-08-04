@@ -208,6 +208,7 @@ jobs:
       - name: Assemble immutable client release manifest
         run: |
           set -euo pipefail
+          pnpm client:verify
           node scripts/client-release.mjs assemble \
             --input-dir "${RUNNER_TEMP}/client-release" \
             --published-at "$(date -u +'%Y-%m-%dT%H:%M:%S.000Z')" \

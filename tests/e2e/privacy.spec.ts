@@ -175,7 +175,7 @@ test('mobile privacy ledger inventories and downloads an owned-data export', asy
 
   await expect(page.getByText('身体与恢复记录')).toBeVisible()
   await expect(page.getByText('AI 计划解释')).toBeVisible()
-  await expect(page.locator('.inventory-row').filter({ hasText: '餐食照片分析' })).toBeVisible()
+  await expect(page.locator('.inventory-row').filter({ hasText: '照片分析与进度照' })).toBeVisible()
   await page.screenshot({
     path: 'output/playwright/iteration-011-privacy-mobile.png',
     fullPage: true,

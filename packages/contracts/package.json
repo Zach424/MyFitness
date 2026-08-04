@@ -24,6 +24,22 @@
     "./workout.constants": {
       "types": "./dist/workout.constants.d.ts",
       "default": "./dist/workout.constants.js"
+    },
+    "./ai.constants": {
+      "types": "./dist/ai.constants.d.ts",
+      "default": "./dist/ai.constants.js"
+    },
+    "./food-photo.constants": {
+      "types": "./dist/food-photo.constants.d.ts",
+      "default": "./dist/food-photo.constants.js"
+    },
+    "./privacy.constants": {
+      "types": "./dist/privacy.constants.d.ts",
+      "default": "./dist/privacy.constants.js"
+    },
+    "./progress-photo.constants": {
+      "types": "./dist/progress-photo.constants.d.ts",
+      "default": "./dist/progress-photo.constants.js"
     }
   },
   "files": [

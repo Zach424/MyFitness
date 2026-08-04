@@ -2,7 +2,7 @@
 
 The roadmap is organized as controlled iterations. A round may take several working sessions, but it ends only after implementation, validation, archive update, and a commit.
 
-Progress snapshot (2026-08-04): iterations 0–33 are complete locally. Weekly-plan lists now project current profile/eligibility freshness; the client proactively checks it, visibly freezes stale adoption/substitution/AI actions, preserves skip and offers bounded recovery. Workout completion remains server-derived from persisted sets, and privacy-first progress photos, safe onboarding, deterministic planning, fixture AI explanations and the exact-byte Obsidian mirror remain available. Hosted quality/smoke is green through the iteration-030 exact SHA; iterations 031–032 are pushed and later hosted exact-SHA evidence has not been inspected in this round. Verified service-only `v0.1.0-rc.1` assets, managed-environment admission, deterministic H5/WeApp candidates, recoverable erasure, release qualification and a browser-proven H5 OIDC candidate remain available. Owner-operated account, budget, domain, credentials and paid-provider work is parked while locally reproducible beta hardening continues; those release gates remain mandatory.
+Progress snapshot (2026-08-04): iterations 0–34 are complete locally. H5/WeApp now pass explicit measured bundle budgets and reject accidental full validation-runtime rebundling; 320 px, 125% text and keyboard activation are browser-proven on onboarding and the Week Fold. Weekly-plan lists still project current profile/eligibility freshness, workout completion remains server-derived from persisted sets, and privacy-first progress photos, safe onboarding, deterministic planning, fixture AI explanations and the exact-byte Obsidian mirror remain available. Hosted quality/smoke is green through the iteration-030 exact SHA; later hosted exact-SHA evidence has not been inspected in this round. Verified service-only `v0.1.0-rc.1` assets, managed-environment admission, deterministic H5/WeApp candidates, recoverable erasure, release qualification and a browser-proven H5 OIDC candidate remain available. Owner-operated account, budget, domain, credentials and paid-provider work is parked while locally reproducible beta hardening continues; those release gates remain mandatory.
 
 | Iteration | Primary scope                                       | Exit evidence                                                                                    |
 | --------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
@@ -41,8 +41,9 @@ Progress snapshot (2026-08-04): iterations 0–33 are complete locally. Weekly-p
 | 32        | Server-authoritative workout completion             | Derived status, legacy compatibility, backfill, idempotency/history and browser proof            |
 | 33        | Proactive stale-plan refresh                        | Visible revision drift, safe reload/retry and current-plan browser proof                         |
 | 34        | Client accessibility and bundle hardening           | 320 px/large text/keyboard checks plus enforced H5/WeApp bundle budgets                          |
-| 35        | Managed shared deployment, beta hardening/release   | Real identity/custody/telemetry, rollback, security/a11y/filing review and staged rollout        |
-| 36        | Native App feasibility and device sync              | Retention gate reviewed; HealthKit/Health Connect/Huawei proof of concept                        |
+| 35        | Record-evidence plan freshness                      | Bounded fingerprint/policy, no-op/material drift proof, safe refresh and immutable history       |
+| 36        | Managed shared deployment, beta hardening/release   | Real identity/custody/telemetry, rollback, security/a11y/filing review and staged rollout        |
+| 37        | Native App feasibility and device sync              | Retention gate reviewed; HealthKit/Health Connect/Huawei proof of concept                        |
 
 ## Release gates
 
@@ -54,14 +55,14 @@ Progress snapshot (2026-08-04): iterations 0–33 are complete locally. Weekly-p
 
 ### Closed beta
 
-- Iterations 9–35 complete.
+- Iterations 9–36 complete.
 - AI evaluation set is versioned and safety validators block known high-risk cases.
 - Data export and deletion are exercised end to end.
 - Support, monitoring, cost limits, rollback, and incident ownership are assigned.
 
 ### Public release
 
-- Iteration 35 complete.
+- Iteration 36 complete.
 - Applicable ICP/APP/Mini Program privacy/AI registration and content-labeling work is reviewed.
 - Store materials match actual data practices and product claims.
 - Release starts with a small cohort and automatic rollback thresholds.

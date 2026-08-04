@@ -43,6 +43,7 @@ jobs:
       - run: git diff --exit-code -- output/evals
       - run: pnpm build
       - run: pnpm build:weapp
+      - run: pnpm client:verify
       - run: pnpm db:up
       - run: pnpm db:migrate
       - run: pnpm test:integration

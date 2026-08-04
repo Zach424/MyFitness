@@ -6,6 +6,30 @@ export default defineConfig({
   resolve: {
     alias: [
       {
+        find: '@myfitness/contracts/ai.constants',
+        replacement: fileURLToPath(
+          new URL('./packages/contracts/src/ai.constants.ts', import.meta.url),
+        ),
+      },
+      {
+        find: '@myfitness/contracts/food-photo.constants',
+        replacement: fileURLToPath(
+          new URL('./packages/contracts/src/food-photo.constants.ts', import.meta.url),
+        ),
+      },
+      {
+        find: '@myfitness/contracts/privacy.constants',
+        replacement: fileURLToPath(
+          new URL('./packages/contracts/src/privacy.constants.ts', import.meta.url),
+        ),
+      },
+      {
+        find: '@myfitness/contracts/progress-photo.constants',
+        replacement: fileURLToPath(
+          new URL('./packages/contracts/src/progress-photo.constants.ts', import.meta.url),
+        ),
+      },
+      {
         find: '@myfitness/contracts/nutrition.constants',
         replacement: fileURLToPath(
           new URL('./packages/contracts/src/nutrition.constants.ts', import.meta.url),

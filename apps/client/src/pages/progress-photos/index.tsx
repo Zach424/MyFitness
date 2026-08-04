@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Button, Image, ScrollView, Slider, Text, View } from '@tarojs/components'
 import Taro from '@tarojs/taro'
+import type { ProgressPhotoItem } from '@myfitness/contracts'
 import {
   progressPhotoAnalysisConsentVersion,
   progressPhotoRetentionConsentVersion,
-  type ProgressPhotoItem,
-} from '@myfitness/contracts'
+} from '@myfitness/contracts/progress-photo.constants'
 
 import { buttonA11yProps } from '../../lib/accessibility'
 import {

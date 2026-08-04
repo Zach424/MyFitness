@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { accountDeletionConfirmationPhrase } from '@myfitness/contracts'
+import { accountDeletionConfirmationPhrase } from '@myfitness/contracts/privacy.constants'
 
 import { deletionReady, formatInventoryCount, formatReceiptToken } from './privacy.model'
 

@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 
-import {
-  accountDeletionConfirmationPhrase,
-  type AccountDeletionResult,
-  type PrivacyOverview,
-  type RevocableConsentPurpose,
+import type {
+  AccountDeletionResult,
+  PrivacyOverview,
+  RevocableConsentPurpose,
 } from '@myfitness/contracts'
+import { accountDeletionConfirmationPhrase } from '@myfitness/contracts/privacy.constants'
 import { Button, Input, ScrollView, Text, View } from '@tarojs/components'
 import Taro from '@tarojs/taro'
 

@@ -42,12 +42,10 @@ import type {
   ProgressPhotoItem,
   ProgressPhotoTicket,
 } from '@myfitness/contracts'
-import {
-  foodPhotoConsentVersion,
-  oidcAuthorizationConfigSchema,
-  verifiedSessionSchema,
-} from '@myfitness/contracts'
+import { foodPhotoConsentVersion } from '@myfitness/contracts/food-photo.constants'
 import Taro from '@tarojs/taro'
+
+import { parseOidcAuthorizationConfig, parseVerifiedSession } from './api-response'
 
 const API_BASE_URL = __API_BASE_URL__.replace(/\/$/, '')
 const AUTH_MODE = __AUTH_MODE__
@@ -200,7 +198,7 @@ export const getOidcAuthorizationConfig = async (): Promise<OidcAuthorizationCon
   if (response.statusCode < 200 || response.statusCode >= 300) {
     throw new ApiError(response.statusCode, response.data as ApiErrorBody)
   }
-  return oidcAuthorizationConfigSchema.parse(response.data)
+  return parseOidcAuthorizationConfig(response.data)
 }
 
 export const exchangeOidcAuthorizationCode = async (
@@ -215,7 +213,7 @@ export const exchangeOidcAuthorizationCode = async (
   if (response.statusCode < 200 || response.statusCode >= 300) {
     throw new ApiError(response.statusCode, response.data as ApiErrorBody)
   }
-  const session = verifiedSessionSchema.parse(response.data)
+  const session = parseVerifiedSession(response.data)
   if (session.provider !== 'oidc') throw new Error('身份服务返回了不匹配的登录方式')
   Taro.setStorageSync(TOKEN_KEY, session.accessToken)
   return session

@@ -2,7 +2,7 @@
 
 Last reviewed: 2026-08-04
 
-Stage: internal alpha locally runnable; weekly plans now carry a server-projected freshness state, and profile-revision or eligibility drift is visible before adoption instead of only after a rejected action. The multi-end client checks on entry, page show, H5 focus and explicit refresh, freezes stale accept/modify/AI actions, preserves skip and offers a bounded regeneration/profile-review path. Server-authoritative workout completion and privacy-first progress photos remain locally implemented. Both first-release client candidate contracts, H5 OIDC browser/API trust, immutable workflow dependencies, exact tag/main/CI release-source qualification, combined admission, recoverable erasure receipts, crash-safe AI lifecycle, adversarial output validation and reproducible evaluation artifacts remain locally green. Owner-operated cloud, domain and real-provider work is explicitly parked while locally verifiable product gaps continue.
+Stage: internal alpha locally runnable; the client release boundary now has measured H5/WeApp budgets, rejects accidental full validation-runtime rebundling and is enforced in both CI and release packaging. H5 onboarding and Week Fold are browser-proven at 320 px with 125% root text; the AI consent control is Tab-focusable, visibly focused and Space/Enter operable. Weekly plans still carry server-projected profile/eligibility freshness, while server-authoritative workout completion and privacy-first progress photos remain locally implemented. Both first-release client candidate contracts, H5 OIDC browser/API trust, immutable workflow dependencies, exact tag/main/CI release-source qualification, combined admission, recoverable erasure receipts, crash-safe AI lifecycle, adversarial output validation and reproducible evaluation artifacts remain locally green. Owner-operated cloud, domain and real-provider work is explicitly parked while locally verifiable product gaps continue.
 
 Primary release target: WeChat Mini Program + responsive H5
 
@@ -12,20 +12,20 @@ MyFitness / 衡迹 turns body, training, nutrition, and recovery records into sa
 
 ## Module status
 
-| Module                  | Status                          | Current evidence                                                       | Next gate                                   |
-| ----------------------- | ------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------- |
-| Product scope           | Done for MVP baseline           | `docs/product/PRODUCT_BRIEF.md`                                        | Validate with target-user interviews        |
-| Delivery roadmap        | Done for planning baseline      | `docs/product/ROADMAP.md`                                              | Continue local gaps; keep external gates    |
-| Design language         | Partial, thirteen flows tested  | Core flows + stale Week Fold state + 28 reviewed screenshots           | Large text, keyboard and remaining states   |
-| Client: Mini Program/H5 | Partial, candidate paths local  | WeApp `wechat` and H5 `oidc` candidate contracts; browser double green | Real providers/domains/device/browser proof |
-| Admin console           | Partial, local slice done       | OIDC BFF, exact lookup, role split and Evidence Rail exercised         | Select IdP, owner, retention and deployment |
-| Business API            | Partial                         | Verified WeChat/OIDC identity plus self-contained OCI runtime          | Shared deployment and real credential proof |
-| Domain rules            | Partial                         | Workout authority + plan freshness + safety/privacy validators         | Add release policy enforcement              |
-| AI service              | Partial                         | Crash-safe runs + adversarial text/vision validators + 23 evals        | Expert corpus + approved provider canary    |
-| Native App/devices      | Deferred                        | Phase-two decision                                                     | MVP retention gate reached                  |
-| Privacy/compliance      | Partial, durable local proof    | Purpose-scoped photo consent/export/deletion + restore replay tested   | Production retention/provider/legal review  |
-| Testing/observability   | Partial                         | 180 unit, 50 integration, 25 browser tests + real-browser state proofs | Centralize telemetry after account approval |
-| Deployment              | Partial, source/admission ready | Immutable actions + tag/main/CI + service/client/environment gates     | Approve dossier, provision and canary       |
+| Module                  | Status                          | Current evidence                                                        | Next gate                                   |
+| ----------------------- | ------------------------------- | ----------------------------------------------------------------------- | ------------------------------------------- |
+| Product scope           | Done for MVP baseline           | `docs/product/PRODUCT_BRIEF.md`                                         | Validate with target-user interviews        |
+| Delivery roadmap        | Done for planning baseline      | `docs/product/ROADMAP.md`                                               | Continue local gaps; keep external gates    |
+| Design language         | Partial, fourteen flows tested  | Core flows + 320 px/large-text/keyboard proof + 31 reviewed screenshots | Screen readers and remaining state matrix   |
+| Client: Mini Program/H5 | Partial, candidate paths local  | H5/WeApp measured budgets plus candidate identity/release contracts     | Real providers/domains/device/browser proof |
+| Admin console           | Partial, local slice done       | OIDC BFF, exact lookup, role split and Evidence Rail exercised          | Select IdP, owner, retention and deployment |
+| Business API            | Partial                         | Verified WeChat/OIDC identity plus self-contained OCI runtime           | Shared deployment and real credential proof |
+| Domain rules            | Partial                         | Workout authority + plan freshness + safety/privacy validators          | Add release policy enforcement              |
+| AI service              | Partial                         | Crash-safe runs + adversarial text/vision validators + 23 evals         | Expert corpus + approved provider canary    |
+| Native App/devices      | Deferred                        | Phase-two decision                                                      | MVP retention gate reached                  |
+| Privacy/compliance      | Partial, durable local proof    | Purpose-scoped photo consent/export/deletion + restore replay tested    | Production retention/provider/legal review  |
+| Testing/observability   | Partial                         | 200 unit, 50 integration, 25 browser tests + client quality gate        | Centralize telemetry after account approval |
+| Deployment              | Partial, source/admission ready | Immutable actions + tag/main/CI + service/client/environment gates      | Approve dossier, provision and canary       |
 
 Status vocabulary: `Done` means validated for the present stage, `Partial` means usable but missing a named gate, `Pending` means not implemented, and `Deferred` means intentionally outside the current release.
 
@@ -35,7 +35,8 @@ Status vocabulary: `Done` means validated for the present stage, `Partial` means
 - pnpm workspace with checked-in lockfile and a shared CSS/TypeScript design-token package.
 - A dependency-free project-status mirror selects the most recent open Obsidian vault (or an explicit override), copies `docs/PROJECT_STATUS.md` byte-for-byte inside that vault and independently rejects stale or path-escaping targets. The repository copy remains authoritative.
 - Parent-qualified pnpm security floors isolate the Taro client on Vite 6.4.3/webpack 5.104.1 and the Next admin on PostCSS 8.5.19 while Vitest remains on Vite 8.1.5; critical/high production audit findings are zero and six moderate Taro build-chain findings remain registered.
-- Separate `dist-h5` and `dist-weapp` production roots prevent one platform build from deleting the other.
+- Separate `dist-h5` and `dist-weapp` production roots prevent one platform build from deleting the other. A dependency-free `myfitness-client-quality/v1` verifier measures the index-derived H5 entrypoint, largest async route, WeApp vendor/page bundles and total trees; strict checked-in budgets run after both builds in CI and before immutable release assembly.
+- Browser code imports dependency-free contract constant subpaths instead of the CommonJS/Zod umbrella. The two public identity responses retain exact-key, URL, UUID, provider and offset-datetime checks through a small client guard while the shared Zod schemas remain the server/test authority. Bundle scanning fails if the removed full validation-runtime markers return.
 - NestJS 11 modular API with Zod 4 contracts rendered into a committed OpenAPI 3.0 document.
 - Provider-neutral users/identities plus provider-bound opaque Bearer sessions. WeChat exchanges a short-lived code server-side, namespaces `openid` by AppID and never persists `session_key`. H5 creates tab-scoped state/nonce/verifier values, derives PKCE S256, removes callback parameters before network work, consumes the transaction once, exchanges code + PKCE at the API, verifies remote JWKS/algorithm/issuer/audience/age/nonce, and stores only an issuer/subject digest. The development issuer is production-disabled; cross-provider account linking is intentionally absent.
 - Independent pre-provisioned OIDC operator identities, least-privilege roles and opaque administrator sessions; remote JWKS/issuer/audience/age/nonce and one-time exchange are verified before issuance.
@@ -74,36 +75,36 @@ Status vocabulary: `Done` means validated for the present stage, `Partial` means
 
 ## Current risks
 
-| Risk                                                                                  | Level  | Mitigation / next evidence                                                                               |
-| ------------------------------------------------------------------------------------- | ------ | -------------------------------------------------------------------------------------------------------- |
-| Production audit retains six moderate Taro build-chain advisories                     | Medium | Remove through a supported Taro/build-chain upgrade; rerun graph, dual-build and E2E proof               |
-| Offline admission cannot prove external references exist or were genuinely approved   | High   | Create/dereference the dossier inside a protected change system; never deploy from local success alone   |
-| The published `v0.1.0-rc.1` predates client release and source-qualification assets   | Medium | Set an approved client API URL and publish/verify a new qualified tag; never mutate the existing release |
-| Pinned GitHub Actions can age after their reviewed upstream releases                  | Medium | Review weekly Dependabot proposals, upstream tags/source and the synchronized lock; require complete CI  |
-| Scope may expand before the recording loop is proven                                  | High   | Enforce MVP exclusions and one-scope iteration archives                                                  |
-| Food-photo portion estimates can be misleading                                        | High   | Catalog-bound ranges/confidence, user edit, no auto-write; broaden real-image evaluation                 |
-| Progress photos can be over-interpreted or retained longer than expected              | High   | Capture-only checks/no body score, separate retention consent, scoped deletion; real-user/policy review  |
-| AI may generate unsafe training or diet changes                                       | High   | Deterministic constraints and validators precede model output                                            |
-| Production AI retention/region/cost/quality are unverified                            | High   | Keep fixture default and provider receipts `policy_bound`; require approved real canary                  |
-| Twenty-three deterministic AI cases do not establish real-world safety                | High   | Add expert-reviewed real/obfuscated/injection image and text cases plus slice thresholds                 |
-| Local MinIO does not prove production object controls                                 | High   | Configure cloud bucket/KMS/IAM/lifecycle/versioning/replication and exercise outage/restore              |
-| Domestic Android health data is fragmented                                            | Medium | Defer device sync; start HealthKit/Health Connect/Huawei feasibility after retention gate                |
-| Brand name “衡迹” is unverified                                                       | Medium | Treat as working name; perform trademark/domain review before public launch                              |
-| H5 entry is 305 KiB/largest chunk about 604 KiB; WeApp vendor is 417 KiB              | Medium | Set budgets and split route/provider code before beta                                                    |
-| Taro emits non-blocking webpack cache serialization warnings                          | Low    | Track upstream/package compatibility; clean builds and artifacts currently pass                          |
-| WeChat lacks real device/domain proof; H5 OIDC has only browser/provider-double proof | High   | Exercise both real adapters/domains, callback hosting and explicit re-registration policy                |
-| Enterprise operator OIDC tenant/client and access owner are absent                    | High   | Select provider; exercise provisioning, recertification, disablement and shared login                    |
-| Administrator audit lacks independent retention/export and alerts                     | High   | Define retention/owner; ship immutable copy and alert review before real operator access                 |
-| Local restore replay works; backup/provider operations are unowned                    | High   | Automate backup/retention, independently retain ledger and approve provider controls                     |
-| A receipt bearer secret remains in client application storage until explicit removal  | Medium | Review secure platform storage/shared-device handling and expiry policy before closed beta               |
-| Dead-letter recovery has no alert owner or safe service endpoint                      | High   | Centralize alerts; require audited exact-job runbook until a least-privilege tool exists                 |
-| Process metrics are not centrally scraped and alerts have no owner                    | High   | Deploy private aggregation, dashboards, paging and named incident ownership before beta                  |
-| Rate limits use uncalibrated fixed windows and exact proxy topology                   | Medium | Load-test policy boundaries and verify `TRUST_PROXY_HOPS` in the shared environment                      |
-| Starter exercise catalog lacks custom/equipment semantics                             | Medium | Model additions only after the manual workout loop informs actual needs                                  |
-| Starter food values are demonstration data, not release catalog                       | High   | Select licensed/localized versioned provider and attribution before beta                                 |
-| Energy/macro UI can be harmful for eating-disorder risk                               | High   | Maintain scope exclusion; add screening/content review before adaptive nutrition planning                |
-| Deterministic-v1 is explainable but not clinically validated                          | High   | Keep general-guidance claims; add offline evaluation and expert/content review                           |
-| Plan freshness follows profile revision/eligibility, not later workout/meal evidence  | Medium | Define a bounded evidence-refresh policy/fingerprint before labeling record drift as plan staleness      |
+| Risk                                                                                        | Level  | Mitigation / next evidence                                                                               |
+| ------------------------------------------------------------------------------------------- | ------ | -------------------------------------------------------------------------------------------------------- |
+| Production audit retains six moderate Taro build-chain advisories                           | Medium | Remove through a supported Taro/build-chain upgrade; rerun graph, dual-build and E2E proof               |
+| Offline admission cannot prove external references exist or were genuinely approved         | High   | Create/dereference the dossier inside a protected change system; never deploy from local success alone   |
+| The published `v0.1.0-rc.1` predates client release and source-qualification assets         | Medium | Set an approved client API URL and publish/verify a new qualified tag; never mutate the existing release |
+| Pinned GitHub Actions can age after their reviewed upstream releases                        | Medium | Review weekly Dependabot proposals, upstream tags/source and the synchronized lock; require complete CI  |
+| Scope may expand before the recording loop is proven                                        | High   | Enforce MVP exclusions and one-scope iteration archives                                                  |
+| Food-photo portion estimates can be misleading                                              | High   | Catalog-bound ranges/confidence, user edit, no auto-write; broaden real-image evaluation                 |
+| Progress photos can be over-interpreted or retained longer than expected                    | High   | Capture-only checks/no body score, separate retention consent, scoped deletion; real-user/policy review  |
+| AI may generate unsafe training or diet changes                                             | High   | Deterministic constraints and validators precede model output                                            |
+| Production AI retention/region/cost/quality are unverified                                  | High   | Keep fixture default and provider receipts `policy_bound`; require approved real canary                  |
+| Twenty-three deterministic AI cases do not establish real-world safety                      | High   | Add expert-reviewed real/obfuscated/injection image and text cases plus slice thresholds                 |
+| Local MinIO does not prove production object controls                                       | High   | Configure cloud bucket/KMS/IAM/lifecycle/versioning/replication and exercise outage/restore              |
+| Domestic Android health data is fragmented                                                  | Medium | Defer device sync; start HealthKit/Health Connect/Huawei feasibility after retention gate                |
+| Brand name “衡迹” is unverified                                                             | Medium | Treat as working name; perform trademark/domain review before public launch                              |
+| H5 entry remains 305 KiB (above webpack's 244 KiB advisory); largest async route is 189 KiB | Medium | Enforced 320/200 KiB and 1.75 MB H5 budgets prevent growth; split app/Taro entry before beta             |
+| Taro emits non-blocking webpack cache serialization warnings                                | Low    | Track upstream/package compatibility; clean builds and artifacts currently pass                          |
+| WeChat lacks real device/domain proof; H5 OIDC has only browser/provider-double proof       | High   | Exercise both real adapters/domains, callback hosting and explicit re-registration policy                |
+| Enterprise operator OIDC tenant/client and access owner are absent                          | High   | Select provider; exercise provisioning, recertification, disablement and shared login                    |
+| Administrator audit lacks independent retention/export and alerts                           | High   | Define retention/owner; ship immutable copy and alert review before real operator access                 |
+| Local restore replay works; backup/provider operations are unowned                          | High   | Automate backup/retention, independently retain ledger and approve provider controls                     |
+| A receipt bearer secret remains in client application storage until explicit removal        | Medium | Review secure platform storage/shared-device handling and expiry policy before closed beta               |
+| Dead-letter recovery has no alert owner or safe service endpoint                            | High   | Centralize alerts; require audited exact-job runbook until a least-privilege tool exists                 |
+| Process metrics are not centrally scraped and alerts have no owner                          | High   | Deploy private aggregation, dashboards, paging and named incident ownership before beta                  |
+| Rate limits use uncalibrated fixed windows and exact proxy topology                         | Medium | Load-test policy boundaries and verify `TRUST_PROXY_HOPS` in the shared environment                      |
+| Starter exercise catalog lacks custom/equipment semantics                                   | Medium | Model additions only after the manual workout loop informs actual needs                                  |
+| Starter food values are demonstration data, not release catalog                             | High   | Select licensed/localized versioned provider and attribution before beta                                 |
+| Energy/macro UI can be harmful for eating-disorder risk                                     | High   | Maintain scope exclusion; add screening/content review before adaptive nutrition planning                |
+| Deterministic-v1 is explainable but not clinically validated                                | High   | Keep general-guidance claims; add offline evaluation and expert/content review                           |
+| Plan freshness follows profile revision/eligibility, not later workout/meal evidence        | Medium | Define a bounded evidence-refresh policy/fingerprint before labeling record drift as plan staleness      |
 
 ## Quality gates
 
@@ -114,7 +115,8 @@ The MVP cannot enter public beta until all of the following are reproducible:
 - Plan output passes schema, training-load, energy-intake, and risk-phrase validation.
 - Permissions, account deletion, photo retention, audit logging, backups, and incident rollback are exercised.
 - CI passes formatting, linting, type checks, unit tests, integration tests, zero critical/high production dependency audit, and production builds.
+- H5 and WeApp production trees pass checked-in entry/route/vendor/page/total budgets and the client validation-runtime regression scan.
 
 ## Primary next step
 
-Iteration 34: harden the client before adding another data feature. Exercise the existing H5 and WeApp flows at 320 px, system large text and keyboard-only navigation, repair the highest-impact accessible-name/focus/overflow failures, and turn the currently advisory H5/WeApp bundle sizes into explicit measured budgets without hiding the registered Taro warnings. Owner-operated cloud account/budget, domain/TLS, real WeChat/OIDC, data-custody owners, centralized telemetry, policy/filing decisions and any approved paid-provider canary remain mandatory external inputs but are parked until the user supplies them; do not describe local MinIO, fixture AI or candidate artifacts as public production.
+Iteration 35: define bounded plan freshness for record evidence without making every new workout or meal invalidate the week. Version a deterministic evidence fingerprint/policy over the plan's existing recent-record snapshot, project a human-readable refresh reason and safe user choice, preserve immutable history and server write guards, and prove no-op versus material-drift cases through contracts, PostgreSQL and H5. Owner-operated cloud account/budget, domain/TLS, real WeChat/OIDC, data-custody owners, centralized telemetry, policy/filing decisions and any approved paid-provider canary remain mandatory external inputs but are parked until the user supplies them; do not describe local MinIO, fixture AI or candidate artifacts as public production.

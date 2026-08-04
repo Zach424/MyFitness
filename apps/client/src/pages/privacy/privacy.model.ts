@@ -1,9 +1,5 @@
-import {
-  accountDeletionConfirmationPhrase,
-  type ConsentState,
-  type PrivacyDataCategory,
-  type PrivacyOverview,
-} from '@myfitness/contracts'
+import type { ConsentState, PrivacyDataCategory, PrivacyOverview } from '@myfitness/contracts'
+import { accountDeletionConfirmationPhrase } from '@myfitness/contracts/privacy.constants'
 
 export const privacyCategoryCopy: Record<
   PrivacyDataCategory,

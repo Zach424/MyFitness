@@ -32,6 +32,7 @@
     "docs:sync-obsidian": "node scripts/sync-project-status-to-obsidian.mjs write",
     "docs:verify-obsidian": "node scripts/sync-project-status-to-obsidian.mjs verify",
     "release:client": "node scripts/client-release.mjs",
+    "client:verify": "node scripts/client-quality.mjs verify --budget apps/client/client-quality-budget.json --h5-root apps/client/dist-h5 --weapp-root apps/client/dist-weapp",
     "release:verify": "node scripts/release-manifest.mjs verify",
     "test": "vitest run",
     "test:ai": "python -m pytest services/ai/tests -q",

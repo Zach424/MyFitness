@@ -1,6 +1,6 @@
 # Design system baseline
 
-Status: implemented and visually validated through iteration-014 administrator support evidence
+Status: implemented and visually validated through iteration-034 client hardening evidence
 
 Working brand: 衡迹 / MyFitness
 
@@ -282,6 +282,12 @@ The real-browser review uploaded two synthetic portrait fixtures through the pro
 The workout sheet now states its completion rule directly below the live set summary: all checked sets become “已完成”; any unchecked set becomes “部分完成”. The note uses the existing muted evidence-copy style, so it clarifies data authority without competing with pain guidance, save feedback or the primary action. No new color, badge or score was introduced for this backend invariant.
 
 The in-app browser review dismissed the known Taro development warning layer, then saved one `3/3 · 360 kg` session and one `2/3 · 240 kg` session through the real API. The ledger displayed `已完成` and `部分完成` respectively, while the editor reset for the next entry. Existing iteration-005 mobile/wide captures remain the visual baseline because the change adds only one explanatory line; the new DOM-backed flow is recorded in the iteration archive. Open design gates remain 320 px, system large text, full keyboard/screen-reader traversal and offline/stale recovery.
+
+## Implementation review — iteration 034
+
+The release-hardening pass exercises the narrowest supported H5 width with enlarged text instead of adding a new visual motif. At 320 px with the responsive root size raised by 125%, onboarding and the Week Fold keep a single reading column and report document width equal to viewport width. The checked-in evidence captures first-screen onboarding, the complete large-text plan and the isolated AI authorization control.
+
+The browser review exposed a semantic trap hidden by snapshots: Taro's H5 `Button` renders as `TARO-BUTTON-CORE`, so giving it `role="checkbox"` and `tabIndex=0` made it focusable but did not make Space activate it. A shared keyboard adapter now handles non-repeating Space/Enter, prevents page movement and reuses the same guarded state transition as pointer activation. Shift+Tab/Tab returned to the control, computed focus was a 3 px solid outline, Space changed `aria-checked` to true and enabled the AI action. Unit coverage protects disabled, repeating and irrelevant keys. Real screen-reader announcements, remaining routes at system text extremes and physical WeChat devices remain open.
 
 ## Screenshot review checklist
 

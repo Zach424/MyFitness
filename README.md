@@ -55,6 +55,7 @@ pnpm dev:admin
 pnpm build:h5
 pnpm build:h5:oidc
 pnpm build:weapp
+pnpm client:verify
 pnpm build:admin
 pnpm test
 pnpm test:ai
@@ -66,7 +67,7 @@ pnpm deploy:smoke
 pnpm test:e2e:oidc
 ```
 
-H5 和微信小程序产物分别生成到 `apps/client/dist-h5` 与 `apps/client/dist-weapp`，两次构建不会互相清理。
+H5 和微信小程序产物分别生成到 `apps/client/dist-h5` 与 `apps/client/dist-weapp`，两次构建不会互相清理。完成双端构建后，`pnpm client:verify` 会检查 H5 入口/异步页面与小程序 vendor/页面/总量预算，并拒绝完整验证运行时重新进入客户端包；CI 与客户端发布组装均执行同一门槛。
 
 Taro 4.2.1 当前通过父级限定的 pnpm override 使用已验证的 Swiper、lodash-es、Vite 与 webpack 安全下限；Vitest 保留独立 Vite 8 工具链。`pnpm audit:prod` 只把严重/高危作为阻断门槛，原始审计中的 6 个中危项仍在风险登记中；升级与 override 退出规则见 [ADR-0013](docs/architecture/decisions/0013-auditable-transitive-security-floors.md)。
 
