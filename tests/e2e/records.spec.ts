@@ -133,3 +133,40 @@ test('record log keeps its hierarchy at wide viewport', async ({ page }) => {
   })
   expect(browserErrors).toEqual([])
 })
+
+test('metric observation keeps canonical statistics and recorded units explicit', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  const browserErrors: string[] = []
+  page.on('console', (message) => {
+    if (message.type() === 'error') browserErrors.push(message.text())
+  })
+  page.on('pageerror', (error) => browserErrors.push(error.message))
+
+  await openRecords(page)
+  await page.locator('[aria-label="体重数值"] input').fill('72.4')
+  await page.getByRole('button', { name: '保存记录' }).click()
+  await expect(page.locator('.records-layout__log').getByText('72.4 kg')).toBeVisible()
+
+  const insightResponse = page.waitForResponse(
+    (response) =>
+      response.url().includes('/v1/insights/health/body.weight') &&
+      response.request().method() === 'GET',
+  )
+  await page.getByRole('button', { name: '查看体重长期观察' }).click()
+  expect((await insightResponse).status()).toBe(200)
+  await expect(page.getByText('只看同一个指标，保留每次记录时的尺度。')).toBeVisible()
+  await expect(page.getByLabel('已确认记录 1')).toBeVisible()
+  await expect(page.getByLabel('记录日期 1')).toBeVisible()
+  await expect(page.locator('.health-calibration-mark')).toHaveCount(1)
+  await expect(page.locator('.health-observation-ledger').getByText('72.4 kg')).toBeVisible()
+  await expect(page.getByText('手动记录 · 发生时区')).toBeVisible()
+  await page.screenshot({
+    path: 'output/playwright/iteration-041-health-metric-observation-mobile.png',
+    fullPage: true,
+  })
+  await page.getByRole('button', { name: '7 天' }).click()
+  await expect(page.getByText('7 天 · 标准单位 kg')).toBeVisible()
+  expect(browserErrors).toEqual([])
+})

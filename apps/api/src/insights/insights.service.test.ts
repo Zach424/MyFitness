@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildDashboard,
   buildExerciseInsight,
+  buildHealthInsight,
   buildNutritionInsight,
   type InsightRows,
 } from './insights.service'
@@ -197,5 +198,52 @@ describe('nutrition insight projection', () => {
       nutrients: { energyKcal: 1220.13, fiberG: 4.5 },
     })
     expect(insight.windows[1]).toMatchObject({ days: 30, recordedDays: 2 })
+  })
+})
+
+describe('health insight projection', () => {
+  it('keeps canonical statistics and recorded display units with bounded points', () => {
+    const at = new Date('2026-08-05T12:00:00.000Z')
+    const points = Array.from({ length: 181 }, (_, index) => ({
+      record_id: `00000000-0000-4000-${String(8_000 + index).padStart(4, '0')}-000000000001`,
+      record_revision: index === 0 ? 2 : 1,
+      occurred_at: new Date(at.getTime() - index * 3_600_000),
+      timezone: 'America/New_York',
+      canonical_value: index === 0 ? '70' : '69',
+      canonical_unit: 'kg' as const,
+      display_value: index === 0 ? '154.3235835' : '69',
+      display_unit: index === 0 ? ('lb' as const) : ('kg' as const),
+      source_kind: 'device' as const,
+      source_metadata: { deviceName: 'Local scale' },
+    }))
+    const insight = buildHealthInsight(
+      'body.weight',
+      [
+        {
+          days: 7,
+          record_count: '2',
+          recorded_days: '2',
+          minimum: '69',
+          maximum: '70',
+          average: '69.5',
+        },
+      ],
+      points,
+      'Asia/Shanghai',
+      at,
+    )
+
+    expect(insight.canonicalUnit).toBe('kg')
+    expect(insight.windows[0]).toMatchObject({ recordCount: 2, statistics: { average: 69.5 } })
+    expect(insight.windows[1]).toMatchObject({ recordCount: 0, statistics: { average: null } })
+    expect(insight.series).toHaveLength(180)
+    expect(insight.series[0]).toMatchObject({
+      localDate: '2026-08-05',
+      recordRevision: 2,
+      displayUnit: 'lb',
+      recordTimezone: 'America/New_York',
+      source: { kind: 'device', metadata: { deviceName: 'Local scale' } },
+    })
+    expect(insight.hasMore).toBe(true)
   })
 })

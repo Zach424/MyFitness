@@ -4,11 +4,16 @@ import type {
   ExerciseInsight,
   ExerciseInsightPoint,
   ExerciseInsightWindow,
+  HealthInsight,
+  HealthInsightPoint,
+  HealthInsightWindow,
+  MetricCode,
   NutritionInsight,
   NutritionInsightDay,
   NutritionInsightWindow,
   TodayEvidence,
   TrendWindow,
+  UnitCode,
 } from '@myfitness/contracts'
 
 import { DatabaseService } from '../database/database.service'
@@ -87,6 +92,28 @@ type NutritionDayRow = {
   carbohydrate_g: string | null
   fat_g: string | null
   fiber_g: string | null
+}
+
+type HealthWindowRow = {
+  days: number
+  record_count: string
+  recorded_days: string
+  minimum: string | null
+  maximum: string | null
+  average: string | null
+}
+
+type HealthPointRow = {
+  record_id: string
+  record_revision: number
+  occurred_at: Date
+  timezone: string
+  canonical_value: string
+  canonical_unit: UnitCode
+  display_value: string
+  display_unit: UnitCode
+  source_kind: HealthInsightPoint['source']['kind']
+  source_metadata: Record<string, string>
 }
 
 const metricLabels: Record<string, string> = {
@@ -266,6 +293,60 @@ export const buildNutritionInsight = (
     timezone,
     windows: ([7, 30, 90] as const).map((days) => nutritionWindow(series, days)),
     series,
+  }
+}
+
+const healthWindow = (days: 7 | 30 | 90, row?: HealthWindowRow): HealthInsightWindow => ({
+  days,
+  recordCount: Number(row?.record_count ?? 0),
+  recordedDays: Number(row?.recorded_days ?? 0),
+  statistics: {
+    minimum: nullableRound(row?.minimum ?? null, 4),
+    maximum: nullableRound(row?.maximum ?? null, 4),
+    average: nullableRound(row?.average ?? null, 4),
+  },
+})
+
+const healthPoint = (row: HealthPointRow, timezone: string): HealthInsightPoint => {
+  const metadata = row.source_metadata ?? {}
+  return {
+    recordId: row.record_id,
+    recordRevision: row.record_revision,
+    occurredAt: row.occurred_at.toISOString(),
+    localDate: localDay(row.occurred_at, timezone),
+    recordTimezone: row.timezone,
+    canonicalValue: Number(row.canonical_value),
+    canonicalUnit: row.canonical_unit,
+    displayValue: Number(row.display_value),
+    displayUnit: row.display_unit,
+    source: {
+      kind: row.source_kind,
+      ...(Object.keys(metadata).length ? { metadata } : {}),
+    },
+  }
+}
+
+export const buildHealthInsight = (
+  metric: MetricCode,
+  windowRows: HealthWindowRow[],
+  pointRows: HealthPointRow[],
+  timezone: string,
+  at = new Date(),
+): HealthInsight => {
+  const series = pointRows.slice(0, 180).map((row) => healthPoint(row, timezone))
+  return {
+    generatedAt: at.toISOString(),
+    timezone,
+    metric,
+    canonicalUnit: series[0]?.canonicalUnit ?? null,
+    windows: ([7, 30, 90] as const).map((days) =>
+      healthWindow(
+        days,
+        windowRows.find((row) => row.days === days),
+      ),
+    ),
+    series,
+    hasMore: pointRows.length > 180,
   }
 }
 
@@ -531,5 +612,50 @@ export class InsightsService {
       [userId, timezone, at],
     )
     return buildNutritionInsight(days.rows, timezone, at)
+  }
+
+  async health(userId: string, metric: MetricCode, timezone: string, at = new Date()) {
+    const [windows, points] = await Promise.all([
+      this.database.query<HealthWindowRow>(
+        `
+          WITH windows(days) AS (VALUES (7), (30), (90))
+          SELECT windows.days,
+            COUNT(records.id)::text AS record_count,
+            COUNT(DISTINCT (records.occurred_at AT TIME ZONE $3)::date)::text AS recorded_days,
+            MIN(records.canonical_value)::text AS minimum,
+            MAX(records.canonical_value)::text AS maximum,
+            AVG(records.canonical_value)::text AS average
+          FROM windows
+          LEFT JOIN health_records records
+            ON records.user_id = $1
+            AND records.metric = $2
+            AND records.status = 'confirmed'
+            AND records.deleted_at IS NULL
+            AND records.occurred_at <= $4
+            AND records.occurred_at >= $4::timestamptz - make_interval(days => windows.days)
+          GROUP BY windows.days
+          ORDER BY windows.days
+        `,
+        [userId, metric, timezone, at],
+      ),
+      this.database.query<HealthPointRow>(
+        `
+          SELECT id AS record_id, revision AS record_revision, occurred_at, timezone,
+            canonical_value, canonical_unit, display_value, display_unit,
+            source_kind, source_metadata
+          FROM health_records
+          WHERE user_id = $1
+            AND metric = $2
+            AND status = 'confirmed'
+            AND deleted_at IS NULL
+            AND occurred_at <= $3
+            AND occurred_at >= $3::timestamptz - INTERVAL '90 days'
+          ORDER BY occurred_at DESC, created_at DESC, id DESC
+          LIMIT 181
+        `,
+        [userId, metric, at],
+      ),
+    ])
+    return buildHealthInsight(metric, windows.rows, points.rows, timezone, at)
   }
 }

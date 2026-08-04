@@ -6,6 +6,9 @@ import {
   exerciseInsightQuerySchema,
   exerciseInsightSchema,
   exerciseKeySchema,
+  healthInsightQuerySchema,
+  healthInsightSchema,
+  metricCodeSchema,
   nutritionInsightQuerySchema,
   nutritionInsightSchema,
 } from '@myfitness/contracts'
@@ -76,6 +79,49 @@ export class InsightsController {
         principal.userId,
         parsed.data.timezone,
         parsed.data.at ? new Date(parsed.data.at) : new Date(),
+      ),
+    )
+  }
+
+  @Get('health/:metric')
+  @ApiOperation({
+    summary: 'Aggregate confirmed current evidence for one exact health metric',
+  })
+  @ApiOkResponse({ schema: openApiSchema(healthInsightSchema) })
+  @ApiBadRequestResponse({ description: 'Metric, timezone or reference timestamp is invalid.' })
+  async health(
+    @CurrentUser() principal: AuthPrincipal,
+    @Param('metric') metric: string,
+    @Query('timezone') timezone: string | undefined,
+    @Query('at') at: string | undefined,
+  ) {
+    const parsedMetric = metricCodeSchema.safeParse(metric)
+    const parsedQuery = healthInsightQuerySchema.safeParse({ timezone, ...(at ? { at } : {}) })
+    if (!parsedMetric.success || !parsedQuery.success) {
+      throw new BadRequestException({
+        message: 'health insight query is invalid',
+        issues: [
+          ...(parsedMetric.success
+            ? []
+            : parsedMetric.error.issues.map((issue) => ({
+                path: 'metric',
+                message: issue.message,
+              }))),
+          ...(parsedQuery.success
+            ? []
+            : parsedQuery.error.issues.map((issue) => ({
+                path: issue.path.join('.'),
+                message: issue.message,
+              }))),
+        ],
+      })
+    }
+    return healthInsightSchema.parse(
+      await this.insights.health(
+        principal.userId,
+        parsedMetric.data,
+        parsedQuery.data.timezone,
+        parsedQuery.data.at ? new Date(parsedQuery.data.at) : new Date(),
       ),
     )
   }

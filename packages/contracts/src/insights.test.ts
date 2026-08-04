@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { exerciseInsightSchema, nutritionInsightSchema } from './insights'
+import { exerciseInsightSchema, healthInsightSchema, nutritionInsightSchema } from './insights'
 
 describe('exercise insight contract', () => {
   it('keeps evidence windows and snapshot identity explicit', () => {
@@ -134,6 +134,59 @@ describe('nutrition insight contract', () => {
       timezone: 'Asia/Shanghai',
       windows: [],
       series,
+    })
+
+    expect(result.success).toBe(false)
+  })
+})
+
+describe('health insight contract', () => {
+  it('keeps canonical statistics and recorded display provenance separate', () => {
+    const parsed = healthInsightSchema.parse({
+      generatedAt: '2026-08-05T12:00:00.000Z',
+      timezone: 'Asia/Shanghai',
+      metric: 'body.weight',
+      canonicalUnit: 'kg',
+      windows: [7, 30, 90].map((days) => ({
+        days,
+        recordCount: 1,
+        recordedDays: 1,
+        statistics: { minimum: 70, maximum: 70, average: 70 },
+      })),
+      series: [
+        {
+          recordId: '00000000-0000-4000-8000-000000000001',
+          recordRevision: 2,
+          occurredAt: '2026-08-05T10:00:00.000Z',
+          localDate: '2026-08-05',
+          recordTimezone: 'America/New_York',
+          canonicalValue: 70,
+          canonicalUnit: 'kg',
+          displayValue: 154.32,
+          displayUnit: 'lb',
+          source: { kind: 'device', metadata: { deviceName: 'Local test scale' } },
+        },
+      ],
+      hasMore: false,
+    })
+
+    expect(parsed.series[0]).toMatchObject({ canonicalUnit: 'kg', displayUnit: 'lb' })
+  })
+
+  it('rejects invented statistics for an empty metric', () => {
+    const result = healthInsightSchema.safeParse({
+      generatedAt: '2026-08-05T12:00:00.000Z',
+      timezone: 'Asia/Shanghai',
+      metric: 'recovery.energy',
+      canonicalUnit: null,
+      windows: [7, 30, 90].map((days) => ({
+        days,
+        recordCount: 0,
+        recordedDays: 0,
+        statistics: { minimum: 0, maximum: null, average: null },
+      })),
+      series: [],
+      hasMore: false,
     })
 
     expect(result.success).toBe(false)

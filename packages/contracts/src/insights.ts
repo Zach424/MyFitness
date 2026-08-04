@@ -1,6 +1,7 @@
 import * as z from 'zod'
 
 import { exerciseEquipmentSchema, exerciseTrackingModeSchema } from './exercise-catalog'
+import { metricCodeSchema, recordSourceSchema, unitCodeSchema } from './health-record'
 import { exerciseCategorySchema, exerciseKeySchema } from './workout'
 
 export const evidenceKindSchema = z.enum(['body', 'recovery', 'workout', 'nutrition'])
@@ -225,6 +226,64 @@ export const nutritionInsightSchema = z
 
 export const nutritionInsightQuerySchema = dashboardQuerySchema
 
+const healthInsightStatisticsSchema = z
+  .object({
+    minimum: z.number().finite().nullable(),
+    maximum: z.number().finite().nullable(),
+    average: z.number().finite().nullable(),
+  })
+  .strict()
+
+export const healthInsightWindowSchema = z
+  .object({
+    days: z.union([z.literal(7), z.literal(30), z.literal(90)]),
+    recordCount: z.number().int().min(0),
+    recordedDays: z.number().int().min(0),
+    statistics: healthInsightStatisticsSchema,
+  })
+  .strict()
+  .superRefine((window, ctx) => {
+    if (window.recordedDays > window.recordCount) {
+      ctx.addIssue({ code: 'custom', message: 'recordedDays cannot exceed recordCount' })
+    }
+    const statistics = Object.values(window.statistics)
+    if (window.recordCount === 0 && statistics.some((value) => value !== null)) {
+      ctx.addIssue({ code: 'custom', message: 'empty windows must keep statistics null' })
+    }
+    if (window.recordCount > 0 && statistics.some((value) => value === null)) {
+      ctx.addIssue({ code: 'custom', message: 'recorded windows require statistics' })
+    }
+  })
+
+export const healthInsightPointSchema = z
+  .object({
+    recordId: z.string().uuid(),
+    recordRevision: z.number().int().positive(),
+    occurredAt: z.string().datetime({ offset: true }),
+    localDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    recordTimezone: z.string().trim().min(1).max(64),
+    canonicalValue: z.number().finite(),
+    canonicalUnit: unitCodeSchema,
+    displayValue: z.number().finite(),
+    displayUnit: unitCodeSchema,
+    source: recordSourceSchema,
+  })
+  .strict()
+
+export const healthInsightSchema = z
+  .object({
+    generatedAt: z.string().datetime({ offset: true }),
+    timezone: z.string().trim().min(1).max(64),
+    metric: metricCodeSchema,
+    canonicalUnit: unitCodeSchema.nullable(),
+    windows: z.array(healthInsightWindowSchema).length(3),
+    series: z.array(healthInsightPointSchema).max(180),
+    hasMore: z.boolean(),
+  })
+  .strict()
+
+export const healthInsightQuerySchema = dashboardQuerySchema
+
 export type Dashboard = z.infer<typeof dashboardSchema>
 export type TodayEvidence = z.infer<typeof todayEvidenceSchema>
 export type TrendWindow = z.infer<typeof trendWindowSchema>
@@ -234,3 +293,6 @@ export type ExerciseInsightPoint = z.infer<typeof exerciseInsightPointSchema>
 export type NutritionInsight = z.infer<typeof nutritionInsightSchema>
 export type NutritionInsightDay = z.infer<typeof nutritionInsightDaySchema>
 export type NutritionInsightWindow = z.infer<typeof nutritionInsightWindowSchema>
+export type HealthInsight = z.infer<typeof healthInsightSchema>
+export type HealthInsightPoint = z.infer<typeof healthInsightPointSchema>
+export type HealthInsightWindow = z.infer<typeof healthInsightWindowSchema>

@@ -2,7 +2,7 @@
 
 Last reviewed: 2026-08-05
 
-Stage: internal alpha locally runnable; nutrition now moves from a versioned starter or owner-created food definition to immutable meal/favorite facts and a correction-safe 90-local-day observation. Missing dates retain null nutrients instead of becoming zero intake, fiber coverage stays explicit, and 7/30/90-day windows recompute after meal correction/deletion without stored rollups. Definition correction/archive/history still cannot rewrite current meal drafts, persisted meals or favorites; photo candidates remain starter-bound and privacy export v4 covers active/archived definitions and revisions. The workout definition→completed evidence→stable-key observation loop, explicit plan links, bounded freshness, measured H5/WeApp budgets, 320 px/large-text/keyboard proof and full-runtime scanning remain green. Next 16.2.11 plus patched parser/glob floors retain zero critical/high production audit findings. Privacy-first progress photos, both client candidate contracts, H5 OIDC trust, immutable workflow dependencies, exact release-source qualification, recoverable erasure, crash-safe AI and reproducible evaluation artifacts remain locally green. Owner-operated cloud, domain and real-provider work is explicitly parked while locally verifiable product gaps continue.
+Stage: internal alpha locally runnable; body/recovery now join workout and nutrition in having correction-safe current observations. Exact confirmed health metrics produce canonical-unit 7/30/90-day statistics while every bounded point preserves original display unit, source, occurrence timezone and revision; AI candidates, other metrics, future facts and other owners stay excluded. Nutrition still preserves explicit missing days/fiber coverage, exercise remains completed-set/stable-key only, and none of the projections persists duplicate sensitive state or generates a target/diagnosis. Definition snapshots, explicit plan links, bounded freshness, measured H5/WeApp budgets, 320 px/large-text/keyboard proof and full-runtime scanning remain green. Next 16.2.11 plus patched parser/glob floors retain zero critical/high production audit findings. Privacy-first progress photos, both client candidate contracts, H5 OIDC trust, immutable workflow dependencies, exact release-source qualification, recoverable erasure, crash-safe AI and reproducible evaluation artifacts remain locally green. Owner-operated cloud, domain and real-provider work is explicitly parked while locally verifiable product gaps continue.
 
 Primary release target: WeChat Mini Program + responsive H5
 
@@ -12,20 +12,20 @@ MyFitness / 衡迹 turns body, training, nutrition, and recovery records into sa
 
 ## Module status
 
-| Module                  | Status                          | Current evidence                                                        | Next gate                                   |
-| ----------------------- | ------------------------------- | ----------------------------------------------------------------------- | ------------------------------------------- |
-| Product scope           | Done for MVP baseline           | `docs/product/PRODUCT_BRIEF.md`                                         | Validate with target-user interviews        |
-| Delivery roadmap        | Done for planning baseline      | `docs/product/ROADMAP.md`                                               | Continue local gaps; keep external gates    |
-| Design language         | Partial, twenty flows tested    | Core flows + 320 px/large-text/keyboard proof + 37 reviewed screenshots | Screen readers and remaining state matrix   |
-| Client: Mini Program/H5 | Partial, candidate paths local  | H5/WeApp measured budgets plus candidate identity/release contracts     | Real providers/domains/device/browser proof |
-| Admin console           | Partial, local slice done       | OIDC BFF, exact lookup, role split and Evidence Rail exercised          | Select IdP, owner, retention and deployment |
-| Business API            | Partial                         | Verified WeChat/OIDC identity plus self-contained OCI runtime           | Shared deployment and real credential proof |
-| Domain rules            | Partial                         | Stable definitions plus correction-safe exercise/nutrition observations | Body/recovery metric observation            |
-| AI service              | Partial                         | Crash-safe runs + adversarial text/vision validators + 23 evals         | Expert corpus + approved provider canary    |
-| Native App/devices      | Deferred                        | Phase-two decision                                                      | MVP retention gate reached                  |
-| Privacy/compliance      | Partial, durable local proof    | Purpose-scoped photo consent/export/deletion + restore replay tested    | Production retention/provider/legal review  |
-| Testing/observability   | Partial                         | 226 unit, 58 integration, 31 browser tests + client quality gate        | Centralize telemetry after account approval |
-| Deployment              | Partial, source/admission ready | Immutable actions + tag/main/CI + service/client/environment gates      | Approve dossier, provision and canary       |
+| Module                  | Status                           | Current evidence                                                        | Next gate                                   |
+| ----------------------- | -------------------------------- | ----------------------------------------------------------------------- | ------------------------------------------- |
+| Product scope           | Done for MVP baseline            | `docs/product/PRODUCT_BRIEF.md`                                         | Validate with target-user interviews        |
+| Delivery roadmap        | Done for planning baseline       | `docs/product/ROADMAP.md`                                               | Continue local gaps; keep external gates    |
+| Design language         | Partial, twenty-one flows tested | Core flows + 320 px/large-text/keyboard proof + 38 reviewed screenshots | Screen readers and remaining state matrix   |
+| Client: Mini Program/H5 | Partial, candidate paths local   | H5/WeApp measured budgets plus candidate identity/release contracts     | Real providers/domains/device/browser proof |
+| Admin console           | Partial, local slice done        | OIDC BFF, exact lookup, role split and Evidence Rail exercised          | Select IdP, owner, retention and deployment |
+| Business API            | Partial                          | Verified WeChat/OIDC identity plus self-contained OCI runtime           | Shared deployment and real credential proof |
+| Domain rules            | Partial                          | Correction-safe exact exercise/nutrition/health observations            | Recoverable sensitive drafts                |
+| AI service              | Partial                          | Crash-safe runs + adversarial text/vision validators + 23 evals         | Expert corpus + approved provider canary    |
+| Native App/devices      | Deferred                         | Phase-two decision                                                      | MVP retention gate reached                  |
+| Privacy/compliance      | Partial, durable local proof     | Purpose-scoped photo consent/export/deletion + restore replay tested    | Production retention/provider/legal review  |
+| Testing/observability   | Partial                          | 231 unit, 59 integration, 32 browser tests + client quality gate        | Centralize telemetry after account approval |
+| Deployment              | Partial, source/admission ready  | Immutable actions + tag/main/CI + service/client/environment gates      | Approve dossier, provision and canary       |
 
 Status vocabulary: `Done` means validated for the present stage, `Partial` means usable but missing a named gate, `Pending` means not implemented, and `Deferred` means intentionally outside the current release.
 
@@ -44,6 +44,7 @@ Status vocabulary: `Done` means validated for the present stage, `Partial` means
 - Next.js 16 administrator BFF keeps the API credential in an HttpOnly cookie and renders the responsive Evidence Desk without user-content browsing or mutation controls.
 - Transactional adult profile, goals, risk eligibility and immutable versioned consent events with optimistic revisions.
 - Transactional measurement create/replace/soft-delete with owner-only append-only snapshots, expected revisions and idempotent creation.
+- An owner-scoped health insight endpoint accepts one exact metric code, reads only current non-deleted confirmed rows, calculates canonical-unit 7/30/90-day count/date/min/max/average evidence and returns up to 180 points with display/source/timezone/revision provenance. Candidates and unlike metrics never merge; correction/deletion recomputes without a rollup, and the client provides no diagnostic or goal verdict.
 - Transactional relational workout aggregates with ordered exercises/sets, completed-only deterministic summaries, server-authoritative completion status, expected revisions, status-insensitive idempotent creation and immutable JSON snapshots.
 - A versioned dependency-free starter exercise catalog plus owner-scoped custom definitions with searchable aliases, explicit tracking/equipment semantics, idempotent creation, optimistic correction, archive lifecycle and immutable definition revisions. Every new workout snapshots the selected semantics, so later catalog edits cannot rewrite historical facts; legacy workout snapshots remain readable.
 - An owner-scoped exercise insight endpoint groups only by exact stable key, counts sessions/metrics only from completed sets, calculates full 7/30/90-day windows in PostgreSQL and returns a bounded 180-point series with recorded snapshot fields, local date and workout revision. It reads corrected current rows, excludes soft deletions, persists no duplicate trend state and produces no progression prescription.
@@ -95,7 +96,7 @@ Status vocabulary: `Done` means validated for the present stage, `Partial` means
 | Local MinIO does not prove production object controls                                       | High   | Configure cloud bucket/KMS/IAM/lifecycle/versioning/replication and exercise outage/restore                 |
 | Domestic Android health data is fragmented                                                  | Medium | Defer device sync; start HealthKit/Health Connect/Huawei feasibility after retention gate                   |
 | Brand name “衡迹” is unverified                                                             | Medium | Treat as working name; perform trademark/domain review before public launch                                 |
-| H5 entry remains 306 KiB (above webpack's 244 KiB advisory); largest async route is 190 KiB | Medium | Enforced 320/200 KiB, 2.10 MB H5 and 735 KB WeApp budgets prevent growth; split entry before beta           |
+| H5 entry remains 306 KiB (above webpack's 244 KiB advisory); largest async route is 190 KiB | Medium | Enforced 320/200 KiB, 2.25 MB H5 and 750 KB WeApp budgets prevent growth; split entry before beta           |
 | Taro emits non-blocking webpack cache serialization warnings                                | Low    | Track upstream/package compatibility; clean builds and artifacts currently pass                             |
 | WeChat lacks real device/domain proof; H5 OIDC has only browser/provider-double proof       | High   | Exercise both real adapters/domains, callback hosting and explicit re-registration policy                   |
 | Enterprise operator OIDC tenant/client and access owner are absent                          | High   | Select provider; exercise provisioning, recertification, disablement and shared login                       |
@@ -114,6 +115,7 @@ Status vocabulary: `Done` means validated for the present stage, `Partial` means
 | Deterministic-v1 is explainable but not clinically validated                                | High   | Keep general-guidance claims; add offline evaluation and expert/content review                              |
 | Explicit links remain observations and do not validate/adapt future workload or adherence   | Medium | Keep adaptation off; define an evaluated policy and expert review before links affect future plans          |
 | Exercise trends can be mistaken for technique quality or a progression instruction          | High   | Keep completed evidence, units and revisions explicit; do not score quality or auto-prescribe load          |
+| Health metric statistics can be mistaken for normal ranges, improvement or diagnosis        | High   | Keep exact metrics/units/provenance; exclude candidates and prohibit bands, verdicts and recommendations    |
 
 ## Quality gates
 
@@ -128,4 +130,4 @@ The MVP cannot enter public beta until all of the following are reproducible:
 
 ## Primary next step
 
-Iteration 41: add a metric-specific body/recovery observation from current, confirmed, non-deleted health records. Preserve exact metric identity, canonical/display units, occurrence timezone and record revision; provide bounded 7/30/90-day evidence with correction/deletion recomputation and a compact H5/WeApp view. Do not merge unlike units, diagnose, grade goals, compare users or turn subjective recovery records into medical scores. Owner-operated cloud account/budget, domain/TLS, real WeChat/OIDC, data-custody owners, centralized telemetry, policy/filing decisions and any approved paid-provider canary remain mandatory external inputs but are parked until the user supplies them; do not describe local MinIO, fixture AI or candidate artifacts as public production.
+Iteration 42: add recoverable, versioned and expiring local drafts for workout, meal and health-record editors. Show saved-at/expiry and explicit restore/discard state; validate schemas before restore; scope by authenticated owner where available; clear on successful save, cancel, logout and account-erasure initiation. Never persist raw photos, authorization material, deletion receipts or stale AI proposals in a draft. Owner-operated cloud account/budget, domain/TLS, real WeChat/OIDC, data-custody owners, centralized telemetry, policy/filing decisions and any approved paid-provider canary remain mandatory external inputs but are parked until the user supplies them; do not describe local MinIO, fixture AI or candidate artifacts as public production.

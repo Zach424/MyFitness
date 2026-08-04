@@ -100,6 +100,19 @@
   line-height: 1.75;
 }
 
+.trend-observation-link {
+  width: 100%;
+  min-height: 42px;
+  margin: 15px 0 0;
+  border: 1px solid rgba(36, 76, 102, 0.16);
+  border-radius: var(--radius-round);
+  color: var(--color-mineral);
+  background: var(--color-paper);
+  font-size: 10px;
+  font-weight: 720;
+  line-height: 40px;
+}
+
 .records-layout {
   display: grid;
   gap: 16px;

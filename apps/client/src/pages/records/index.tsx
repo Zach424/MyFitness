@@ -406,6 +406,18 @@ const RecordsPage = () => {
                 ) : (
                   <View className="trend-empty">保存第一笔后，这里会逐步长出属于你的趋势。</View>
                 )}
+                <Button
+                  {...buttonA11yProps}
+                  className="trend-observation-link"
+                  aria-label={`查看${activeDefinition.label}长期观察`}
+                  onClick={() =>
+                    void Taro.navigateTo({
+                      url: `/pages/health-insights/index?metric=${draft.metric}`,
+                    })
+                  }
+                >
+                  查看 7 / 30 / 90 天观察 →
+                </Button>
               </View>
             </View>
 

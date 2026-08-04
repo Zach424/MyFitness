@@ -1,6 +1,6 @@
 # Health record model — measurement foundation
 
-Status: implemented through the body/recovery create, edit, history and delete lifecycle in iteration 004
+Status: create/edit/history/delete plus exact-metric observation implemented through iteration 041
 
 ## Purpose and boundary
 
@@ -58,3 +58,11 @@ This overlap is intentional: a future worker, import path or administrative tool
 - `health_record_revisions` repeats the metric/unit/source/status safety constraints. A unique `(record_id, revision)` key prevents two accepted states from claiming the same version.
 
 Occurrence time and timezone remain user-domain facts; `createdAt`, `updatedAt` and `changedAt` are server timestamps. The current client edits the value/unit while retaining the original occurrence time. Later import/admin paths must add actor/reason metadata before they may mutate records.
+
+## Exact-metric observation
+
+`GET /v1/insights/health/:metric` reads current, non-deleted, confirmed rows for exactly one shared metric code. AI candidates, other metrics, future records and other owners do not contribute. Complete 7/30/90 elapsed-day windows expose record count, distinct dates in the requested timezone and minimum/maximum/average in the metric's canonical unit.
+
+The latest 180 current points retain canonical value/unit and the original display value/unit, source provenance, occurrence instant, original record timezone and current revision. Correction and soft deletion recompute the projection from `health_records`; immutable revisions remain history rather than simultaneous trend facts. No rollup is persisted or added to privacy export.
+
+The dedicated client page may position values on a relative calibration strip, but higher/lower carries no positive or negative meaning. It must not combine metrics/units, include candidates, diagnose, define normal ranges, grade goals, compare people or prescribe behavior. ADR-0039 records this boundary.

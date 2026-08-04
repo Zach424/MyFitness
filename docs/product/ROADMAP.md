@@ -2,7 +2,7 @@
 
 The roadmap is organized as controlled iterations. A round may take several working sessions, but it ends only after implementation, validation, archive update, and a commit.
 
-Progress snapshot (2026-08-05): iterations 0–40 are complete locally. Nutrition now moves from a versioned starter/owner-created food definition to an immutable meal snapshot and an exact 90-local-day observation. Missing days stay null rather than becoming zero intake, fiber coverage stays explicit and meal correction/deletion recomputes current 7/30/90-day evidence. Exercise stable-key trends, measured H5/WeApp entry/route/page/total budgets, the 320 px/large-text/keyboard proof and zero critical/high production audit findings remain green. Hosted quality/smoke is green through the iteration-030 exact SHA; later hosted exact-SHA evidence has not been inspected in this round. Owner-operated account, budget, domain, credentials and paid-provider work remains parked while locally reproducible product gaps continue; those release gates remain mandatory.
+Progress snapshot (2026-08-05): iterations 0–41 are complete locally. Body/recovery now join workout and nutrition in having correction-safe current observations. Exact health metric codes and canonical units drive 7/30/90-day statistics while each point preserves display/source/timezone/revision provenance; candidates and cross-metric facts stay excluded. Measured H5/WeApp budgets, 320 px/large-text/keyboard proof and zero critical/high production audit findings remain green. Hosted quality/smoke is green through the iteration-030 exact SHA; later hosted exact-SHA evidence has not been inspected in this round. Owner-operated account, budget, domain, credentials and paid-provider work remains parked while locally reproducible product gaps continue; those release gates remain mandatory.
 
 | Iteration | Primary scope                                       | Exit evidence                                                                                    |
 | --------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
@@ -48,8 +48,9 @@ Progress snapshot (2026-08-05): iterations 0–40 are complete locally. Nutritio
 | 39        | User-owned food catalog and provenance              | Explicit user-confirmed nutrients, correction/archive, meal snapshots and privacy proof          |
 | 40        | Daily nutrition history and trends                  | Confirmed-meal-only daily projection, correction-safe windows and non-prescriptive client proof  |
 | 41        | Metric-specific body/recovery observation           | Unit-safe current evidence, revision detail, correction/deletion and non-diagnostic client proof |
-| 42        | Managed shared deployment, beta hardening/release   | Real identity/custody/telemetry, rollback, security/a11y/filing review and staged rollout        |
-| 43        | Native App feasibility and device sync              | Retention gate reviewed; HealthKit/Health Connect/Huawei proof of concept                        |
+| 42        | Recoverable sensitive editor drafts                 | Versioned/expiring local drafts, visible recovery and save/cancel/logout/erasure clearing proof  |
+| 43        | Managed shared deployment, beta hardening/release   | Real identity/custody/telemetry, rollback, security/a11y/filing review and staged rollout        |
+| 44        | Native App feasibility and device sync              | Retention gate reviewed; HealthKit/Health Connect/Huawei proof of concept                        |
 
 ## Release gates
 
@@ -61,14 +62,14 @@ Progress snapshot (2026-08-05): iterations 0–40 are complete locally. Nutritio
 
 ### Closed beta
 
-- Iterations 9–42 complete.
+- Iterations 9–43 complete.
 - AI evaluation set is versioned and safety validators block known high-risk cases.
 - Data export and deletion are exercised end to end.
 - Support, monitoring, cost limits, rollback, and incident ownership are assigned.
 
 ### Public release
 
-- Iteration 42 complete.
+- Iteration 43 complete.
 - Applicable ICP/APP/Mini Program privacy/AI registration and content-labeling work is reviewed.
 - Store materials match actual data practices and product claims.
 - Release starts with a small cohort and automatic rollback thresholds.

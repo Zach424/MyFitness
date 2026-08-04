@@ -361,6 +361,18 @@ Reviewed evidence:
 
 - [390 × 844 daily nutrition observation](../../output/playwright/iteration-040-nutrition-observation-mobile.png)
 
+## Health metric-observation review — iteration 041
+
+The record editor keeps its immediate seven-entry preview and links the active exact metric to a dedicated **METRIC OBSERVATION** page. The signature **Calibration Strip** uses thin neutral stems on one canonical scale; it deliberately omits trend arrows, normal zones, goal lines and positive/negative colors. High and low are labelled as numeric position only.
+
+The page states `ONE METRIC · ONE CANONICAL UNIT`, then separates confirmed record count, recorded dates and recorded-value average marked `非目标`. The ledger restores the user's original display value/unit and adds canonical conversion only when needed, followed by source, occurrence timezone and revision. AI candidates are absent by query rule and named in the empty-state boundary.
+
+The 390 px production-browser review saved 72.4 kg, opened exact `body.weight`, verified one confirmed record/date and one calibration mark, read manual source/timezone, then changed the window to seven days. The large title remains the thesis; the quiet strip is the sole expressive element. Request/page/console error capture remained empty.
+
+Reviewed evidence:
+
+- [390 × 844 exact health metric observation](../../output/playwright/iteration-041-health-metric-observation-mobile.png)
+
 ## Screenshot review checklist
 
 - The Rhythm Rail remains understandable without color.

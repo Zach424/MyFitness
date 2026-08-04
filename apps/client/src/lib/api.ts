@@ -20,8 +20,10 @@ import type {
   ConfirmFoodPhotoCandidate,
   HealthRecord,
   HealthRecordHistoryItem,
+  HealthInsight,
   Meal,
   MealHistoryItem,
+  MetricCode,
   NutritionInsight,
   OidcAuthorizationConfig,
   OidcSessionRequest,
@@ -525,6 +527,12 @@ export const getExerciseInsight = (exerciseKey: string, timezone: string) =>
 export const getNutritionInsight = (timezone: string) =>
   authenticatedRequest<NutritionInsight>(
     `/insights/nutrition?timezone=${encodeURIComponent(timezone)}`,
+    'GET',
+  )
+
+export const getHealthInsight = (metric: MetricCode, timezone: string) =>
+  authenticatedRequest<HealthInsight>(
+    `/insights/health/${encodeURIComponent(metric)}?timezone=${encodeURIComponent(timezone)}`,
     'GET',
   )
 
