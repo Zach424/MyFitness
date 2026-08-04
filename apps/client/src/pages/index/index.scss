@@ -179,6 +179,75 @@
   box-shadow: 0 2px 0 rgba(20, 36, 38, 0.02);
 }
 
+.today-plan-card {
+  margin-bottom: 16px;
+  padding: 17px;
+  border: 1px solid rgba(64, 105, 88, 0.2);
+  border-radius: var(--radius-card);
+  background: linear-gradient(135deg, rgba(234, 242, 237, 0.94), rgba(252, 253, 252, 0.98));
+}
+
+.today-plan-card--recorded {
+  border-color: rgba(64, 105, 88, 0.36);
+  box-shadow: inset 4px 0 0 var(--color-juniper);
+}
+
+.today-plan-card__heading {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.today-plan-card__title,
+.today-plan-card__meta,
+.today-plan-card__actual {
+  display: block;
+}
+
+.today-plan-card__title {
+  margin-top: 5px;
+  font-size: 20px;
+  font-weight: 770;
+  letter-spacing: -0.035em;
+}
+
+.today-plan-card__state {
+  padding: 5px 9px;
+  border-radius: 999px;
+  color: var(--color-mineral);
+  background: rgba(201, 221, 211, 0.58);
+  font-size: 10px;
+  font-weight: 760;
+}
+
+.today-plan-card__meta {
+  margin-top: 11px;
+  color: var(--color-juniper);
+  font-family: var(--font-metric);
+  font-size: 10px;
+}
+
+.today-plan-card__actual {
+  margin-top: 8px;
+  color: var(--color-muted);
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.today-plan-card__action {
+  width: fit-content;
+  min-height: 44px;
+  margin: 13px 0 0;
+  padding: 0 15px;
+  border: 1px solid rgba(36, 76, 102, 0.16);
+  border-radius: 10px;
+  color: var(--color-mineral);
+  background: var(--color-paper);
+  font-size: 11px;
+  font-weight: 720;
+}
+
 .rhythm-card {
   overflow: hidden;
   padding: 20px 16px 8px;

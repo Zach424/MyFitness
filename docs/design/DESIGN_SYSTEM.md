@@ -299,6 +299,18 @@ Reviewed evidence:
 
 - [390 × 844 evidence-shift fold](../../output/playwright/iteration-035-evidence-shift-mobile.png)
 
+## Plan-to-actual reconciliation review — iteration 036
+
+The Week Fold now carries a quiet **PLANNED ↔ RECORDED** ledger card beneath the selected session. It deliberately starts as `未关联`, lists recent workouts without preselecting one and states that the system does not match by title, date or duration. Only the user's button press changes the exact day mark from a dot to a check. A bound card shows both plan and workout revisions; if the workout later changes, the current revision appears without replacing the originally selected revision.
+
+An old-plan link is labeled `旧版关联` and never migrates itself to the current fold. Both current and old links expose one explicit unlink action. The active and closed states reuse Paper, Mineral and Juniper rather than adding success pressure, streaks or adherence scores. Partial actual workouts remain labeled partial instead of being promoted to completion.
+
+Today adds a compact planned/recorded card before the confirmed evidence rail. It appears only for an accepted session on the local Today date. Returning from Plan now refreshes both dashboard and plan projection on page show, so the card changes without a full reload. The production H5 review found and fixed that cached-page refresh gap, then found that a successful XHR `204` was surfaced by Chromium as `net::ERR_ABORTED`; the unlink API now returns a strict `200` closure receipt.
+
+Reviewed evidence:
+
+- [390 × 844 explicit plan/workout link](../../output/playwright/iteration-036-plan-link-mobile.png)
+
 ## Screenshot review checklist
 
 - The Rhythm Rail remains understandable without color.

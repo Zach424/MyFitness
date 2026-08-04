@@ -2,6 +2,7 @@ import type {
   AiExplanation,
   CreateHealthRecord,
   CreateMeal,
+  CreatePlanWorkoutLink,
   CreateWorkout,
   Dashboard,
   DevSession,
@@ -23,6 +24,8 @@ import type {
   OnboardingRequest,
   OnboardingResponse,
   PlanDecision,
+  PlanWorkoutLink,
+  PlanWorkoutLinkClosure,
   PrivacyOverview,
   RevocableConsentPurpose,
   ConsentRevocationResult,
@@ -182,10 +185,15 @@ const requestAuthSession = () => {
   return requestDevSession()
 }
 
+let pendingAuthSession: Promise<ClientSession> | undefined
+
 const getAccessToken = async () => {
   const stored = Taro.getStorageSync<string>(TOKEN_KEY)
   if (stored) return stored
-  return (await requestAuthSession()).accessToken
+  pendingAuthSession ??= requestAuthSession().finally(() => {
+    pendingAuthSession = undefined
+  })
+  return (await pendingAuthSession).accessToken
 }
 
 const privateApiUrl = (path: string) => `${API_BASE_URL.replace(/\/v1$/, '')}${path}`
@@ -445,6 +453,17 @@ export const getDashboard = (timezone: string) =>
 
 export const listWeeklyPlans = () =>
   authenticatedRequest<{ items: WeeklyPlanListItem[] }>('/plans/weekly', 'GET')
+
+export const linkPlanWorkout = (planId: string, payload: CreatePlanWorkoutLink) =>
+  authenticatedRequest<PlanWorkoutLink>(`/plans/weekly/${planId}/session-links`, 'POST', payload)
+
+export const unlinkPlanWorkout = (planId: string, linkId: string, expectedRevision: number) =>
+  authenticatedRequest<PlanWorkoutLinkClosure>(
+    `/plans/weekly/${planId}/session-links/${linkId}`,
+    'DELETE',
+    undefined,
+    { 'x-expected-revision': String(expectedRevision) },
+  )
 
 export const generateWeeklyPlan = (payload: GenerateWeeklyPlan, idempotencyKey: string) =>
   authenticatedRequest<WeeklyPlan>('/plans/weekly', 'POST', payload, {

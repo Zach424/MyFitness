@@ -227,6 +227,235 @@ describe('weekly plan API with PostgreSQL', () => {
     })
   })
 
+  it('links only explicit owner-selected current revisions and preserves closure history', async () => {
+    const generated = await request(app.getHttpServer())
+      .post('/v1/plans/weekly')
+      .set('Authorization', `Bearer ${token}`)
+      .set('x-idempotency-key', `plan-${randomUUID()}`)
+      .send({ weekStart: '2026-08-10' })
+      .expect(201)
+    const sessionDate = generated.body.days.find((day: { session: unknown }) => day.session)
+      .date as string
+    const workoutInput = {
+      title: '实际完成的自选训练',
+      source: { kind: 'manual' },
+      exercises: [
+        {
+          position: 1,
+          exerciseKey: 'goblet_squat',
+          name: '高脚杯深蹲',
+          category: 'strength',
+          sets: [{ position: 1, kind: 'working', reps: 8, completed: true }],
+        },
+      ],
+      startedAt: `${sessionDate}T10:00:00+08:00`,
+      endedAt: `${sessionDate}T10:30:00+08:00`,
+      timezone: 'Asia/Shanghai',
+      painLevel: 0,
+      fatigue: 2,
+    }
+    const workout = await request(app.getHttpServer())
+      .post('/v1/workouts')
+      .set('Authorization', `Bearer ${token}`)
+      .set('x-idempotency-key', `workout-${randomUUID()}`)
+      .send(workoutInput)
+      .expect(201)
+    const foreignWorkout = await request(app.getHttpServer())
+      .post('/v1/workouts')
+      .set('Authorization', `Bearer ${otherToken}`)
+      .set('x-idempotency-key', `workout-${randomUUID()}`)
+      .send(workoutInput)
+      .expect(201)
+
+    await request(app.getHttpServer())
+      .post(`/v1/plans/weekly/${generated.body.id}/session-links`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        expectedPlanRevision: 1,
+        sessionDate,
+        workoutId: workout.body.id,
+        expectedWorkoutRevision: 1,
+      })
+      .expect(422)
+
+    const accepted = await request(app.getHttpServer())
+      .put(`/v1/plans/weekly/${generated.body.id}/decision`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ decision: 'accepted', expectedRevision: 1, selections: [] })
+      .expect(200)
+
+    await request(app.getHttpServer())
+      .post('/v1/health-records')
+      .set('Authorization', `Bearer ${token}`)
+      .set('x-idempotency-key', `record-${randomUUID()}`)
+      .send({
+        metric: 'recovery.energy',
+        value: 5,
+        unit: 'score_1_5',
+        source: { kind: 'manual' },
+        status: 'confirmed',
+        occurredAt: new Date().toISOString(),
+        timezone: 'Asia/Shanghai',
+      })
+      .expect(201)
+    const evidenceStaleLink = await request(app.getHttpServer())
+      .post(`/v1/plans/weekly/${generated.body.id}/session-links`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        expectedPlanRevision: accepted.body.revision,
+        sessionDate,
+        workoutId: workout.body.id,
+        expectedWorkoutRevision: 1,
+      })
+      .expect(409)
+    expect(evidenceStaleLink.body).toMatchObject({ code: 'plan_evidence_changed' })
+
+    const regenerated = await request(app.getHttpServer())
+      .post('/v1/plans/weekly')
+      .set('Authorization', `Bearer ${token}`)
+      .set('x-idempotency-key', `plan-${randomUUID()}`)
+      .send({ weekStart: '2026-08-10' })
+      .expect(201)
+    const linkablePlan = await request(app.getHttpServer())
+      .put(`/v1/plans/weekly/${generated.body.id}/decision`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ decision: 'accepted', expectedRevision: regenerated.body.revision, selections: [] })
+      .expect(200)
+
+    await request(app.getHttpServer())
+      .post(`/v1/plans/weekly/${generated.body.id}/session-links`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        expectedPlanRevision: 1,
+        sessionDate,
+        workoutId: workout.body.id,
+        expectedWorkoutRevision: 1,
+      })
+      .expect(409)
+    await request(app.getHttpServer())
+      .post(`/v1/plans/weekly/${generated.body.id}/session-links`)
+      .set('Authorization', `Bearer ${otherToken}`)
+      .send({
+        expectedPlanRevision: linkablePlan.body.revision,
+        sessionDate,
+        workoutId: foreignWorkout.body.id,
+        expectedWorkoutRevision: 1,
+      })
+      .expect(404)
+    await request(app.getHttpServer())
+      .post(`/v1/plans/weekly/${generated.body.id}/session-links`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        expectedPlanRevision: linkablePlan.body.revision,
+        sessionDate,
+        workoutId: foreignWorkout.body.id,
+        expectedWorkoutRevision: 1,
+      })
+      .expect(404)
+
+    const linked = await request(app.getHttpServer())
+      .post(`/v1/plans/weekly/${generated.body.id}/session-links`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        expectedPlanRevision: linkablePlan.body.revision,
+        sessionDate,
+        workoutId: workout.body.id,
+        expectedWorkoutRevision: 1,
+      })
+      .expect(201)
+    expect(linked.body).toMatchObject({
+      planId: generated.body.id,
+      planRevision: linkablePlan.body.revision,
+      sessionDate,
+      workoutId: workout.body.id,
+      workoutRevision: 1,
+      currentWorkoutRevision: 1,
+      revision: 1,
+    })
+
+    const replay = await request(app.getHttpServer())
+      .post(`/v1/plans/weekly/${generated.body.id}/session-links`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        expectedPlanRevision: linkablePlan.body.revision,
+        sessionDate,
+        workoutId: workout.body.id,
+        expectedWorkoutRevision: 1,
+      })
+      .expect(201)
+    expect(replay.body.id).toBe(linked.body.id)
+
+    const updatedWorkout = await request(app.getHttpServer())
+      .put(`/v1/workouts/${workout.body.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ ...workoutInput, title: '修订后的实际训练', expectedRevision: 1 })
+      .expect(200)
+    const linkedList = await request(app.getHttpServer())
+      .get('/v1/plans/weekly')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200)
+    expect(linkedList.body.items[0].sessionLinks[0]).toMatchObject({
+      id: linked.body.id,
+      workoutRevision: 1,
+      currentWorkoutRevision: 2,
+      workoutTitle: '修订后的实际训练',
+    })
+
+    await request(app.getHttpServer())
+      .delete(`/v1/plans/weekly/${generated.body.id}/session-links/${linked.body.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('x-expected-revision', '1')
+      .expect(200)
+    const unlinkedList = await request(app.getHttpServer())
+      .get('/v1/plans/weekly')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200)
+    expect(unlinkedList.body.items[0].sessionLinks).toEqual([])
+
+    const relinked = await request(app.getHttpServer())
+      .post(`/v1/plans/weekly/${generated.body.id}/session-links`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        expectedPlanRevision: linkablePlan.body.revision,
+        sessionDate,
+        workoutId: workout.body.id,
+        expectedWorkoutRevision: updatedWorkout.body.revision,
+      })
+      .expect(201)
+    expect(relinked.body.id).not.toBe(linked.body.id)
+
+    await request(app.getHttpServer())
+      .delete(`/v1/workouts/${workout.body.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('x-expected-revision', String(updatedWorkout.body.revision))
+      .expect(204)
+    const closedByDeletion = await pool.query<{
+      revision: number
+      unlink_reason: string
+    }>(
+      `SELECT revision, unlink_reason FROM plan_workout_links
+       WHERE id = $1 AND unlinked_at IS NOT NULL`,
+      [relinked.body.id],
+    )
+    expect(closedByDeletion.rows[0]).toMatchObject({
+      revision: 2,
+      unlink_reason: 'workout_deleted',
+    })
+
+    const exported = await request(app.getHttpServer())
+      .get('/v1/me/privacy/export')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200)
+    const exportedPlan = exported.body.data.weeklyPlans.find(
+      (plan: { id: string }) => plan.id === generated.body.id,
+    ) as { workout_links: Array<{ unlink_reason: string }> }
+    expect(exportedPlan.workout_links).toHaveLength(2)
+    expect(exportedPlan.workout_links.map((link) => link.unlink_reason)).toEqual([
+      'user',
+      'workout_deleted',
+    ])
+  })
+
   it('regenerates changed constraints and blocks unsafe decisions on an existing plan', async () => {
     const generated = await request(app.getHttpServer())
       .post('/v1/plans/weekly')

@@ -1,4 +1,10 @@
-import type { PlanDecision, PlanFreshness, WeeklyPlan } from '@myfitness/contracts'
+import type {
+  PlanDecision,
+  PlanFreshness,
+  PlanWorkoutLink,
+  WeeklyPlan,
+  WeeklyPlanListItem,
+} from '@myfitness/contracts'
 
 const localDate = (date: Date) => {
   const pad = (value: number) => String(value).padStart(2, '0')
@@ -114,4 +120,36 @@ export const planFreshnessNotice = (freshness: PlanFreshness) => {
     body: '采用、替换动作和 AI 边注已冻结；历史计划仍保留。完成个人资料与安全问答后，再生成新的本周折页。',
     actionLabel: '完成个人资料',
   }
+}
+
+export const planDayLinks = (
+  plan: Pick<WeeklyPlanListItem, 'id' | 'revision' | 'sessionLinks'>,
+  sessionDate: string,
+) => {
+  const matching = plan.sessionLinks.filter((link) => link.sessionDate === sessionDate)
+  return {
+    current: matching.find((link) => link.planRevision === plan.revision),
+    previous: matching.find((link) => link.planRevision !== plan.revision),
+  }
+}
+
+export type TodayPlanReconciliation = {
+  plan: WeeklyPlanListItem
+  day: WeeklyPlanListItem['days'][number]
+  link?: PlanWorkoutLink
+  state: 'planned' | 'recorded'
+}
+
+export const todayPlanReconciliation = (
+  plans: WeeklyPlanListItem[],
+  date: string,
+): TodayPlanReconciliation | undefined => {
+  for (const plan of plans) {
+    if (plan.status !== 'accepted') continue
+    const day = plan.days.find((candidate) => candidate.date === date)
+    if (!day?.session) continue
+    const link = planDayLinks(plan, date).current
+    return { plan, day, ...(link ? { link } : {}), state: link ? 'recorded' : 'planned' }
+  }
+  return undefined
 }

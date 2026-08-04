@@ -8,10 +8,12 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common'
 import type {
+  CreatePlanWorkoutLink,
   GenerateWeeklyPlan,
   PlanDecision,
   OnboardingResponse,
   PlanFreshness,
+  PlanWorkoutLink,
   WeeklyPlan,
   WeeklyPlanContent,
   WeeklyPlanHistoryItem,
@@ -54,6 +56,30 @@ type PlanRow = {
   updated_at: Date
 }
 
+type PlanWorkoutLinkRow = {
+  id: string
+  user_id: string
+  plan_id: string
+  plan_revision: number
+  session_date: string | Date
+  workout_id: string
+  workout_revision: number
+  revision: number
+  linked_at: Date
+  workout_title: string
+  workout_status: PlanWorkoutLink['workoutStatus']
+  workout_started_at: Date
+  current_workout_revision: number
+}
+
+type LinkableWorkoutRow = {
+  id: string
+  revision: number
+  title: string
+  status: PlanWorkoutLink['workoutStatus']
+  started_at: Date
+}
+
 const localDate = (value: string | Date) => {
   if (typeof value === 'string') return value.slice(0, 10)
   const pad = (part: number) => String(part).padStart(2, '0')
@@ -78,6 +104,47 @@ const mapPlan = (row: PlanRow): WeeklyPlan => ({
   createdAt: row.created_at.toISOString(),
   updatedAt: row.updated_at.toISOString(),
 })
+
+const mapPlanWorkoutLink = (row: PlanWorkoutLinkRow): PlanWorkoutLink => ({
+  id: row.id,
+  userId: row.user_id,
+  planId: row.plan_id,
+  planRevision: row.plan_revision,
+  sessionDate: localDate(row.session_date),
+  workoutId: row.workout_id,
+  workoutRevision: row.workout_revision,
+  currentWorkoutRevision: row.current_workout_revision,
+  workoutTitle: row.workout_title,
+  workoutStatus: row.workout_status,
+  workoutStartedAt: row.workout_started_at.toISOString(),
+  revision: row.revision,
+  linkedAt: row.linked_at.toISOString(),
+})
+
+const loadActivePlanWorkoutLinks = async (
+  executor: QueryExecutor,
+  userId: string,
+  planIds: string[],
+) => {
+  if (!planIds.length) return []
+  const result = await executor.query<PlanWorkoutLinkRow>(
+    `
+      SELECT link.*, workout.title AS workout_title, workout.status AS workout_status,
+             workout.started_at AS workout_started_at,
+             workout.revision AS current_workout_revision
+      FROM plan_workout_links AS link
+      JOIN workout_sessions AS workout
+        ON workout.id = link.workout_id AND workout.user_id = link.user_id
+      WHERE link.user_id = $1
+        AND link.plan_id = ANY($2::uuid[])
+        AND link.unlinked_at IS NULL
+        AND workout.deleted_at IS NULL
+      ORDER BY link.linked_at DESC
+    `,
+    [userId, planIds],
+  )
+  return result.rows.map(mapPlanWorkoutLink)
+}
 
 const projectFreshness = (
   plan: WeeklyPlan,
@@ -318,6 +385,17 @@ export class PlansService {
       `,
       [userId],
     )
+    const sessionLinks = await loadActivePlanWorkoutLinks(
+      this.database,
+      userId,
+      result.rows.map((row) => row.id),
+    )
+    const linksByPlan = new Map<string, PlanWorkoutLink[]>()
+    for (const link of sessionLinks) {
+      const current = linksByPlan.get(link.planId) ?? []
+      current.push(link)
+      linksByPlan.set(link.planId, current)
+    }
     let profile: OnboardingResponse | undefined
     try {
       profile = await this.onboarding.get(userId)
@@ -336,9 +414,168 @@ export class PlansService {
         return {
           ...plan,
           freshness: projectFreshness(plan, profile, currentReadinessScore, checkedAt),
+          sessionLinks: linksByPlan.get(plan.id) ?? [],
         }
       }),
     }
+  }
+
+  async linkWorkout(
+    userId: string,
+    planId: string,
+    input: CreatePlanWorkoutLink,
+  ): Promise<PlanWorkoutLink> {
+    return this.database.withTransaction(async (client) => {
+      const current = await client.query<PlanRow>(
+        'SELECT * FROM weekly_plans WHERE id = $1 AND user_id = $2 FOR UPDATE',
+        [planId, userId],
+      )
+      const row = current.rows[0]
+      if (!row) throw new NotFoundException('weekly plan not found')
+      if (row.revision !== input.expectedPlanRevision) {
+        throw new ConflictException({
+          code: 'plan_revision_changed',
+          message: `plan revision changed; current revision is ${row.revision}`,
+          currentRevision: row.revision,
+        })
+      }
+      if (row.status !== 'accepted') {
+        throw new UnprocessableEntityException({
+          code: 'plan_not_adopted',
+          message: 'Only an explicitly accepted plan can be linked to an actual workout.',
+        })
+      }
+
+      const plan = mapPlan(row)
+      const day = plan.days.find((candidate) => candidate.date === input.sessionDate)
+      if (!day?.session) {
+        throw new UnprocessableEntityException({
+          code: 'plan_session_not_found',
+          message: 'The selected plan revision has no session on that date.',
+        })
+      }
+      const profile = await this.loadEligibleProfile(userId)
+      if (profile.revision !== plan.evidence.onboardingRevision) {
+        throw new ConflictException({
+          code: 'plan_profile_changed',
+          message: 'Planning constraints changed; regenerate and accept the current plan first.',
+        })
+      }
+      await this.assertEvidenceCurrent(userId, profile, plan.evidence.readinessScore)
+
+      const workouts = await client.query<LinkableWorkoutRow>(
+        `
+          SELECT id, revision, title, status, started_at
+          FROM workout_sessions
+          WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL
+          FOR UPDATE
+        `,
+        [input.workoutId, userId],
+      )
+      const workout = workouts.rows[0]
+      if (!workout) throw new NotFoundException('workout not found')
+      if (workout.revision !== input.expectedWorkoutRevision) {
+        throw new ConflictException({
+          code: 'workout_revision_changed',
+          message: `workout revision changed; current revision is ${workout.revision}`,
+          currentRevision: workout.revision,
+        })
+      }
+
+      const active = await client.query<PlanWorkoutLinkRow>(
+        `
+          SELECT link.*, workout.title AS workout_title, workout.status AS workout_status,
+                 workout.started_at AS workout_started_at,
+                 workout.revision AS current_workout_revision
+          FROM plan_workout_links AS link
+          JOIN workout_sessions AS workout
+            ON workout.id = link.workout_id AND workout.user_id = link.user_id
+          WHERE link.user_id = $1 AND link.unlinked_at IS NULL
+            AND (
+              link.workout_id = $2
+              OR (
+                link.plan_id = $3 AND link.plan_revision = $4 AND link.session_date = $5
+              )
+            )
+          FOR UPDATE OF link
+        `,
+        [userId, input.workoutId, planId, input.expectedPlanRevision, input.sessionDate],
+      )
+      const exact = active.rows.find(
+        (link) =>
+          link.workout_id === input.workoutId &&
+          link.plan_id === planId &&
+          link.plan_revision === input.expectedPlanRevision &&
+          localDate(link.session_date) === input.sessionDate,
+      )
+      if (exact && exact.workout_revision === input.expectedWorkoutRevision) {
+        return mapPlanWorkoutLink(exact)
+      }
+      if (active.rows.length) {
+        throw new ConflictException({
+          code: 'plan_workout_link_conflict',
+          message: 'The session or workout already has another active explicit link.',
+        })
+      }
+
+      const inserted = await client.query<PlanWorkoutLinkRow>(
+        `
+          INSERT INTO plan_workout_links (
+            id, user_id, plan_id, plan_revision, session_date, workout_id, workout_revision
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+          RETURNING *, $8::text AS workout_title, $9::text AS workout_status,
+                    $10::timestamptz AS workout_started_at,
+                    $7::integer AS current_workout_revision
+        `,
+        [
+          randomUUID(),
+          userId,
+          planId,
+          input.expectedPlanRevision,
+          input.sessionDate,
+          input.workoutId,
+          input.expectedWorkoutRevision,
+          workout.title,
+          workout.status,
+          workout.started_at,
+        ],
+      )
+      return mapPlanWorkoutLink(inserted.rows[0]!)
+    })
+  }
+
+  async unlinkWorkout(userId: string, planId: string, linkId: string, expectedRevision: number) {
+    return this.database.withTransaction(async (client) => {
+      const result = await client.query<{ id: string; revision: number; unlinked_at: Date }>(
+        `
+          UPDATE plan_workout_links
+          SET unlinked_at = NOW(), unlink_reason = 'user', revision = revision + 1
+          WHERE id = $1 AND plan_id = $2 AND user_id = $3
+            AND unlinked_at IS NULL AND revision = $4
+          RETURNING id, revision, unlinked_at
+        `,
+        [linkId, planId, userId, expectedRevision],
+      )
+      if (result.rows[0]) {
+        return {
+          linkId: result.rows[0].id,
+          revision: result.rows[0].revision,
+          unlinkedAt: result.rows[0].unlinked_at.toISOString(),
+        }
+      }
+
+      const existing = await client.query<{ revision: number; unlinked_at: Date | null }>(
+        'SELECT revision, unlinked_at FROM plan_workout_links WHERE id = $1 AND plan_id = $2 AND user_id = $3',
+        [linkId, planId, userId],
+      )
+      const row = existing.rows[0]
+      if (!row || row.unlinked_at) throw new NotFoundException('active plan workout link not found')
+      throw new ConflictException({
+        code: 'plan_workout_link_revision_changed',
+        message: `plan workout link revision changed; current revision is ${row.revision}`,
+        currentRevision: row.revision,
+      })
+    })
   }
 
   async getActionableForAi(userId: string, planId: string, expectedRevision: number) {

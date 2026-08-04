@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Button, ScrollView, Text, View } from '@tarojs/components'
-import Taro from '@tarojs/taro'
-import type { Dashboard, TodayEvidence } from '@myfitness/contracts'
+import Taro, { useDidShow } from '@tarojs/taro'
+import type { Dashboard, TodayEvidence, WeeklyPlanListItem } from '@myfitness/contracts'
 
 import { buttonA11yProps } from '../../lib/accessibility'
-import { getDashboard } from '../../lib/api'
+import { getDashboard, listWeeklyPlans } from '../../lib/api'
+import { todayPlanReconciliation } from '../plans/plan.model'
 import './index.scss'
 
 const quickActions = [
@@ -78,21 +79,28 @@ const RailEntry = ({ item }: { item: TodayEvidence }) => (
 
 const IndexPage = () => {
   const [dashboard, setDashboard] = useState<Dashboard>()
+  const [plans, setPlans] = useState<WeeklyPlanListItem[]>([])
   const [trendDays, setTrendDays] = useState<7 | 30 | 90>(7)
   const [feedback, setFeedback] = useState('')
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
+  useDidShow(() => {
     void (async () => {
+      setLoading(true)
       try {
-        setDashboard(await getDashboard(timezone()))
+        const [nextDashboard, nextPlans] = await Promise.all([
+          getDashboard(timezone()),
+          listWeeklyPlans(),
+        ])
+        setDashboard(nextDashboard)
+        setPlans(nextPlans.items)
       } catch (error) {
         setFeedback(error instanceof Error ? error.message : '今日数据暂时无法读取，请稍后重试。')
       } finally {
         setLoading(false)
       }
     })()
-  }, [])
+  })
 
   const readiness = dashboard?.readiness ?? {
     score: null,
@@ -103,6 +111,9 @@ const IndexPage = () => {
     factors: [],
   }
   const rail = dashboard?.today.items ?? []
+  const planReconciliation = dashboard
+    ? todayPlanReconciliation(plans, dashboard.today.date)
+    : undefined
   const trend = dashboard?.trends.find((item) => item.days === trendDays)
   const activeTicks = readiness.score === null ? 0 : Math.ceil(readiness.score / 20)
 
@@ -154,6 +165,49 @@ const IndexPage = () => {
                   </View>
                 </View>
               </View>
+
+              {planReconciliation?.day.session ? (
+                <View
+                  className={`today-plan-card today-plan-card--${planReconciliation.state}`}
+                  aria-label={`今日计划训练，${planReconciliation.state === 'recorded' ? '已明确关联实际训练' : '尚未关联实际训练'}`}
+                >
+                  <View className="today-plan-card__heading">
+                    <View>
+                      <Text className="eyebrow">PLANNED ↔ RECORDED</Text>
+                      <Text className="today-plan-card__title">
+                        {planReconciliation.day.session.title}
+                      </Text>
+                    </View>
+                    <Text className="today-plan-card__state">
+                      {planReconciliation.state === 'recorded' ? '已记录' : '待记录'}
+                    </Text>
+                  </View>
+                  <Text className="today-plan-card__meta metric">
+                    PLAN v{planReconciliation.plan.revision} ·{' '}
+                    {planReconciliation.day.session.plannedMinutes} MIN
+                  </Text>
+                  {planReconciliation.link ? (
+                    <Text className="today-plan-card__actual">
+                      实际：{planReconciliation.link.workoutTitle} ·{' '}
+                      {planReconciliation.link.workoutStatus === 'completed'
+                        ? '全部完成'
+                        : '部分完成'}
+                      {' · '}WORKOUT v{planReconciliation.link.currentWorkoutRevision}
+                    </Text>
+                  ) : (
+                    <Text className="today-plan-card__actual">
+                      只有你在计划页主动选择训练记录后，这里才会显示“已记录”。
+                    </Text>
+                  )}
+                  <Button
+                    {...buttonA11yProps}
+                    className="today-plan-card__action"
+                    onClick={openPlans}
+                  >
+                    {planReconciliation.state === 'recorded' ? '查看关联' : '去选择实际记录'}
+                  </Button>
+                </View>
+              ) : null}
 
               <View className="section rhythm-card">
                 <View className="section-heading">

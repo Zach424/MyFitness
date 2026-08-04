@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   Headers,
   HttpCode,
@@ -23,15 +24,21 @@ import {
   ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger'
 import {
+  createPlanWorkoutLinkSchema,
+  expectedRevisionHeaderSchema,
   generateWeeklyPlanSchema,
   idempotencyKeySchema,
   planDecisionSchema,
+  planWorkoutLinkIdSchema,
+  planWorkoutLinkClosureSchema,
+  planWorkoutLinkSchema,
   weeklyPlanHistorySchema,
   weeklyPlanIdSchema,
   weeklyPlanListSchema,
   weeklyPlanSchema,
   type GenerateWeeklyPlan,
   type PlanDecision,
+  type CreatePlanWorkoutLink,
 } from '@myfitness/contracts'
 import * as z from 'zod'
 
@@ -90,6 +97,58 @@ export class PlansController {
   @ApiOkResponse({ schema: openApiSchema(weeklyPlanListSchema) })
   async list(@CurrentUser() principal: AuthPrincipal) {
     return weeklyPlanListSchema.parse(await this.plans.list(principal.userId))
+  }
+
+  @Post(':planId/session-links')
+  @ApiOperation({ summary: 'Explicitly link one plan session revision to one actual workout' })
+  @ApiParam({ name: 'planId', schema: { type: 'string', format: 'uuid' } })
+  @ApiBody({ schema: openApiSchema(createPlanWorkoutLinkSchema) })
+  @ApiCreatedResponse({ schema: openApiSchema(planWorkoutLinkSchema) })
+  @ApiBadRequestResponse({ description: 'Plan session link input is invalid.' })
+  @ApiConflictResponse({ description: 'Plan, workout or evidence revision is stale or linked.' })
+  @ApiNotFoundResponse({ description: 'Plan or workout does not exist for this user.' })
+  @ApiUnprocessableEntityResponse({ description: 'Plan is not adopted or has no such session.' })
+  async linkWorkout(
+    @CurrentUser() principal: AuthPrincipal,
+    @Param('planId') rawPlanId: string,
+    @Body() body: unknown,
+  ) {
+    const planId = parse(weeklyPlanIdSchema, rawPlanId, 'planId must be a UUID')
+    const input: CreatePlanWorkoutLink = parse(
+      createPlanWorkoutLinkSchema,
+      body,
+      'plan workout link is invalid',
+    )
+    return planWorkoutLinkSchema.parse(
+      await this.plans.linkWorkout(principal.userId, planId, input),
+    )
+  }
+
+  @Delete(':planId/session-links/:linkId')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Close an explicit plan-to-workout link without deleting its history' })
+  @ApiParam({ name: 'planId', schema: { type: 'string', format: 'uuid' } })
+  @ApiParam({ name: 'linkId', schema: { type: 'string', format: 'uuid' } })
+  @ApiHeader({ name: 'x-expected-revision', required: true })
+  @ApiOkResponse({ schema: openApiSchema(planWorkoutLinkClosureSchema) })
+  @ApiConflictResponse({ description: 'Expected link revision does not match.' })
+  @ApiNotFoundResponse({ description: 'Active link does not exist for this user and plan.' })
+  async unlinkWorkout(
+    @CurrentUser() principal: AuthPrincipal,
+    @Param('planId') rawPlanId: string,
+    @Param('linkId') rawLinkId: string,
+    @Headers('x-expected-revision') rawRevision: string | undefined,
+  ) {
+    const planId = parse(weeklyPlanIdSchema, rawPlanId, 'planId must be a UUID')
+    const linkId = parse(planWorkoutLinkIdSchema, rawLinkId, 'linkId must be a UUID')
+    const revision = parse(
+      expectedRevisionHeaderSchema,
+      rawRevision,
+      'x-expected-revision is invalid or missing',
+    )
+    return planWorkoutLinkClosureSchema.parse(
+      await this.plans.unlinkWorkout(principal.userId, planId, linkId, revision),
+    )
   }
 
   @Put(':planId/decision')

@@ -39,7 +39,9 @@ const collectBrowserErrors = (page: Page, allowedResponse?: (response: Response)
   })
   page.on('pageerror', (error) => errors.push(error.message))
   page.on('requestfailed', (request) =>
-    errors.push(`Request failed: ${request.method()} ${request.url()}`),
+    errors.push(
+      `Request failed: ${request.method()} ${request.url()} (${request.failure()?.errorText ?? 'unknown'})`,
+    ),
   )
   page.on('response', (response) => {
     if (response.status() < 400 || allowedResponse?.(response)) return
@@ -48,7 +50,7 @@ const collectBrowserErrors = (page: Page, allowedResponse?: (response: Response)
   return errors
 }
 
-const onboarding = (riskFlags: string[] = []) => ({
+const onboarding = (riskFlags: string[] = [], availableDays: string[] = ['tue', 'thu', 'sat']) => ({
   adultConfirmed: true,
   profile: {
     displayName: '计划浏览器测试',
@@ -61,7 +63,7 @@ const onboarding = (riskFlags: string[] = []) => ({
   goal: {
     primaryGoal: 'habit',
     experience: 'beginner',
-    availableDays: ['tue', 'thu', 'sat'],
+    availableDays,
     sessionMinutes: 45,
     equipment: ['dumbbells'],
     dietaryPreferences: ['none'],
@@ -74,7 +76,11 @@ const onboarding = (riskFlags: string[] = []) => ({
   },
 })
 
-const seedProfileAndOpenPlans = async (page: Page, riskFlags: string[] = []) => {
+const seedProfileAndOpenPlans = async (
+  page: Page,
+  riskFlags: string[] = [],
+  availableDays?: string[],
+) => {
   const sessionPromise = page.waitForResponse((response) =>
     response.url().endsWith('/v1/auth/dev/session'),
   )
@@ -84,7 +90,7 @@ const seedProfileAndOpenPlans = async (page: Page, riskFlags: string[] = []) => 
   const { accessToken } = (await session.json()) as { accessToken: string }
   const profile = await page.request.put('http://127.0.0.1:3100/v1/me/onboarding', {
     headers: { Authorization: `Bearer ${accessToken}` },
-    data: onboarding(riskFlags),
+    data: onboarding(riskFlags, availableDays),
   })
   expect(profile.status()).toBe(200)
   await page.getByRole('button', { name: '计划' }).click()
@@ -267,5 +273,83 @@ test('material recovery evidence freezes the old fold and regenerates it safely'
   await expect(alert).not.toBeVisible()
   await expect(page.getByText('v2', { exact: true }).first()).toBeVisible()
   await expect(page.locator('.evidence-strip__value').filter({ hasText: '100' })).toBeVisible()
+  expect(errors).toEqual([])
+})
+
+test('user explicitly reconciles a planned session with one actual workout', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  const errors = collectBrowserErrors(page)
+  const todayWeekday = new Intl.DateTimeFormat('en-US', {
+    weekday: 'short',
+    timeZone: 'Asia/Shanghai',
+  })
+    .format(new Date())
+    .toLowerCase()
+  const accessToken = await seedProfileAndOpenPlans(page, [], [todayWeekday])
+  const generation = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/v1/plans/weekly') && response.request().method() === 'POST',
+  )
+  await page.getByRole('button', { name: /生成 .* 初稿/ }).click()
+  const generated = (await (await generation).json()) as {
+    days: Array<{ date: string; session: unknown }>
+  }
+  const sessionDate = generated.days.find((day) => day.session)?.date
+  expect(sessionDate).toBeTruthy()
+  await page.getByRole('button', { name: '采用这份计划' }).click()
+  await expect(page.getByText('已采用', { exact: true })).toBeVisible()
+
+  const workout = await page.request.post('http://127.0.0.1:3100/v1/workouts', {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'x-idempotency-key': `plan-link-workout-${randomUUID()}`,
+    },
+    data: {
+      title: '显式关联训练',
+      source: { kind: 'manual' },
+      exercises: [
+        {
+          position: 1,
+          exerciseKey: 'goblet_squat',
+          name: '高脚杯深蹲',
+          category: 'strength',
+          sets: [{ position: 1, kind: 'working', reps: 8, completed: true }],
+        },
+      ],
+      startedAt: `${sessionDate}T10:00:00+08:00`,
+      endedAt: `${sessionDate}T10:30:00+08:00`,
+      timezone: 'Asia/Shanghai',
+      painLevel: 0,
+      fatigue: 2,
+    },
+  })
+  expect(workout.status()).toBe(201)
+
+  await page.getByRole('button', { name: '检查版本' }).click()
+  await expect(page.getByText('系统不会预选或自动匹配。')).toBeVisible()
+  const linkResponse = page.waitForResponse(
+    (response) => response.url().endsWith('/session-links') && response.status() === 201,
+  )
+  await page.getByRole('button', { name: /显式关联训练.*全部完成.*v1/ }).click()
+  expect((await linkResponse).status()).toBe(201)
+  await expect(
+    page.getByText('这是你的明确选择，不是根据标题、日期或时长推测的完成情况。'),
+  ).toBeVisible()
+  await expect(page.locator('.week-fold__day--recorded')).toHaveCount(1)
+  await page.locator('.session-link-card').scrollIntoViewIfNeeded()
+  await page.screenshot({ path: 'output/playwright/iteration-036-plan-link-mobile.png' })
+
+  await page.getByRole('button', { name: '返回今日' }).click()
+  await expect(page.getByText('实际：显式关联训练')).toBeVisible()
+  await expect(page.getByText('已记录', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: '查看关联' }).click()
+  await expect(page.locator('.session-link-card__workout')).toHaveText('显式关联训练')
+
+  const unlinkResponse = page.waitForResponse(
+    (response) => response.url().includes('/session-links/') && response.status() === 200,
+  )
+  await page.getByRole('button', { name: '解除关联' }).click()
+  expect((await unlinkResponse).status()).toBe(200)
+  await expect(page.getByText('系统不会预选或自动匹配。')).toBeVisible()
   expect(errors).toEqual([])
 })

@@ -2,7 +2,7 @@
 
 Last reviewed: 2026-08-04
 
-Stage: internal alpha locally runnable; weekly plans now carry server-projected profile, eligibility and bounded record-evidence freshness. Normal workout/meal logging does not churn a plan, while recovery evidence crossing the actual `deterministic-v1` boundary freezes unsafe actions and supports browser-proven same-plan regeneration. The client release boundary retains measured H5/WeApp budgets, 320 px/large-text/keyboard proof and full-runtime regression scanning. Next 16.2.11 plus patched parser/glob floors restore zero critical/high production audit findings. Server-authoritative workout completion, privacy-first progress photos, both client candidate contracts, H5 OIDC trust, immutable workflow dependencies, exact release-source qualification, recoverable erasure, crash-safe AI and reproducible evaluation artifacts remain locally green. Owner-operated cloud, domain and real-provider work is explicitly parked while locally verifiable product gaps continue.
+Stage: internal alpha locally runnable; accepted weekly-plan sessions can now be explicitly bound to one owner-selected workout revision, displayed as planned versus recorded in the Week Fold and Today, and unlinked without erasing custody history. Cross-owner, stale, unadopted, empty-day and conflicting relationships fail at the server, while no title/date/duration matching creates adherence facts. Bounded profile/recovery freshness, measured H5/WeApp budgets, 320 px/large-text/keyboard proof and full-runtime scanning remain green. Next 16.2.11 plus patched parser/glob floors retain zero critical/high production audit findings. Server-authoritative workout completion, privacy-first progress photos, both client candidate contracts, H5 OIDC trust, immutable workflow dependencies, exact release-source qualification, recoverable erasure, crash-safe AI and reproducible evaluation artifacts remain locally green. Owner-operated cloud, domain and real-provider work is explicitly parked while locally verifiable product gaps continue.
 
 Primary release target: WeChat Mini Program + responsive H5
 
@@ -16,15 +16,15 @@ MyFitness / 衡迹 turns body, training, nutrition, and recovery records into sa
 | ----------------------- | ------------------------------- | ----------------------------------------------------------------------- | ------------------------------------------- |
 | Product scope           | Done for MVP baseline           | `docs/product/PRODUCT_BRIEF.md`                                         | Validate with target-user interviews        |
 | Delivery roadmap        | Done for planning baseline      | `docs/product/ROADMAP.md`                                               | Continue local gaps; keep external gates    |
-| Design language         | Partial, fifteen flows tested   | Core flows + 320 px/large-text/keyboard proof + 32 reviewed screenshots | Screen readers and remaining state matrix   |
+| Design language         | Partial, sixteen flows tested   | Core flows + 320 px/large-text/keyboard proof + 33 reviewed screenshots | Screen readers and remaining state matrix   |
 | Client: Mini Program/H5 | Partial, candidate paths local  | H5/WeApp measured budgets plus candidate identity/release contracts     | Real providers/domains/device/browser proof |
 | Admin console           | Partial, local slice done       | OIDC BFF, exact lookup, role split and Evidence Rail exercised          | Select IdP, owner, retention and deployment |
 | Business API            | Partial                         | Verified WeChat/OIDC identity plus self-contained OCI runtime           | Shared deployment and real credential proof |
-| Domain rules            | Partial                         | Workout authority + bounded plan evidence freshness + safety validators | Link planned sessions to actual workouts    |
+| Domain rules            | Partial                         | Workout authority + bounded freshness + explicit revision-bound links   | User-owned exercise/equipment semantics     |
 | AI service              | Partial                         | Crash-safe runs + adversarial text/vision validators + 23 evals         | Expert corpus + approved provider canary    |
 | Native App/devices      | Deferred                        | Phase-two decision                                                      | MVP retention gate reached                  |
 | Privacy/compliance      | Partial, durable local proof    | Purpose-scoped photo consent/export/deletion + restore replay tested    | Production retention/provider/legal review  |
-| Testing/observability   | Partial                         | 204 unit, 51 integration, 26 browser tests + client quality gate        | Centralize telemetry after account approval |
+| Testing/observability   | Partial                         | 206 unit, 52 integration, 27 browser tests + client quality gate        | Centralize telemetry after account approval |
 | Deployment              | Partial, source/admission ready | Immutable actions + tag/main/CI + service/client/environment gates      | Approve dossier, provision and canary       |
 
 Status vocabulary: `Done` means validated for the present stage, `Partial` means usable but missing a named gate, `Pending` means not implemented, and `Deferred` means intentionally outside the current release.
@@ -48,6 +48,7 @@ Status vocabulary: `Done` means validated for the present stage, `Partial` means
 - Transactional nutrition aggregates with food/serving snapshots, canonical grams, deterministic kcal/P/C/F/fiber totals, owner favorites and immutable JSON revisions.
 - Timezone-aware read-only Today projection with confirmed evidence, nullable recovery summary and 7/30/90-day totals.
 - Versioned weekly plans with deterministic availability/load/equipment constraints, evidence snapshots, substitutions, optimistic decisions and immutable history. The list response adds a non-persisted server freshness projection (`current`, `evidence_changed`, `profile_changed`, `eligibility_blocked`, or defensive `onboarding_required`) from current profile/eligibility and one dashboard. `planning-impact-v1` fingerprints only missing/below-60/at-or-above-60 recovery bands, so workout/meal counters and same-band score changes remain no-ops. Permission literals and server rechecks close accept/modify/AI on material drift while preserving skip; regeneration keeps the plan ID and appends a new immutable revision. Historical snapshots are normalized at the read boundary, and AI context does not receive the new policy metadata.
+- Explicit `plan_workout_links` keep plan and workout aggregates independent while binding their exact selected revisions. Composite owner foreign keys and partial active uniqueness prevent cross-user or one-to-many links; only an accepted, current plan session and current non-deleted workout may be linked. User unlink and workout soft deletion close rows with revision/reason/time instead of deleting them. Active projections expose original/current workout revisions in the Week Fold and Today, never infer adherence, and all rows join the owner export/erasure scope.
 - Parameterized `pg` access to PostgreSQL 18.4 with transactional, checksum-protected SQL migrations.
 - React Native for the later native App rather than forcing device integrations into the first client.
 - NestJS modular monolith + PostgreSQL + Redis for business services.
@@ -104,7 +105,7 @@ Status vocabulary: `Done` means validated for the present stage, `Partial` means
 | Starter food values are demonstration data, not release catalog                             | High   | Select licensed/localized versioned provider and attribution before beta                                 |
 | Energy/macro UI can be harmful for eating-disorder risk                                     | High   | Maintain scope exclusion; add screening/content review before adaptive nutrition planning                |
 | Deterministic-v1 is explainable but not clinically validated                                | High   | Keep general-guidance claims; add offline evaluation and expert/content review                           |
-| Planning freshness uses a coarse recovery band and does not reconcile completed workouts    | Medium | Add an explicit user-owned plan/session-to-workout link; do not infer adherence from titles/timestamps   |
+| Explicit links remain observations and do not validate/adapt future workload or adherence   | Medium | Keep adaptation off; define an evaluated policy and expert review before links affect future plans       |
 
 ## Quality gates
 
@@ -119,4 +120,4 @@ The MVP cannot enter public beta until all of the following are reproducible:
 
 ## Primary next step
 
-Iteration 36: close the plan-to-actual loop with an explicit user-owned link from one planned session/revision to one workout. Preserve both aggregate histories, reject cross-owner/stale links, never infer adherence from title or timestamp similarity, and show planned versus recorded state in Today and the Week Fold with PostgreSQL and H5 proof. Owner-operated cloud account/budget, domain/TLS, real WeChat/OIDC, data-custody owners, centralized telemetry, policy/filing decisions and any approved paid-provider canary remain mandatory external inputs but are parked until the user supplies them; do not describe local MinIO, fixture AI or candidate artifacts as public production.
+Iteration 37: replace the fixed exercise-only recording boundary with a user-owned custom exercise catalog and explicit equipment semantics. Keep starter entries versioned demonstrations, prevent catalog edits from rewriting workout/plan history, support correction/export/erasure, and prove search/reuse/ownership in PostgreSQL plus H5/WeApp. Owner-operated cloud account/budget, domain/TLS, real WeChat/OIDC, data-custody owners, centralized telemetry, policy/filing decisions and any approved paid-provider canary remain mandatory external inputs but are parked until the user supplies them; do not describe local MinIO, fixture AI or candidate artifacts as public production.

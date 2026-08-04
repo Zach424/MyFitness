@@ -209,6 +209,41 @@ export const weeklyPlanSchema = weeklyPlanContentSchema.safeExtend({
   updatedAt: z.string().datetime({ offset: true }),
 })
 
+export const planWorkoutLinkSchema = z
+  .object({
+    id: z.string().uuid(),
+    userId: z.string().uuid(),
+    planId: z.string().uuid(),
+    planRevision: z.number().int().positive(),
+    sessionDate: localDateSchema,
+    workoutId: z.string().uuid(),
+    workoutRevision: z.number().int().positive(),
+    currentWorkoutRevision: z.number().int().positive(),
+    workoutTitle: z.string().trim().min(1).max(100),
+    workoutStatus: z.enum(['completed', 'partial']),
+    workoutStartedAt: z.string().datetime({ offset: true }),
+    revision: z.number().int().positive(),
+    linkedAt: z.string().datetime({ offset: true }),
+  })
+  .strict()
+
+export const createPlanWorkoutLinkSchema = z
+  .object({
+    expectedPlanRevision: z.number().int().positive(),
+    sessionDate: localDateSchema,
+    workoutId: z.string().uuid(),
+    expectedWorkoutRevision: z.number().int().positive(),
+  })
+  .strict()
+
+export const planWorkoutLinkClosureSchema = z
+  .object({
+    linkId: z.string().uuid(),
+    revision: z.number().int().positive(),
+    unlinkedAt: z.string().datetime({ offset: true }),
+  })
+  .strict()
+
 const planFreshnessBase = {
   checkedAt: z.string().datetime({ offset: true }),
   planOnboardingRevision: z.number().int().positive(),
@@ -297,6 +332,7 @@ export const planFreshnessSchema = z.discriminatedUnion('state', [
 
 export const weeklyPlanListItemSchema = weeklyPlanSchema.safeExtend({
   freshness: planFreshnessSchema,
+  sessionLinks: z.array(planWorkoutLinkSchema),
 })
 
 export const generateWeeklyPlanSchema = z
@@ -362,9 +398,13 @@ export const weeklyPlanHistorySchema = z
   .object({ planId: z.string().uuid(), items: z.array(weeklyPlanHistoryItemSchema) })
   .strict()
 export const weeklyPlanIdSchema = z.string().uuid()
+export const planWorkoutLinkIdSchema = z.string().uuid()
 
 export type WeeklyPlanContent = z.infer<typeof weeklyPlanContentSchema>
 export type WeeklyPlan = z.infer<typeof weeklyPlanSchema>
+export type PlanWorkoutLink = z.infer<typeof planWorkoutLinkSchema>
+export type CreatePlanWorkoutLink = z.infer<typeof createPlanWorkoutLinkSchema>
+export type PlanWorkoutLinkClosure = z.infer<typeof planWorkoutLinkClosureSchema>
 export type PlanFreshness = z.infer<typeof planFreshnessSchema>
 export type WeeklyPlanListItem = z.infer<typeof weeklyPlanListItemSchema>
 export type GenerateWeeklyPlan = z.infer<typeof generateWeeklyPlanSchema>

@@ -1,6 +1,6 @@
 # Workout record model
 
-Status: implemented in iteration 005; server-authoritative completion hardened in iteration 032
+Status: implemented in iteration 005; server-authoritative completion hardened in iteration 032; explicit plan-session relationship added in iteration 036
 
 Workout records are user-owned observations of what was actually attempted and completed. They are not exercise prescriptions, readiness diagnoses or claims that greater volume is always better.
 
@@ -57,10 +57,16 @@ Migration `0021_authoritative_workout_status.sql` backfills the relational statu
 
 This makes the previous workout a convenient structure template without presenting yesterday's completion, symptoms or notes as today's facts. Saving creates a new idempotent session; it never links by mutating or cloning the previous database row.
 
+## Plan relationship
+
+The workout aggregate contains no plan fields. A separate owner-controlled link records the exact workout revision that the user selected for an accepted plan session revision. This avoids changing workout request hashes or allowing an older full-replacement client to remove a relationship it cannot represent.
+
+A later workout correction advances the workout aggregate normally while the link retains its original `workout_revision`; list projections expose both versions. Soft-deleting the workout closes every active link in the same transaction with `workout_deleted` as the reason. The workout and its immutable snapshots remain the authority for actual sets, status and summaries; the link cannot turn a partial workout into a completed one.
+
 ## Safety and product boundaries
 
 - Pain at 6 or above triggers clear stop/escalation copy; the app does not diagnose injury.
 - Volume is labeled as an observation aid, not a quality score or progression mandate.
 - Imported workouts are allowed by contract for later adapters, but there is no import UI or provider integration yet.
-- Rest intervals, tempo, supersets, equipment, custom exercise library and plan linkage are intentionally deferred until the basic record loop is proven.
+- Rest intervals, tempo, supersets, equipment and a custom exercise library remain deferred; plan linkage is explicit and never inferred.
 - Privacy erasure remains separate from soft deletion and must cover revisions and backups before public release.

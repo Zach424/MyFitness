@@ -4,8 +4,10 @@ import Taro, { useDidShow } from '@tarojs/taro'
 import type {
   AiExplanation,
   PlanFreshness,
+  PlanWorkoutLink,
   WeeklyPlan,
   WeeklyPlanHistoryItem,
+  Workout,
 } from '@myfitness/contracts'
 import { aiPlanConsentVersion } from '@myfitness/contracts/ai.constants'
 
@@ -21,7 +23,10 @@ import {
   generateWeeklyPlan,
   getAiExplanationHistory,
   getWeeklyPlanHistory,
+  linkPlanWorkout,
   listWeeklyPlans,
+  listWorkouts,
+  unlinkPlanWorkout,
 } from '../../lib/api'
 import {
   changedPlanSelections,
@@ -169,6 +174,8 @@ const PlansPage = () => {
   const [savedPlan, setSavedPlan] = useState<WeeklyPlan>()
   const [draftPlan, setDraftPlan] = useState<WeeklyPlan>()
   const [freshness, setFreshness] = useState<PlanFreshness>()
+  const [sessionLinks, setSessionLinks] = useState<PlanWorkoutLink[]>([])
+  const [workouts, setWorkouts] = useState<Workout[]>([])
   const [history, setHistory] = useState<WeeklyPlanHistoryItem[]>([])
   const [aiHistory, setAiHistory] = useState<AiExplanation[]>([])
   const [aiConsent, setAiConsent] = useState(false)
@@ -191,12 +198,14 @@ const PlansPage = () => {
   const setCurrentPlan = (
     plan: WeeklyPlan,
     nextFreshness: PlanFreshness = currentPlanFreshness(plan),
+    nextSessionLinks: PlanWorkoutLink[] = [],
   ) => {
     savedPlanRef.current = plan
     freshnessRef.current = nextFreshness
     setSavedPlan(plan)
     setDraftPlan(plan)
     setFreshness(nextFreshness)
+    setSessionLinks(nextSessionLinks)
     setAiConsent(false)
     setSelectedDate(
       plan.days.find((day) => day.session)?.date ??
@@ -221,22 +230,24 @@ const PlansPage = () => {
     refreshInFlight.current = true
     setRefreshing(true)
     try {
-      const plans = await listWeeklyPlans()
+      const [plans, workoutList] = await Promise.all([listWeeklyPlans(), listWorkouts()])
+      setWorkouts(workoutList.items)
       lastProjectionCheck.current = Date.now()
       const projected = plans.items.find((item) => item.id === current.id) ?? plans.items[0]
       if (!projected) return
-      const { freshness: nextFreshness, ...plan } = projected
+      const { freshness: nextFreshness, sessionLinks: nextSessionLinks, ...plan } = projected
       const previousFreshness = freshnessRef.current
       const planChanged = plan.id !== current.id || plan.revision !== current.revision
       const freshnessChanged =
         planFreshnessProjectionKey(previousFreshness) !== planFreshnessProjectionKey(nextFreshness)
 
       if (planChanged || freshnessChanged) {
-        setCurrentPlan(plan, nextFreshness)
+        setCurrentPlan(plan, nextFreshness, nextSessionLinks)
         if (planChanged) await refreshPlanHistory(plan)
       } else {
         freshnessRef.current = nextFreshness
         setFreshness(nextFreshness)
+        setSessionLinks(nextSessionLinks)
       }
 
       if (previousFreshness?.state === 'current' && nextFreshness.state !== 'current') {
@@ -265,12 +276,13 @@ const PlansPage = () => {
   useEffect(() => {
     void (async () => {
       try {
-        const plans = await listWeeklyPlans()
+        const [plans, workoutList] = await Promise.all([listWeeklyPlans(), listWorkouts()])
+        setWorkouts(workoutList.items)
         const latest = plans.items[0]
         if (latest) {
-          const { freshness: initialFreshness, ...plan } = latest
+          const { freshness: initialFreshness, sessionLinks: initialLinks, ...plan } = latest
           lastProjectionCheck.current = Date.now()
-          setCurrentPlan(plan, initialFreshness)
+          setCurrentPlan(plan, initialFreshness, initialLinks)
           await refreshPlanHistory(plan)
         }
       } catch (error) {
@@ -297,6 +309,13 @@ const PlansPage = () => {
   }, [])
 
   const selectedDay = draftPlan?.days.find((day) => day.date === selectedDate)
+  const selectedSessionLinks = sessionLinks.filter((link) => link.sessionDate === selectedDate)
+  const selectedCurrentLink = selectedSessionLinks.find(
+    (link) => link.planRevision === savedPlan?.revision,
+  )
+  const selectedPreviousLink = selectedSessionLinks.find(
+    (link) => link.planRevision !== savedPlan?.revision,
+  )
   const selections = useMemo(
     () => (savedPlan && draftPlan ? changedPlanSelections(savedPlan, draftPlan) : []),
     [savedPlan, draftPlan],
@@ -348,6 +367,7 @@ const PlansPage = () => {
       setCurrentPlan(
         plan,
         decision === 'skipped' && freshness ? freshness : currentPlanFreshness(plan),
+        sessionLinks,
       )
       await refreshPlanHistory(plan)
       setFeedback(
@@ -370,6 +390,41 @@ const PlansPage = () => {
       current ? updatePlanSelection(current, activityId, optionId) : current,
     )
     setFeedback('')
+  }
+
+  const linkWorkout = async (workout: Workout) => {
+    if (!savedPlan || !selectedDay?.session) return
+    setSaving(true)
+    setFeedback('')
+    try {
+      await linkPlanWorkout(savedPlan.id, {
+        expectedPlanRevision: savedPlan.revision,
+        sessionDate: selectedDay.date,
+        workoutId: workout.id,
+        expectedWorkoutRevision: workout.revision,
+      })
+      await refreshPlanProjection(false, true)
+      setFeedback('已按你的选择关联实际训练；计划和训练原版本都未被改写。')
+    } catch (error) {
+      setFeedback(messageOf(error))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const unlinkWorkout = async (link: PlanWorkoutLink) => {
+    if (!savedPlan) return
+    setSaving(true)
+    setFeedback('')
+    try {
+      await unlinkPlanWorkout(savedPlan.id, link.id, link.revision)
+      await refreshPlanProjection(false, true)
+      setFeedback('关联已解除；关闭时间仍保留在导出与审计记录中。')
+    } catch (error) {
+      setFeedback(messageOf(error))
+    } finally {
+      setSaving(false)
+    }
   }
 
   const generateExplanation = async () => {
@@ -555,21 +610,28 @@ const PlansPage = () => {
               ) : null}
 
               <View className="week-fold" role="tablist" aria-label="选择计划日期">
-                {draftPlan.days.map((day) => (
-                  <Button
-                    {...buttonA11yProps}
-                    className={`week-fold__day ${selectedDate === day.date ? 'week-fold__day--selected' : ''} ${day.session ? 'week-fold__day--planned' : ''}`}
-                    aria-selected={selectedDate === day.date}
-                    key={day.date}
-                    onClick={() => setSelectedDate(day.date)}
-                  >
-                    <Text className="week-fold__weekday">{weekdayLabels[day.weekday]}</Text>
-                    <Text className="week-fold__date metric">{shortDate(day.date)}</Text>
-                    <Text className="week-fold__mark" aria-hidden="true">
-                      {day.session ? '●' : '·'}
-                    </Text>
-                  </Button>
-                ))}
+                {draftPlan.days.map((day) => {
+                  const recorded = sessionLinks.some(
+                    (link) =>
+                      link.sessionDate === day.date && link.planRevision === draftPlan.revision,
+                  )
+                  return (
+                    <Button
+                      {...buttonA11yProps}
+                      className={`week-fold__day ${selectedDate === day.date ? 'week-fold__day--selected' : ''} ${day.session ? 'week-fold__day--planned' : ''} ${recorded ? 'week-fold__day--recorded' : ''}`}
+                      aria-label={`${weekdayLabels[day.weekday]} ${shortDate(day.date)}${recorded ? '，已明确关联训练记录' : day.session ? '，有计划训练' : '，无计划训练'}`}
+                      aria-selected={selectedDate === day.date}
+                      key={day.date}
+                      onClick={() => setSelectedDate(day.date)}
+                    >
+                      <Text className="week-fold__weekday">{weekdayLabels[day.weekday]}</Text>
+                      <Text className="week-fold__date metric">{shortDate(day.date)}</Text>
+                      <Text className="week-fold__mark" aria-hidden="true">
+                        {recorded ? '✓' : day.session ? '●' : '·'}
+                      </Text>
+                    </Button>
+                  )
+                })}
               </View>
 
               <View className="plans-grid">
@@ -599,6 +661,104 @@ const PlansPage = () => {
                               onSelect={(optionId) => selectOption(activity.id, optionId)}
                             />
                           ))}
+                        </View>
+                        <View className="session-link-card">
+                          <View className="session-link-card__heading">
+                            <View>
+                              <Text className="plans-eyebrow">PLANNED ↔ RECORDED</Text>
+                              <Text className="session-link-card__title">实际训练关联</Text>
+                            </View>
+                            <Text className="session-link-card__state">
+                              {selectedCurrentLink
+                                ? '已记录'
+                                : selectedPreviousLink
+                                  ? '旧版关联'
+                                  : '未关联'}
+                            </Text>
+                          </View>
+                          {selectedCurrentLink ? (
+                            <View className="session-link-card__linked">
+                              <Text className="session-link-card__workout">
+                                {selectedCurrentLink.workoutTitle}
+                              </Text>
+                              <Text className="session-link-card__meta metric">
+                                PLAN v{selectedCurrentLink.planRevision} ↔ WORKOUT v
+                                {selectedCurrentLink.workoutRevision}
+                                {selectedCurrentLink.currentWorkoutRevision !==
+                                selectedCurrentLink.workoutRevision
+                                  ? ` · 当前训练 v${selectedCurrentLink.currentWorkoutRevision}`
+                                  : ''}
+                              </Text>
+                              <Text className="session-link-card__copy">
+                                这是你的明确选择，不是根据标题、日期或时长推测的完成情况。
+                              </Text>
+                              <Button
+                                {...buttonA11yProps}
+                                className="session-link-card__unlink"
+                                disabled={saving}
+                                onClick={() => void unlinkWorkout(selectedCurrentLink)}
+                              >
+                                解除关联
+                              </Button>
+                            </View>
+                          ) : selectedPreviousLink ? (
+                            <View className="session-link-card__linked">
+                              <Text className="session-link-card__workout">
+                                {selectedPreviousLink.workoutTitle}
+                              </Text>
+                              <Text className="session-link-card__copy">
+                                这条记录绑定计划 v{selectedPreviousLink.planRevision}；当前是 v
+                                {savedPlan?.revision}，系统不会自动迁移历史关联。
+                              </Text>
+                              <Button
+                                {...buttonA11yProps}
+                                className="session-link-card__unlink"
+                                disabled={saving}
+                                onClick={() => void unlinkWorkout(selectedPreviousLink)}
+                              >
+                                解除旧版关联
+                              </Button>
+                            </View>
+                          ) : savedPlan?.status === 'accepted' && freshness?.state === 'current' ? (
+                            <View>
+                              <Text className="session-link-card__copy">
+                                选择一条真实训练记录建立关联；系统不会预选或自动匹配。
+                              </Text>
+                              {workouts.length ? (
+                                <View className="session-link-options">
+                                  {workouts.slice(0, 5).map((workout) => (
+                                    <Button
+                                      {...buttonA11yProps}
+                                      className="session-link-option"
+                                      disabled={saving}
+                                      key={workout.id}
+                                      onClick={() => void linkWorkout(workout)}
+                                    >
+                                      <Text>{workout.title}</Text>
+                                      <Text className="metric">
+                                        {workout.status === 'completed' ? '全部完成' : '部分完成'} ·
+                                        v{workout.revision}
+                                      </Text>
+                                    </Button>
+                                  ))}
+                                </View>
+                              ) : (
+                                <Button
+                                  {...buttonA11yProps}
+                                  className="session-link-card__open-workouts"
+                                  onClick={() =>
+                                    void Taro.navigateTo({ url: '/pages/workouts/index' })
+                                  }
+                                >
+                                  先记录一次训练
+                                </Button>
+                              )}
+                            </View>
+                          ) : (
+                            <Text className="session-link-card__copy">
+                              先采用当前且依据未变化的计划，再由你选择实际训练记录。
+                            </Text>
+                          )}
                         </View>
                       </>
                     ) : (

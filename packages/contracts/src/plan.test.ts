@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  createPlanWorkoutLinkSchema,
   generateWeeklyPlanSchema,
   normalizePersistedPlanEvidence,
   planDecisionSchema,
   planEvidenceSchema,
   planFreshnessSchema,
+  planWorkoutLinkSchema,
 } from './plan'
 
 describe('weekly plan contract', () => {
@@ -116,6 +118,39 @@ describe('weekly plan contract', () => {
       }).success,
     ).toBe(false)
     expect(planFreshnessSchema.safeParse({ ...changed, canExplainWithAi: true }).success).toBe(
+      false,
+    )
+  })
+
+  it('binds an explicit session link to both aggregate revisions', () => {
+    const input = {
+      expectedPlanRevision: 3,
+      sessionDate: '2026-08-05',
+      workoutId: 'd1f76f47-f8b3-4a44-81ad-64597712511a',
+      expectedWorkoutRevision: 2,
+    }
+    expect(createPlanWorkoutLinkSchema.parse(input)).toEqual(input)
+    expect(
+      createPlanWorkoutLinkSchema.safeParse({ ...input, sessionDate: '2026-08-5' }).success,
+    ).toBe(false)
+
+    const link = {
+      id: '02ed91d1-2254-4930-a798-8100e0a90fc4',
+      userId: 'a9598e11-3ccf-4620-82ef-9dafb1524292',
+      planId: 'af310f2e-e4ac-4aec-9e0f-d6658f430b09',
+      planRevision: 3,
+      sessionDate: '2026-08-05',
+      workoutId: input.workoutId,
+      workoutRevision: 2,
+      currentWorkoutRevision: 4,
+      workoutTitle: '全身训练 A',
+      workoutStatus: 'partial',
+      workoutStartedAt: '2026-08-05T10:00:00.000+08:00',
+      revision: 1,
+      linkedAt: '2026-08-05T11:00:00.000Z',
+    }
+    expect(planWorkoutLinkSchema.parse(link)).toEqual(link)
+    expect(planWorkoutLinkSchema.safeParse({ ...link, workoutStatus: 'planned' }).success).toBe(
       false,
     )
   })

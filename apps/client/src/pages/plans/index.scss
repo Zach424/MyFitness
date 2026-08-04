@@ -494,6 +494,102 @@
   margin-top: 18px;
 }
 
+.week-fold__day--recorded:not(.week-fold__day--selected) {
+  color: var(--color-mineral);
+  background: rgba(201, 221, 211, 0.32);
+}
+
+.session-link-card {
+  margin-top: 18px;
+  padding: 16px;
+  border: 1px solid rgba(64, 105, 88, 0.2);
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(234, 242, 237, 0.9), rgba(252, 253, 252, 0.98));
+}
+
+.session-link-card__heading {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.session-link-card__title,
+.session-link-card__workout,
+.session-link-card__meta,
+.session-link-card__copy {
+  display: block;
+}
+
+.session-link-card__title {
+  margin-top: 5px;
+  font-size: 18px;
+  font-weight: 760;
+}
+
+.session-link-card__state {
+  padding: 5px 8px;
+  border-radius: 999px;
+  color: var(--color-mineral);
+  background: rgba(201, 221, 211, 0.5);
+  font-size: 10px;
+  font-weight: 760;
+}
+
+.session-link-card__linked,
+.session-link-options {
+  display: grid;
+  gap: 8px;
+  margin-top: 13px;
+}
+
+.session-link-card__workout {
+  font-size: 16px;
+  font-weight: 740;
+}
+
+.session-link-card__meta {
+  color: var(--color-juniper);
+  font-family: var(--font-metric);
+  font-size: 10px;
+}
+
+.session-link-card__copy {
+  margin-top: 10px;
+  color: var(--color-muted);
+  font-size: 11px;
+  line-height: 1.65;
+}
+
+.session-link-option,
+.session-link-card__unlink,
+.session-link-card__open-workouts {
+  min-height: 44px;
+  margin: 0;
+  border-radius: 10px;
+  font-size: 11px;
+}
+
+.session-link-option {
+  display: flex;
+  padding: 10px 12px;
+  align-items: center;
+  justify-content: space-between;
+  border: 1px solid rgba(36, 76, 102, 0.14);
+  color: var(--color-ink);
+  background: var(--color-paper);
+  text-align: left;
+}
+
+.session-link-card__unlink,
+.session-link-card__open-workouts {
+  width: fit-content;
+  padding: 0 14px;
+  border: 1px solid rgba(36, 76, 102, 0.16);
+  color: var(--color-mineral);
+  background: transparent;
+}
+
 .plan-activity {
   padding: 15px;
   border: 1px solid rgba(36, 76, 102, 0.1);

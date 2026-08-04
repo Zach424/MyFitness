@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import type { WeeklyPlan } from '@myfitness/contracts'
+import type { WeeklyPlan, WeeklyPlanListItem } from '@myfitness/contracts'
 
 import {
   changedPlanSelections,
   currentPlanFreshness,
   defaultPlanWeekStart,
+  planDayLinks,
   planFreshnessNotice,
   planFreshnessProjectionKey,
+  todayPlanReconciliation,
   updatePlanSelection,
 } from './plan.model'
 
@@ -123,5 +125,41 @@ describe('plan page model', () => {
         changeReason: 'recovery_threshold_crossed',
       }),
     )
+  })
+
+  it('shows only an explicit exact-revision link as recorded', () => {
+    const link = {
+      id: '02ed91d1-2254-4930-a798-8100e0a90fc4',
+      userId: 'a9598e11-3ccf-4620-82ef-9dafb1524292',
+      planId: 'af310f2e-e4ac-4aec-9e0f-d6658f430b09',
+      planRevision: 3,
+      sessionDate: '2026-07-20',
+      workoutId: 'd1f76f47-f8b3-4a44-81ad-64597712511a',
+      workoutRevision: 2,
+      currentWorkoutRevision: 2,
+      workoutTitle: '实际训练',
+      workoutStatus: 'completed',
+      workoutStartedAt: '2026-07-20T10:00:00.000+08:00',
+      revision: 1,
+      linkedAt: '2026-07-20T11:00:00.000Z',
+    } as const
+    const item = {
+      ...plan,
+      id: link.planId,
+      revision: 3,
+      status: 'accepted',
+      sessionLinks: [link],
+    } as WeeklyPlanListItem
+    expect(planDayLinks(item, '2026-07-20').current).toEqual(link)
+    expect(todayPlanReconciliation([item], '2026-07-20')).toMatchObject({
+      state: 'recorded',
+      link,
+    })
+
+    const regenerated = { ...item, revision: 4, sessionLinks: [link] } as WeeklyPlanListItem
+    expect(planDayLinks(regenerated, '2026-07-20')).toMatchObject({ previous: link })
+    expect(todayPlanReconciliation([regenerated], '2026-07-20')).toMatchObject({
+      state: 'planned',
+    })
   })
 })

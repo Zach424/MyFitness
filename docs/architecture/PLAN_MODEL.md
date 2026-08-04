@@ -1,6 +1,6 @@
 # Weekly plan model
 
-Status: implemented as `deterministic-v1` in iteration 008; bounded record-evidence freshness added in iteration 035
+Status: implemented as `deterministic-v1` in iteration 008; bounded record-evidence freshness added in iteration 035; explicit plan-to-workout links added in iteration 036
 
 ## Purpose and boundary
 
@@ -17,7 +17,8 @@ user
        ├─ onboarding revision + versioned planning-impact evidence fingerprint
        ├─ current status and revision
        ├─ server-computed freshness projection (read response only)
-       └─ weekly_plan_revisions (immutable generated/modified/accepted/skipped snapshots)
+       ├─ weekly_plan_revisions (immutable generated/modified/accepted/skipped snapshots)
+       └─ plan_workout_links (explicit, revision-bound, independently closable relationships)
 ```
 
 `weekly_plans` is indexed and unique by `(user_id, week_start)`. The current content is stored as JSONB because the client reads and decides on the plan as one aggregate, while the stable ownership, week, revision, status, engine version and idempotency fields remain relational. Every JSON document is validated by Zod at the API boundary and every accepted transition is copied into `weekly_plan_revisions`.
@@ -54,12 +55,22 @@ Client decisions use optimistic `expectedRevision` checks:
 - `skipped` records the decision and optional note without implying failure.
 - A stale decision returns `409`; a missing/blocked profile returns `422`.
 
+## Explicit plan-to-actual reconciliation
+
+A plan session becomes `recorded` only when its owner explicitly selects one workout. `plan_workout_links` binds the exact plan ID, plan revision and session date to the exact workout ID and workout revision selected at that moment. Composite owner foreign keys and partial unique indexes prevent cross-user links, two active workouts for one exact session revision, or one workout from satisfying multiple active sessions.
+
+Creation is allowed only for the current `accepted` plan revision with current profile, eligibility and planning-impact evidence, and for the current non-deleted workout revision. The selected date must contain a session in that plan revision. Draft, modified, skipped, stale, empty-day and cross-owner attempts fail at the server even if another client bypasses the H5 controls.
+
+The relationship does not mutate either source aggregate. If the workout is edited later, the read model reports both the originally bound `workoutRevision` and the `currentWorkoutRevision`; if the plan is regenerated, the old link remains attached to the old plan revision and is not silently migrated. User unlink and workout soft deletion close the link with a reason, timestamp and incremented link revision rather than erasing it. All rows are included in the owner export and removed by account erasure.
+
+`GET /plans/weekly` projects active links. The Week Fold uses a check mark only for an exact current-revision link, and Today shows one accepted current session as `planned` or `recorded`. Neither surface compares titles, dates, duration or exercises to infer adherence. A link is an owner-confirmed association, not a quality score or load-adaptation signal.
+
 ## Known limitations
 
 - The rules are explainable but have not been clinically validated or evaluated against user outcomes.
-- Planned activities are not yet linked to completed workout records, so adherence is not inferred.
 - Exercise and food choices use a small built-in starter set rather than a licensed, localized catalog.
-- Evidence freshness is intentionally coarse and uses only the current engine's recovery boundary. Planned activities are still not reconciled with completed workouts, and workload/adherence/nutrition changes do not adapt a week.
+- Evidence freshness is intentionally coarse and uses only the current engine's recovery boundary. Explicit links are visible but workload/adherence/nutrition changes still do not adapt a week.
+- There is no plan-to-workout draft handoff; users first save an actual workout and then explicitly choose it from the plan.
 - No language model, photo analysis, device data, injury assessment, progressive overload, or adaptive energy model participates in this version.
 
 Any future AI layer must produce the same structured plan contract, cite the evidence it used, pass deterministic validators, and remain a proposal until the user explicitly accepts it.

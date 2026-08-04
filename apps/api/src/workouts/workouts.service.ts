@@ -348,6 +348,14 @@ export class WorkoutsService {
       )
       const deleted = result.rows[0]
       if (!deleted) await this.throwMutationFailure(client, userId, workoutId)
+      await client.query(
+        `
+          UPDATE plan_workout_links
+          SET unlinked_at = NOW(), unlink_reason = 'workout_deleted', revision = revision + 1
+          WHERE workout_id = $1 AND user_id = $2 AND unlinked_at IS NULL
+        `,
+        [workoutId, userId],
+      )
       const workout = (await loadWorkouts(client, [deleted!]))[0]!
       await insertRevision(client, workout, 'deleted')
     })
