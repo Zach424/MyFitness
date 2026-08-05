@@ -13,6 +13,7 @@ import type {
 } from '@myfitness/contracts'
 import { aiPlanConsentVersion } from '@myfitness/contracts/ai.constants'
 
+import { AggregateHistoryReadState } from '../../components/aggregate-history-read-state'
 import {
   buttonActivationProps,
   buttonA11yProps,
@@ -20,6 +21,11 @@ import {
   deferH5Focus,
   keyboardActivationProps,
 } from '../../lib/accessibility'
+import {
+  classifyAggregateHistoryReadFailure,
+  type AggregateHistoryReadFailure,
+  type AggregateHistoryReadPhase,
+} from '../../lib/aggregate-history-read'
 import {
   ApiError,
   decideWeeklyPlan,
@@ -300,6 +306,8 @@ const PlansPage = () => {
   const [history, setHistory] = useState<WeeklyPlanHistoryItem[]>([])
   const [historyNextCursor, setHistoryNextCursor] = useState<string | null>(null)
   const [historyLoadingMore, setHistoryLoadingMore] = useState(false)
+  const [historyContinuationFailure, setHistoryContinuationFailure] =
+    useState<AggregateHistoryReadFailure>()
   const [aiHistory, setAiHistory] = useState<AiExplanation[]>([])
   const [aiConsent, setAiConsent] = useState(false)
   const [aiLoading, setAiLoading] = useState(false)
@@ -398,6 +406,8 @@ const PlansPage = () => {
     setHistory(snapshot.items)
     setHistoryNextCursor(snapshot.nextCursor)
     setAiHistory(snapshot.explanations)
+    setHistoryLoadingMore(false)
+    setHistoryContinuationFailure(undefined)
   }
 
   const refreshPlanHistory = async (plan: WeeklyPlan) => {
@@ -407,10 +417,11 @@ const PlansPage = () => {
     applyPlanHistorySnapshot(snapshot)
   }
 
-  const loadOlderPlanHistory = async () => {
+  const readOlderPlanHistory = async () => {
     if (!savedPlan || !historyNextCursor || historyLoadingMore) return
     const generation = historyGenerationRef.current
     setHistoryLoadingMore(true)
+    setHistoryContinuationFailure(undefined)
     try {
       const page = await getWeeklyPlanHistory(savedPlan.id, {
         limit: 10,
@@ -420,10 +431,25 @@ const PlansPage = () => {
       setHistory((current) => [...current, ...page.items])
       setHistoryNextCursor(page.nextCursor)
     } catch (error) {
-      setFeedback(messageOf(error))
+      if (generation !== historyGenerationRef.current) return
+      setHistoryContinuationFailure({
+        kind: classifyAggregateHistoryReadFailure(error),
+        operation: 'continuation',
+      })
+      deferH5Focus('plan-history-read-retry', 80)
     } finally {
-      setHistoryLoadingMore(false)
+      if (generation === historyGenerationRef.current) setHistoryLoadingMore(false)
     }
+  }
+
+  const loadOlderPlanHistory = () => {
+    if (historyContinuationFailure) return
+    void readOlderPlanHistory()
+  }
+
+  const retryOlderPlanHistory = () => {
+    if (!historyContinuationFailure) return
+    void readOlderPlanHistory()
   }
 
   const refreshPlanProjection = async (announce = false, force = false) => {
@@ -565,6 +591,11 @@ const PlansPage = () => {
   const readFailurePresentation = readFailure
     ? planReadFailureCopy(readFailure, hasReadSnapshot)
     : undefined
+  const historyReadPhase: AggregateHistoryReadPhase = historyLoadingMore
+    ? 'continuing'
+    : historyContinuationFailure
+      ? 'stale'
+      : 'ready'
   const planActionable = (freshness?.canAcceptOrModify ?? false) && readAuthorityReady
   const aiActionable = (freshness?.canExplainWithAi ?? false) && readAuthorityReady && !saving
   const planWriteBlocked = saving || Boolean(planRecovery) || !readAuthorityReady
@@ -1694,13 +1725,25 @@ const PlansPage = () => {
                         <Text>查看解释运行档案</Text>
                         <Text className="metric">{aiHistory.length}</Text>
                       </Button>
-                    ) : null}
+                    ) : (
+                      <Text className="ai-history-empty metric">
+                        EXPLANATION RUNS 0 · ACCEPTED SNAPSHOT / 解释档案已核对
+                      </Text>
+                    )}
                   </View>
 
                   <View className="plan-aside-card history-card">
                     <Text className="plans-eyebrow">VERSION TRACE</Text>
                     <Text className="plan-aside-card__title">决定历史</Text>
                     <View className="plan-history-list">
+                      <AggregateHistoryReadState
+                        phase={historyReadPhase}
+                        failure={historyContinuationFailure}
+                        subject="计划决定"
+                        itemCount={history.length}
+                        retryId="plan-history-read-retry"
+                        onRetry={retryOlderPlanHistory}
+                      />
                       {history.map((item) => (
                         <View className="plan-history" key={`${item.revision}-${item.changedAt}`}>
                           <View>
@@ -1718,8 +1761,9 @@ const PlansPage = () => {
                         <Button
                           {...buttonA11yProps}
                           className="record-page-more"
-                          disabled={historyLoadingMore}
-                          onClick={() => void loadOlderPlanHistory()}
+                          disabled={historyLoadingMore || Boolean(historyContinuationFailure)}
+                          aria-disabled={historyLoadingMore || Boolean(historyContinuationFailure)}
+                          onClick={loadOlderPlanHistory}
                         >
                           {historyLoadingMore ? '正在载入…' : '继续载入更早决定'}
                         </Button>

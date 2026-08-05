@@ -765,6 +765,16 @@ The same successful-empty card, request-generation guard and focus scroll margin
 - [390 × 844 unread action-definition ledger](../../output/playwright/iteration-074-action-definition-history-offline-mobile.png)
 - [1440 × 1000 retained food-definition revisions and correction](../../output/playwright/iteration-074-food-definition-history-stale-wide.png)
 
+## Week Fold decision-history read authority — iteration 075
+
+The Week Fold evidence rail now applies the same bounded audit grammar to plan decisions without turning the whole planning desk into a service-error surface. A failed older-page request inserts an amber `SERVICE PAUSED` receipt immediately above the accepted versions, names `RETAINED 10 REVISIONS · CURSOR FROZEN` and moves focus to one outlined suffix-retry control. The original continuation stays visible at the end of the list but is inert, so its previous cursor cannot appear current.
+
+On 1440 × 1000 H5, the wide composition keeps the v11 current plan, plan-to-workout evidence and AI provenance above the right-hand history rail while v11 through v2 remain readable below the failure receipt. The explanation rail explicitly reads `EXPLANATION RUNS 0 · ACCEPTED SNAPSHOT / 解释档案已核对`, distinguishing an earned empty ledger from an unavailable or simply omitted section. Retrying the plan suffix restores v1 without regenerating a plan or creating an explanation run.
+
+The receipt deliberately does not disable local inspection of the accepted current plan or explanation provenance. It also introduces no plan-quality score, adherence inference, health interpretation or prescriptive copy; the visual state describes only audit-read authority.
+
+- [1440 × 1000 retained weekly-plan decisions and accepted-empty explanations](../../output/playwright/iteration-075-plan-history-stale-wide.png)
+
 ## Screenshot review checklist
 
 - The Rhythm Rail remains understandable without color.

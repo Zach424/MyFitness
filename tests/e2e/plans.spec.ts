@@ -104,7 +104,10 @@ const seedProfileAndOpenPlans = async (
 
 test('weekly plan supports substitution, modification and acceptance history', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
-  const errors = collectBrowserErrors(page)
+  const errors = collectBrowserErrors(
+    page,
+    (response) => response.status() === 503 && response.url().includes('/history?'),
+  )
   const accessToken = await seedProfileAndOpenPlans(page)
 
   const generatedPromise = page.waitForResponse(
@@ -114,6 +117,7 @@ test('weekly plan supports substitution, modification and acceptance history', a
   await page.getByRole('button', { name: /生成 .* 初稿/ }).click()
   expect((await generatedPromise).status()).toBe(201)
   await expect(page.getByText('本周折页')).toBeVisible()
+  await expect(page.getByText(/EXPLANATION RUNS 0 · ACCEPTED SNAPSHOT/)).toBeVisible()
   await expect(page.getByText('待决定')).toBeVisible()
   await expect(page.getByText('椅子深蹲').first()).toBeVisible()
 
@@ -153,24 +157,53 @@ test('weekly plan supports substitution, modification and acceptance history', a
     expect(decision.status()).toBe(200)
   }
 
+  await page.setViewportSize({ width: 1440, height: 1000 })
   await page.reload()
   await expect(page.getByText('v11', { exact: true }).first()).toBeVisible()
   const historyCard = page.locator('.history-card')
   await historyCard.scrollIntoViewIfNeeded()
   await expect(historyCard.locator('.plan-history')).toHaveCount(10)
-  const olderHistoryPromise = page.waitForResponse(
-    (response) =>
-      response.url().includes(`/v1/plans/weekly/${acceptedPlan.id}/history?`) &&
-      response.url().includes('cursor=') &&
-      response.request().method() === 'GET',
-  )
+  let olderReads = 0
+  let explanationWrites = 0
+  page.on('request', (request) => {
+    if (request.method() === 'POST' && request.url().includes('/ai-explanations')) {
+      explanationWrites += 1
+    }
+  })
+  await page.route(/\/history\?limit=10&cursor=/, async (route) => {
+    if (route.request().method() !== 'GET') {
+      await route.continue()
+      return
+    }
+    olderReads += 1
+    if (olderReads === 1) {
+      await route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'raw plan history outage must stay hidden' }),
+      })
+      return
+    }
+    await route.continue()
+  })
   await page.getByRole('button', { name: '继续载入更早决定' }).click()
-  expect((await olderHistoryPromise).status()).toBe(200)
+  const historyReadState = historyCard.locator('.aggregate-history-read-state')
+  await expect(historyReadState.getByText('SERVICE PAUSED / 服务暂不可用')).toBeVisible()
+  await expect(historyReadState).toContainText('RETAINED 10 REVISIONS · CURSOR FROZEN')
+  await expect(historyReadState).not.toContainText('raw plan history outage')
+  await expect(historyCard.locator('.plan-history')).toHaveCount(10)
+  await expect(page.getByRole('button', { name: '继续载入更早决定' })).toBeDisabled()
+  await expect(page.getByText(/EXPLANATION RUNS 0 · ACCEPTED SNAPSHOT/)).toBeVisible()
+  const retry = historyCard.getByRole('button', { name: '重试载入计划决定更早版本' })
+  await expect(retry).toBeFocused()
+  await page.screenshot({ path: 'output/playwright/iteration-075-plan-history-stale-wide.png' })
+
+  await retry.click()
+  await expect(historyReadState).toHaveCount(0)
   await expect(historyCard.locator('.plan-history')).toHaveCount(11)
   await expect(page.getByText('已载入全部决定版本')).toBeVisible()
-  await page.screenshot({
-    path: 'output/playwright/iteration-049-progressive-plan-revisions-mobile.png',
-  })
+  expect(olderReads).toBe(2)
+  expect(explanationWrites).toBe(0)
   expect(errors).toEqual([])
 })
 
