@@ -658,6 +658,19 @@ On wide H5, a rejected refresh leaves the accepted 71.8 kg card in its sticky le
 - [390 × 844 unread health-record ledger](../../output/playwright/iteration-065-record-initial-offline-mobile.png)
 - [1440 × 1000 retained health-record page](../../output/playwright/iteration-065-record-stale-wide.png)
 
+## Workout ledger and action-directory read authority — iteration 066
+
+The training log now treats its recent sessions and embedded action directory as one recording surface. On mobile, an initial offline response places the amber ruled authority card immediately after the page thesis. The retained count is an em dash, the recent ledger uses a question mark instead of the established empty invitation and the action directory says it has not been checked. Only a successful combined response may show either empty state.
+
+The workout editor remains visible so unsaved title, occurrence time and set input do not look discarded, but save and catalog-dependent choices are visibly inert. The dedicated `管理我的动作` entry remains active because that route reads and governs its own definitions. The single full-width `重新核对` action receives keyboard focus and the settled 390 px page proves no horizontal overflow.
+
+On wide H5, a rejected catalog refresh retains one accepted workout and nine accepted actions alongside `RETAINED SNAPSHOT · 1 SESSIONS · 9 ACTIONS`. Quick repeat, save, card repeat, correction, history, delete and action reuse stay readable but inactive; the independent exercise observation and owner-action register retain their normal hierarchy. The authority rail spans the two-column composition so the warning describes both halves rather than looking like a local catalog error.
+
+Visual review found that Taro's native disabled color made the quick-repeat title nearly disappear. Explicit child colors now retain readable contrast while event-level guards and `aria-disabled` enforce inactivity; muted appearance is not the sole safety mechanism.
+
+- [390 × 844 unread workout ledger and action directory](../../output/playwright/iteration-066-workout-initial-offline-mobile.png)
+- [1440 × 1000 retained workout/action snapshot](../../output/playwright/iteration-066-workout-stale-wide.png)
+
 ## Screenshot review checklist
 
 - The Rhythm Rail remains understandable without color.

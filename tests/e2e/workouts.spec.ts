@@ -56,6 +56,134 @@ const openWorkouts = async (page: Page) => {
   await expect(page.getByText('把完成的每一组，写成下一次的起点。')).toBeVisible()
 }
 
+test('workout authority keeps an initial offline ledger and action directory unknown', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  let workoutReads = 0
+  await page.route(/\/v1\/workouts\?limit=20$/, async (route) => {
+    if (route.request().method() !== 'GET') {
+      await route.continue()
+      return
+    }
+    workoutReads += 1
+    if (workoutReads === 1) {
+      await route.abort('failed')
+      return
+    }
+    await route.continue()
+  })
+
+  await openWorkouts(page)
+  const readState = page.locator('.workout-read-state')
+  await expect(readState.getByText('OFFLINE / 连接未完成')).toBeVisible()
+  await expect(readState).toContainText('训练记录还没有读取')
+  await expect(page.getByText('还没有训练记录')).toHaveCount(0)
+  await expect(page.getByText('训练数量尚未核对')).toBeVisible()
+  await expect(page.getByText(/动作目录尚未核对/)).toBeVisible()
+  await expect(page.getByText('没有匹配动作。你可以创建自己的动作定义。')).toHaveCount(0)
+  await expect(page.locator('.workouts-topbar__count')).toHaveText('—')
+  await expect(page.getByRole('button', { name: '保存训练', exact: true })).toBeDisabled()
+  await expect(page.getByRole('button', { name: '管理我的动作' })).toBeEnabled()
+  const retry = page.getByRole('button', { name: '重新核对训练与动作目录' })
+  await expect(retry).toBeFocused()
+  await expect
+    .poll(() =>
+      page.locator('.workouts-page').evaluate((element) => element.getBoundingClientRect().left),
+    )
+    .toBe(0)
+  expect(
+    await page.locator('.workouts-page').evaluate((element) => {
+      const bounds = element.getBoundingClientRect()
+      return bounds.width <= window.innerWidth && element.scrollWidth <= window.innerWidth
+    }),
+  ).toBe(true)
+
+  await page.screenshot({
+    path: 'output/playwright/iteration-066-workout-initial-offline-mobile.png',
+  })
+
+  const workoutResponse = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/v1/workouts?limit=20') && response.request().method() === 'GET',
+  )
+  const catalogResponse = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/v1/exercise-catalog') && response.request().method() === 'GET',
+  )
+  await page.keyboard.press('Enter')
+  expect((await workoutResponse).status()).toBe(200)
+  expect((await catalogResponse).status()).toBe(200)
+  await expect(page.getByText('还没有训练记录')).toBeVisible()
+  await expect(page.getByRole('button', { name: '添加俯卧撑' })).toBeEnabled()
+  await expect(page.getByRole('button', { name: '保存训练', exact: true })).toBeEnabled()
+  expect(workoutReads).toBe(2)
+})
+
+test('workout authority retains and freezes both ledgers when catalog refresh is refused', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await openWorkouts(page)
+  await page.getByRole('button', { name: '保存训练', exact: true }).click()
+  const retainedEntry = page.locator('.workout-entry').first()
+  await expect(retainedEntry).toBeVisible()
+
+  let catalogReads = 0
+  await page.route(/\/v1\/exercise-catalog$/, async (route) => {
+    if (route.request().method() !== 'GET') {
+      await route.continue()
+      return
+    }
+    catalogReads += 1
+    if (catalogReads === 1) {
+      await route.fulfill({
+        status: 429,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'raw catalog refusal must stay hidden' }),
+      })
+      return
+    }
+    await route.continue()
+  })
+
+  await page.getByRole('button', { name: '更新训练与动作目录' }).click()
+  const readState = page.locator('.workout-read-state')
+  await expect(readState.getByText('READ REFUSED / 读取被拒绝')).toBeVisible()
+  await expect(readState).toContainText('RETAINED SNAPSHOT · 1 SESSIONS')
+  await expect(readState).not.toContainText('raw catalog refusal')
+  await expect(retainedEntry).toBeVisible()
+  await expect(page.locator('.workout-ledger__count')).toHaveText('保留 1')
+  await expect(page.getByRole('button', { name: '保存训练', exact: true })).toBeDisabled()
+  await expect(page.getByRole('button', { name: '重复上次训练' })).toBeDisabled()
+  await expect(retainedEntry.getByRole('button', { name: '重复' })).toBeDisabled()
+  await expect(retainedEntry.getByRole('button', { name: '修改' })).toBeDisabled()
+  await expect(retainedEntry.getByRole('button', { name: '历史' })).toBeDisabled()
+  await expect(retainedEntry.getByRole('button', { name: '删除' })).toBeDisabled()
+  await expect(page.getByRole('button', { name: '添加俯卧撑' })).toBeDisabled()
+  await expect(page.getByRole('button', { name: '管理我的动作' })).toBeEnabled()
+  await expect(page.getByRole('button', { name: '查看高脚杯深蹲趋势' })).toBeEnabled()
+  const retry = page.getByRole('button', { name: '重新核对训练与动作目录' })
+  await expect(retry).toBeFocused()
+
+  await page.screenshot({
+    path: 'output/playwright/iteration-066-workout-stale-wide.png',
+    fullPage: true,
+  })
+
+  const catalogResponse = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/v1/exercise-catalog') && response.request().method() === 'GET',
+  )
+  await page.keyboard.press('Enter')
+  expect((await catalogResponse).status()).toBe(200)
+  await expect(readState).toHaveCount(0)
+  await expect(retainedEntry.getByRole('button', { name: '修改' })).toBeEnabled()
+  await expect(page.getByRole('button', { name: '添加俯卧撑' })).toBeEnabled()
+  await expect(page.getByRole('button', { name: '保存训练', exact: true })).toBeEnabled()
+  expect(catalogReads).toBe(2)
+})
+
 const collectBrowserErrors = (page: Page) => {
   const browserErrors: string[] = []
   page.on('console', (message) => {

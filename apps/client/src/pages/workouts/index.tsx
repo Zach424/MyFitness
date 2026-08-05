@@ -28,6 +28,7 @@ import { describeSaveFailure, type SaveRecovery } from '../../lib/save-recovery'
 import { useRecoverableDraft } from '../../lib/use-local-draft'
 import {
   buildWorkoutRequest,
+  classifyWorkoutReadFailure,
   createExerciseDraft,
   draftFromWorkout,
   exerciseMode,
@@ -35,6 +36,8 @@ import {
   initialWorkoutDraft,
   isWorkoutDraft,
   type WorkoutDraft,
+  type WorkoutReadFailureKind,
+  workoutReadPhase,
   workoutDraftSummary,
   validateWorkoutDraft,
 } from './workout.model'
@@ -60,6 +63,46 @@ const requestKey = () =>
 
 const messageOf = (error: unknown) =>
   error instanceof ApiError || error instanceof Error ? error.message : '操作失败，请稍后重试'
+
+const workoutReadFailureCopy = (
+  kind: WorkoutReadFailureKind,
+  hasSnapshot: boolean,
+): { eyebrow: string; title: string; detail: string } => {
+  if (kind === 'offline') {
+    return {
+      eyebrow: 'OFFLINE / 连接未完成',
+      title: hasSnapshot ? '训练与动作目录复核没有完成' : '训练记录还没有读取',
+      detail: hasSnapshot
+        ? '上次成功读取的训练与动作目录仍在下方，但保存、复用、修改、历史与删除均已冻结。'
+        : '当前无法确认账户里的训练和自定义动作；页面不会用空记录簿代替，也不会提交训练。',
+    }
+  }
+  if (kind === 'refused') {
+    return {
+      eyebrow: 'READ REFUSED / 读取被拒绝',
+      title: hasSnapshot ? '服务拒绝了本次训练复核' : '服务没有接受本次训练读取',
+      detail: hasSnapshot
+        ? '旧训练与动作目录继续只读保留；重新核对前不会生成新的训练事实。'
+        : '训练数量和可复用动作仍是未知状态；重新核对成功前，训练操作保持冻结。',
+    }
+  }
+  if (kind === 'service') {
+    return {
+      eyebrow: 'SERVICE PAUSED / 服务暂不可用',
+      title: hasSnapshot ? '本次训练复核暂未完成' : '训练记录暂时无法读取',
+      detail: hasSnapshot
+        ? '下方保留上次快照用于查看，所有训练记录操作保持冻结。'
+        : '服务暂时没有返回训练与动作目录证据；这里不会显示“还没有训练记录”。',
+    }
+  }
+  return {
+    eyebrow: 'READ UNKNOWN / 结果未知',
+    title: hasSnapshot ? '无法确认当前训练快照' : '无法确认训练记录状态',
+    detail: hasSnapshot
+      ? '旧训练与动作目录继续只读保留；重新核对前不会提交任何训练记录操作。'
+      : '页面尚未取得可信的训练快照，也不会推断账户没有训练或自定义动作。',
+  }
+}
 
 const equipmentLabels: Record<ExerciseEquipment, string> = {
   bodyweight: '自重',
@@ -101,6 +144,8 @@ const WorkoutsPage = () => {
   const [history, setHistory] = useState<WorkoutHistoryItem[]>()
   const [historyNextCursor, setHistoryNextCursor] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [hasReadSnapshot, setHasReadSnapshot] = useState(false)
+  const [readFailure, setReadFailure] = useState<WorkoutReadFailureKind>()
   const [loadingMore, setLoadingMore] = useState(false)
   const [nextCursor, setNextCursor] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -108,6 +153,8 @@ const WorkoutsPage = () => {
   const [saveRecovery, setSaveRecovery] = useState<SaveRecovery>()
   const pendingKey = useRef('')
   const catalogReturnFocusId = useRef('')
+  const readInFlight = useRef(false)
+  const pageActive = useRef(true)
 
   const invalidatePendingSave = (nextFeedback = '') => {
     pendingKey.current = ''
@@ -116,39 +163,64 @@ const WorkoutsPage = () => {
   }
 
   useEffect(() => {
-    void (async () => {
-      try {
-        const workoutResult = await listWorkouts({ limit: 20 })
-        setWorkouts(workoutResult.items)
-        setNextCursor(workoutResult.nextCursor)
-      } catch (error) {
-        setFeedback(messageOf(error))
-      } finally {
-        setLoading(false)
-      }
-    })()
+    pageActive.current = true
+    return () => {
+      pageActive.current = false
+    }
   }, [])
 
+  const loadWorkoutAuthority = async () => {
+    if (readInFlight.current) return
+    readInFlight.current = true
+    setLoading(true)
+    setReadFailure(undefined)
+    setDeleting(undefined)
+    setHistoryWorkout(undefined)
+    try {
+      const [workoutResult, catalogResult] = await Promise.all([
+        listWorkouts({ limit: 20 }),
+        listExerciseCatalog(),
+      ])
+      if (!pageActive.current) return
+      setWorkouts(workoutResult.items)
+      setNextCursor(workoutResult.nextCursor)
+      setCatalogItems(catalogResult.items)
+      setHasReadSnapshot(true)
+
+      const returnTarget = catalogReturnFocusId.current
+      if (!returnTarget) return
+      catalogReturnFocusId.current = ''
+      const customEntryId = returnTarget.replace('workout-edit-action-', '')
+      const targetStillExists = catalogResult.items.some(
+        (entry) => entry.source === 'custom' && entry.id === customEntryId,
+      )
+      deferH5Focus(targetStillExists ? returnTarget : 'workout-manage-actions', 350)
+    } catch (error) {
+      if (!pageActive.current) return
+      setReadFailure(classifyWorkoutReadFailure(error))
+      deferH5Focus('workout-read-retry', 80)
+    } finally {
+      readInFlight.current = false
+      if (pageActive.current) setLoading(false)
+    }
+  }
+
   useDidShow(() => {
-    void listExerciseCatalog()
-      .then((result) => {
-        setCatalogItems(result.items)
-        const returnTarget = catalogReturnFocusId.current
-        if (!returnTarget) return
-        catalogReturnFocusId.current = ''
-        const customEntryId = returnTarget.replace('workout-edit-action-', '')
-        const targetStillExists = result.items.some(
-          (entry) => entry.source === 'custom' && entry.id === customEntryId,
-        )
-        deferH5Focus(targetStillExists ? returnTarget : 'workout-manage-actions', 350)
-      })
-      .catch((error: unknown) => {
-        catalogReturnFocusId.current = ''
-        setFeedback(messageOf(error))
-      })
+    void loadWorkoutAuthority()
   })
 
+  const readPhase = workoutReadPhase({
+    hasSnapshot: hasReadSnapshot,
+    busy: loading,
+    hasFailure: Boolean(readFailure),
+  })
+  const readAuthorityReady = readPhase === 'ready'
+  const readFailurePresentation = readFailure
+    ? workoutReadFailureCopy(readFailure, hasReadSnapshot)
+    : undefined
+
   const openExerciseCatalog = (returnFocusId: string, entryId?: string) => {
+    if (entryId && !readAuthorityReady) return
     catalogReturnFocusId.current = returnFocusId
     const query = entryId ? `&entryId=${encodeURIComponent(entryId)}` : ''
     void Taro.navigateTo({
@@ -160,7 +232,7 @@ const WorkoutsPage = () => {
   }
 
   const loadOlderWorkouts = async () => {
-    if (!nextCursor || loadingMore) return
+    if (!readAuthorityReady || !nextCursor || loadingMore) return
     setLoadingMore(true)
     try {
       const result = await listWorkouts({ limit: 20, cursor: nextCursor })
@@ -194,6 +266,10 @@ const WorkoutsPage = () => {
       pendingKey.current = ''
       setSaveRecovery(undefined)
       setFeedback('本地草稿已恢复；保存前请重新核对完成组、负重与感受。')
+      return
+    }
+    if (!readAuthorityReady) {
+      setFeedback('请先重新核对训练与动作目录，再恢复这份修改草稿。草稿仍安全保留。')
       return
     }
     try {
@@ -251,6 +327,7 @@ const WorkoutsPage = () => {
   }
 
   const addExercise = (item: ExerciseCatalogItem) => {
+    if (!readAuthorityReady) return
     if (draft.exercises.some((exercise) => exercise.exerciseKey === item.key)) {
       setFeedback(`${item.name}已经在本次训练中。`)
       return
@@ -310,6 +387,10 @@ const WorkoutsPage = () => {
   }
 
   const save = async () => {
+    if (!readAuthorityReady) {
+      setFeedback('请先重新核对训练与动作目录，再保存本次训练。当前输入仍保留。')
+      return
+    }
     const validation = validateWorkoutDraft(draft)
     if (validation) {
       setSaveRecovery(undefined)
@@ -353,6 +434,7 @@ const WorkoutsPage = () => {
   }
 
   const edit = (workout: Workout) => {
+    if (!readAuthorityReady) return
     if (recoverableDraft.pending) {
       setFeedback('请先恢复或放弃页面顶部的本地草稿，再开始另一项修改。')
       Taro.pageScrollTo({ scrollTop: 0, duration: 220 })
@@ -367,6 +449,7 @@ const WorkoutsPage = () => {
   }
 
   const repeat = (workout: Workout) => {
+    if (!readAuthorityReady) return
     if (recoverableDraft.pending) {
       setFeedback('请先恢复或放弃页面顶部的本地草稿，再复制另一项训练。')
       Taro.pageScrollTo({ scrollTop: 0, duration: 220 })
@@ -381,7 +464,7 @@ const WorkoutsPage = () => {
   }
 
   const remove = async () => {
-    if (!deleting) return
+    if (!deleting || !readAuthorityReady) return
     setSaving(true)
     try {
       await deleteWorkout(deleting.id, deleting.revision)
@@ -400,6 +483,7 @@ const WorkoutsPage = () => {
   }
 
   const openHistory = async (workout: Workout) => {
+    if (!readAuthorityReady) return
     setHistoryWorkout(workout)
     setHistory(undefined)
     setHistoryNextCursor(null)
@@ -414,7 +498,7 @@ const WorkoutsPage = () => {
   }
 
   const loadOlderHistory = async () => {
-    if (!historyWorkout || !historyNextCursor || loadingMore) return
+    if (!readAuthorityReady || !historyWorkout || !historyNextCursor || loadingMore) return
     setLoadingMore(true)
     try {
       const result = await getWorkoutHistory(historyWorkout.id, {
@@ -447,7 +531,9 @@ const WorkoutsPage = () => {
               <Text>衡迹</Text>
               <Text className="workouts-wordmark__en">TRAINING LOG</Text>
             </View>
-            <Text className="workouts-topbar__count metric">{workouts.length}</Text>
+            <Text className="workouts-topbar__count metric">
+              {hasReadSnapshot ? workouts.length : '—'}
+            </Text>
           </View>
 
           <View className="workouts-intro">
@@ -488,12 +574,54 @@ const WorkoutsPage = () => {
             />
           ) : null}
 
+          {readPhase === 'refreshing' && hasReadSnapshot ? (
+            <View className="workout-read-state workout-read-state--refreshing" role="status">
+              <View>
+                <Text className="workout-read-state__eyebrow">
+                  CHECKING TRAINING / 保留上次快照
+                </Text>
+                <Text className="workout-read-state__title">正在复核训练与动作目录</Text>
+                <Text className="workout-read-state__copy">
+                  复核完成前，下方训练与动作目录只读保留；保存、复用、修改、历史与删除均已冻结。
+                </Text>
+              </View>
+            </View>
+          ) : readFailurePresentation ? (
+            <View className={`workout-read-state workout-read-state--${readPhase}`} role="status">
+              <View>
+                <Text className="workout-read-state__eyebrow">
+                  {readFailurePresentation.eyebrow}
+                </Text>
+                <Text className="workout-read-state__title">{readFailurePresentation.title}</Text>
+                <Text className="workout-read-state__copy">{readFailurePresentation.detail}</Text>
+                {hasReadSnapshot ? (
+                  <Text className="workout-read-state__retained metric">
+                    RETAINED SNAPSHOT · {workouts.length} SESSIONS · {catalogItems.length} ACTIONS
+                  </Text>
+                ) : null}
+              </View>
+              <Button
+                id="workout-read-retry"
+                className="workout-read-state__action"
+                aria-label="重新核对训练与动作目录"
+                {...buttonActivationProps(
+                  () => void loadWorkoutAuthority(),
+                  loading || loadingMore || saving,
+                )}
+              >
+                重新核对
+              </Button>
+            </View>
+          ) : null}
+
           <View className="workouts-grid">
             <View className="workout-builder">
               {workouts[0] && !editing ? (
                 <Button
                   {...buttonA11yProps}
                   className="repeat-banner"
+                  disabled={!readAuthorityReady}
+                  aria-disabled={!readAuthorityReady}
                   onClick={() => repeat(workouts[0]!)}
                 >
                   <View>
@@ -640,7 +768,13 @@ const WorkoutsPage = () => {
                     onInput={(event) => setCatalogQuery(event.detail.value)}
                   />
                   <View className="exercise-catalog" aria-label="动作目录搜索结果">
-                    {filteredCatalog.length ? (
+                    {!hasReadSnapshot ? (
+                      <View className="catalog-empty">
+                        {loading
+                          ? '正在核对可复用动作…'
+                          : '动作目录尚未核对；重新核对成功后才会显示可复用动作。'}
+                      </View>
+                    ) : filteredCatalog.length ? (
                       filteredCatalog.map((item) => {
                         const selected = draft.exercises.some(
                           (exercise) => exercise.exerciseKey === item.key,
@@ -650,7 +784,8 @@ const WorkoutsPage = () => {
                             <Button
                               {...buttonA11yProps}
                               className={`catalog-entry__add ${selected ? 'catalog-entry__add--selected' : ''}`}
-                              disabled={selected ? true : undefined}
+                              disabled={selected || !readAuthorityReady}
+                              aria-disabled={selected || !readAuthorityReady}
                               aria-label={`${selected ? '已添加' : '添加'}${item.name}`}
                               onClick={() => addExercise(item)}
                             >
@@ -670,8 +805,10 @@ const WorkoutsPage = () => {
                             </Button>
                             {item.source === 'custom' ? (
                               <Button
-                                {...buttonActivationProps(() =>
-                                  openExerciseCatalog(`workout-edit-action-${item.id}`, item.id),
+                                {...buttonActivationProps(
+                                  () =>
+                                    openExerciseCatalog(`workout-edit-action-${item.id}`, item.id),
+                                  !readAuthorityReady,
                                 )}
                                 id={`workout-edit-action-${item.id}`}
                                 className="catalog-entry__edit"
@@ -947,7 +1084,8 @@ const WorkoutsPage = () => {
                 <Button
                   {...buttonA11yProps}
                   className="save-workout"
-                  disabled={saving}
+                  disabled={saving || !readAuthorityReady}
+                  aria-disabled={saving || !readAuthorityReady}
                   onClick={() => void save()}
                 >
                   {saving
@@ -963,10 +1101,39 @@ const WorkoutsPage = () => {
                   <Text className="workouts-eyebrow">RECENT SESSIONS</Text>
                   <Text className="workout-panel-title">训练记录簿</Text>
                 </View>
-                <Text className="workout-ledger__count metric">已载入 {workouts.length}</Text>
+                <View className="workout-ledger__tools">
+                  <Text className="workout-ledger__count metric">
+                    {readAuthorityReady
+                      ? `已载入 ${workouts.length}`
+                      : hasReadSnapshot
+                        ? `保留 ${workouts.length}`
+                        : '尚未核对'}
+                  </Text>
+                  {readPhase === 'ready' || readPhase === 'refreshing' ? (
+                    <Button
+                      id="workout-read-refresh"
+                      className="workout-read-refresh"
+                      aria-label="更新训练与动作目录"
+                      {...buttonActivationProps(
+                        () => void loadWorkoutAuthority(),
+                        loading || loadingMore || saving,
+                      )}
+                    >
+                      {loading ? '核对中…' : '更新训练'}
+                    </Button>
+                  ) : null}
+                </View>
               </View>
-              {loading ? (
+              {loading && !hasReadSnapshot ? (
                 <View className="workout-empty">正在整理训练…</View>
+              ) : !hasReadSnapshot ? (
+                <View className="workout-empty">
+                  <Text className="workout-empty__mark">?</Text>
+                  <Text className="workout-empty__title">训练数量尚未核对</Text>
+                  <Text className="workout-empty__body">
+                    重新核对成功后，才会显示当前训练或空记录簿。
+                  </Text>
+                </View>
               ) : workouts.length ? (
                 <View className="workout-list">
                   {workouts.map((workout) => (
@@ -1022,6 +1189,8 @@ const WorkoutsPage = () => {
                         <Button
                           {...buttonA11yProps}
                           className="entry-action"
+                          disabled={!readAuthorityReady}
+                          aria-disabled={!readAuthorityReady}
                           onClick={() => repeat(workout)}
                         >
                           重复
@@ -1029,6 +1198,8 @@ const WorkoutsPage = () => {
                         <Button
                           {...buttonA11yProps}
                           className="entry-action"
+                          disabled={!readAuthorityReady}
+                          aria-disabled={!readAuthorityReady}
                           onClick={() => edit(workout)}
                         >
                           修改
@@ -1036,6 +1207,8 @@ const WorkoutsPage = () => {
                         <Button
                           {...buttonA11yProps}
                           className="entry-action"
+                          disabled={!readAuthorityReady}
+                          aria-disabled={!readAuthorityReady}
                           onClick={() => void openHistory(workout)}
                         >
                           历史
@@ -1043,7 +1216,11 @@ const WorkoutsPage = () => {
                         <Button
                           {...buttonA11yProps}
                           className="entry-action entry-action--danger"
-                          onClick={() => setDeleting(workout)}
+                          disabled={!readAuthorityReady}
+                          aria-disabled={!readAuthorityReady}
+                          onClick={() => {
+                            if (readAuthorityReady) setDeleting(workout)
+                          }}
                         >
                           删除
                         </Button>
@@ -1054,7 +1231,8 @@ const WorkoutsPage = () => {
                     <Button
                       {...buttonA11yProps}
                       className="record-page-more"
-                      disabled={loadingMore}
+                      disabled={loadingMore || !readAuthorityReady}
+                      aria-disabled={loadingMore || !readAuthorityReady}
                       onClick={() => void loadOlderWorkouts()}
                     >
                       {loadingMore ? '正在载入…' : '继续载入更早训练'}
@@ -1096,6 +1274,8 @@ const WorkoutsPage = () => {
               <Button
                 {...buttonA11yProps}
                 className="modal-action modal-action--danger"
+                disabled={saving || !readAuthorityReady}
+                aria-disabled={saving || !readAuthorityReady}
                 onClick={() => void remove()}
               >
                 确认删除
@@ -1151,7 +1331,8 @@ const WorkoutsPage = () => {
                   <Button
                     {...buttonA11yProps}
                     className="record-page-more"
-                    disabled={loadingMore}
+                    disabled={loadingMore || !readAuthorityReady}
+                    aria-disabled={loadingMore || !readAuthorityReady}
                     onClick={() => void loadOlderHistory()}
                   >
                     {loadingMore ? '正在载入…' : '继续载入更早版本'}

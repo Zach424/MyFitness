@@ -101,6 +101,89 @@
   gap: 16px;
 }
 
+.workout-read-state {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  padding: 17px;
+  border: 1px solid rgba(169, 104, 33, 0.3);
+  border-left: 4px solid var(--color-warning);
+  border-radius: var(--radius-card);
+  background:
+    repeating-linear-gradient(
+      -12deg,
+      rgba(169, 104, 33, 0.035) 0,
+      rgba(169, 104, 33, 0.035) 1px,
+      transparent 1px,
+      transparent 12px
+    ),
+    rgba(255, 250, 241, 0.98);
+}
+
+.workout-read-state--refreshing {
+  border-color: rgba(36, 76, 102, 0.24);
+  border-left-color: var(--color-mineral);
+  background: var(--color-mineral-soft);
+}
+
+.workout-read-state__eyebrow,
+.workout-read-state__title,
+.workout-read-state__copy,
+.workout-read-state__retained {
+  display: block;
+}
+
+.workout-read-state__eyebrow {
+  color: var(--color-warning);
+  font-family: var(--font-display);
+  font-size: 9px;
+  font-weight: 740;
+  letter-spacing: 0.12em;
+}
+
+.workout-read-state--refreshing .workout-read-state__eyebrow {
+  color: var(--color-mineral);
+}
+
+.workout-read-state__title {
+  margin-top: 6px;
+  font-size: 18px;
+  font-weight: 770;
+  letter-spacing: -0.035em;
+}
+
+.workout-read-state__copy {
+  max-width: 720px;
+  margin-top: 7px;
+  color: var(--color-muted);
+  font-size: 10px;
+  line-height: 1.7;
+}
+
+.workout-read-state__retained {
+  margin-top: 9px;
+  color: var(--color-warning);
+  font-family: var(--font-metric);
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.workout-read-state__action {
+  width: auto;
+  min-width: max-content;
+  min-height: 42px;
+  margin: 0;
+  padding: 0 14px;
+  border: 1px solid var(--color-warning);
+  border-radius: var(--radius-control);
+  color: var(--color-warning);
+  background: var(--color-paper);
+  font-size: 10px;
+  font-weight: 730;
+}
+
 .workout-card,
 .repeat-banner {
   border: 1px solid rgba(20, 36, 38, 0.085);
@@ -659,6 +742,49 @@
   font-size: 12px;
 }
 
+.workout-ledger__tools {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+}
+
+.workout-read-refresh {
+  width: auto;
+  min-height: 34px;
+  margin: 0;
+  padding: 0 11px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-control);
+  color: var(--color-mineral);
+  background: var(--color-paper);
+  font-size: 9px;
+  font-weight: 720;
+}
+
+.save-workout[aria-disabled='true'],
+.repeat-banner[aria-disabled='true'],
+.catalog-entry__add[aria-disabled='true'],
+.catalog-entry__edit[aria-disabled='true'],
+.entry-action[aria-disabled='true'],
+.record-page-more[aria-disabled='true'],
+.modal-action[aria-disabled='true'],
+.workout-read-refresh[aria-disabled='true'] {
+  opacity: 0.46;
+}
+
+.repeat-banner[aria-disabled='true'] {
+  opacity: 1;
+  cursor: not-allowed;
+}
+
+.repeat-banner[aria-disabled='true'] .repeat-banner__title {
+  color: rgba(20, 36, 38, 0.66);
+}
+
+.repeat-banner[aria-disabled='true'] .repeat-banner__meta {
+  color: rgba(63, 117, 107, 0.72);
+}
+
 .workout-list {
   padding-top: 2px;
 }
@@ -990,6 +1116,26 @@ textarea:focus-visible {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@media (max-width: 560px) {
+  .workout-read-state {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .workout-read-state__action {
+    width: 100%;
+  }
+
+  .workout-ledger__heading {
+    align-items: flex-start;
+  }
+
+  .workout-ledger__tools {
+    align-items: flex-end;
+    flex-direction: column;
   }
 }
 

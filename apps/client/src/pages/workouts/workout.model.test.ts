@@ -2,17 +2,43 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
   buildWorkoutRequest,
+  classifyWorkoutReadFailure,
   createExerciseDraft,
-  filterExerciseCatalog,
   draftFromWorkout,
+  filterExerciseCatalog,
   initialWorkoutDraft,
   validateWorkoutDraft,
+  workoutReadPhase,
   workoutDraftSummary,
 } from './workout.model'
 import { starterExerciseCatalog } from '@myfitness/contracts/exercise-catalog.constants'
 
 describe('workout page model', () => {
   afterEach(() => vi.useRealTimers())
+
+  it('keeps an unread training ledger distinct from an accepted empty snapshot', () => {
+    expect(workoutReadPhase({ hasSnapshot: false, busy: true, hasFailure: false })).toBe(
+      'initial-loading',
+    )
+    expect(workoutReadPhase({ hasSnapshot: false, busy: false, hasFailure: true })).toBe(
+      'initial-error',
+    )
+    expect(workoutReadPhase({ hasSnapshot: true, busy: false, hasFailure: false })).toBe('ready')
+  })
+
+  it('marks a retained workout and catalog snapshot as refreshing or stale', () => {
+    expect(workoutReadPhase({ hasSnapshot: true, busy: true, hasFailure: false })).toBe(
+      'refreshing',
+    )
+    expect(workoutReadPhase({ hasSnapshot: true, busy: false, hasFailure: true })).toBe('stale')
+  })
+
+  it('classifies workout authority failures without exposing server copy', () => {
+    expect(classifyWorkoutReadFailure(new Error('Failed to fetch'))).toBe('offline')
+    expect(classifyWorkoutReadFailure({ statusCode: 403 })).toBe('refused')
+    expect(classifyWorkoutReadFailure({ statusCode: 503 })).toBe('service')
+    expect(classifyWorkoutReadFailure(undefined)).toBe('unknown')
+  })
 
   it('builds ordered completed strength sets', () => {
     const draft = initialWorkoutDraft()
