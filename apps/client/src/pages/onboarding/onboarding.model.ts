@@ -1,6 +1,8 @@
 import type { OnboardingRequest, RiskFlag } from '@myfitness/contracts'
 import { consentVersions } from '@myfitness/contracts/onboarding.constants'
 
+import type { RegisterReadFailureKind } from '../../lib/register-read'
+
 export type OnboardingDraft = {
   displayName: string
   ageBand: OnboardingRequest['profile']['ageBand']
@@ -110,5 +112,44 @@ export const buildOnboardingRequest = (
       healthData: { accepted: true, version: consentVersions.healthData },
     },
     ...(expectedRevision === undefined ? {} : { expectedRevision }),
+  }
+}
+
+export const onboardingAuthorityMatchesBase = (
+  currentRevision: number | null,
+  draftBaseRevision: number | null | undefined,
+) => draftBaseRevision !== undefined && currentRevision === draftBaseRevision
+
+export const onboardingReadFailureCopy = (kind: RegisterReadFailureKind, hasSnapshot: boolean) => {
+  if (kind === 'offline')
+    return {
+      eyebrow: 'OFFLINE / 连接未完成',
+      title: hasSnapshot ? '个人资料底稿复核没有完成' : '个人资料底稿还没有读取',
+      detail: hasSnapshot
+        ? '上次成功核对的资料与本地草稿仍在下方；重新核对前，保存保持冻结。'
+        : '当前无法确认账户是否已有资料；页面不会用起始选项代替，也不会开放保存。',
+    }
+  if (kind === 'refused')
+    return {
+      eyebrow: 'READ REFUSED / 读取被拒绝',
+      title: '服务没有接受本次个人资料核对',
+      detail: hasSnapshot
+        ? '旧底稿继续保留，本地编辑不会丢失；核对成功前不能用旧修订授权保存。'
+        : '资料是否存在仍是未知状态；只有成功响应或明确未建档响应才能开放编辑底稿。',
+    }
+  if (kind === 'service')
+    return {
+      eyebrow: 'SERVICE PAUSED / 服务暂不可用',
+      title: '个人资料底稿暂时无法读取',
+      detail: hasSnapshot
+        ? '下方保留上次核对的资料与本地编辑；当前修订恢复前，保存保持冻结。'
+        : '服务暂时没有返回资料证据；这里不会把默认年龄、目标或风险选项当成你的事实。',
+    }
+  return {
+    eyebrow: 'READ UNKNOWN / 结果未知',
+    title: '无法确认当前个人资料底稿',
+    detail: hasSnapshot
+      ? '旧底稿继续只读保留，本地编辑仍可保留；重新核对前不会提交资料。'
+      : '页面尚未取得可信资料底稿，也不会推断这个账户尚未建档。',
   }
 }

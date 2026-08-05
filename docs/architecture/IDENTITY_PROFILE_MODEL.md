@@ -1,6 +1,6 @@
 # Identity and onboarding model
 
-Status: verified WeChat and complete H5 OIDC browser/API adapters plus erased-identity suppression are implemented locally; real credentials, hosted callback, device/browser and shared-provider proof remain gated
+Status: verified WeChat and complete H5 OIDC browser/API adapters, erased-identity suppression and profile/goal register read authority are implemented locally; real credentials, hosted callback, device/browser and shared-provider proof remain gated
 
 ## Ownership chain
 
@@ -33,6 +33,12 @@ Risk flags are a bounded enum. No flags produces `eligible`; one or more produce
 Profile and goal changes run in one database transaction. The service locks the current profile and compares `expectedRevision`; a stale client receives a conflict rather than overwriting newer data. Height is converted to canonical centimeters while its chosen display value/unit are retained. Consent writes use append-only events, so a profile revision cannot rewrite when or which policy version was accepted.
 
 The current versions are `2026-07-18` for terms, privacy and health-data processing. A client must send the exact active versions. Required service purposes remain active until account erasure. Optional AI-plan and food-photo purposes can be withdrawn; a later explicit request adds a new acceptance row rather than clearing the prior revocation. The privacy center exports every interval and erases consent receipts with the account.
+
+## Client register authority
+
+The onboarding editor distinguishes unread authority, confirmed absence and one accepted profile/goal response. Only an explicit 404/new-user result may expose starter choices without a revision, and the page labels those values as an unsubmitted draft rather than owner facts. A non-404 initial failure hides the form; a failed foreground refresh retains the last accepted revision or absence in page memory but freezes PUT while local edits and step navigation remain available.
+
+The draft base revision remains separate from the most recently accepted response. A same-revision refresh preserves local edits, while a changed revision publishes current evidence without rebasing or overwriting the draft. Save remains frozen until the user explicitly discards the old-base edits and loads the latest response. A server 409 performs one read-only reconciliation and never replays PUT. No profile, risk, consent draft, response or retry instruction is persisted or polled.
 
 ## Environment boundary
 

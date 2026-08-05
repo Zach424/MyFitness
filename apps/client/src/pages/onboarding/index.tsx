@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Button, Input, ScrollView, Switch, Text, View } from '@tarojs/components'
 import Taro from '@tarojs/taro'
 
@@ -14,10 +14,17 @@ import {
 import type { OnboardingResponse } from '@myfitness/contracts'
 
 import { ApiError, apiBaseUrl, getOnboarding, saveOnboarding } from '../../lib/api'
-import { buttonA11yProps } from '../../lib/accessibility'
+import { buttonA11yProps, buttonActivationProps, deferH5Focus } from '../../lib/accessibility'
+import {
+  classifyRegisterReadFailure,
+  registerReadPhase,
+  type RegisterReadFailureKind,
+} from '../../lib/register-read'
 import {
   buildOnboardingRequest,
   initialDraft,
+  onboardingAuthorityMatchesBase,
+  onboardingReadFailureCopy,
   toggleSelection,
   validateStep,
   type OnboardingDraft,
@@ -64,6 +71,12 @@ const stepMeta = [
     body: '筛查不是诊断，只决定规划流程是否需要暂停。',
   },
 ] as const
+
+const authorityMeta = {
+  eyebrow: 'PROFILE REGISTER / 资料底稿',
+  title: '先确认资料底稿',
+  body: '只有服务确认当前资料或明确尚未建档后，页面才会显示并允许保存个人信息。',
+} as const
 
 const consentItems: ReadonlyArray<{
   key: 'adultConfirmed' | 'termsAccepted' | 'privacyAccepted' | 'healthDataAccepted'
@@ -117,31 +130,96 @@ const hydrateDraft = (profile: OnboardingResponse): OnboardingDraft => ({
 const OnboardingPage = () => {
   const [step, setStep] = useState(0)
   const [draft, setDraft] = useState<OnboardingDraft>(initialDraft)
-  const [revision, setRevision] = useState<number>()
+  const [acceptedProfile, setAcceptedProfile] = useState<OnboardingResponse | null>()
+  const [draftBaseRevision, setDraftBaseRevision] = useState<number | null>()
+  const [draftDirty, setDraftDirty] = useState(false)
+  const [draftOutdated, setDraftOutdated] = useState(false)
+  const [readFailure, setReadFailure] = useState<RegisterReadFailureKind>()
   const [message, setMessage] = useState('')
-  const [loading, setLoading] = useState(true)
+  const [readBusy, setReadBusy] = useState(true)
   const [saving, setSaving] = useState(false)
   const [result, setResult] = useState<OnboardingResponse>()
+  const pageActive = useRef(true)
+  const readInFlight = useRef(false)
+  const acceptedProfileRef = useRef<OnboardingResponse | null>()
+  const draftBaseRevisionRef = useRef<number | null>()
+  const draftDirtyRef = useRef(false)
+
+  const publishAuthority = (existing: OnboardingResponse | undefined) => {
+    const accepted = existing ?? null
+    const currentRevision = existing?.revision ?? null
+    const hasLocalEdits = draftDirtyRef.current
+    acceptedProfileRef.current = accepted
+    setAcceptedProfile(accepted)
+    setReadFailure(undefined)
+
+    if (!hasLocalEdits) {
+      const nextDraft = existing ? hydrateDraft(existing) : initialDraft
+      draftBaseRevisionRef.current = currentRevision
+      draftDirtyRef.current = false
+      setDraft(nextDraft)
+      setDraftBaseRevision(currentRevision)
+      setDraftDirty(false)
+      setDraftOutdated(false)
+      return
+    }
+
+    setDraftOutdated(!onboardingAuthorityMatchesBase(currentRevision, draftBaseRevisionRef.current))
+  }
+
+  const loadProfileAuthority = async (focusOnFailure = true) => {
+    if (readInFlight.current) return false
+    const hadSnapshot = acceptedProfileRef.current !== undefined
+    readInFlight.current = true
+    setReadBusy(true)
+    setReadFailure(undefined)
+    try {
+      const existing = await getOnboarding()
+      if (!pageActive.current) return false
+      publishAuthority(existing)
+      if (!hadSnapshot) deferH5Focus('onboarding-close', 350)
+      return true
+    } catch (error) {
+      if (!pageActive.current) return false
+      setReadFailure(classifyRegisterReadFailure(error))
+      if (focusOnFailure) deferH5Focus('onboarding-read-retry', hadSnapshot ? 80 : 500)
+      return false
+    } finally {
+      readInFlight.current = false
+      if (pageActive.current) setReadBusy(false)
+    }
+  }
 
   useEffect(() => {
-    void getOnboarding()
-      .then((existing) => {
-        if (!existing) return
-        setDraft(hydrateDraft(existing))
-        setRevision(existing.revision)
-      })
-      .catch((error: unknown) => {
-        if (!(error instanceof ApiError) || error.statusCode !== 404) {
-          setMessage(error instanceof Error ? error.message : '暂时无法载入资料')
-        }
-      })
-      .finally(() => setLoading(false))
+    pageActive.current = true
+    void loadProfileAuthority()
+    return () => {
+      pageActive.current = false
+    }
   }, [])
 
   const patchDraft = (patch: Partial<OnboardingDraft>) => {
     setDraft((current) => ({ ...current, ...patch }))
+    draftDirtyRef.current = true
+    setDraftDirty(true)
     setMessage('')
     setResult(undefined)
+  }
+
+  const loadAcceptedDraft = () => {
+    if (acceptedProfile === undefined) return
+    const currentRevision = acceptedProfile?.revision ?? null
+    const nextDraft = acceptedProfile ? hydrateDraft(acceptedProfile) : initialDraft
+    draftBaseRevisionRef.current = currentRevision
+    draftDirtyRef.current = false
+    setDraft(nextDraft)
+    setDraftBaseRevision(currentRevision)
+    setDraftDirty(false)
+    setDraftOutdated(false)
+    setResult(undefined)
+    setMessage('已载入最新底稿；刚才未提交的本地修改已由你明确放弃。')
+    setStep(0)
+    deferH5Focus('onboarding-display-name', 80)
   }
 
   const advance = () => {
@@ -155,6 +233,17 @@ const OnboardingPage = () => {
   }
 
   const submit = async () => {
+    if (
+      readBusy ||
+      readFailure !== undefined ||
+      acceptedProfile === undefined ||
+      draftBaseRevision === undefined ||
+      draftOutdated
+    ) {
+      setMessage('请先重新核对当前资料底稿；保存不会使用未知或过期的修订。')
+      deferH5Focus('onboarding-read-retry')
+      return
+    }
     const validationError = validateStep(draft, 2)
     if (validationError) {
       setMessage(validationError)
@@ -163,8 +252,17 @@ const OnboardingPage = () => {
     setSaving(true)
     setMessage('')
     try {
-      const saved = await saveOnboarding(buildOnboardingRequest(draft, revision))
-      setRevision(saved.revision)
+      const saved = await saveOnboarding(
+        buildOnboardingRequest(draft, draftBaseRevision ?? undefined),
+      )
+      acceptedProfileRef.current = saved
+      draftBaseRevisionRef.current = saved.revision
+      draftDirtyRef.current = false
+      setAcceptedProfile(saved)
+      setDraftBaseRevision(saved.revision)
+      setDraftDirty(false)
+      setDraftOutdated(false)
+      setReadFailure(undefined)
       setResult(saved)
       setMessage(
         saved.eligibility.status === 'eligible'
@@ -172,13 +270,42 @@ const OnboardingPage = () => {
           : '资料已保存。为安全起见，个性化训练规划会先暂停，请取得医生或合格专业人员许可。',
       )
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : '保存失败，请稍后再试')
+      if (error instanceof ApiError && error.statusCode === 409) {
+        setMessage('资料已在其他位置更新。你的本地修改仍保留；请更新底稿后再决定如何填写。')
+        const refreshed = await loadProfileAuthority()
+        if (refreshed) deferH5Focus('onboarding-load-accepted', 80)
+      } else {
+        setMessage(error instanceof Error ? error.message : '保存失败，请稍后再试')
+      }
     } finally {
       setSaving(false)
     }
   }
 
-  const meta = stepMeta[step]!
+  const hasReadSnapshot = acceptedProfile !== undefined
+  const readPhase = registerReadPhase({
+    hasSnapshot: hasReadSnapshot,
+    busy: readBusy,
+    hasFailure: readFailure !== undefined,
+  })
+  const readFailurePresentation = readFailure
+    ? onboardingReadFailureCopy(readFailure, hasReadSnapshot)
+    : undefined
+  const acceptedRevision = acceptedProfile?.revision ?? null
+  const authorityMatchesDraft = onboardingAuthorityMatchesBase(acceptedRevision, draftBaseRevision)
+  const canSubmit = !saving && readPhase === 'ready' && authorityMatchesDraft && !draftOutdated
+  const authorityLabel =
+    readPhase === 'ready'
+      ? acceptedProfile
+        ? `已确认底稿 · 资料 v${acceptedProfile.revision}`
+        : '已确认底稿 · 当前尚未建档'
+      : acceptedProfile
+        ? `保留底稿 · 资料 v${acceptedProfile.revision}`
+        : '保留底稿 · 上次确认尚未建档'
+  const retainedLabel = acceptedProfile
+    ? `保留底稿 · 资料 v${acceptedProfile.revision}`
+    : '保留底稿 · 已确认尚未建档'
+  const meta = hasReadSnapshot ? stepMeta[step]! : authorityMeta
 
   return (
     <View className="onboarding-page">
@@ -191,6 +318,7 @@ const OnboardingPage = () => {
             </View>
             <Button
               {...buttonA11yProps}
+              id="onboarding-close"
               className="close-action"
               aria-label="返回今天"
               onClick={() => void Taro.navigateBack()}
@@ -199,14 +327,24 @@ const OnboardingPage = () => {
             </Button>
           </View>
 
-          <View className="onboarding-progress" aria-label={`建档进度，第 ${step + 1} 步，共 3 步`}>
-            {[0, 1, 2].map((item) => (
-              <View
-                className={`onboarding-progress__bar ${item <= step ? 'onboarding-progress__bar--active' : ''}`}
-                key={item}
-              />
-            ))}
-          </View>
+          {hasReadSnapshot ? (
+            <View
+              className="onboarding-progress"
+              aria-label={`建档进度，第 ${step + 1} 步，共 3 步`}
+            >
+              {[0, 1, 2].map((item) => (
+                <View
+                  className={`onboarding-progress__bar ${item <= step ? 'onboarding-progress__bar--active' : ''}`}
+                  key={item}
+                />
+              ))}
+            </View>
+          ) : (
+            <View
+              className="onboarding-progress onboarding-progress--authority"
+              aria-hidden="true"
+            />
+          )}
 
           <View className="onboarding-layout">
             <View className="onboarding-main">
@@ -216,13 +354,126 @@ const OnboardingPage = () => {
                 <Text className="onboarding-heading__body">{meta.body}</Text>
               </View>
 
-              {loading ? <View className="form-card loading-card">正在读取你的资料…</View> : null}
+              {hasReadSnapshot ? (
+                <View className="profile-authority-toolbar">
+                  <View className="profile-authority-toolbar__summary">
+                    <Text className="profile-authority-toolbar__eyebrow">
+                      PROFILE BASE / 保存依据
+                    </Text>
+                    <Text className="profile-authority-toolbar__label">
+                      {authorityLabel}
+                      {draftDirty ? ' · 有未提交修改' : ''}
+                    </Text>
+                  </View>
+                  <Button
+                    {...buttonActivationProps(
+                      () => void loadProfileAuthority(),
+                      readBusy || saving,
+                    )}
+                    id="onboarding-read-refresh"
+                    className="profile-authority-toolbar__action"
+                  >
+                    {readBusy ? '核对中…' : '更新底稿'}
+                  </Button>
+                </View>
+              ) : null}
 
-              {!loading && step === 0 ? (
+              {readPhase === 'initial-loading' ? (
+                <View
+                  className="profile-authority-state profile-authority-state--loading"
+                  role="status"
+                >
+                  <Text className="profile-authority-state__eyebrow">
+                    CHECKING PROFILE REGISTER
+                  </Text>
+                  <Text className="profile-authority-state__title">正在核对个人资料底稿</Text>
+                  <Text className="profile-authority-state__copy">
+                    完整读取或明确未建档响应返回前，不会显示起始选项，也不会开放保存。
+                  </Text>
+                </View>
+              ) : null}
+
+              {readPhase === 'refreshing' ? (
+                <View
+                  className="profile-authority-state profile-authority-state--refreshing"
+                  role="status"
+                >
+                  <Text className="profile-authority-state__eyebrow">
+                    CHECKING PROFILE BASE / 保留本地修改
+                  </Text>
+                  <Text className="profile-authority-state__title">正在复核个人资料底稿</Text>
+                  <Text className="profile-authority-state__copy">
+                    上次核对的资料和未提交修改继续显示；完成前不会替换草稿，也不会授权保存。
+                  </Text>
+                  <Text className="profile-authority-state__retained metric">{retainedLabel}</Text>
+                </View>
+              ) : null}
+
+              {readFailurePresentation ? (
+                <View className="profile-authority-state" role="status">
+                  <Text className="profile-authority-state__eyebrow">
+                    {readFailurePresentation.eyebrow}
+                  </Text>
+                  <Text className="profile-authority-state__title">
+                    {readFailurePresentation.title}
+                  </Text>
+                  <Text className="profile-authority-state__copy">
+                    {readFailurePresentation.detail}
+                  </Text>
+                  {hasReadSnapshot ? (
+                    <Text className="profile-authority-state__retained metric">
+                      {retainedLabel}
+                    </Text>
+                  ) : null}
+                  <Button
+                    {...buttonActivationProps(() => void loadProfileAuthority())}
+                    id="onboarding-read-retry"
+                    className="profile-authority-state__action"
+                  >
+                    重新核对
+                  </Button>
+                </View>
+              ) : null}
+
+              {acceptedProfile === null ? (
+                <View className="profile-authority-empty" role="status">
+                  <Text className="profile-authority-empty__title">
+                    {readPhase === 'ready'
+                      ? '服务已确认：当前尚未建档'
+                      : '保留底稿：上次核对时尚未建档'}
+                  </Text>
+                  <Text className="profile-authority-empty__copy">
+                    下方年龄、目标与节奏只是起始草稿，不是你的已确认事实；只有在当前底稿核对成功后保存，才会成为资料。
+                  </Text>
+                </View>
+              ) : null}
+
+              {draftOutdated ? (
+                <View className="profile-authority-drift" role="status">
+                  <Text className="profile-authority-drift__title">本地修改基于较早的资料修订</Text>
+                  <Text className="profile-authority-drift__copy">
+                    为避免覆盖其他位置的更新，保存保持冻结。你的修改仍在本页；只有下面的明确操作会放弃它们并载入最新底稿。
+                  </Text>
+                  <Button
+                    {...buttonActivationProps(
+                      loadAcceptedDraft,
+                      readBusy || readFailure !== undefined,
+                    )}
+                    id="onboarding-load-accepted"
+                    className="profile-authority-drift__action"
+                    disabled={readBusy || readFailure !== undefined}
+                  >
+                    放弃本地修改并载入最新底稿
+                  </Button>
+                </View>
+              ) : null}
+
+              {hasReadSnapshot && step === 0 ? (
                 <View className="form-card">
                   <View className="field">
                     <Text className="field__label">怎么称呼你</Text>
                     <Input
+                      id="onboarding-display-name"
                       className="text-input"
                       maxlength={40}
                       placeholder="例如：小陈"
@@ -291,7 +542,7 @@ const OnboardingPage = () => {
                 </View>
               ) : null}
 
-              {!loading && step === 1 ? (
+              {hasReadSnapshot && step === 1 ? (
                 <View className="form-card">
                   <View className="field">
                     <Text className="field__label">当前最重要的目标</Text>
@@ -377,7 +628,7 @@ const OnboardingPage = () => {
                 </View>
               ) : null}
 
-              {!loading && step === 2 ? (
+              {hasReadSnapshot && step === 2 ? (
                 <View className="form-card">
                   <View className="screening-note">
                     <Text className="screening-note__mark">!</Text>
@@ -434,7 +685,7 @@ const OnboardingPage = () => {
                 {message || ' '}
               </View>
 
-              {!loading ? (
+              {hasReadSnapshot ? (
                 <View className="form-actions">
                   {step > 0 ? (
                     <Button
@@ -455,12 +706,11 @@ const OnboardingPage = () => {
                     </Button>
                   ) : (
                     <Button
-                      {...buttonA11yProps}
+                      {...buttonActivationProps(() => void submit(), !canSubmit)}
                       className="primary-action"
-                      disabled={saving}
-                      onClick={() => void submit()}
+                      disabled={!canSubmit}
                     >
-                      保存资料
+                      {saving ? '保存中…' : '保存资料'}
                     </Button>
                   )}
                 </View>

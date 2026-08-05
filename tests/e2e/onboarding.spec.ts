@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test'
 import { Pool } from 'pg'
 
 const subjectStorageKey = 'myfitness.dev.subject'
+const apiUrl = process.env.MYFITNESS_E2E_API_URL ?? 'http://127.0.0.1:3100/v1'
 const database = new Pool({
   connectionString:
     process.env.DATABASE_URL ?? 'postgresql://myfitness:myfitness_local@127.0.0.1:54329/myfitness',
@@ -54,7 +55,14 @@ const openOnboarding = async (page: Page) => {
   await expect(page.getByText('先认识你')).toBeVisible()
 }
 
-const collectBrowserErrors = (page: Page) => {
+const collectBrowserErrors = (
+  page: Page,
+  options: {
+    allowOnboardingRequestFailure?: boolean
+    expectedOnboardingStatus?: number
+    expectedOnboardingWriteStatus?: number
+  } = {},
+) => {
   const errors: string[] = []
   page.on('console', (message) => {
     if (message.type() !== 'error') return
@@ -65,18 +73,58 @@ const collectBrowserErrors = (page: Page) => {
   })
   page.on('pageerror', (error) => errors.push(error.message))
   page.on('requestfailed', (request) => {
+    if (
+      options.allowOnboardingRequestFailure &&
+      request.method() === 'GET' &&
+      request.url().endsWith('/v1/me/onboarding')
+    )
+      return
     errors.push(`Request failed: ${request.method()} ${request.url()}`)
   })
   page.on('response', (response) => {
     if (response.status() < 400) return
     const expectedEmptyProfile =
       response.status() === 404 && response.url().endsWith('/v1/me/onboarding')
-    if (!expectedEmptyProfile) {
+    const expectedInjectedStatus =
+      options.expectedOnboardingStatus === response.status() &&
+      response.request().method() === 'GET' &&
+      response.url().endsWith('/v1/me/onboarding')
+    const expectedWriteStatus =
+      options.expectedOnboardingWriteStatus === response.status() &&
+      response.request().method() === 'PUT' &&
+      response.url().endsWith('/v1/me/onboarding')
+    if (!expectedEmptyProfile && !expectedInjectedStatus && !expectedWriteStatus) {
       errors.push(`HTTP ${response.status()}: ${response.request().method()} ${response.url()}`)
     }
   })
   return errors
 }
+
+const onboardingPayload = (displayName: string) => ({
+  adultConfirmed: true,
+  profile: {
+    displayName,
+    ageBand: '25_34',
+    sexForCalculations: 'unspecified',
+    height: { value: 170, unit: 'cm' },
+    unitSystem: 'metric',
+    timezone: 'Asia/Shanghai',
+  },
+  goal: {
+    primaryGoal: 'fitness',
+    experience: 'beginner',
+    availableDays: ['mon', 'wed', 'fri'],
+    sessionMinutes: 45,
+    equipment: ['bodyweight'],
+    dietaryPreferences: ['none'],
+  },
+  risk: { flags: [], acknowledged: true },
+  consents: {
+    terms: { accepted: true, version: '2026-07-18' },
+    privacy: { accepted: true, version: '2026-07-18' },
+    healthData: { accepted: true, version: '2026-07-18' },
+  },
+})
 
 test('adult onboarding persists a professional-clearance risk state', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
@@ -140,5 +188,149 @@ test('onboarding layout remains legible at wide viewport', async ({ page }) => {
     path: 'output/playwright/iteration-003-onboarding-wide.png',
     fullPage: true,
   })
+  expect(browserErrors).toEqual([])
+})
+
+test('profile register keeps an initial transport outage unknown', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  const browserErrors = collectBrowserErrors(page, { allowOnboardingRequestFailure: true })
+  let disconnectRead = true
+  await page.route(`${apiUrl}/me/onboarding`, async (route) => {
+    if (route.request().method() !== 'GET' || !disconnectRead) {
+      await route.continue()
+      return
+    }
+    await route.abort('internetdisconnected')
+  })
+
+  await page.goto('/')
+  await page.getByRole('button', { name: '建立或更新个人资料' }).click()
+
+  await expect(page.getByText('先确认资料底稿')).toBeVisible()
+  await expect(page.getByText('个人资料底稿还没有读取')).toBeVisible()
+  await expect(page.getByRole('button', { name: '重新核对' })).toBeFocused()
+  await expect(page.getByRole('textbox', { name: '例如：小陈' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: '保存资料' })).toHaveCount(0)
+  await page.screenshot({
+    path: 'output/playwright/iteration-071-profile-register-offline-mobile.png',
+    fullPage: true,
+  })
+
+  disconnectRead = false
+  await page.getByRole('button', { name: '重新核对' }).click()
+  await expect(page.getByText('服务已确认：当前尚未建档')).toBeVisible()
+  await expect(page.getByRole('textbox', { name: '例如：小陈' })).toBeVisible()
+  expect(browserErrors).toEqual([])
+})
+
+test('profile register retains local edits after a refused refresh', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const browserErrors = collectBrowserErrors(page, { expectedOnboardingStatus: 503 })
+  const sessionPromise = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/v1/auth/dev/session') && response.request().method() === 'POST',
+  )
+  await page.goto('/')
+  const session = await sessionPromise
+  expect(session.status()).toBe(200)
+  const { accessToken } = (await session.json()) as { accessToken: string }
+  const seeded = await page.request.put(`${apiUrl}/me/onboarding`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    data: onboardingPayload('已核对资料'),
+  })
+  expect(seeded.status()).toBe(200)
+
+  await page.getByRole('button', { name: '建立或更新个人资料' }).click()
+  const displayName = page.getByRole('textbox', { name: '例如：小陈' })
+  await expect(displayName).toHaveValue('已核对资料')
+  await displayName.fill('保留的本地修改')
+
+  let observedPutCount = 0
+  await page.route(`${apiUrl}/me/onboarding`, async (route) => {
+    if (route.request().method() !== 'GET') {
+      if (route.request().method() === 'PUT') observedPutCount += 1
+      await route.continue()
+      return
+    }
+    await route.fulfill({
+      status: 503,
+      contentType: 'application/json',
+      body: JSON.stringify({ message: 'injected profile register outage' }),
+    })
+  })
+  await page.getByRole('button', { name: '更新底稿' }).click()
+
+  await expect(page.getByText('个人资料底稿暂时无法读取')).toBeVisible()
+  await expect(page.getByText('保留底稿 · 资料 v1', { exact: true })).toBeVisible()
+  await expect(displayName).toHaveValue('保留的本地修改')
+  await expect(page.getByRole('button', { name: '重新核对' })).toBeFocused()
+  await page.locator('.onboarding-scroll').evaluate((element) => element.scrollTo({ top: 0 }))
+  await page.screenshot({
+    path: 'output/playwright/iteration-071-profile-register-stale-wide.png',
+    fullPage: true,
+  })
+
+  await page.getByRole('button', { name: '继续' }).click()
+  await page.getByRole('button', { name: '继续' }).click()
+  await expect(page.getByRole('button', { name: '保存资料' })).toHaveAttribute(
+    'aria-disabled',
+    'true',
+  )
+  expect(observedPutCount).toBe(0)
+  expect(
+    await page.evaluate(
+      (localValue) => Object.values(localStorage).some((value) => value.includes(localValue)),
+      '保留的本地修改',
+    ),
+  ).toBe(false)
+  expect(browserErrors).toEqual([])
+})
+
+test('profile register refuses to rebase a local draft over a newer revision', async ({ page }) => {
+  const browserErrors = collectBrowserErrors(page, { expectedOnboardingWriteStatus: 409 })
+  const sessionPromise = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/v1/auth/dev/session') && response.request().method() === 'POST',
+  )
+  await page.goto('/')
+  const session = await sessionPromise
+  expect(session.status()).toBe(200)
+  const { accessToken } = (await session.json()) as { accessToken: string }
+  const headers = { Authorization: `Bearer ${accessToken}` }
+  const seeded = await page.request.put(`${apiUrl}/me/onboarding`, {
+    headers,
+    data: onboardingPayload('资料 v1'),
+  })
+  expect(seeded.status()).toBe(200)
+
+  await page.getByRole('button', { name: '建立或更新个人资料' }).click()
+  const displayName = page.getByRole('textbox', { name: '例如：小陈' })
+  await expect(displayName).toHaveValue('资料 v1')
+  await displayName.fill('不应被自动覆盖的本地修改')
+
+  const remoteUpdate = await page.request.put(`${apiUrl}/me/onboarding`, {
+    headers,
+    data: { ...onboardingPayload('服务端资料 v2'), expectedRevision: 1 },
+  })
+  expect(remoteUpdate.status()).toBe(200)
+  await page.getByRole('button', { name: '继续' }).click()
+  await page.getByRole('button', { name: '继续' }).click()
+
+  const conflictResponse = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/v1/me/onboarding') && response.request().method() === 'PUT',
+  )
+  await page.getByRole('button', { name: '保存资料' }).click()
+  expect((await conflictResponse).status()).toBe(409)
+
+  await expect(page.getByText('本地修改基于较早的资料修订')).toBeVisible()
+  await expect(page.getByText('已确认底稿 · 资料 v2 · 有未提交修改')).toBeVisible()
+  await expect(page.getByRole('button', { name: '保存资料' })).toHaveAttribute(
+    'aria-disabled',
+    'true',
+  )
+  await page.getByRole('button', { name: '放弃本地修改并载入最新底稿' }).click()
+  await expect(displayName).toHaveValue('服务端资料 v2')
+  await expect(page.getByText('本地修改基于较早的资料修订')).toHaveCount(0)
   expect(browserErrors).toEqual([])
 })

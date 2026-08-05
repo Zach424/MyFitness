@@ -1,6 +1,6 @@
 # Privacy ownership model
 
-Status: durable local ownership/erasure boundary with lost-response recovery, purpose-separated photo custody, catalog history and conflict-safe expiring editor drafts implemented through iteration 044
+Status: durable local ownership/erasure boundary with lost-response recovery, purpose-separated photo custody, catalog history, conflict-safe expiring record drafts and non-persistent profile/goal draft authority implemented through iteration 071
 
 ## User-owned surface
 
@@ -11,6 +11,10 @@ The inventory has eight stable user-facing categories: profile/goals, health/rec
 ## Private-photo inventory read authority
 
 The purpose-separated food-proof and progress-photo owner lists are custody evidence, not optional decoration. Each client accepts empty only from a complete successful response. Initial failure exposes neither a false-empty sheet nor media actions; refresh failure retains the last successful item set only in page memory, labels it stale and freezes reservation, candidate confirmation, comparison assignment and deletion until explicit retry succeeds. Existing ambiguous-write reconciliation remains separate and cannot replay media or infer physical deletion from list absence. No image, path, list snapshot or recovery instruction is persisted; ADR-0065 records the boundary.
+
+## Profile/goal draft residency
+
+The onboarding register contains broad identity, planning, risk and required-consent intent, so it deliberately does not join the 24-hour record-draft vault. Unread, confirmed-absent and accepted-revision authority plus any local edits live only in page memory. A failed refresh retains the page state but freezes PUT; changed revision never silently rebases it. A 409 performs one read reconciliation without replay, and only an explicit discard action replaces local input with the latest accepted response. No profile draft, risk flag selection, consent toggle, server response or retry command enters application storage.
 
 ## Portable export
 

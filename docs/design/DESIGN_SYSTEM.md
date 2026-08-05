@@ -1,6 +1,6 @@
 # Design system baseline
 
-Status: implemented and visually validated through iteration-070 private-photo inventory read-authority evidence
+Status: implemented and visually validated through iteration-071 profile/goal register read-authority evidence
 
 Working brand: 衡迹 / MyFitness
 
@@ -714,6 +714,19 @@ Visual review caught that delayed programmatic focus did not always match `:focu
 
 - [390 × 844 unread food-proof inventory](../../output/playwright/iteration-070-food-inventory-offline-mobile.png)
 - [1440 × 1000 retained progress-photo inventory](../../output/playwright/iteration-070-progress-inventory-stale-wide.png)
+
+## Profile/goal register read authority — iteration 071
+
+The three-sheet onboarding flow now begins with a register receipt rather than assuming its familiar starter choices are facts. On the 390 × 844 initial-offline state, the numbered progress bars become one partial authority rule and the headline changes to `先确认资料底稿`. No name, age, sex, height, goal, risk or consent control appears. The amber card contains the only primary action, and its programmatic focus ring makes recovery visible without a raw transport message.
+
+After a confirmed absence, a quiet green note explicitly calls every starter choice an unsubmitted draft. For an existing profile, the compact `PROFILE BASE` receipt names the accepted revision and whether the page has local edits. This separates the form's editable intent from the service evidence that may authorize save.
+
+On the 1440 × 1000 stale state, the full v1 form and `保留的本地修改` remain beneath an amber receipt, while both the toolbar and receipt say `保留底稿`. Save is guarded and inert even if the person continues through the local steps. The explanation rail keeps its original privacy hierarchy, so failure handling does not turn onboarding into a generic system-status page.
+
+Visual review corrected the receipt's flex sizing after the first wide capture squeezed its label into a vertical strip. A fixed action basis and flexible summary restored the intended evidence hierarchy. The browser artifact resets the nested scroll container after input focus; this is a test-framing correction, not hidden application scrolling.
+
+- [390 × 844 unread profile/goal register](../../output/playwright/iteration-071-profile-register-offline-mobile.png)
+- [1440 × 1000 retained profile v1 and local edit](../../output/playwright/iteration-071-profile-register-stale-wide.png)
 
 ## Screenshot review checklist
 
