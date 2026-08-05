@@ -3,6 +3,8 @@ import { randomUUID } from 'node:crypto'
 import { expect, test, type Page, type Response } from '@playwright/test'
 import { Pool } from 'pg'
 
+import { apiUrl } from './runtime'
+
 const database = new Pool({
   connectionString:
     process.env.DATABASE_URL ?? 'postgresql://myfitness:myfitness_local@127.0.0.1:54329/myfitness',
@@ -88,7 +90,7 @@ const seedProfileAndOpenPlans = async (
   const session = await sessionPromise
   expect(session.status()).toBe(200)
   const { accessToken } = (await session.json()) as { accessToken: string }
-  const profile = await page.request.put('http://127.0.0.1:3100/v1/me/onboarding', {
+  const profile = await page.request.put(`${apiUrl}/me/onboarding`, {
     headers: { Authorization: `Bearer ${accessToken}` },
     data: onboarding(riskFlags, availableDays),
   })
@@ -142,13 +144,10 @@ test('weekly plan supports substitution, modification and acceptance history', a
   })
 
   for (let expectedRevision = acceptedPlan.revision; expectedRevision < 11; expectedRevision += 1) {
-    const decision = await page.request.put(
-      `http://127.0.0.1:3100/v1/plans/weekly/${acceptedPlan.id}/decision`,
-      {
-        headers: { Authorization: `Bearer ${accessToken}` },
-        data: { decision: 'accepted', expectedRevision, selections: [] },
-      },
-    )
+    const decision = await page.request.put(`${apiUrl}/plans/weekly/${acceptedPlan.id}/decision`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      data: { decision: 'accepted', expectedRevision, selections: [] },
+    })
     expect(decision.status()).toBe(200)
   }
 
@@ -262,7 +261,7 @@ test('material recovery evidence freezes the old fold and regenerates it safely'
   await page.getByRole('button', { name: /生成 .* 初稿/ }).click()
   await expect(page.getByText('本周折页')).toBeVisible()
 
-  const record = await page.request.post('http://127.0.0.1:3100/v1/health-records', {
+  const record = await page.request.post(`${apiUrl}/health-records`, {
     headers: {
       Authorization: `Bearer ${accessToken}`,
       'x-idempotency-key': `plan-evidence-${randomUUID()}`,
@@ -335,7 +334,7 @@ test('user explicitly reconciles a planned session with one actual workout', asy
   const actualWorkoutEnd = Math.min(localMidnight + 30 * 60_000, Date.now() - 1_000)
   const actualWorkoutStart = Math.max(localMidnight, actualWorkoutEnd - 30 * 60_000)
 
-  const workout = await page.request.post('http://127.0.0.1:3100/v1/workouts', {
+  const workout = await page.request.post(`${apiUrl}/workouts`, {
     headers: {
       Authorization: `Bearer ${accessToken}`,
       'x-idempotency-key': `plan-link-workout-${randomUUID()}`,

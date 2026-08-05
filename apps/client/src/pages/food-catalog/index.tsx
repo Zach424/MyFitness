@@ -17,6 +17,7 @@ import {
   listFoodCatalog,
   updateFoodCatalogEntry,
 } from '../../lib/api'
+import ExerciseCatalogPage from '../exercise-catalog'
 import './index.scss'
 
 const categoryLabels: Record<FoodSnapshot['category'], string> = {
@@ -439,4 +440,11 @@ const FoodCatalogPage = () => {
   )
 }
 
-export default FoodCatalogPage
+const OwnerCatalogPage = () =>
+  Taro.getCurrentInstance().router?.params.kind === 'exercise' ? (
+    <ExerciseCatalogPage />
+  ) : (
+    <FoodCatalogPage />
+  )
+
+export default OwnerCatalogPage

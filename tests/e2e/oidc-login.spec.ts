@@ -2,8 +2,9 @@ import { createHash } from 'node:crypto'
 
 import { expect, test, type Page, type Route } from '@playwright/test'
 
+import { apiOrigin } from './runtime'
+
 const browserOrigin = 'http://127.0.0.1:4173'
-const apiOrigin = 'http://127.0.0.1:3100'
 const issuer = `${browserOrigin}/__oidc`
 const authorizationUrl = `${issuer}/authorize`
 const redirectUri = `${browserOrigin}/auth/callback`

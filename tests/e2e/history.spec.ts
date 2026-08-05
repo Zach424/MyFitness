@@ -1,6 +1,8 @@
 import { expect, test, type Page } from '@playwright/test'
 import { Pool } from 'pg'
 
+import { apiUrl } from './runtime'
+
 const subjectStorageKey = 'myfitness.dev.subject'
 const database = new Pool({
   connectionString:
@@ -81,7 +83,7 @@ test('history calendar crosses domains and requires a real time for backfill', a
 
   const recordedDate = localDate(new Date(Date.now() - 86_400_000))
   const openDate = localDate(new Date(Date.now() - 2 * 86_400_000))
-  const healthResponse = await page.request.post('http://127.0.0.1:3100/v1/health-records', {
+  const healthResponse = await page.request.post(`${apiUrl}/health-records`, {
     headers: apiHeaders(accessToken, 'health'),
     data: {
       metric: 'body.weight',
@@ -94,7 +96,7 @@ test('history calendar crosses domains and requires a real time for backfill', a
     },
   })
   expect(healthResponse.status()).toBe(201)
-  const workoutResponse = await page.request.post('http://127.0.0.1:3100/v1/workouts', {
+  const workoutResponse = await page.request.post(`${apiUrl}/workouts`, {
     headers: apiHeaders(accessToken, 'workout'),
     data: {
       title: '历史日历训练',
@@ -125,7 +127,7 @@ test('history calendar crosses domains and requires a real time for backfill', a
     },
   })
   expect(workoutResponse.status()).toBe(201)
-  const mealResponse = await page.request.post('http://127.0.0.1:3100/v1/nutrition/meals', {
+  const mealResponse = await page.request.post(`${apiUrl}/nutrition/meals`, {
     headers: apiHeaders(accessToken, 'meal'),
     data: {
       mealType: 'lunch',

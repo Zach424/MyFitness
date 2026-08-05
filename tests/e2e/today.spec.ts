@@ -1,6 +1,8 @@
 import { expect, test, type Page } from '@playwright/test'
 import { Pool } from 'pg'
 
+import { apiUrl } from './runtime'
+
 const database = new Pool({
   connectionString:
     process.env.DATABASE_URL ?? 'postgresql://myfitness:myfitness_local@127.0.0.1:54329/myfitness',
@@ -49,7 +51,7 @@ test('Today replaces fixtures with confirmed recovery and meal evidence', async 
 
   const occurredAt = new Date().toISOString()
   const headers = { Authorization: `Bearer ${accessToken}`, 'x-idempotency-key': '' }
-  const healthResponse = await page.request.post('http://127.0.0.1:3100/v1/health-records', {
+  const healthResponse = await page.request.post(`${apiUrl}/health-records`, {
     headers: { ...headers, 'x-idempotency-key': `today-health-${Date.now()}` },
     data: {
       metric: 'recovery.energy',
@@ -62,7 +64,7 @@ test('Today replaces fixtures with confirmed recovery and meal evidence', async 
     },
   })
   expect(healthResponse.status()).toBe(201)
-  const mealResponse = await page.request.post('http://127.0.0.1:3100/v1/nutrition/meals', {
+  const mealResponse = await page.request.post(`${apiUrl}/nutrition/meals`, {
     headers: { ...headers, 'x-idempotency-key': `today-meal-${Date.now()}` },
     data: {
       mealType: 'lunch',

@@ -1,6 +1,8 @@
 import { expect, test, type APIRequestContext } from '@playwright/test'
 import { Pool } from 'pg'
 
+import { apiUrl } from './runtime'
+
 const localDatabaseUrl =
   process.env.DATABASE_URL ?? 'postgresql://myfitness:myfitness_local@127.0.0.1:54329/myfitness'
 const parsedDatabaseUrl = new URL(localDatabaseUrl)
@@ -25,7 +27,7 @@ test.beforeAll(async ({ playwright }) => {
   if (existing.rows[0]?.count !== '0') {
     throw new Error('administrator E2E refuses to truncate pre-existing local operator data')
   }
-  api = await playwright.request.newContext({ baseURL: 'http://127.0.0.1:3100/v1/' })
+  api = await playwright.request.newContext({ baseURL: `${apiUrl}/` })
   const session = await api.post('auth/dev/session', {
     data: { subject: `admin-e2e-user-${Date.now()}` },
   })

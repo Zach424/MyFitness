@@ -461,6 +461,18 @@ The 390 × 844 production-browser review advanced one plan to v11, proved exactl
 
 - [390 × 844 progressive weekly-plan history](../../output/playwright/iteration-049-progressive-plan-revisions-mobile.png)
 
+## Lazy owner-action register review — iteration 050
+
+Workout recording now treats the action picker as a fact-selection surface and sends mutable definition work to the shared lazy **OWNED MOVEMENT REGISTER**. The register states its three operations—define, correct, snapshot—and names the boundary directly: later correction changes future choices, not the open workout draft or historical training.
+
+The action view reuses the owner-food register's paper shell, quiet category controls, amber correction accent and compact **REVISION LEDGER** rather than introducing a second definition-management dialect. Category, tracking mode and equipment remain explicit text controls; `其他器械` still requires an explanation. Archive requires a separate confirmation and says exactly which evidence remains.
+
+The 390 × 844 production-browser review enters a non-default workout title, creates `壶铃摆动`, returns to the unchanged draft, selects and saves the action snapshot, then corrects the live definition to `双手壶铃摆动`. R2/R1 remain readable in the register while the saved workout still displays the original name. Archive removes only the future choice. Request, page and console error capture remained empty.
+
+The final artifact makes the performance hierarchy match the information hierarchy: workouts fall from 50,338 to 39,297 bytes and the owner register is 30,176 bytes. Reusing the existing lazy owner route avoids a second H5 runtime and shared register styles avoid duplicate visual CSS.
+
+- [390 × 844 lazy owner-action register](../../output/playwright/iteration-050-lazy-exercise-catalog-mobile.png)
+
 ## Screenshot review checklist
 
 - The Rhythm Rail remains understandable without color.

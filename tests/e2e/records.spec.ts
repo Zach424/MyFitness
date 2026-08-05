@@ -1,6 +1,8 @@
 import { expect, test, type Page } from '@playwright/test'
 import { Pool } from 'pg'
 
+import { apiUrl } from './runtime'
+
 const subjectStorageKey = 'myfitness.dev.subject'
 const database = new Pool({
   connectionString:
@@ -300,7 +302,7 @@ test('health log loads older records and restores a correction beyond the first 
   page.on('pageerror', (error) => browserErrors.push(error.message))
 
   await openRecords(page)
-  const createStatuses = await page.evaluate(async () => {
+  const createStatuses = await page.evaluate(async (apiUrl) => {
     const rawToken = localStorage.getItem('myfitness.auth.accessToken')
     if (!rawToken) throw new Error('development access token is missing')
     let decoded: { data?: unknown } = {}
@@ -312,7 +314,7 @@ test('health log loads older records and restores a correction beyond the first 
     const token = typeof decoded.data === 'string' ? decoded.data : rawToken
     const statuses: number[] = []
     for (let day = 1; day <= 21; day += 1) {
-      const response = await fetch('http://127.0.0.1:3100/v1/health-records', {
+      const response = await fetch(`${apiUrl}/health-records`, {
         method: 'POST',
         headers: {
           authorization: `Bearer ${token}`,
@@ -332,7 +334,7 @@ test('health log loads older records and restores a correction beyond the first 
       statuses.push(response.status)
     }
     return statuses
-  })
+  }, apiUrl)
   expect(createStatuses).toEqual(Array.from({ length: 21 }, () => 201))
 
   await page.reload()
@@ -383,7 +385,7 @@ test('health history sheet progressively loads immutable older revisions', async
   page.on('pageerror', (error) => browserErrors.push(error.message))
 
   await openRecords(page)
-  const seed = await page.evaluate(async () => {
+  const seed = await page.evaluate(async (apiUrl) => {
     const rawToken = localStorage.getItem('myfitness.auth.accessToken')
     if (!rawToken) throw new Error('development access token is missing')
     let decoded: { data?: unknown } = {}
@@ -406,7 +408,7 @@ test('health history sheet progressively loads immutable older revisions', async
       occurredAt: '2026-02-01T04:00:00.000Z',
       timezone: 'Asia/Shanghai',
     })
-    const createdResponse = await fetch('http://127.0.0.1:3100/v1/health-records', {
+    const createdResponse = await fetch(`${apiUrl}/health-records`, {
       method: 'POST',
       headers: { ...headers, 'x-idempotency-key': 'progressive-revision-history' },
       body: JSON.stringify(payload(70)),
@@ -414,7 +416,7 @@ test('health history sheet progressively loads immutable older revisions', async
     let current = (await createdResponse.json()) as { id: string; revision: number }
     const statuses = [createdResponse.status]
     for (let revision = 2; revision <= 12; revision += 1) {
-      const response = await fetch(`http://127.0.0.1:3100/v1/health-records/${current.id}`, {
+      const response = await fetch(`${apiUrl}/health-records/${current.id}`, {
         method: 'PUT',
         headers,
         body: JSON.stringify({
@@ -426,7 +428,7 @@ test('health history sheet progressively loads immutable older revisions', async
       current = (await response.json()) as { id: string; revision: number }
     }
     return { statuses, revision: current.revision }
-  })
+  }, apiUrl)
   expect(seed.statuses).toEqual([201, ...Array.from({ length: 11 }, () => 200)])
   expect(seed.revision).toBe(12)
 

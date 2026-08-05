@@ -1,14 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
-  buildExerciseCatalogRequest,
   buildWorkoutRequest,
   createExerciseDraft,
   filterExerciseCatalog,
   draftFromWorkout,
-  initialExerciseCatalogDraft,
   initialWorkoutDraft,
-  validateExerciseCatalogDraft,
   validateWorkoutDraft,
   workoutDraftSummary,
 } from './workout.model'
@@ -101,7 +98,7 @@ describe('workout page model', () => {
     })
   })
 
-  it('searches aliases and equipment while building explicit custom definitions', () => {
+  it('searches aliases and equipment in the active picker', () => {
     const custom = {
       source: 'custom' as const,
       id: '2a7746d1-bf16-4d41-b390-f47e4ae7a956',
@@ -122,17 +119,6 @@ describe('workout page model', () => {
     }
     expect(filterExerciseCatalog([custom], 'swing')).toEqual([custom])
     expect(filterExerciseCatalog([custom], 'kettlebell')).toEqual([custom])
-
-    const draft = initialExerciseCatalogDraft()
-    draft.name = custom.name
-    draft.aliases = 'Kettlebell Swing，KB Swing'
-    draft.equipment = ['kettlebell']
-    expect(buildExerciseCatalogRequest(draft)).toMatchObject({
-      aliases: ['Kettlebell Swing', 'KB Swing'],
-      equipment: ['kettlebell'],
-    })
-    draft.equipment = ['other']
-    expect(validateExerciseCatalogDraft(draft)).toContain('具体器械')
   })
 
   it('binds corrections to a revision but keeps repeats independent', () => {

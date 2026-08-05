@@ -2,6 +2,8 @@ import { expect, test, type Page } from '@playwright/test'
 import { DeleteObjectsCommand, ListObjectsV2Command, S3Client } from '@aws-sdk/client-s3'
 import { Pool } from 'pg'
 
+import { apiUrl } from './runtime'
+
 const subjectStorageKey = 'myfitness.dev.subject'
 const database = new Pool({
   connectionString:
@@ -429,7 +431,7 @@ test('owned food definition history progressively loads immutable older revision
   await openNutrition(page)
   await page.getByRole('button', { name: '管理我的食物' }).click()
 
-  const seed = await page.evaluate(async () => {
+  const seed = await page.evaluate(async (apiUrl) => {
     const rawToken = localStorage.getItem('myfitness.auth.accessToken')
     if (!rawToken) throw new Error('development access token is missing')
     let decoded: { data?: unknown } = {}
@@ -456,7 +458,7 @@ test('owned food definition history progressively loads immutable older revision
       reference: `配方称量修订 R${revision}`,
       defaultServing: { amount: 100, unit: 'g', grams: 100 },
     })
-    const createdResponse = await fetch('http://127.0.0.1:3100/v1/food-catalog', {
+    const createdResponse = await fetch(`${apiUrl}/food-catalog`, {
       method: 'POST',
       headers: { ...headers, 'x-idempotency-key': 'progressive-food-definition-history' },
       body: JSON.stringify(payload(1)),
@@ -464,7 +466,7 @@ test('owned food definition history progressively loads immutable older revision
     let current = (await createdResponse.json()) as { id: string; revision: number }
     const statuses = [createdResponse.status]
     for (let revision = 2; revision <= 12; revision += 1) {
-      const response = await fetch(`http://127.0.0.1:3100/v1/food-catalog/${current.id}`, {
+      const response = await fetch(`${apiUrl}/food-catalog/${current.id}`, {
         method: 'PUT',
         headers,
         body: JSON.stringify({ ...payload(revision), expectedRevision: current.revision }),
@@ -473,7 +475,7 @@ test('owned food definition history progressively loads immutable older revision
       current = (await response.json()) as { id: string; revision: number }
     }
     return { statuses, revision: current.revision }
-  })
+  }, apiUrl)
   expect(seed.statuses).toEqual([201, ...Array.from({ length: 11 }, () => 200)])
   expect(seed.revision).toBe(12)
 

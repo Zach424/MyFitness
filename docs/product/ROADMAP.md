@@ -57,8 +57,9 @@ Progress snapshot (2026-08-05): iterations 0–49 are complete locally. Current 
 | 48        | Bounded user-definition revision histories          | Exercise/food definition cursors, archived-owner access and progressive correction sheets        |
 | 49        | Bounded weekly-plan revision history                | Stable plan cursor, structured snapshot bounds and progressive Week Fold history                 |
 | 50        | Dedicated lazy action-definition register           | Equivalent create/correct/archive/history flow and a smaller workout page artifact               |
-| 51        | Managed shared deployment, beta hardening/release   | Real identity/custody/telemetry, rollback, security/a11y/filing review and staged rollout        |
-| 52        | Native App feasibility and device sync              | Retention gate reviewed; HealthKit/Health Connect/Huawei proof of concept                        |
+| 51        | Lazy food-photo review workflow                     | Explicit confirmed-candidate return, no sensitive draft persistence and a smaller nutrition page |
+| 52        | Managed shared deployment, beta hardening/release   | Real identity/custody/telemetry, rollback, security/a11y/filing review and staged rollout        |
+| 53        | Native App feasibility and device sync              | Retention gate reviewed; HealthKit/Health Connect/Huawei proof of concept                        |
 
 ## Release gates
 

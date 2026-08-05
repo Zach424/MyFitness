@@ -9,7 +9,7 @@ import {
   foodPhotoConsentVersion,
 } from '@myfitness/contracts'
 
-const apiUrl = 'http://127.0.0.1:3100/v1'
+import { apiUrl } from './runtime'
 const database = new Pool({
   connectionString:
     process.env.DATABASE_URL ?? 'postgresql://myfitness:myfitness_local@127.0.0.1:54329/myfitness',

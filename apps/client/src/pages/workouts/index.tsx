@@ -1,52 +1,39 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Button, Input, ScrollView, Text, Textarea, View } from '@tarojs/components'
-import Taro from '@tarojs/taro'
+import Taro, { useDidShow } from '@tarojs/taro'
 import type {
-  CustomExerciseCatalogEntry,
-  ExerciseCatalogEntryHistoryItem,
   ExerciseCatalogItem,
   ExerciseEquipment,
   Workout,
   WorkoutHistoryItem,
 } from '@myfitness/contracts'
-import { exerciseEquipmentOptions } from '@myfitness/contracts/exercise-catalog.constants'
 
 import { buttonA11yProps } from '../../lib/accessibility'
-import { DefinitionRevisionLedger } from '../../components/definition-revision-ledger'
 import { parseBackfillIntent } from '../../lib/backfill-intent'
 import { LocalDraftNotice } from '../../components/local-draft-notice'
 import { OccurrenceField } from '../../components/occurrence-field'
 import { currentCorrectionTarget } from '../../lib/correction-draft'
 import {
   ApiError,
-  archiveExerciseCatalogEntry,
-  createExerciseCatalogEntry,
   createWorkout,
   deleteWorkout,
-  getExerciseCatalogEntryHistory,
   getWorkout,
   getWorkoutHistory,
   listExerciseCatalog,
   listWorkouts,
-  updateExerciseCatalogEntry,
   updateWorkout,
 } from '../../lib/api'
 import { appendOlderRecords, includeExactRecord } from '../../lib/record-pages'
 import { useRecoverableDraft } from '../../lib/use-local-draft'
 import {
-  buildExerciseCatalogRequest,
   buildWorkoutRequest,
   createExerciseDraft,
   draftFromWorkout,
-  exerciseCatalogDraftFromItem,
   exerciseMode,
   filterExerciseCatalog,
-  initialExerciseCatalogDraft,
   initialWorkoutDraft,
   isWorkoutDraft,
-  type ExerciseCatalogDraft,
   type WorkoutDraft,
-  validateExerciseCatalogDraft,
   workoutDraftSummary,
   validateWorkoutDraft,
 } from './workout.model'
@@ -88,15 +75,11 @@ const equipmentLabels: Record<ExerciseEquipment, string> = {
   other: '其他器械',
 }
 
-const categoryLabels = { strength: '力量', cardio: '有氧', mobility: '灵活性' } as const
 const trackingLabels = {
   reps_load: '次数 / 负重',
   duration: '时长',
   duration_distance: '时长 / 距离',
 } as const
-
-const catalogRequestKey = () =>
-  `exercise-${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`}`
 
 const WorkoutsPage = () => {
   const backfill = useRef(parseBackfillIntent(Taro.getCurrentInstance().router?.params)).current
@@ -111,14 +94,6 @@ const WorkoutsPage = () => {
   const [workouts, setWorkouts] = useState<Workout[]>([])
   const [catalogItems, setCatalogItems] = useState<ExerciseCatalogItem[]>([])
   const [catalogQuery, setCatalogQuery] = useState('')
-  const [catalogEditorOpen, setCatalogEditorOpen] = useState(false)
-  const [catalogEditing, setCatalogEditing] = useState<CustomExerciseCatalogEntry>()
-  const [catalogHistory, setCatalogHistory] = useState<ExerciseCatalogEntryHistoryItem[]>()
-  const [catalogHistoryNextCursor, setCatalogHistoryNextCursor] = useState<string | null>(null)
-  const [catalogHistoryLoadingMore, setCatalogHistoryLoadingMore] = useState(false)
-  const [catalogDraft, setCatalogDraft] = useState<ExerciseCatalogDraft>(
-    initialExerciseCatalogDraft,
-  )
   const [editing, setEditing] = useState<Workout>()
   const [deleting, setDeleting] = useState<Workout>()
   const [historyWorkout, setHistoryWorkout] = useState<Workout>()
@@ -130,18 +105,13 @@ const WorkoutsPage = () => {
   const [saving, setSaving] = useState(false)
   const [feedback, setFeedback] = useState('')
   const pendingKey = useRef('')
-  const pendingCatalogKey = useRef('')
 
   useEffect(() => {
     void (async () => {
       try {
-        const [workoutResult, catalogResult] = await Promise.all([
-          listWorkouts({ limit: 20 }),
-          listExerciseCatalog(),
-        ])
+        const workoutResult = await listWorkouts({ limit: 20 })
         setWorkouts(workoutResult.items)
         setNextCursor(workoutResult.nextCursor)
-        setCatalogItems(catalogResult.items)
       } catch (error) {
         setFeedback(messageOf(error))
       } finally {
@@ -149,6 +119,12 @@ const WorkoutsPage = () => {
       }
     })()
   }, [])
+
+  useDidShow(() => {
+    void listExerciseCatalog()
+      .then((result) => setCatalogItems(result.items))
+      .catch((error: unknown) => setFeedback(messageOf(error)))
+  })
 
   const loadOlderWorkouts = async () => {
     if (!nextCursor || loadingMore) return
@@ -250,120 +226,6 @@ const WorkoutsPage = () => {
     }))
     setFeedback('')
     pendingKey.current = ''
-  }
-
-  const patchCatalogDraft = (patch: Partial<ExerciseCatalogDraft>) => {
-    setCatalogDraft((current) => ({ ...current, ...patch }))
-    if (!catalogEditing) pendingCatalogKey.current = ''
-  }
-
-  const openCatalogEditor = async (item?: CustomExerciseCatalogEntry) => {
-    setCatalogEditing(item)
-    setCatalogDraft(item ? exerciseCatalogDraftFromItem(item) : initialExerciseCatalogDraft())
-    setCatalogHistory(item ? undefined : [])
-    setCatalogHistoryNextCursor(null)
-    setCatalogHistoryLoadingMore(false)
-    setCatalogEditorOpen(true)
-    pendingCatalogKey.current = ''
-    setFeedback('')
-    if (!item) return
-    try {
-      const result = await getExerciseCatalogEntryHistory(item.id, { limit: 10 })
-      setCatalogHistory(result.items)
-      setCatalogHistoryNextCursor(result.nextCursor)
-    } catch (error) {
-      setCatalogHistory([])
-      setFeedback(messageOf(error))
-    }
-  }
-
-  const loadOlderCatalogHistory = async () => {
-    if (!catalogEditing || !catalogHistoryNextCursor || catalogHistoryLoadingMore) return
-    setCatalogHistoryLoadingMore(true)
-    try {
-      const result = await getExerciseCatalogEntryHistory(catalogEditing.id, {
-        limit: 10,
-        cursor: catalogHistoryNextCursor,
-      })
-      setCatalogHistory((current) => [...(current ?? []), ...result.items])
-      setCatalogHistoryNextCursor(result.nextCursor)
-    } catch (error) {
-      setFeedback(messageOf(error))
-    } finally {
-      setCatalogHistoryLoadingMore(false)
-    }
-  }
-
-  const closeCatalogEditor = () => {
-    setCatalogEditorOpen(false)
-    setCatalogEditing(undefined)
-    setCatalogHistory(undefined)
-    setCatalogHistoryNextCursor(null)
-    setCatalogDraft(initialExerciseCatalogDraft())
-    pendingCatalogKey.current = ''
-  }
-
-  const toggleCatalogEquipment = (equipment: ExerciseEquipment) => {
-    patchCatalogDraft({
-      equipment: catalogDraft.equipment.includes(equipment)
-        ? catalogDraft.equipment.filter((item) => item !== equipment)
-        : [...catalogDraft.equipment, equipment],
-    })
-  }
-
-  const saveCatalogDefinition = async () => {
-    const validation = validateExerciseCatalogDraft(catalogDraft)
-    if (validation) {
-      setFeedback(validation)
-      return
-    }
-    setSaving(true)
-    setFeedback('')
-    try {
-      const request = buildExerciseCatalogRequest(catalogDraft)
-      const saved = catalogEditing
-        ? await updateExerciseCatalogEntry(catalogEditing.id, {
-            ...request,
-            expectedRevision: catalogEditing.revision,
-          })
-        : await createExerciseCatalogEntry(
-            request,
-            (pendingCatalogKey.current ||= catalogRequestKey()),
-          )
-      setCatalogItems((current) => {
-        const exists = current.some((item) => item.id === saved.id)
-        return exists
-          ? current.map((item) => (item.id === saved.id ? saved : item))
-          : [saved, ...current]
-      })
-      closeCatalogEditor()
-      setCatalogQuery(saved.name)
-      setFeedback(
-        catalogEditing
-          ? '动作定义已更新；已保存训练和当前训练草稿仍保留原快照。'
-          : '自定义动作已加入你的目录，可以搜索并复用。',
-      )
-    } catch (error) {
-      setFeedback(messageOf(error))
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const archiveCatalogDefinition = async () => {
-    if (!catalogEditing) return
-    setSaving(true)
-    try {
-      await archiveExerciseCatalogEntry(catalogEditing.id, catalogEditing.revision)
-      setCatalogItems((current) => current.filter((item) => item.id !== catalogEditing.id))
-      closeCatalogEditor()
-      setCatalogQuery('')
-      setFeedback('动作已从未来选择中停用；当前草稿和历史训练快照没有被改写。')
-    } catch (error) {
-      setFeedback(messageOf(error))
-    } finally {
-      setSaving(false)
-    }
   }
 
   const removeExercise = (index: number) => {
@@ -721,9 +583,11 @@ const WorkoutsPage = () => {
                     <Button
                       {...buttonA11yProps}
                       className="catalog-create"
-                      onClick={() => void openCatalogEditor()}
+                      onClick={() =>
+                        void Taro.navigateTo({ url: '/pages/food-catalog/index?kind=exercise' })
+                      }
                     >
-                      ＋ 自定义动作
+                      管理我的动作
                     </Button>
                   </View>
                   <Input
@@ -768,7 +632,11 @@ const WorkoutsPage = () => {
                                 {...buttonA11yProps}
                                 className="catalog-entry__edit"
                                 aria-label={`编辑自定义动作${item.name}`}
-                                onClick={() => void openCatalogEditor(item)}
+                                onClick={() =>
+                                  void Taro.navigateTo({
+                                    url: `/pages/food-catalog/index?kind=exercise&entryId=${item.id}`,
+                                  })
+                                }
                               >
                                 编辑
                               </Button>
@@ -1151,167 +1019,6 @@ const WorkoutsPage = () => {
           </Text>
         </View>
       </ScrollView>
-
-      {catalogEditorOpen ? (
-        <View
-          className="catalog-modal"
-          role="dialog"
-          aria-modal="true"
-          aria-label="自定义动作编辑器"
-        >
-          <View className="catalog-modal__card">
-            <View className="workout-section-heading">
-              <View>
-                <Text className="workouts-eyebrow">USER-OWNED CATALOG</Text>
-                <Text className="workout-modal__title">
-                  {catalogEditing ? '纠正动作定义' : '创建自定义动作'}
-                </Text>
-              </View>
-              <Button
-                {...buttonA11yProps}
-                className="history-close-button"
-                aria-label="关闭自定义动作编辑器"
-                onClick={closeCatalogEditor}
-              >
-                ×
-              </Button>
-            </View>
-            <Text className="catalog-modal__notice">
-              目录只影响未来选择。已保存训练和当前草稿会保留当时名称、追踪方式与器械快照。
-            </Text>
-
-            <View className="catalog-form-field">
-              <Text className="field-caption">动作名称</Text>
-              <Input
-                className="catalog-form-input"
-                value={catalogDraft.name}
-                maxlength={80}
-                placeholder="例如：壶铃摆动"
-                aria-label="自定义动作名称"
-                onInput={(event) => patchCatalogDraft({ name: event.detail.value })}
-              />
-            </View>
-            <View className="catalog-form-field">
-              <Text className="field-caption">别名（逗号分隔，可选）</Text>
-              <Input
-                className="catalog-form-input"
-                value={catalogDraft.aliases}
-                maxlength={240}
-                placeholder="例如：Kettlebell Swing，KB Swing"
-                aria-label="自定义动作别名"
-                onInput={(event) => patchCatalogDraft({ aliases: event.detail.value })}
-              />
-            </View>
-
-            <View className="catalog-form-field">
-              <Text className="field-caption">动作类别</Text>
-              <View className="catalog-option-row">
-                {(['strength', 'cardio', 'mobility'] as const).map((category) => (
-                  <Button
-                    {...buttonA11yProps}
-                    className={`catalog-option ${catalogDraft.category === category ? 'catalog-option--active' : ''}`}
-                    key={category}
-                    aria-pressed={catalogDraft.category === category}
-                    onClick={() => patchCatalogDraft({ category })}
-                  >
-                    {categoryLabels[category]}
-                  </Button>
-                ))}
-              </View>
-            </View>
-
-            <View className="catalog-form-field">
-              <Text className="field-caption">记录方式</Text>
-              <View className="catalog-option-row">
-                {(['reps_load', 'duration', 'duration_distance'] as const).map((trackingMode) => (
-                  <Button
-                    {...buttonA11yProps}
-                    className={`catalog-option ${catalogDraft.trackingMode === trackingMode ? 'catalog-option--active' : ''}`}
-                    key={trackingMode}
-                    aria-pressed={catalogDraft.trackingMode === trackingMode}
-                    onClick={() => patchCatalogDraft({ trackingMode })}
-                  >
-                    {trackingLabels[trackingMode]}
-                  </Button>
-                ))}
-              </View>
-            </View>
-
-            <View className="catalog-form-field">
-              <Text className="field-caption">所需器械（可多选）</Text>
-              <View className="catalog-equipment-grid">
-                {exerciseEquipmentOptions.map((equipment) => (
-                  <Button
-                    {...buttonA11yProps}
-                    className={`catalog-equipment ${catalogDraft.equipment.includes(equipment) ? 'catalog-equipment--active' : ''}`}
-                    key={equipment}
-                    aria-pressed={catalogDraft.equipment.includes(equipment)}
-                    onClick={() => toggleCatalogEquipment(equipment)}
-                  >
-                    {equipmentLabels[equipment]}
-                  </Button>
-                ))}
-              </View>
-            </View>
-
-            <View className="catalog-form-field">
-              <Text className="field-caption">器械说明（选择“其他器械”时必填）</Text>
-              <Input
-                className="catalog-form-input"
-                value={catalogDraft.equipmentNotes}
-                maxlength={120}
-                placeholder="例如：固定地雷管装置"
-                aria-label="自定义动作器械说明"
-                onInput={(event) => patchCatalogDraft({ equipmentNotes: event.detail.value })}
-              />
-            </View>
-
-            {catalogEditing ? (
-              <DefinitionRevisionLedger
-                items={catalogHistory}
-                nextCursor={catalogHistoryNextCursor}
-                loadingMore={catalogHistoryLoadingMore}
-                onLoadOlder={loadOlderCatalogHistory}
-              />
-            ) : null}
-
-            {feedback ? (
-              <View className="workout-feedback" role="status">
-                {feedback}
-              </View>
-            ) : null}
-            <View className="catalog-modal__actions">
-              {catalogEditing ? (
-                <Button
-                  {...buttonA11yProps}
-                  className="catalog-archive"
-                  disabled={saving}
-                  onClick={() => void archiveCatalogDefinition()}
-                >
-                  停用动作
-                </Button>
-              ) : (
-                <Button
-                  {...buttonA11yProps}
-                  className="modal-action"
-                  disabled={saving}
-                  onClick={closeCatalogEditor}
-                >
-                  取消
-                </Button>
-              )}
-              <Button
-                {...buttonA11yProps}
-                className="catalog-save"
-                disabled={saving}
-                onClick={() => void saveCatalogDefinition()}
-              >
-                {saving ? '正在保存…' : catalogEditing ? '保存定义新版本' : '创建并加入目录'}
-              </Button>
-            </View>
-          </View>
-        </View>
-      ) : null}
 
       {deleting ? (
         <View className="workout-modal" role="dialog" aria-modal="true" aria-label="确认删除训练">

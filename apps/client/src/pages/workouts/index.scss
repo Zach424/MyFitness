@@ -219,8 +219,7 @@
   line-height: 38px;
 }
 
-.catalog-search,
-.catalog-form-input {
+.catalog-search {
   box-sizing: border-box;
   width: 100%;
   min-height: 44px;
@@ -800,7 +799,6 @@
 }
 
 .workout-modal,
-.catalog-modal,
 .workout-history {
   position: fixed;
   z-index: 70;
@@ -811,98 +809,6 @@
   justify-content: center;
   background: rgba(13, 27, 30, 0.48);
   backdrop-filter: blur(7px);
-}
-
-.catalog-modal {
-  align-items: flex-start;
-  overflow-y: auto;
-}
-
-.catalog-modal__card {
-  width: 100%;
-  max-width: 520px;
-  margin: auto;
-  padding: 24px;
-  border-radius: 20px;
-  background: var(--color-paper);
-  box-shadow: var(--shadow-float);
-}
-
-.catalog-modal__notice {
-  display: block;
-  margin-top: 10px;
-  padding: 10px 12px;
-  border-left: 3px solid var(--color-juniper);
-  color: var(--color-muted);
-  background: var(--color-mist);
-  font-size: 9px;
-  line-height: 1.6;
-}
-
-.catalog-form-field {
-  margin-top: 16px;
-}
-
-.catalog-form-input {
-  margin-top: 7px;
-}
-
-.catalog-option-row,
-.catalog-equipment-grid {
-  display: flex;
-  margin-top: 7px;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.catalog-option,
-.catalog-equipment {
-  width: auto;
-  min-height: 40px;
-  margin: 0;
-  padding: 0 11px;
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-round);
-  color: var(--color-muted);
-  background: var(--color-paper);
-  font-size: 9px;
-  line-height: 38px;
-}
-
-.catalog-option--active,
-.catalog-equipment--active {
-  border-color: var(--color-juniper);
-  color: var(--color-paper);
-  background: var(--color-juniper);
-}
-
-.catalog-modal__actions {
-  display: grid;
-  grid-template-columns: 0.8fr 1.2fr;
-  margin-top: 20px;
-  gap: 8px;
-}
-
-.catalog-save,
-.catalog-archive {
-  min-height: 48px;
-  margin: 0;
-  border-radius: 13px;
-  font-size: 10px;
-  font-weight: 720;
-  line-height: 46px;
-}
-
-.catalog-save {
-  border: 1px solid var(--color-ink);
-  color: var(--color-paper);
-  background: var(--color-ink);
-}
-
-.catalog-archive {
-  border: 1px solid #9a574e;
-  color: #9a574e;
-  background: var(--color-paper);
 }
 
 .workout-modal__card {
