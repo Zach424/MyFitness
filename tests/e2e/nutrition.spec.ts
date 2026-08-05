@@ -558,6 +558,52 @@ test('ambiguous meal response retains the draft and retries one aggregate', asyn
   expect(idempotencyKeys[1]).toBe(idempotencyKeys[0])
 })
 
+test('committed meal correction reconciles every submitted snapshot without replaying PUT', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await openNutrition(page)
+
+  const title = page.locator('.nutrition-title-input input')
+  await title.fill('核对中的午餐')
+  await page.getByRole('button', { name: '添加熟鸡胸肉' }).click()
+  await page.locator('[aria-label="进餐时间，年-月-日 时:分"] input').fill('2026-07-18 12:30')
+  await page.getByRole('button', { name: '保存餐次', exact: true }).click()
+  const entry = page.locator('.meal-entry').filter({ hasText: '核对中的午餐' })
+  await expect(entry).toHaveCount(1)
+
+  await entry.getByRole('button', { name: '修改' }).click()
+  await title.fill('已逐项核对的午餐')
+  let updateAttempts = 0
+  await page.route(/\/v1\/nutrition\/meals\/[0-9a-f-]{36}$/, async (route) => {
+    if (route.request().method() !== 'PUT') {
+      await route.continue()
+      return
+    }
+    updateAttempts += 1
+    const committedResponse = await route.fetch()
+    expect(committedResponse.status()).toBe(200)
+    await route.abort('failed')
+  })
+
+  await page.getByRole('button', { name: '保存餐次新版本' }).click()
+  await expect(page.getByRole('status').getByText('RECONCILE FIRST / 禁止直接重放')).toBeVisible()
+  await expect(title).toHaveValue('已逐项核对的午餐')
+  const reconcile = page.getByRole('button', { name: '核对保存结果' })
+  expect(updateAttempts).toBe(1)
+  await page.screenshot({
+    path: 'output/playwright/iteration-079-correction-reconciliation-wide.png',
+    fullPage: true,
+  })
+
+  await reconcile.click()
+  await expect(page.getByRole('status')).toContainText('已从当前 R2 逐项确认上次餐次修改已保存')
+  await expect(page.locator('.meal-entry').filter({ hasText: '已逐项核对的午餐' })).toHaveCount(1)
+  await expect(page.locator('.meal-entry').filter({ hasText: 'v2' })).toHaveCount(1)
+  await expect(page.getByRole('button', { name: '保存餐次', exact: true })).toBeEnabled()
+  expect(updateAttempts).toBe(1)
+})
+
 test('meal editor and ledger remain balanced at wide viewport', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 })
   const browserErrors = collectBrowserErrors(page)

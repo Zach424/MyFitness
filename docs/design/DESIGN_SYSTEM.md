@@ -808,6 +808,17 @@ An owner-visible 404 removes the row and moves focus to ledger refresh without s
 - [390 × 844 unresolved body deletion and exact-read action](../../output/playwright/iteration-078-delete-reconciliation-mobile.png)
 - [1440 × 1000 unresolved meal deletion in the ledger rail](../../output/playwright/iteration-078-delete-reconciliation-wide.png)
 
+## Aggregate-correction response-loss recovery — iteration 079
+
+The three record editors now reuse their existing inline save-status surface as an authority switch. When an expected-revision PUT loses its response, the eyebrow changes to `RECONCILE FIRST / 禁止直接重放`, the exact draft stays editable and the primary action changes from save to `核对保存结果`. The amber ruled treatment distinguishes uncertainty from both a green success and a red explicit refusal without adding another modal or moving the person away from their input.
+
+On 390 × 844 H5, the body editor keeps the submitted `71.8 kg`, occurrence, source and visible R1 base immediately above the recovery action; the older accepted R1 trend remains readable below. On 1440 × 1000 H5, the meal editor retains its food snapshot, serving and nutrient preview while the R1 ledger card remains in the right rail. This makes the two sides of reconciliation visible together without presenting user-confirmed nutrients as newly verified facts.
+
+The exact read accepts a save only when the current revision advanced and every submitted field matches. The same revision returns the primary action to a fresh explicit save while preserving input; a different revision updates only the comparison base and keeps the draft for review. A missing target disables save until cancel so a correction cannot silently become a create. Any draft mutation invalidates the old recovery action in the same render. These states add no auto-save, offline queue, background replay or correction-idempotency claim.
+
+- [390 × 844 unresolved body correction with retained input](../../output/playwright/iteration-079-correction-reconciliation-mobile.png)
+- [1440 × 1000 unresolved meal correction beside accepted R1](../../output/playwright/iteration-079-correction-reconciliation-wide.png)
+
 ## Screenshot review checklist
 
 - The Rhythm Rail remains understandable without color.

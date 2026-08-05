@@ -9,6 +9,7 @@ import type {
   FoodSnapshot,
   Meal,
   MealHistoryItem,
+  UpdateMeal,
 } from '@myfitness/contracts'
 
 import { AggregateDeleteRecovery } from '../../components/aggregate-delete-recovery'
@@ -18,6 +19,13 @@ import {
   deferH5Focus,
   escapeDismissProps,
 } from '../../lib/accessibility'
+import {
+  classifyAggregateCorrectionEvidence,
+  describeAggregateCorrectionFailure,
+  describeAggregateCorrectionReconciliationFailure,
+  describeMissingAggregateCorrectionTarget,
+  mealMatchesSubmittedCorrection,
+} from '../../lib/aggregate-correction-recovery'
 import {
   classifyAggregateDeleteEvidence,
   describeAggregateDeleteFailure,
@@ -187,6 +195,13 @@ const NutritionPage = () => {
   const [saving, setSaving] = useState(false)
   const [feedback, setFeedback] = useState('')
   const [saveRecovery, setSaveRecovery] = useState<SaveRecovery>()
+  const [correctionRecovery, setCorrectionRecovery] = useState<{
+    phase: 'reconcile' | 'missing'
+    targetId: string
+    baseRevision: number
+    submitted: UpdateMeal
+    draftSignature: string
+  }>()
   const [deleteRecovery, setDeleteRecovery] = useState<{
     target: Meal
     receipt: DeleteRecovery
@@ -208,6 +223,7 @@ const NutritionPage = () => {
   const invalidatePendingSave = (nextFeedback = '') => {
     pendingKey.current = ''
     setSaveRecovery(undefined)
+    setCorrectionRecovery(undefined)
     setFeedback(nextFeedback)
   }
 
@@ -263,6 +279,17 @@ const NutritionPage = () => {
     hasFailure: Boolean(readFailure),
   })
   const readAuthorityReady = readPhase === 'ready'
+  const activeCorrectionRecovery =
+    correctionRecovery &&
+    JSON.stringify(draft) === correctionRecovery.draftSignature &&
+    editing?.id === correctionRecovery.targetId &&
+    editing.revision === correctionRecovery.baseRevision
+      ? correctionRecovery
+      : undefined
+
+  useEffect(() => {
+    if (correctionRecovery && !activeCorrectionRecovery) setCorrectionRecovery(undefined)
+  }, [activeCorrectionRecovery, correctionRecovery])
   const readFailurePresentation = readFailure
     ? nutritionReadFailureCopy(readFailure, hasReadSnapshot)
     : undefined
@@ -443,6 +470,7 @@ const NutritionPage = () => {
     setEditing(undefined)
     pendingKey.current = ''
     setSaveRecovery(undefined)
+    setCorrectionRecovery(undefined)
   }
 
   const save = async () => {
@@ -458,10 +486,26 @@ const NutritionPage = () => {
     }
     setSaving(true)
     setSaveRecovery(undefined)
+    setCorrectionRecovery(undefined)
     setFeedback('')
+    let attemptedCorrection:
+      | {
+          targetId: string
+          baseRevision: number
+          submitted: UpdateMeal
+          draftSignature: string
+        }
+      | undefined
     try {
       if (editing) {
-        const saved = await updateMeal(editing.id, buildMealRequest(draft, editing.revision))
+        const submitted = buildMealRequest(draft, editing.revision)
+        attemptedCorrection = {
+          targetId: editing.id,
+          baseRevision: editing.revision,
+          submitted,
+          draftSignature: JSON.stringify(draft),
+        }
+        const saved = await updateMeal(editing.id, submitted)
         setMeals((current) => current.map((meal) => (meal.id === saved.id ? saved : meal)))
         setFeedback('餐次修改已保存，上一版本仍可在历史中查看。')
       } else {
@@ -472,10 +516,64 @@ const NutritionPage = () => {
       }
       resetEditor()
     } catch (requestError) {
+      if (attemptedCorrection) {
+        const recovery = describeAggregateCorrectionFailure(requestError, '这次餐次修改')
+        setSaveRecovery(recovery)
+        setFeedback(recovery.message)
+        if (recovery.authority === 'reconcile_required') {
+          setCorrectionRecovery({ phase: 'reconcile', ...attemptedCorrection })
+        }
+        return
+      }
       const recovery = describeSaveFailure(requestError, {
-        subject: editing ? '这次餐次修改' : '这次餐次',
-        create: !editing,
+        subject: '这次餐次',
+        create: true,
       })
+      setSaveRecovery(recovery)
+      setFeedback(recovery.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const reconcileCorrection = async () => {
+    if (!activeCorrectionRecovery || activeCorrectionRecovery.phase === 'missing') return
+    const pending = activeCorrectionRecovery
+    setSaving(true)
+    setSaveRecovery(undefined)
+    setFeedback('')
+    try {
+      const current = await getMeal(pending.targetId)
+      const evidence = classifyAggregateCorrectionEvidence(pending.baseRevision, current, (meal) =>
+        mealMatchesSubmittedCorrection(meal, pending.submitted),
+      )
+      setMeals((accepted) => includeExactRecord(accepted, current))
+      setCorrectionRecovery(undefined)
+      setSaveRecovery(undefined)
+      if (evidence === 'accepted') {
+        recoverableDraft.clear()
+        setEditing(undefined)
+        setDraft(initialMealDraft())
+        pendingKey.current = ''
+        setFeedback(`已从当前 R${current.revision} 逐项确认上次餐次修改已保存。`)
+        return
+      }
+      setEditing(current)
+      setFeedback(
+        evidence === 'unchanged'
+          ? `当前餐次仍是 R${current.revision}，没有上次修改已落库的证据。输入仍保留；如需保存，请再次明确提交。`
+          : `当前餐次已变为 R${current.revision}，但与上次提交内容不完全一致。已更新比较基线并保留你的输入；请核对后再明确保存。`,
+      )
+    } catch (error) {
+      if (error instanceof ApiError && error.statusCode === 404) {
+        setMeals((accepted) => accepted.filter((meal) => meal.id !== pending.targetId))
+        const recovery = describeMissingAggregateCorrectionTarget('这次餐次')
+        setCorrectionRecovery({ ...pending, phase: 'missing' })
+        setSaveRecovery(recovery)
+        setFeedback(recovery.message)
+        return
+      }
+      const recovery = describeAggregateCorrectionReconciliationFailure(error, '这次餐次')
       setSaveRecovery(recovery)
       setFeedback(recovery.message)
     } finally {
@@ -1022,9 +1120,13 @@ const NutritionPage = () => {
               <Button
                 {...buttonA11yProps}
                 className="save-meal"
-                disabled={saving || !readAuthorityReady}
-                aria-disabled={saving || !readAuthorityReady}
-                onClick={() => void save()}
+                disabled={
+                  saving || !readAuthorityReady || activeCorrectionRecovery?.phase === 'missing'
+                }
+                aria-disabled={
+                  saving || !readAuthorityReady || activeCorrectionRecovery?.phase === 'missing'
+                }
+                onClick={() => void (activeCorrectionRecovery ? reconcileCorrection() : save())}
               >
                 {saving
                   ? '正在保存…'

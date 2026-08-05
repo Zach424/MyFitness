@@ -514,6 +514,49 @@ test('ambiguous workout response retains the draft and retries one aggregate', a
   expect(idempotencyKeys[1]).toBe(idempotencyKeys[0])
 })
 
+test('uncommitted workout correction reads R1 before a second explicit PUT', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await openWorkouts(page)
+
+  await page.locator('.session-title-input input').fill('核对后再改训练')
+  await page.locator('[aria-label="开始时间，年-月-日 时:分"] input').fill('2026-07-18 18:00')
+  await page.locator('[aria-label="结束时间，年-月-日 时:分"] input').fill('2026-07-18 18:45')
+  await page.getByRole('button', { name: '保存训练', exact: true }).click()
+  const entry = page.locator('.workout-entry').filter({ hasText: '核对后再改训练' })
+  await expect(entry).toHaveCount(1)
+
+  await entry.getByRole('button', { name: '修改' }).click()
+  const reps = page.locator('[aria-label="高脚杯深蹲第1组次数"] input')
+  await reps.fill('12')
+  let updateAttempts = 0
+  await page.route(/\/v1\/workouts\/[0-9a-f-]{36}$/, async (route) => {
+    if (route.request().method() !== 'PUT') {
+      await route.continue()
+      return
+    }
+    updateAttempts += 1
+    if (updateAttempts === 1) {
+      await route.abort('failed')
+      return
+    }
+    await route.continue()
+  })
+
+  await page.getByRole('button', { name: '保存训练新版本' }).click()
+  await expect(page.getByRole('status').getByText('RECONCILE FIRST / 禁止直接重放')).toBeVisible()
+  await expect(reps).toHaveValue('12')
+  const reconcile = page.getByRole('button', { name: '核对保存结果' })
+  await reconcile.click()
+  await expect(page.getByRole('status')).toContainText('当前训练仍是 R1，没有上次修改已落库的证据')
+  await expect(reps).toHaveValue('12')
+  expect(updateAttempts).toBe(1)
+
+  await page.getByRole('button', { name: '保存训练新版本' }).click()
+  await expect(page.locator('.workout-entry').filter({ hasText: 'v2' })).toHaveCount(1)
+  await expect(page.getByRole('status')).toContainText('训练修改已保存')
+  expect(updateAttempts).toBe(2)
+})
+
 test('ambiguous action-definition create retries the same key and creates one definition', async ({
   page,
 }) => {

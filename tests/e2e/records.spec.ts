@@ -434,6 +434,52 @@ test('ambiguous body-record response keeps input and retries with one idempotenc
   expect(idempotencyKeys[1]).toBe(idempotencyKeys[0])
 })
 
+test('committed body-record correction reconciles exact content without replaying PUT', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await openRecords(page)
+
+  const value = page.locator('[aria-label="体重数值"] input')
+  await value.fill('71.2')
+  await page.locator('[aria-label="发生时间，年-月-日 时:分"] input').fill('2026-07-18 16:00')
+  await page.getByRole('button', { name: '保存记录' }).click()
+  await expect(page.locator('.log-entry').filter({ hasText: '71.2 kg' })).toHaveCount(1)
+
+  await page.getByRole('button', { name: '修改' }).click()
+  await value.fill('71.8')
+  let updateAttempts = 0
+  await page.route(/\/v1\/health-records\/[0-9a-f-]{36}$/, async (route) => {
+    if (route.request().method() !== 'PUT') {
+      await route.continue()
+      return
+    }
+    updateAttempts += 1
+    const committedResponse = await route.fetch()
+    expect(committedResponse.status()).toBe(200)
+    await route.abort('failed')
+  })
+
+  await page.getByRole('button', { name: '保存新版本' }).click()
+  const recovery = page.getByRole('status')
+  await expect(recovery.getByText('RECONCILE FIRST / 禁止直接重放')).toBeVisible()
+  await expect(value).toHaveValue('71.8')
+  const reconcile = page.getByRole('button', { name: '核对保存结果' })
+  await expect(reconcile).toBeEnabled()
+  expect(updateAttempts).toBe(1)
+  await page.screenshot({
+    path: 'output/playwright/iteration-079-correction-reconciliation-mobile.png',
+    fullPage: true,
+  })
+
+  await reconcile.click()
+  await expect(page.getByRole('status')).toContainText('已从当前 R2 逐项确认上次修改已保存')
+  await expect(page.locator('.log-entry').filter({ hasText: '71.8 kg' })).toHaveCount(1)
+  await expect(page.locator('.log-entry').filter({ hasText: 'v2' })).toHaveCount(1)
+  await expect(page.getByRole('button', { name: '保存记录' })).toBeEnabled()
+  expect(updateAttempts).toBe(1)
+})
+
 test('record log keeps its hierarchy at wide viewport', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 })
   const browserErrors: string[] = []

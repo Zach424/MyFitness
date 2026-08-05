@@ -4,6 +4,7 @@ import Taro, { useDidShow } from '@tarojs/taro'
 import type {
   ExerciseCatalogItem,
   ExerciseEquipment,
+  UpdateWorkout,
   Workout,
   WorkoutHistoryItem,
 } from '@myfitness/contracts'
@@ -15,6 +16,13 @@ import {
   deferH5Focus,
   escapeDismissProps,
 } from '../../lib/accessibility'
+import {
+  classifyAggregateCorrectionEvidence,
+  describeAggregateCorrectionFailure,
+  describeAggregateCorrectionReconciliationFailure,
+  describeMissingAggregateCorrectionTarget,
+  workoutMatchesSubmittedCorrection,
+} from '../../lib/aggregate-correction-recovery'
 import {
   classifyAggregateDeleteEvidence,
   describeAggregateDeleteFailure,
@@ -166,6 +174,13 @@ const WorkoutsPage = () => {
   const [saving, setSaving] = useState(false)
   const [feedback, setFeedback] = useState('')
   const [saveRecovery, setSaveRecovery] = useState<SaveRecovery>()
+  const [correctionRecovery, setCorrectionRecovery] = useState<{
+    phase: 'reconcile' | 'missing'
+    targetId: string
+    baseRevision: number
+    submitted: UpdateWorkout
+    draftSignature: string
+  }>()
   const [deleteRecovery, setDeleteRecovery] = useState<{
     target: Workout
     receipt: DeleteRecovery
@@ -187,6 +202,7 @@ const WorkoutsPage = () => {
   const invalidatePendingSave = (nextFeedback = '') => {
     pendingKey.current = ''
     setSaveRecovery(undefined)
+    setCorrectionRecovery(undefined)
     setFeedback(nextFeedback)
   }
 
@@ -245,6 +261,17 @@ const WorkoutsPage = () => {
     hasFailure: Boolean(readFailure),
   })
   const readAuthorityReady = readPhase === 'ready'
+  const activeCorrectionRecovery =
+    correctionRecovery &&
+    JSON.stringify(draft) === correctionRecovery.draftSignature &&
+    editing?.id === correctionRecovery.targetId &&
+    editing.revision === correctionRecovery.baseRevision
+      ? correctionRecovery
+      : undefined
+
+  useEffect(() => {
+    if (correctionRecovery && !activeCorrectionRecovery) setCorrectionRecovery(undefined)
+  }, [activeCorrectionRecovery, correctionRecovery])
   const readFailurePresentation = readFailure
     ? workoutReadFailureCopy(readFailure, hasReadSnapshot)
     : undefined
@@ -429,10 +456,26 @@ const WorkoutsPage = () => {
     }
     setSaving(true)
     setSaveRecovery(undefined)
+    setCorrectionRecovery(undefined)
     setFeedback('')
+    let attemptedCorrection:
+      | {
+          targetId: string
+          baseRevision: number
+          submitted: UpdateWorkout
+          draftSignature: string
+        }
+      | undefined
     try {
       if (editing) {
-        const saved = await updateWorkout(editing.id, buildWorkoutRequest(draft, editing.revision))
+        const submitted = buildWorkoutRequest(draft, editing.revision)
+        attemptedCorrection = {
+          targetId: editing.id,
+          baseRevision: editing.revision,
+          submitted,
+          draftSignature: JSON.stringify(draft),
+        }
+        const saved = await updateWorkout(editing.id, submitted)
         recoverableDraft.clear()
         setWorkouts((current) =>
           current.map((workout) => (workout.id === saved.id ? saved : workout)),
@@ -452,10 +495,65 @@ const WorkoutsPage = () => {
         setFeedback('训练已保存。完成组才会进入训练量汇总。')
       }
     } catch (error) {
+      if (attemptedCorrection) {
+        const recovery = describeAggregateCorrectionFailure(error, '这次训练修改')
+        setSaveRecovery(recovery)
+        setFeedback(recovery.message)
+        if (recovery.authority === 'reconcile_required') {
+          setCorrectionRecovery({ phase: 'reconcile', ...attemptedCorrection })
+        }
+        return
+      }
       const recovery = describeSaveFailure(error, {
-        subject: editing ? '这次训练修改' : '这次训练',
-        create: !editing,
+        subject: '这次训练',
+        create: true,
       })
+      setSaveRecovery(recovery)
+      setFeedback(recovery.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const reconcileCorrection = async () => {
+    if (!activeCorrectionRecovery || activeCorrectionRecovery.phase === 'missing') return
+    const pending = activeCorrectionRecovery
+    setSaving(true)
+    setSaveRecovery(undefined)
+    setFeedback('')
+    try {
+      const current = await getWorkout(pending.targetId)
+      const evidence = classifyAggregateCorrectionEvidence(
+        pending.baseRevision,
+        current,
+        (workout) => workoutMatchesSubmittedCorrection(workout, pending.submitted),
+      )
+      setWorkouts((accepted) => includeExactRecord(accepted, current))
+      setCorrectionRecovery(undefined)
+      setSaveRecovery(undefined)
+      if (evidence === 'accepted') {
+        recoverableDraft.clear()
+        setEditing(undefined)
+        setDraft(initialWorkoutDraft())
+        setFeedback(`已从当前 R${current.revision} 逐项确认上次训练修改已保存。`)
+        return
+      }
+      setEditing(current)
+      setFeedback(
+        evidence === 'unchanged'
+          ? `当前训练仍是 R${current.revision}，没有上次修改已落库的证据。输入仍保留；如需保存，请再次明确提交。`
+          : `当前训练已变为 R${current.revision}，但与上次提交内容不完全一致。已更新比较基线并保留你的输入；请核对后再明确保存。`,
+      )
+    } catch (error) {
+      if (error instanceof ApiError && error.statusCode === 404) {
+        setWorkouts((accepted) => accepted.filter((workout) => workout.id !== pending.targetId))
+        const recovery = describeMissingAggregateCorrectionTarget('这次训练')
+        setCorrectionRecovery({ ...pending, phase: 'missing' })
+        setSaveRecovery(recovery)
+        setFeedback(recovery.message)
+        return
+      }
+      const recovery = describeAggregateCorrectionReconciliationFailure(error, '这次训练')
       setSaveRecovery(recovery)
       setFeedback(recovery.message)
     } finally {
@@ -713,6 +811,7 @@ const WorkoutsPage = () => {
                         setEditing(undefined)
                         setDraft(initialWorkoutDraft())
                         setSaveRecovery(undefined)
+                        setCorrectionRecovery(undefined)
                         pendingKey.current = ''
                         setFeedback('')
                       }}
@@ -1146,9 +1245,13 @@ const WorkoutsPage = () => {
                 <Button
                   {...buttonA11yProps}
                   className="save-workout"
-                  disabled={saving || !readAuthorityReady}
-                  aria-disabled={saving || !readAuthorityReady}
-                  onClick={() => void save()}
+                  disabled={
+                    saving || !readAuthorityReady || activeCorrectionRecovery?.phase === 'missing'
+                  }
+                  aria-disabled={
+                    saving || !readAuthorityReady || activeCorrectionRecovery?.phase === 'missing'
+                  }
+                  onClick={() => void (activeCorrectionRecovery ? reconcileCorrection() : save())}
                 >
                   {saving
                     ? '正在保存…'
