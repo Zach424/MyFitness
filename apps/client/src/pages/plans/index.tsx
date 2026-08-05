@@ -25,6 +25,7 @@ import {
   generateAiExplanation,
   generateWeeklyPlan,
   getAiExplanationHistory,
+  getAiExplanationRequestStatus,
   getWeeklyPlanHistory,
   linkPlanWorkout,
   listWeeklyPlans,
@@ -77,6 +78,12 @@ type PendingSessionLinkWrite =
       linkRevision: number
       sessionDate: string
     }
+
+type PendingAiExplanationWrite = {
+  planId: string
+  planRevision: number
+  idempotencyKey: string
+}
 
 const weekdayLabels: Record<WeeklyPlan['days'][number]['weekday'], string> = {
   mon: '一',
@@ -254,8 +261,10 @@ const PlansPage = () => {
   const [refreshing, setRefreshing] = useState(false)
   const [feedback, setFeedback] = useState('')
   const [planRecovery, setPlanRecovery] = useState<WorkbenchRecovery>()
+  const [aiRecovery, setAiRecovery] = useState<WorkbenchRecovery>()
   const pendingKey = useRef('')
   const pendingAiKey = useRef('')
+  const pendingAiExplanation = useRef<PendingAiExplanationWrite>()
   const pendingGeneration = useRef<PendingPlanGeneration>()
   const pendingDecision = useRef<PendingPlanDecision>()
   const pendingSessionLink = useRef<PendingSessionLinkWrite>()
@@ -451,7 +460,7 @@ const PlansPage = () => {
   const planWriteBlocked = saving || Boolean(planRecovery)
   const freshnessNotice = freshness ? planFreshnessNotice(freshness) : null
   const toggleAiConsent = () => {
-    if (aiActionable) setAiConsent((value) => !value)
+    if (aiActionable && !aiRecovery) setAiConsent((value) => !value)
   }
 
   const generate = async () => {
@@ -797,11 +806,39 @@ const PlansPage = () => {
     }
   }
 
+  const finishAiExplanation = (explanation: AiExplanation, recovered = false) => {
+    pendingAiKey.current = ''
+    pendingAiExplanation.current = undefined
+    setAiRecovery(undefined)
+    setAiHistory((current) => [
+      explanation,
+      ...current.filter((item) => item.id !== explanation.id),
+    ])
+    setAiConsent(false)
+    const isCurrentRevision = savedPlanRef.current?.revision === explanation.planRevision
+    setFeedback(
+      recovered
+        ? isCurrentRevision
+          ? `核对完成：原请求已生成计划 v${explanation.planRevision} 的边注；页面没有再次调用模型。`
+          : `核对完成：原请求属于计划 v${explanation.planRevision}，已归入历史；当前版本没有被旧边注覆盖。`
+        : explanation.source === 'model'
+          ? 'AI 边注已生成；它只解释当前版本，没有修改计划。'
+          : explanation.source === 'fixture'
+            ? '本地演示边注已生成；接入生产模型后来源会明确标注。'
+            : '模型结果不可用，已显示通过安全规则的确定性说明。',
+    )
+  }
+
   const generateExplanation = async () => {
-    if (!savedPlan || !aiConsent || !aiActionable) return
+    if (!savedPlan || !aiConsent || !aiActionable || aiRecovery) return
     setAiLoading(true)
     setFeedback('')
     if (!pendingAiKey.current) pendingAiKey.current = aiRequestKey()
+    pendingAiExplanation.current = {
+      planId: savedPlan.id,
+      planRevision: savedPlan.revision,
+      idempotencyKey: pendingAiKey.current,
+    }
     try {
       const explanation = await generateAiExplanation(
         savedPlan.id,
@@ -815,21 +852,72 @@ const PlansPage = () => {
         },
         pendingAiKey.current,
       )
-      pendingAiKey.current = ''
-      setAiHistory((current) => [
-        explanation,
-        ...current.filter((item) => item.id !== explanation.id),
-      ])
-      setAiConsent(false)
-      setFeedback(
-        explanation.source === 'model'
-          ? 'AI 边注已生成；它只解释当前版本，没有修改计划。'
-          : explanation.source === 'fixture'
-            ? '本地演示边注已生成；接入生产模型后来源会明确标注。'
-            : '模型结果不可用，已显示通过安全规则的确定性说明。',
-      )
+      finishAiExplanation(explanation)
     } catch (error) {
-      setFeedback(messageOf(error))
+      setAiRecovery(describeWorkbenchFailure('plan_explain', error))
+    } finally {
+      setAiLoading(false)
+    }
+  }
+
+  const reconcileAiExplanation = async () => {
+    const pending = pendingAiExplanation.current
+    if (!pending || !aiRecovery) return
+    if (aiRecovery.authority === 'terminal') {
+      pendingAiKey.current = ''
+      pendingAiExplanation.current = undefined
+      setAiRecovery(undefined)
+      setAiConsent(false)
+      setFeedback('本次 AI 解释尝试已经结束；如仍需要，请重新授权并发起。')
+      return
+    }
+
+    setAiLoading(true)
+    setFeedback('')
+    try {
+      const status = await getAiExplanationRequestStatus(pending.planId, pending.idempotencyKey)
+      if (status.status === 'pending') {
+        setAiRecovery({
+          operation: 'plan_explain',
+          authority: 'reconcile_required',
+          failureKind: 'unexpected',
+          eyebrow: 'RUN PENDING / 原请求仍在收敛',
+          message: `服务端已确认计划 v${status.planRevision} 的原请求存在，但尚未形成可展示结果。页面不会重放模型调用；可稍后再次读取同一请求。`,
+          actionLabel: '再次核对原请求',
+          preserves: 'explanation_intent',
+        })
+        return
+      }
+
+      const explanation = status.explanation
+      if (
+        explanation.planId !== pending.planId ||
+        explanation.planRevision !== pending.planRevision
+      ) {
+        setAiRecovery(
+          terminalPlanRecovery(
+            'plan_explain',
+            '服务端返回的解释与原请求绑定的计划版本不一致，页面已拒绝展示，也不会重放模型调用。',
+            '结束本次核对',
+            'explanation_intent',
+          ),
+        )
+        return
+      }
+      finishAiExplanation(explanation, true)
+    } catch (error) {
+      if (error instanceof ApiError && error.statusCode === 404) {
+        setAiRecovery(
+          terminalPlanRecovery(
+            'plan_explain',
+            `服务端不存在计划 v${pending.planRevision} 的这次原请求，因此没有成功证据。页面不会补发模型调用。`,
+            '结束本次核对',
+            'explanation_intent',
+          ),
+        )
+      } else {
+        setAiRecovery(describeWorkbenchFailure('plan_explain', error))
+      }
     } finally {
       setAiLoading(false)
     }
@@ -1319,6 +1407,30 @@ const PlansPage = () => {
                       ) : null}
                     </View>
 
+                    {aiRecovery ? (
+                      <View className="ai-run-recovery" role="alert">
+                        <Text className="ai-run-recovery__route metric">
+                          ORIGINAL REQUEST → STATUS
+                        </Text>
+                        <Text className="plans-eyebrow">{aiRecovery.eyebrow}</Text>
+                        <Text className="ai-run-recovery__title">只读取刚才那次运行</Text>
+                        <Text className="ai-run-recovery__copy">{aiRecovery.message}</Text>
+                        {pendingAiExplanation.current ? (
+                          <Text className="ai-run-recovery__trace">
+                            保留目标：计划 v{pendingAiExplanation.current.planRevision}
+                            ；核对不会创建新授权、模型调用或计划版本。
+                          </Text>
+                        ) : null}
+                        <Button
+                          className="ai-run-recovery__action"
+                          disabled={aiLoading}
+                          {...buttonActivationProps(() => void reconcileAiExplanation(), aiLoading)}
+                        >
+                          {aiLoading ? '正在读取原请求…' : aiRecovery.actionLabel}
+                        </Button>
+                      </View>
+                    ) : null}
+
                     {currentExplanation ? (
                       <View className="ai-note">
                         <Text className="ai-note__headline">
@@ -1366,42 +1478,55 @@ const PlansPage = () => {
                           只发送当前计划的精简摘要，不含姓名、用户编号或未选动作。AI
                           只做解释，不能改动计划。
                         </Text>
-                        <Button
-                          {...checkboxA11yProps}
-                          {...keyboardActivationProps(toggleAiConsent, !aiActionable)}
-                          className={`ai-consent ${aiConsent ? 'ai-consent--checked' : ''}`}
-                          aria-checked={aiConsent}
-                          aria-disabled={!aiActionable}
-                          aria-label="同意本次 AI 计划解释数据处理"
-                          onClick={toggleAiConsent}
-                        >
-                          <Checkbox checked={aiConsent} value="ai-plan-explanation" aria-hidden />
-                          <Text>
-                            我同意本次将精简计划摘要发送给配置的 AI 服务，并记录本次授权版本。
+                        {aiRecovery ? (
+                          <Text className="ai-note-empty__recovery-hint">
+                            本次授权已经绑定到上方原请求；核对结束前不会要求再次授权或发起新运行。
                           </Text>
-                        </Button>
-                        <Button
-                          {...buttonA11yProps}
-                          className="ai-generate"
-                          disabled={
-                            !aiConsent ||
-                            aiLoading ||
-                            !aiActionable ||
-                            draftPlan.status === 'skipped'
-                          }
-                          aria-disabled={
-                            !aiConsent ||
-                            aiLoading ||
-                            !aiActionable ||
-                            draftPlan.status === 'skipped'
-                          }
-                          onClick={() => void generateExplanation()}
-                        >
-                          {aiLoading ? '正在生成边注…' : '生成解释边注'}
-                        </Button>
-                        <Text className="ai-note-empty__hint">
-                          本地默认使用演示 provider；生产模型、失败回退和版本来源会分别标注。
-                        </Text>
+                        ) : (
+                          <>
+                            <Button
+                              {...checkboxA11yProps}
+                              {...keyboardActivationProps(toggleAiConsent, !aiActionable)}
+                              className={`ai-consent ${aiConsent ? 'ai-consent--checked' : ''}`}
+                              disabled={!aiActionable}
+                              aria-checked={aiConsent}
+                              aria-disabled={!aiActionable}
+                              aria-label="同意本次 AI 计划解释数据处理"
+                              onClick={toggleAiConsent}
+                            >
+                              <Checkbox
+                                checked={aiConsent}
+                                value="ai-plan-explanation"
+                                aria-hidden
+                              />
+                              <Text>
+                                我同意本次将精简计划摘要发送给配置的 AI 服务，并记录本次授权版本。
+                              </Text>
+                            </Button>
+                            <Button
+                              {...buttonA11yProps}
+                              className="ai-generate"
+                              disabled={
+                                !aiConsent ||
+                                aiLoading ||
+                                !aiActionable ||
+                                draftPlan.status === 'skipped'
+                              }
+                              aria-disabled={
+                                !aiConsent ||
+                                aiLoading ||
+                                !aiActionable ||
+                                draftPlan.status === 'skipped'
+                              }
+                              onClick={() => void generateExplanation()}
+                            >
+                              {aiLoading ? '正在生成边注…' : '生成解释边注'}
+                            </Button>
+                            <Text className="ai-note-empty__hint">
+                              本地默认使用演示 provider；生产模型、失败回退和版本来源会分别标注。
+                            </Text>
+                          </>
+                        )}
                       </View>
                     )}
                   </View>

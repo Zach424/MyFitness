@@ -338,6 +338,57 @@ test('AI margin note requires consent, preserves provenance and becomes stale wi
   expect(errors).toEqual([])
 })
 
+test('lost AI explanation response reads the exact durable run without a second model call', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  const errors = collectBrowserErrors(page)
+  await seedProfileAndOpenPlans(page)
+  await page.getByRole('button', { name: /生成 .* 初稿/ }).click()
+  await expect(page.getByText('计划边注')).toBeVisible()
+
+  let explanationWrites = 0
+  let exactStatusReads = 0
+  page.on('request', (request) => {
+    if (request.url().endsWith('/explanation') && request.method() === 'POST') {
+      explanationWrites += 1
+    }
+    if (request.url().endsWith('/explanation-request') && request.method() === 'GET') {
+      exactStatusReads += 1
+    }
+  })
+  await page.route(
+    '**/v1/plans/weekly/*/explanation',
+    async (route) => {
+      const response = await route.fetch()
+      expect(response.status()).toBe(201)
+      await route.abort('failed')
+    },
+    { times: 1 },
+  )
+
+  await page.getByRole('checkbox', { name: '同意本次 AI 计划解释数据处理' }).click()
+  await page.getByRole('button', { name: '生成解释边注' }).click()
+  const recovery = page.locator('.ai-run-recovery')
+  await expect(recovery).toContainText('ORIGINAL REQUEST → STATUS')
+  await expect(recovery).toContainText('只读取刚才那次运行')
+  await expect(recovery).toContainText('保留目标：计划 v1')
+  await expect(page.getByText(/本次授权已经绑定到上方原请求/)).toBeVisible()
+  await expect(page.getByRole('button', { name: '生成解释边注' })).not.toBeVisible()
+  await recovery.scrollIntoViewIfNeeded()
+  await page.screenshot({
+    path: 'output/playwright/iteration-060-ai-explanation-reconciliation-mobile.png',
+  })
+
+  await page.getByRole('button', { name: '核对服务端状态' }).click()
+  await expect(page.getByText(/原请求已生成计划 v1 的边注/)).toBeVisible()
+  await expect(page.getByText('本地演示解释')).toBeVisible()
+  await expect(page.getByText('这周先把节奏做稳')).toBeVisible()
+  expect(explanationWrites).toBe(1)
+  expect(exactStatusReads).toBe(1)
+  expect(errors.filter((error) => !error.includes('net::ERR_FAILED'))).toEqual([])
+})
+
 test('AI margin note remains a secondary evidence layer at wide viewport', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1100 })
   const errors = collectBrowserErrors(page)

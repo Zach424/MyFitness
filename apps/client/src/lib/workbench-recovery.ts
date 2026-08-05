@@ -18,6 +18,7 @@ export type WorkbenchOperation =
   | 'plan_skip'
   | 'plan_link'
   | 'plan_unlink'
+  | 'plan_explain'
 
 export type WorkbenchRecoveryAuthority = 'retry_same_request' | 'reconcile_required' | 'terminal'
 
@@ -37,6 +38,7 @@ export type WorkbenchRecovery = {
     | 'capture_intent'
     | 'decision_input'
     | 'link_intent'
+    | 'explanation_intent'
     | 'none'
 }
 
@@ -141,6 +143,11 @@ export const workbenchOperationPolicies: Record<WorkbenchOperation, OperationPol
     label: '计划与实际训练解除关联',
     uncertainAuthority: 'reconcile_required',
     preserves: 'link_intent',
+  },
+  plan_explain: {
+    label: 'AI 计划解释运行',
+    uncertainAuthority: 'reconcile_required',
+    preserves: 'explanation_intent',
   },
 }
 

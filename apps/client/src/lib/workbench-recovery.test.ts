@@ -37,6 +37,7 @@ describe('authority-aware workbench recovery contract', () => {
     'plan_skip',
     'plan_link',
     'plan_unlink',
+    'plan_explain',
   ] as const)('requires read-side reconciliation before repeating %s', (operation) => {
     const recovery = describeWorkbenchFailure(operation, serverError(503, 'unavailable'))
 
@@ -80,5 +81,6 @@ describe('authority-aware workbench recovery contract', () => {
     expect(workbenchOperationPolicies.plan_skip.preserves).toBe('none')
     expect(workbenchOperationPolicies.plan_link.preserves).toBe('link_intent')
     expect(workbenchOperationPolicies.plan_unlink.preserves).toBe('link_intent')
+    expect(workbenchOperationPolicies.plan_explain.preserves).toBe('explanation_intent')
   })
 })

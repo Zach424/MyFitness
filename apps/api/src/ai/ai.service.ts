@@ -12,6 +12,7 @@ import {
 import type {
   AiExplanation,
   AiExplanationContent,
+  AiExplanationRequestStatus,
   AiWorkerFailureCode,
   AiWorkerResponse,
   GenerateAiExplanation,
@@ -400,6 +401,43 @@ export class AiService implements OnModuleInit, OnModuleDestroy {
       inputTokens: worker?.usage?.inputTokens ?? null,
       outputTokens: worker?.usage?.outputTokens ?? null,
     })
+  }
+
+  async requestStatus(
+    userId: string,
+    planId: string,
+    idempotencyKey: string,
+  ): Promise<AiExplanationRequestStatus> {
+    const result = await this.database.query<RunRow>(
+      `SELECT * FROM ai_explanation_runs
+       WHERE user_id = $1 AND plan_id = $2 AND idempotency_key = $3`,
+      [userId, planId, idempotencyKey],
+    )
+    let row = result.rows[0]
+    if (!row) throw new NotFoundException('AI explanation request not found')
+
+    if (row.status === 'pending') {
+      const reconciled = await this.reconcileOne(this.database, row.id)
+      if (reconciled) {
+        row = reconciled
+      } else {
+        const current = await this.database.query<RunRow>(
+          'SELECT * FROM ai_explanation_runs WHERE id = $1',
+          [row.id],
+        )
+        row = current.rows[0] ?? row
+      }
+    }
+    if (row.status === 'completed') {
+      return { status: 'completed', explanation: mapRun(row) }
+    }
+    return {
+      status: 'pending',
+      requestId: row.id,
+      planId: row.plan_id,
+      planRevision: row.plan_revision,
+      expiresAt: row.expires_at.toISOString(),
+    }
   }
 
   async history(userId: string, planId: string) {

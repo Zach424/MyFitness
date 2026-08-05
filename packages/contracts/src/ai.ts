@@ -170,6 +170,24 @@ export const aiExplanationSchema = z
   })
   .strict()
 
+export const aiExplanationRequestStatusSchema = z.discriminatedUnion('status', [
+  z
+    .object({
+      status: z.literal('pending'),
+      requestId: z.string().uuid(),
+      planId: z.string().uuid(),
+      planRevision: z.number().int().positive(),
+      expiresAt: z.string().datetime({ offset: true }),
+    })
+    .strict(),
+  z
+    .object({
+      status: z.literal('completed'),
+      explanation: aiExplanationSchema,
+    })
+    .strict(),
+])
+
 export const aiExplanationHistorySchema = z
   .object({ planId: z.string().uuid(), items: z.array(aiExplanationSchema).max(20) })
   .strict()
@@ -181,3 +199,4 @@ export type AiWorkerResponse = z.infer<typeof aiWorkerResponseSchema>
 export type AiWorkerFailureCode = z.infer<typeof aiWorkerFailureCodeSchema>
 export type GenerateAiExplanation = z.infer<typeof generateAiExplanationSchema>
 export type AiExplanation = z.infer<typeof aiExplanationSchema>
+export type AiExplanationRequestStatus = z.infer<typeof aiExplanationRequestStatusSchema>

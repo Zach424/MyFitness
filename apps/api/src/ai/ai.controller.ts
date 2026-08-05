@@ -1,4 +1,13 @@
-import { BadRequestException, Body, Controller, Get, Headers, Param, Post } from '@nestjs/common'
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  Header,
+  Headers,
+  Param,
+  Post,
+} from '@nestjs/common'
 import {
   ApiBadRequestResponse,
   ApiBody,
@@ -14,6 +23,7 @@ import {
 } from '@nestjs/swagger'
 import {
   aiExplanationHistorySchema,
+  aiExplanationRequestStatusSchema,
   aiExplanationSchema,
   generateAiExplanationSchema,
   idempotencyKeySchema,
@@ -55,6 +65,7 @@ export class AiController {
   @ApiOperation({ summary: 'Generate a review-only explanation for the current plan revision' })
   @ApiParam({ name: 'planId', schema: { type: 'string', format: 'uuid' } })
   @ApiHeader({ name: 'x-idempotency-key', required: true })
+  @Header('Cache-Control', 'private, no-store, max-age=0')
   @ApiBody({ schema: openApiSchema(generateAiExplanationSchema) })
   @ApiCreatedResponse({ schema: openApiSchema(aiExplanationSchema) })
   @ApiBadRequestResponse({ description: 'Consent, revision or idempotency key is invalid.' })
@@ -75,6 +86,28 @@ export class AiController {
       'AI explanation request is invalid',
     )
     return aiExplanationSchema.parse(await this.ai.generate(principal.userId, planId, key, input))
+  }
+
+  @Get(':planId/explanation-request')
+  @ApiOperation({ summary: 'Read one AI explanation run by its original idempotency key' })
+  @ApiParam({ name: 'planId', schema: { type: 'string', format: 'uuid' } })
+  @ApiHeader({ name: 'x-idempotency-key', required: true })
+  @Header('Cache-Control', 'private, no-store, max-age=0')
+  @ApiOkResponse({ schema: openApiSchema(aiExplanationRequestStatusSchema) })
+  @ApiBadRequestResponse({ description: 'The idempotency key is invalid or missing.' })
+  @ApiNotFoundResponse({
+    description: 'The exact explanation request does not exist for this plan and user.',
+  })
+  async requestStatus(
+    @CurrentUser() principal: AuthPrincipal,
+    @Param('planId') rawId: string,
+    @Headers('x-idempotency-key') rawKey: string | undefined,
+  ) {
+    const planId = parse(weeklyPlanIdSchema, rawId, 'planId must be a UUID')
+    const key = parse(idempotencyKeySchema, rawKey, 'x-idempotency-key is invalid or missing')
+    return aiExplanationRequestStatusSchema.parse(
+      await this.ai.requestStatus(principal.userId, planId, key),
+    )
   }
 
   @Get(':planId/explanations')

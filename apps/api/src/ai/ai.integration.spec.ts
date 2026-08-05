@@ -130,6 +130,23 @@ describe('AI plan explanations with PostgreSQL and fixture worker', () => {
       .expect(201)
     expect(repeated.body.id).toBe(generated.body.id)
 
+    const exactStatus = await request(app.getHttpServer())
+      .get(`/v1/plans/weekly/${planId}/explanation-request`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('x-idempotency-key', key)
+      .expect(200)
+    expect(exactStatus.body).toMatchObject({
+      status: 'completed',
+      explanation: { id: generated.body.id, planId, planRevision: 1 },
+    })
+    expect(exactStatus.headers['cache-control']).toContain('no-store')
+
+    await request(app.getHttpServer())
+      .get(`/v1/plans/weekly/${planId}/explanation-request`)
+      .set('Authorization', `Bearer ${otherToken}`)
+      .set('x-idempotency-key', key)
+      .expect(404)
+
     const history = await request(app.getHttpServer())
       .get(`/v1/plans/weekly/${planId}/explanations`)
       .set('Authorization', `Bearer ${token}`)
@@ -216,6 +233,19 @@ describe('AI plan explanations with PostgreSQL and fixture worker', () => {
           return pending.rows[0]?.count
         })
         .toBe('1')
+
+      const pendingStatus = await request(app.getHttpServer())
+        .get(`/v1/plans/weekly/${planId}/explanation-request`)
+        .set('Authorization', `Bearer ${token}`)
+        .set('x-idempotency-key', key)
+        .expect(200)
+      expect(pendingStatus.body).toMatchObject({
+        status: 'pending',
+        requestId: expect.any(String),
+        planId,
+        planRevision: 1,
+        expiresAt: expect.any(String),
+      })
 
       const reserved = await pool.query<{
         id: string
@@ -320,6 +350,21 @@ describe('AI plan explanations with PostgreSQL and fixture worker', () => {
         [key],
       )
 
+      const recovered = await request(app.getHttpServer())
+        .get(`/v1/plans/weekly/${planId}/explanation-request`)
+        .set('Authorization', `Bearer ${token}`)
+        .set('x-idempotency-key', key)
+        .expect(200)
+      expect(recovered.body).toMatchObject({
+        status: 'completed',
+        explanation: {
+          source: 'fallback',
+          provider: 'unavailable',
+          model: 'orchestrator-recovery-v1',
+          failureCode: 'provider_timeout',
+        },
+      })
+
       const repeated = await request(app.getHttpServer())
         .post(`/v1/plans/weekly/${planId}/explanation`)
         .set('Authorization', `Bearer ${token}`)
@@ -332,6 +377,7 @@ describe('AI plan explanations with PostgreSQL and fixture worker', () => {
         model: 'orchestrator-recovery-v1',
         failureCode: 'provider_timeout',
       })
+      expect(repeated.body.id).toBe(recovered.body.explanation.id)
 
       releaseWorker?.()
       const original = await generation

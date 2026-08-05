@@ -1,6 +1,6 @@
 # Design system baseline
 
-Status: implemented and visually validated through iteration-055 authority-aware workbench recovery evidence
+Status: implemented and visually validated through iteration-060 exact AI-run recovery evidence
 
 Working brand: 衡迹 / MyFitness
 
@@ -592,6 +592,16 @@ After reconciliation, functional assertions—not screenshots—prove the exact 
 
 - [390 × 844 exact link reconciliation](../../output/playwright/iteration-059-plan-link-reconciliation-mobile.png)
 - [390 × 844 unlink reconciliation](../../output/playwright/iteration-059-plan-unlink-reconciliation-mobile.png)
+
+## Exact AI-run reconciliation — iteration 060
+
+The Week Fold AI margin note now owns a smaller recovery surface inside the existing ruled card rather than moving provider uncertainty to the page-wide plan banner. The amber rail says `ORIGINAL REQUEST → STATUS`, `RECONCILE FIRST` and “只读取刚才那次运行”. This makes the recovery authority explicit while preserving the plan evidence above and version history below.
+
+The retained trace names only the target plan revision and promises that the read creates no new authorization, model call or plan version. While unresolved, the consent checkbox and ordinary generate action are replaced by one quiet statement that the existing authorization is already bound to the original request. This avoids the visually blank disabled-label behavior seen in earlier Taro controls and prevents a second consent from looking necessary.
+
+The single amber action reads the exact durable run by its original in-memory key. Functional proof accepts a completed explanation only when its plan ID/revision still match; a result for an older revision enters history without becoming current. The screenshot records uncertainty, not success. Real browser counters prove one POST and one GET, while source/prompt/validator assertions remain functional evidence.
+
+- [390 × 844 exact AI-run reconciliation](../../output/playwright/iteration-060-ai-explanation-reconciliation-mobile.png)
 
 ## Screenshot review checklist
 

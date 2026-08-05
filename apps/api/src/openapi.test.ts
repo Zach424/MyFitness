@@ -56,6 +56,7 @@ describe('OpenAPI document', () => {
     expect(document.paths['/v1/plans/weekly/{planId}/decision']?.put).toBeDefined()
     expect(document.paths['/v1/plans/weekly/{planId}/history']?.get).toBeDefined()
     expect(document.paths['/v1/plans/weekly/{planId}/explanation']?.post).toBeDefined()
+    expect(document.paths['/v1/plans/weekly/{planId}/explanation-request']?.get).toBeDefined()
     expect(document.paths['/v1/plans/weekly/{planId}/explanations']?.get).toBeDefined()
     expect(document.paths['/v1/auth/dev/session']?.post).toBeDefined()
     expect(document.paths['/v1/auth/wechat/session']?.post).toBeDefined()

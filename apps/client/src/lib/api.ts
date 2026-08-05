@@ -1,5 +1,6 @@
 import type {
   AiExplanation,
+  AiExplanationRequestStatus,
   CreateHealthRecord,
   CreateExerciseCatalogEntry,
   CreateFoodCatalogEntry,
@@ -622,6 +623,14 @@ export const generateAiExplanation = (
   authenticatedRequest<AiExplanation>(`/plans/weekly/${planId}/explanation`, 'POST', payload, {
     'x-idempotency-key': idempotencyKey,
   })
+
+export const getAiExplanationRequestStatus = (planId: string, idempotencyKey: string) =>
+  authenticatedRequest<AiExplanationRequestStatus>(
+    `/plans/weekly/${planId}/explanation-request`,
+    'GET',
+    undefined,
+    { 'x-idempotency-key': idempotencyKey },
+  )
 
 export const getAiExplanationHistory = async (planId: string) =>
   (

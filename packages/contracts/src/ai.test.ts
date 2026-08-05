@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   aiExplanationContentSchema,
+  aiExplanationRequestStatusSchema,
   aiExplanationSchema,
   aiPlanConsentVersion,
   aiPlanPromptVersion,
@@ -31,6 +32,26 @@ const content = {
 }
 
 describe('AI explanation contracts', () => {
+  it('keeps pending request status distinct from a completed explanation', () => {
+    expect(
+      aiExplanationRequestStatusSchema.parse({
+        status: 'pending',
+        requestId: '00000000-0000-4000-8000-000000000010',
+        planId: '00000000-0000-4000-8000-000000000011',
+        planRevision: 2,
+        expiresAt: '2026-08-05T10:00:00+08:00',
+      }).status,
+    ).toBe('pending')
+    expect(() =>
+      aiExplanationRequestStatusSchema.parse({
+        status: 'pending',
+        requestId: '00000000-0000-4000-8000-000000000010',
+        planId: '00000000-0000-4000-8000-000000000011',
+        planRevision: 2,
+      }),
+    ).toThrow()
+  })
+
   it('keeps each current provenance version inside its readable history', () => {
     expect(aiPlanPromptVersions).toContain(aiPlanPromptVersion)
     expect(aiPlanValidatorVersions).toContain(aiPlanValidatorVersion)
