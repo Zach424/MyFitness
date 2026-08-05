@@ -146,6 +146,58 @@ test('workout completes create, repeat, update, history and delete lifecycle', a
   expect(browserErrors).toEqual([])
 })
 
+test('ambiguous workout response retains the draft and retries one aggregate', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await openWorkouts(page)
+
+  const title = page.locator('.session-title-input input')
+  await title.fill('响应丢失训练')
+  await page.locator('[aria-label="开始时间，年-月-日 时:分"] input').fill('2026-07-18 18:00')
+  await page.locator('[aria-label="结束时间，年-月-日 时:分"] input').fill('2026-07-18 18:45')
+
+  const idempotencyKeys: string[] = []
+  let createAttempts = 0
+  await page.route('**/v1/workouts', async (route) => {
+    if (route.request().method() !== 'POST') {
+      await route.continue()
+      return
+    }
+    createAttempts += 1
+    idempotencyKeys.push(route.request().headers()['x-idempotency-key'] ?? '')
+    if (createAttempts === 1) {
+      const committedResponse = await route.fetch()
+      expect(committedResponse.status()).toBe(201)
+      await route.abort('failed')
+      return
+    }
+    await route.continue()
+  })
+
+  await page.getByRole('button', { name: '保存训练', exact: true }).click()
+  const uncertainStatus = page.getByRole('status')
+  await expect(uncertainStatus.getByText('CONNECTION UNCERTAIN / 输入仍保留')).toBeVisible()
+  await expect(uncertainStatus).toContainText('无法确认这次训练是否已经到达服务端')
+  await expect(title).toHaveValue('响应丢失训练')
+  const retryButton = page.getByRole('button', { name: '重试保存（防重复）' })
+  await expect(retryButton).toBeEnabled()
+  await expect(retryButton).toHaveCSS('opacity', '1')
+
+  await page.screenshot({
+    path: 'output/playwright/iteration-054-workout-save-recovery-mobile.png',
+    fullPage: true,
+  })
+
+  const retryResponse = page.waitForResponse(
+    (response) => response.url().endsWith('/v1/workouts') && response.request().method() === 'POST',
+  )
+  await retryButton.click()
+  expect((await retryResponse).status()).toBe(201)
+  await expect(page.locator('.workout-entry').filter({ hasText: '响应丢失训练' })).toHaveCount(1)
+  expect(createAttempts).toBe(2)
+  expect(idempotencyKeys[0]).not.toBe('')
+  expect(idempotencyKeys[1]).toBe(idempotencyKeys[0])
+})
+
 test('workout log remains useful at wide viewport', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 })
   const browserErrors = collectBrowserErrors(page)

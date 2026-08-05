@@ -510,6 +510,17 @@ Server refusal, retryable service outage, ambiguous network interruption and an 
 
 - [390 × 844 ambiguous save recovery](../../output/playwright/iteration-053-ambiguous-save-recovery-mobile.png)
 
+## Core record recovery family — iteration 054
+
+Workout and meal editors now use the same calm unresolved-transaction grammar as body records. The warm strip and `CONNECTION UNCERTAIN / 输入仍保留` eyebrow remain identical, while the body names the actual aggregate—`这次训练` or `这次餐次`. This repetition is intentional: an interrupted save should be recognizable before the user has to parse page-specific detail.
+
+The screenshots keep each editor's evidence visible around the recovery state. Training still shows completed-set/volume/minute totals and an empty record ledger; nutrition still shows the confirmed food portion/macros and an empty meal ledger. The unchanged draft and zero-count ledger together explain why the page cannot yet claim a visible save, while the enabled mineral retry action provides one next step. Neither view adds a cloud/offline badge or suggests automatic synchronization.
+
+Implementation audit treated every payload control as part of the visual state contract. Changing load unit, any set field, fatigue, pain or note clears a workout recovery attempt. Changing meal type, title, occurrence, food selection, portion or note clears a meal attempt. A Taro `disabled="false"` selector was also corrected on the meal action so retry does not look inactive. Both 390 × 844 reviews commit through the real API, lose only the response, then reuse one key and render one final ledger entry.
+
+- [390 × 844 workout save recovery](../../output/playwright/iteration-054-workout-save-recovery-mobile.png)
+- [390 × 844 meal save recovery](../../output/playwright/iteration-054-meal-save-recovery-mobile.png)
+
 ## Screenshot review checklist
 
 - The Rhythm Rail remains understandable without color.

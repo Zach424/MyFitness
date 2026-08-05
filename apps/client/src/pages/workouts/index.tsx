@@ -24,6 +24,7 @@ import {
   updateWorkout,
 } from '../../lib/api'
 import { appendOlderRecords, includeExactRecord } from '../../lib/record-pages'
+import { describeSaveFailure, type SaveRecovery } from '../../lib/save-recovery'
 import { useRecoverableDraft } from '../../lib/use-local-draft'
 import {
   buildWorkoutRequest,
@@ -104,8 +105,15 @@ const WorkoutsPage = () => {
   const [nextCursor, setNextCursor] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [feedback, setFeedback] = useState('')
+  const [saveRecovery, setSaveRecovery] = useState<SaveRecovery>()
   const pendingKey = useRef('')
   const catalogReturnFocusId = useRef('')
+
+  const invalidatePendingSave = (nextFeedback = '') => {
+    pendingKey.current = ''
+    setSaveRecovery(undefined)
+    setFeedback(nextFeedback)
+  }
 
   useEffect(() => {
     void (async () => {
@@ -184,6 +192,7 @@ const WorkoutsPage = () => {
       if (!restored) return
       setDraft(restored)
       pendingKey.current = ''
+      setSaveRecovery(undefined)
       setFeedback('本地草稿已恢复；保存前请重新核对完成组、负重与感受。')
       return
     }
@@ -201,6 +210,7 @@ const WorkoutsPage = () => {
       setEditing(target)
       setDraft(restored)
       pendingKey.current = ''
+      setSaveRecovery(undefined)
       setFeedback(`已恢复基于 R${correction.baseRevision} 的训练修改；保存仍会校验当前版本。`)
     } catch (error) {
       if (error instanceof ApiError && error.statusCode === 404) {
@@ -237,7 +247,7 @@ const WorkoutsPage = () => {
           : exercise,
       ),
     }))
-    pendingKey.current = ''
+    invalidatePendingSave()
   }
 
   const addExercise = (item: ExerciseCatalogItem) => {
@@ -249,8 +259,7 @@ const WorkoutsPage = () => {
       ...current,
       exercises: [...current.exercises, createExerciseDraft(item)],
     }))
-    setFeedback('')
-    pendingKey.current = ''
+    invalidatePendingSave()
   }
 
   const removeExercise = (index: number) => {
@@ -258,7 +267,7 @@ const WorkoutsPage = () => {
       ...current,
       exercises: current.exercises.filter((_, currentIndex) => currentIndex !== index),
     }))
-    pendingKey.current = ''
+    invalidatePendingSave()
   }
 
   const addSet = (exerciseIndex: number) => {
@@ -285,7 +294,7 @@ const WorkoutsPage = () => {
         }
       }),
     }))
-    pendingKey.current = ''
+    invalidatePendingSave()
   }
 
   const removeSet = (exerciseIndex: number, setIndex: number) => {
@@ -297,16 +306,18 @@ const WorkoutsPage = () => {
           : exercise,
       ),
     }))
-    pendingKey.current = ''
+    invalidatePendingSave()
   }
 
   const save = async () => {
     const validation = validateWorkoutDraft(draft)
     if (validation) {
+      setSaveRecovery(undefined)
       setFeedback(validation)
       return
     }
     setSaving(true)
+    setSaveRecovery(undefined)
     setFeedback('')
     try {
       if (editing) {
@@ -317,6 +328,7 @@ const WorkoutsPage = () => {
         )
         setEditing(undefined)
         setDraft(initialWorkoutDraft())
+        setSaveRecovery(undefined)
         setFeedback('训练修改已保存，上一版本仍可在历史中查看。')
       } else {
         if (!pendingKey.current) pendingKey.current = requestKey()
@@ -325,10 +337,16 @@ const WorkoutsPage = () => {
         setWorkouts((current) => [saved, ...current])
         setDraft(initialWorkoutDraft())
         pendingKey.current = ''
+        setSaveRecovery(undefined)
         setFeedback('训练已保存。完成组才会进入训练量汇总。')
       }
     } catch (error) {
-      setFeedback(messageOf(error))
+      const recovery = describeSaveFailure(error, {
+        subject: editing ? '这次训练修改' : '这次训练',
+        create: !editing,
+      })
+      setSaveRecovery(recovery)
+      setFeedback(recovery.message)
     } finally {
       setSaving(false)
     }
@@ -343,6 +361,7 @@ const WorkoutsPage = () => {
     setEditing(workout)
     setDraft(draftFromWorkout(workout))
     setFeedback('正在修改这次训练；保存会产生新版本。')
+    setSaveRecovery(undefined)
     pendingKey.current = ''
     Taro.pageScrollTo({ scrollTop: 0, duration: 220 })
   }
@@ -356,6 +375,7 @@ const WorkoutsPage = () => {
     setEditing(undefined)
     setDraft(draftFromWorkout(workout, true))
     setFeedback('已复制上次结构；请勾选今天实际完成的组，再保存为新训练。')
+    setSaveRecovery(undefined)
     pendingKey.current = ''
     Taro.pageScrollTo({ scrollTop: 0, duration: 220 })
   }
@@ -502,6 +522,8 @@ const WorkoutsPage = () => {
                         recoverableDraft.clear()
                         setEditing(undefined)
                         setDraft(initialWorkoutDraft())
+                        setSaveRecovery(undefined)
+                        pendingKey.current = ''
                         setFeedback('')
                       }}
                     >
@@ -519,7 +541,7 @@ const WorkoutsPage = () => {
                     placeholder="例如：全身训练 A"
                     onInput={(event) => {
                       setDraft((current) => ({ ...current, title: event.detail.value }))
-                      pendingKey.current = ''
+                      invalidatePendingSave()
                     }}
                   />
                 </View>
@@ -536,8 +558,7 @@ const WorkoutsPage = () => {
                         startedLocal,
                         originalStartedAt: undefined,
                       }))
-                      pendingKey.current = ''
-                      setFeedback('')
+                      invalidatePendingSave()
                     }}
                     onTimeZoneChange={(timezone) => {
                       setDraft((current) => ({
@@ -547,8 +568,7 @@ const WorkoutsPage = () => {
                         originalStartedAt: undefined,
                         originalEndedAt: undefined,
                       }))
-                      pendingKey.current = ''
-                      setFeedback('')
+                      invalidatePendingSave()
                     }}
                     onOffsetChange={(startedOffsetMinutes) => {
                       setDraft((current) => ({
@@ -556,8 +576,7 @@ const WorkoutsPage = () => {
                         startedOffsetMinutes,
                         originalStartedAt: undefined,
                       }))
-                      pendingKey.current = ''
-                      setFeedback('')
+                      invalidatePendingSave()
                     }}
                   />
                   <OccurrenceField
@@ -571,8 +590,7 @@ const WorkoutsPage = () => {
                         endedLocal,
                         originalEndedAt: undefined,
                       }))
-                      pendingKey.current = ''
-                      setFeedback('')
+                      invalidatePendingSave()
                     }}
                     onTimeZoneChange={(timezone) => {
                       setDraft((current) => ({
@@ -582,8 +600,7 @@ const WorkoutsPage = () => {
                         originalStartedAt: undefined,
                         originalEndedAt: undefined,
                       }))
-                      pendingKey.current = ''
-                      setFeedback('')
+                      invalidatePendingSave()
                     }}
                     onOffsetChange={(endedOffsetMinutes) => {
                       setDraft((current) => ({
@@ -591,8 +608,7 @@ const WorkoutsPage = () => {
                         endedOffsetMinutes,
                         originalEndedAt: undefined,
                       }))
-                      pendingKey.current = ''
-                      setFeedback('')
+                      invalidatePendingSave()
                     }}
                   />
                 </View>
@@ -684,7 +700,10 @@ const WorkoutsPage = () => {
                         className={`load-unit-button ${draft.loadUnit === unit ? 'load-unit-button--active' : ''}`}
                         key={unit}
                         aria-pressed={draft.loadUnit === unit}
-                        onClick={() => setDraft((current) => ({ ...current, loadUnit: unit }))}
+                        onClick={() => {
+                          setDraft((current) => ({ ...current, loadUnit: unit }))
+                          invalidatePendingSave()
+                        }}
                       >
                         {unit}
                       </Button>
@@ -841,7 +860,10 @@ const WorkoutsPage = () => {
                           key={value}
                           aria-label={`疲劳${value}`}
                           aria-pressed={draft.fatigue === value}
-                          onClick={() => setDraft((current) => ({ ...current, fatigue: value }))}
+                          onClick={() => {
+                            setDraft((current) => ({ ...current, fatigue: value }))
+                            invalidatePendingSave()
+                          }}
                         >
                           {value}
                         </Button>
@@ -857,7 +879,10 @@ const WorkoutsPage = () => {
                           className={`pain-option ${draft.painLevel === value ? 'pain-option--active' : ''}`}
                           key={value}
                           aria-pressed={draft.painLevel === value}
-                          onClick={() => setDraft((current) => ({ ...current, painLevel: value }))}
+                          onClick={() => {
+                            setDraft((current) => ({ ...current, painLevel: value }))
+                            invalidatePendingSave()
+                          }}
                         >
                           {value === 0 ? '无' : value}
                         </Button>
@@ -873,9 +898,10 @@ const WorkoutsPage = () => {
                     value={draft.note}
                     maxlength={500}
                     placeholder="动作感受、替代动作或需要下次留意的事"
-                    onInput={(event) =>
+                    onInput={(event) => {
                       setDraft((current) => ({ ...current, note: event.detail.value }))
-                    }
+                      invalidatePendingSave()
+                    }}
                   />
                 </View>
 
@@ -906,12 +932,15 @@ const WorkoutsPage = () => {
                 ) : null}
                 {feedback ? (
                   <View
-                    className="workout-feedback"
+                    className={`workout-feedback ${saveRecovery ? `workout-feedback--${saveRecovery.kind}` : ''}`}
                     role="status"
                     aria-live="polite"
                     aria-atomic="true"
                   >
-                    {feedback}
+                    {saveRecovery ? (
+                      <Text className="workout-feedback__eyebrow">{saveRecovery.eyebrow}</Text>
+                    ) : null}
+                    <Text>{feedback}</Text>
                   </View>
                 ) : null}
 
@@ -921,7 +950,9 @@ const WorkoutsPage = () => {
                   disabled={saving}
                   onClick={() => void save()}
                 >
-                  {saving ? '正在保存…' : editing ? '保存训练新版本' : '保存训练'}
+                  {saving
+                    ? '正在保存…'
+                    : (saveRecovery?.actionLabel ?? (editing ? '保存训练新版本' : '保存训练'))}
                 </Button>
               </View>
             </View>

@@ -232,6 +232,60 @@ test('meal completes favorite, create, repeat, update, history and delete lifecy
   expect(browserErrors).toEqual([])
 })
 
+test('ambiguous meal response retains the draft and retries one aggregate', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await openNutrition(page)
+
+  const title = page.locator('.nutrition-title-input input')
+  await title.fill('响应丢失午餐')
+  await page.getByRole('button', { name: '添加熟鸡胸肉' }).click()
+  await page.locator('[aria-label="进餐时间，年-月-日 时:分"] input').fill('2026-07-18 12:30')
+
+  const idempotencyKeys: string[] = []
+  let createAttempts = 0
+  await page.route('**/v1/nutrition/meals', async (route) => {
+    if (route.request().method() !== 'POST') {
+      await route.continue()
+      return
+    }
+    createAttempts += 1
+    idempotencyKeys.push(route.request().headers()['x-idempotency-key'] ?? '')
+    if (createAttempts === 1) {
+      const committedResponse = await route.fetch()
+      expect(committedResponse.status()).toBe(201)
+      await route.abort('failed')
+      return
+    }
+    await route.continue()
+  })
+
+  await page.getByRole('button', { name: '保存餐次', exact: true }).click()
+  const uncertainStatus = page.getByRole('status')
+  await expect(uncertainStatus.getByText('CONNECTION UNCERTAIN / 输入仍保留')).toBeVisible()
+  await expect(uncertainStatus).toContainText('无法确认这次餐次是否已经到达服务端')
+  await expect(title).toHaveValue('响应丢失午餐')
+  await expect(page.locator('.meal-item').getByText('熟鸡胸肉')).toBeVisible()
+  const retryButton = page.getByRole('button', { name: '重试保存（防重复）' })
+  await expect(retryButton).toBeEnabled()
+  await expect(retryButton).toHaveCSS('opacity', '1')
+
+  await page.screenshot({
+    path: 'output/playwright/iteration-054-meal-save-recovery-mobile.png',
+    fullPage: true,
+  })
+
+  const retryResponse = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/v1/nutrition/meals') && response.request().method() === 'POST',
+  )
+  await retryButton.click()
+  expect((await retryResponse).status()).toBe(201)
+  await expect(page.locator('.meal-entry').filter({ hasText: '响应丢失午餐' })).toHaveCount(1)
+  expect(createAttempts).toBe(2)
+  expect(idempotencyKeys[0]).not.toBe('')
+  expect(idempotencyKeys[1]).toBe(idempotencyKeys[0])
+})
+
 test('meal editor and ledger remain balanced at wide viewport', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 })
   const browserErrors = collectBrowserErrors(page)

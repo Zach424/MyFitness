@@ -607,6 +607,30 @@
   background: var(--color-mineral-soft);
 }
 
+.workout-feedback__eyebrow {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--color-ink);
+  font-family: var(--font-metric);
+  font-size: 9px;
+  font-weight: 760;
+  letter-spacing: 0.08em;
+}
+
+.workout-feedback--network_uncertain,
+.workout-feedback--service_unavailable,
+.workout-feedback--unexpected {
+  border-left-color: var(--color-warning);
+  color: var(--color-ink);
+  background: var(--color-warning-soft);
+}
+
+.workout-feedback--server_rejected {
+  border-left-color: var(--color-pulse);
+  color: var(--color-ink);
+  background: rgba(233, 106, 91, 0.09);
+}
+
 .save-workout {
   min-height: 52px;
   margin: 18px 0 0;

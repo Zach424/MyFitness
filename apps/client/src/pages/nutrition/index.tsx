@@ -30,6 +30,7 @@ import {
   updateMeal,
 } from '../../lib/api'
 import { appendOlderRecords, includeExactRecord } from '../../lib/record-pages'
+import { describeSaveFailure, type SaveRecovery } from '../../lib/save-recovery'
 import { useRecoverableDraft } from '../../lib/use-local-draft'
 import {
   buildMealRequest,
@@ -125,8 +126,15 @@ const NutritionPage = () => {
   const [nextCursor, setNextCursor] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [feedback, setFeedback] = useState('')
+  const [saveRecovery, setSaveRecovery] = useState<SaveRecovery>()
   const pendingKey = useRef('')
   const photoReturnFocus = useRef(false)
+
+  const invalidatePendingSave = (nextFeedback = '') => {
+    pendingKey.current = ''
+    setSaveRecovery(undefined)
+    setFeedback(nextFeedback)
+  }
 
   useEffect(() => {
     void (async () => {
@@ -189,6 +197,7 @@ const NutritionPage = () => {
       if (!restored) return
       setDraft(restored)
       pendingKey.current = ''
+      setSaveRecovery(undefined)
       setFeedback('本地餐次草稿已恢复；请重新核对食物、份量和参考来源。')
       return
     }
@@ -206,6 +215,7 @@ const NutritionPage = () => {
       setEditing(target)
       setDraft(restored)
       pendingKey.current = ''
+      setSaveRecovery(undefined)
       setFeedback(`已恢复基于 R${correction.baseRevision} 的餐次修改；保存仍会校验当前版本。`)
     } catch (error) {
       if (error instanceof ApiError && error.statusCode === 404) {
@@ -241,7 +251,7 @@ const NutritionPage = () => {
   const addFood = (entry: CatalogDisplayEntry) => {
     const item = entry.catalog ? draftFromFoodCatalogItem(entry.catalog) : draftFromSavedFood(entry)
     setDraft((current) => ({ ...current, items: [...current.items, item] }))
-    setFeedback(`${entry.food.name}已加入本餐，请确认实际份量。`)
+    invalidatePendingSave(`${entry.food.name}已加入本餐，请确认实际份量。`)
   }
 
   const updateAmount = (index: number, value: string) => {
@@ -251,6 +261,7 @@ const NutritionPage = () => {
         itemIndex === index ? { ...item, amount: value } : item,
       ),
     }))
+    invalidatePendingSave()
   }
 
   const removeFood = (index: number) => {
@@ -258,6 +269,7 @@ const NutritionPage = () => {
       ...current,
       items: current.items.filter((_, itemIndex) => itemIndex !== index),
     }))
+    invalidatePendingSave()
   }
 
   const openFoodPhotoWorkflow = () => {
@@ -272,8 +284,7 @@ const NutritionPage = () => {
               ...current,
               items: [...current.items, ...confirmedDrafts],
             }))
-            pendingKey.current = ''
-            setFeedback('候选已带入当前草稿，照片已删除；餐次尚未保存，请继续核对。')
+            invalidatePendingSave('候选已带入当前草稿，照片已删除；餐次尚未保存，请继续核对。')
           } catch (error) {
             setFeedback(messageOf(error))
           }
@@ -322,15 +333,19 @@ const NutritionPage = () => {
     setDraft(initialMealDraft())
     setEditing(undefined)
     pendingKey.current = ''
+    setSaveRecovery(undefined)
   }
 
   const save = async () => {
     const error = validateMealDraft(draft)
     if (error) {
+      setSaveRecovery(undefined)
       setFeedback(error)
       return
     }
     setSaving(true)
+    setSaveRecovery(undefined)
+    setFeedback('')
     try {
       if (editing) {
         const saved = await updateMeal(editing.id, buildMealRequest(draft, editing.revision))
@@ -344,7 +359,12 @@ const NutritionPage = () => {
       }
       resetEditor()
     } catch (requestError) {
-      setFeedback(messageOf(requestError))
+      const recovery = describeSaveFailure(requestError, {
+        subject: editing ? '这次餐次修改' : '这次餐次',
+        create: !editing,
+      })
+      setSaveRecovery(recovery)
+      setFeedback(recovery.message)
     } finally {
       setSaving(false)
     }
@@ -358,6 +378,8 @@ const NutritionPage = () => {
     }
     setEditing(meal)
     setDraft(draftFromMeal(meal))
+    pendingKey.current = ''
+    setSaveRecovery(undefined)
     setFeedback('正在修改这餐；保存会产生新版本。')
     Taro.pageScrollTo({ scrollTop: 0, duration: 180 })
   }
@@ -370,6 +392,7 @@ const NutritionPage = () => {
     }
     setEditing(undefined)
     pendingKey.current = ''
+    setSaveRecovery(undefined)
     setDraft(draftFromMeal(meal, true))
     setFeedback('已复制食物与份量；请按今天实际吃下的内容调整后保存。')
     Taro.pageScrollTo({ scrollTop: 0, duration: 180 })
@@ -465,6 +488,7 @@ const NutritionPage = () => {
                 recoverableDraft.clear()
                 setDraft(initialMealDraft())
                 pendingKey.current = ''
+                setSaveRecovery(undefined)
                 setFeedback('本地餐次草稿已清除。')
               }}
             />
@@ -501,7 +525,7 @@ const NutritionPage = () => {
                     className={`meal-type ${draft.mealType === type ? 'meal-type--active' : ''}`}
                     aria-pressed={draft.mealType === type}
                     key={type}
-                    onClick={() =>
+                    onClick={() => {
                       setDraft((current) => ({
                         ...current,
                         mealType: type,
@@ -510,7 +534,8 @@ const NutritionPage = () => {
                             ? mealTypeLabels[type]
                             : current.title,
                       }))
-                    }
+                      invalidatePendingSave()
+                    }}
                   >
                     {mealTypeLabels[type]}
                   </Button>
@@ -524,9 +549,10 @@ const NutritionPage = () => {
                   value={draft.title}
                   maxlength={80}
                   aria-label="餐次名称"
-                  onInput={(event) =>
+                  onInput={(event) => {
                     setDraft((current) => ({ ...current, title: event.detail.value }))
-                  }
+                    invalidatePendingSave()
+                  }}
                 />
               </View>
 
@@ -541,13 +567,11 @@ const NutritionPage = () => {
                     occurredLocal,
                     originalOccurredAt: undefined,
                   }))
-                  pendingKey.current = ''
-                  setFeedback('')
+                  invalidatePendingSave()
                 }}
                 onTimeZoneChange={(timezone) => {
                   setDraft((current) => ({ ...current, timezone, originalOccurredAt: undefined }))
-                  pendingKey.current = ''
-                  setFeedback('')
+                  invalidatePendingSave()
                 }}
                 onOffsetChange={(occurrenceOffsetMinutes) => {
                   setDraft((current) => ({
@@ -555,8 +579,7 @@ const NutritionPage = () => {
                     occurrenceOffsetMinutes,
                     originalOccurredAt: undefined,
                   }))
-                  pendingKey.current = ''
-                  setFeedback('')
+                  invalidatePendingSave()
                 }}
               />
 
@@ -769,20 +792,24 @@ const NutritionPage = () => {
                   value={draft.note}
                   maxlength={500}
                   placeholder="烹饪方式、包装品牌，或下次需要校正的事"
-                  onInput={(event) =>
+                  onInput={(event) => {
                     setDraft((current) => ({ ...current, note: event.detail.value }))
-                  }
+                    invalidatePendingSave()
+                  }}
                 />
               </View>
 
               {feedback ? (
                 <View
-                  className="nutrition-feedback"
+                  className={`nutrition-feedback ${saveRecovery ? `nutrition-feedback--${saveRecovery.kind}` : ''}`}
                   role="status"
                   aria-live="polite"
                   aria-atomic="true"
                 >
-                  {feedback}
+                  {saveRecovery ? (
+                    <Text className="nutrition-feedback__eyebrow">{saveRecovery.eyebrow}</Text>
+                  ) : null}
+                  <Text>{feedback}</Text>
                 </View>
               ) : null}
               <Button
@@ -791,7 +818,9 @@ const NutritionPage = () => {
                 disabled={saving}
                 onClick={() => void save()}
               >
-                {saving ? '正在保存…' : editing ? '保存餐次新版本' : '保存餐次'}
+                {saving
+                  ? '正在保存…'
+                  : (saveRecovery?.actionLabel ?? (editing ? '保存餐次新版本' : '保存餐次'))}
               </Button>
             </View>
 

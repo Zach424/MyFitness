@@ -517,6 +517,30 @@ textarea:focus-visible {
   line-height: 1.55;
 }
 
+.nutrition-feedback__eyebrow {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--color-ink);
+  font-family: var(--font-metric);
+  font-size: 9px;
+  font-weight: 760;
+  letter-spacing: 0.08em;
+}
+
+.nutrition-feedback--network_uncertain,
+.nutrition-feedback--service_unavailable,
+.nutrition-feedback--unexpected {
+  border-left-color: var(--color-warning);
+  color: var(--color-ink);
+  background: var(--color-warning-soft);
+}
+
+.nutrition-feedback--server_rejected {
+  border-left-color: var(--color-pulse);
+  color: var(--color-ink);
+  background: rgba(233, 106, 91, 0.09);
+}
+
 .save-meal {
   min-height: 50px;
   margin: 16px 0 0;
@@ -529,7 +553,7 @@ textarea:focus-visible {
   line-height: 50px;
 }
 
-.save-meal[disabled] {
+.save-meal[disabled='true'] {
   opacity: 0.55;
 }
 
