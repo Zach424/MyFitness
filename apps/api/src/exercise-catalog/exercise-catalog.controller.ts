@@ -8,6 +8,7 @@ import {
   HttpCode,
   Param,
   Post,
+  Query,
   Put,
 } from '@nestjs/common'
 import {
@@ -20,12 +21,14 @@ import {
   ApiOkResponse,
   ApiOperation,
   ApiParam,
+  ApiQuery,
   ApiTags,
 } from '@nestjs/swagger'
 import {
   createExerciseCatalogEntrySchema,
   customExerciseCatalogEntrySchema,
   exerciseCatalogEntryHistorySchema,
+  exerciseCatalogEntryHistoryQuerySchema,
   exerciseCatalogEntryIdSchema,
   exerciseCatalogEntryInputBaseSchema,
   exerciseCatalogListSchema,
@@ -145,10 +148,32 @@ export class ExerciseCatalogController {
   @Get(':entryId/history')
   @ApiOperation({ summary: 'Read immutable user-owned exercise definition revisions' })
   @ApiParam({ name: 'entryId', schema: { type: 'string', format: 'uuid' } })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    schema: { type: 'integer', minimum: 1, maximum: 50 },
+  })
+  @ApiQuery({
+    name: 'cursor',
+    required: false,
+    schema: { type: 'string', minLength: 24, maxLength: 256 },
+  })
   @ApiOkResponse({ schema: openApiSchema(exerciseCatalogEntryHistorySchema) })
+  @ApiBadRequestResponse({ description: 'Entry identifier, history limit or cursor is invalid.' })
   @ApiNotFoundResponse({ description: 'Exercise entry does not exist for this user.' })
-  async history(@CurrentUser() principal: AuthPrincipal, @Param('entryId') rawId: string) {
+  async history(
+    @CurrentUser() principal: AuthPrincipal,
+    @Param('entryId') rawId: string,
+    @Query() query: unknown,
+  ) {
     const id = parse(exerciseCatalogEntryIdSchema, rawId, 'entryId must be a UUID')
-    return exerciseCatalogEntryHistorySchema.parse(await this.catalog.history(principal.userId, id))
+    const parsed = parse(
+      exerciseCatalogEntryHistoryQuerySchema,
+      query,
+      'exercise definition history query is invalid',
+    )
+    return exerciseCatalogEntryHistorySchema.parse(
+      await this.catalog.history(principal.userId, id, parsed),
+    )
   }
 }

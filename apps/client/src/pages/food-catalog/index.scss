@@ -181,19 +181,6 @@
   color: var(--color-paper);
   background: var(--color-mineral);
 }
-.food-editor__history {
-  margin-top: 14px;
-  padding: 12px;
-  border-left: 3px solid var(--color-juniper);
-  background: rgba(63, 117, 107, 0.055);
-}
-.food-editor__revision {
-  margin-top: 7px;
-  color: var(--color-muted);
-  font-family: var(--font-metric);
-  font-size: 8px;
-  line-height: 1.5;
-}
 .food-editor__actions,
 .food-register__heading,
 .food-register__item,

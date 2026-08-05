@@ -42,11 +42,11 @@ import type {
   AccountDeletionResult,
   AccountDeletionIntent,
   ErasureReceiptStatus,
-  ExerciseCatalogEntryHistoryItem,
+  ExerciseCatalogEntryHistory,
   ExerciseCatalogItem,
   CustomExerciseCatalogEntry,
   CustomFoodCatalogEntry,
-  FoodCatalogEntryHistoryItem,
+  FoodCatalogEntryHistory,
   FoodCatalogItem,
   UpdateHealthRecord,
   UpdateExerciseCatalogEntry,
@@ -397,9 +397,9 @@ export const archiveExerciseCatalogEntry = (entryId: string, expectedRevision: n
     { 'x-expected-revision': String(expectedRevision) },
   )
 
-export const getExerciseCatalogEntryHistory = (entryId: string) =>
-  authenticatedRequest<{ entryId: string; items: ExerciseCatalogEntryHistoryItem[] }>(
-    `/exercise-catalog/${entryId}/history`,
+export const getExerciseCatalogEntryHistory = (entryId: string, options?: RecordListOptions) =>
+  authenticatedRequest<ExerciseCatalogEntryHistory>(
+    recordListPath(`/exercise-catalog/${entryId}/history`, options),
     'GET',
   )
 
@@ -419,9 +419,9 @@ export const archiveFoodCatalogEntry = (entryId: string, expectedRevision: numbe
     'x-expected-revision': String(expectedRevision),
   })
 
-export const getFoodCatalogEntryHistory = (entryId: string) =>
-  authenticatedRequest<{ entryId: string; items: FoodCatalogEntryHistoryItem[] }>(
-    `/food-catalog/${entryId}/history`,
+export const getFoodCatalogEntryHistory = (entryId: string, options?: RecordListOptions) =>
+  authenticatedRequest<FoodCatalogEntryHistory>(
+    recordListPath(`/food-catalog/${entryId}/history`, options),
     'GET',
   )
 

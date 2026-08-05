@@ -3,6 +3,7 @@ import { Button, Input, ScrollView, Text, Textarea, View } from '@tarojs/compone
 import Taro from '@tarojs/taro'
 import type {
   CustomExerciseCatalogEntry,
+  ExerciseCatalogEntryHistoryItem,
   ExerciseCatalogItem,
   ExerciseEquipment,
   Workout,
@@ -11,6 +12,7 @@ import type {
 import { exerciseEquipmentOptions } from '@myfitness/contracts/exercise-catalog.constants'
 
 import { buttonA11yProps } from '../../lib/accessibility'
+import { DefinitionRevisionLedger } from '../../components/definition-revision-ledger'
 import { parseBackfillIntent } from '../../lib/backfill-intent'
 import { LocalDraftNotice } from '../../components/local-draft-notice'
 import { OccurrenceField } from '../../components/occurrence-field'
@@ -21,6 +23,7 @@ import {
   createExerciseCatalogEntry,
   createWorkout,
   deleteWorkout,
+  getExerciseCatalogEntryHistory,
   getWorkout,
   getWorkoutHistory,
   listExerciseCatalog,
@@ -110,6 +113,9 @@ const WorkoutsPage = () => {
   const [catalogQuery, setCatalogQuery] = useState('')
   const [catalogEditorOpen, setCatalogEditorOpen] = useState(false)
   const [catalogEditing, setCatalogEditing] = useState<CustomExerciseCatalogEntry>()
+  const [catalogHistory, setCatalogHistory] = useState<ExerciseCatalogEntryHistoryItem[]>()
+  const [catalogHistoryNextCursor, setCatalogHistoryNextCursor] = useState<string | null>(null)
+  const [catalogHistoryLoadingMore, setCatalogHistoryLoadingMore] = useState(false)
   const [catalogDraft, setCatalogDraft] = useState<ExerciseCatalogDraft>(
     initialExerciseCatalogDraft,
   )
@@ -251,17 +257,48 @@ const WorkoutsPage = () => {
     if (!catalogEditing) pendingCatalogKey.current = ''
   }
 
-  const openCatalogEditor = (item?: CustomExerciseCatalogEntry) => {
+  const openCatalogEditor = async (item?: CustomExerciseCatalogEntry) => {
     setCatalogEditing(item)
     setCatalogDraft(item ? exerciseCatalogDraftFromItem(item) : initialExerciseCatalogDraft())
+    setCatalogHistory(item ? undefined : [])
+    setCatalogHistoryNextCursor(null)
+    setCatalogHistoryLoadingMore(false)
     setCatalogEditorOpen(true)
     pendingCatalogKey.current = ''
     setFeedback('')
+    if (!item) return
+    try {
+      const result = await getExerciseCatalogEntryHistory(item.id, { limit: 10 })
+      setCatalogHistory(result.items)
+      setCatalogHistoryNextCursor(result.nextCursor)
+    } catch (error) {
+      setCatalogHistory([])
+      setFeedback(messageOf(error))
+    }
+  }
+
+  const loadOlderCatalogHistory = async () => {
+    if (!catalogEditing || !catalogHistoryNextCursor || catalogHistoryLoadingMore) return
+    setCatalogHistoryLoadingMore(true)
+    try {
+      const result = await getExerciseCatalogEntryHistory(catalogEditing.id, {
+        limit: 10,
+        cursor: catalogHistoryNextCursor,
+      })
+      setCatalogHistory((current) => [...(current ?? []), ...result.items])
+      setCatalogHistoryNextCursor(result.nextCursor)
+    } catch (error) {
+      setFeedback(messageOf(error))
+    } finally {
+      setCatalogHistoryLoadingMore(false)
+    }
   }
 
   const closeCatalogEditor = () => {
     setCatalogEditorOpen(false)
     setCatalogEditing(undefined)
+    setCatalogHistory(undefined)
+    setCatalogHistoryNextCursor(null)
     setCatalogDraft(initialExerciseCatalogDraft())
     pendingCatalogKey.current = ''
   }
@@ -684,7 +721,7 @@ const WorkoutsPage = () => {
                     <Button
                       {...buttonA11yProps}
                       className="catalog-create"
-                      onClick={() => openCatalogEditor()}
+                      onClick={() => void openCatalogEditor()}
                     >
                       ＋ 自定义动作
                     </Button>
@@ -731,7 +768,7 @@ const WorkoutsPage = () => {
                                 {...buttonA11yProps}
                                 className="catalog-entry__edit"
                                 aria-label={`编辑自定义动作${item.name}`}
-                                onClick={() => openCatalogEditor(item)}
+                                onClick={() => void openCatalogEditor(item)}
                               >
                                 编辑
                               </Button>
@@ -1228,6 +1265,15 @@ const WorkoutsPage = () => {
                 onInput={(event) => patchCatalogDraft({ equipmentNotes: event.detail.value })}
               />
             </View>
+
+            {catalogEditing ? (
+              <DefinitionRevisionLedger
+                items={catalogHistory}
+                nextCursor={catalogHistoryNextCursor}
+                loadingMore={catalogHistoryLoadingMore}
+                onLoadOlder={loadOlderCatalogHistory}
+              />
+            ) : null}
 
             {feedback ? (
               <View className="workout-feedback" role="status">

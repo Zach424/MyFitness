@@ -6,6 +6,7 @@ import {
   foodCatalogVersion,
 } from './food-catalog.constants'
 import { foodCategorySchema, foodServingSchema, nutrientsPer100gSchema } from './nutrition'
+import { recordListQuerySchema, recordPageCursorSchema } from './pagination'
 
 export * from './food-catalog.constants'
 
@@ -107,9 +108,11 @@ export const foodCatalogEntryHistoryItemSchema = customFoodCatalogEntrySchema.ex
 export const foodCatalogEntryHistorySchema = z
   .object({
     entryId: z.string().uuid(),
-    items: z.array(foodCatalogEntryHistoryItemSchema),
+    items: z.array(foodCatalogEntryHistoryItemSchema).max(50),
+    nextCursor: recordPageCursorSchema.nullable(),
   })
   .strict()
+export const foodCatalogEntryHistoryQuerySchema = recordListQuerySchema(20, 50)
 
 export const foodCatalogEntryIdSchema = z.string().uuid()
 
@@ -119,3 +122,5 @@ export type StarterFoodCatalogItem = z.infer<typeof starterFoodCatalogItemSchema
 export type CustomFoodCatalogEntry = z.infer<typeof customFoodCatalogEntrySchema>
 export type FoodCatalogItem = z.infer<typeof foodCatalogItemSchema>
 export type FoodCatalogEntryHistoryItem = z.infer<typeof foodCatalogEntryHistoryItemSchema>
+export type FoodCatalogEntryHistory = z.infer<typeof foodCatalogEntryHistorySchema>
+export type FoodCatalogEntryHistoryQuery = z.infer<typeof foodCatalogEntryHistoryQuerySchema>

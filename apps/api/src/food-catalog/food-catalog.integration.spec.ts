@@ -169,6 +169,15 @@ describe('user food catalog API with PostgreSQL', () => {
       reference: definition.reference,
     })
 
+    const firstHistoryPage = await request(app.getHttpServer())
+      .get(`/v1/food-catalog/${String(created.body.id)}/history?limit=1`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200)
+    expect(firstHistoryPage.body.items.map((item: { revision: number }) => item.revision)).toEqual([
+      2,
+    ])
+    expect(firstHistoryPage.body.nextCursor).toEqual(expect.any(String))
+
     const archived = await request(app.getHttpServer())
       .delete(`/v1/food-catalog/${String(created.body.id)}`)
       .set('Authorization', `Bearer ${token}`)
@@ -176,6 +185,16 @@ describe('user food catalog API with PostgreSQL', () => {
       .expect(200)
     expect(archived.body).toMatchObject({ revision: 3, name: '低脂家庭炖牛肉' })
     expect(archived.body.archivedAt).toBeTruthy()
+
+    const olderHistoryPage = await request(app.getHttpServer())
+      .get(`/v1/food-catalog/${String(created.body.id)}/history`)
+      .query({ limit: 1, cursor: String(firstHistoryPage.body.nextCursor) })
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200)
+    expect(olderHistoryPage.body.items.map((item: { revision: number }) => item.revision)).toEqual([
+      1,
+    ])
+    expect(olderHistoryPage.body.nextCursor).toBeNull()
 
     const history = await request(app.getHttpServer())
       .get(`/v1/food-catalog/${String(created.body.id)}/history`)
@@ -187,6 +206,11 @@ describe('user food catalog API with PostgreSQL', () => {
       'created',
     ])
     expect(history.body.items[2]).toMatchObject({ name: '家庭炖牛肉', revision: 1 })
+    expect(history.body.nextCursor).toBeNull()
+    await request(app.getHttpServer())
+      .get(`/v1/food-catalog/${String(created.body.id)}/history?limit=0`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(400)
 
     const privacy = await request(app.getHttpServer())
       .get('/v1/me/privacy')

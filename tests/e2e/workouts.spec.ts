@@ -303,6 +303,7 @@ test('user creates, searches, corrects and archives an owned exercise snapshot',
   await expect(recorded.getByText(/高脚杯深蹲 · 壶铃摆动/)).toBeVisible()
 
   await page.getByRole('button', { name: '编辑自定义动作壶铃摆动' }).click()
+  await expect(editor.getByLabel('定义修订历史').getByText(/R1 · 创建/)).toBeVisible()
   await editor.locator('[aria-label="自定义动作名称"] input').fill('双手壶铃摆动')
   const updateDefinition = page.waitForResponse(
     (response) =>
@@ -323,6 +324,9 @@ test('user creates, searches, corrects and archives an owned exercise snapshot',
   })
 
   await page.getByRole('button', { name: '编辑自定义动作双手壶铃摆动' }).click()
+  const definitionHistory = editor.getByLabel('定义修订历史')
+  await expect(definitionHistory.getByText(/R2 · 纠正/)).toBeVisible()
+  await expect(definitionHistory.getByText(/R1 · 创建/)).toBeVisible()
   const archiveDefinition = page.waitForResponse(
     (response) =>
       /\/v1\/exercise-catalog\/[0-9a-f-]{36}$/.test(response.url()) &&

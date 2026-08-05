@@ -1,0 +1,29 @@
+.definition-revision-ledger {
+  margin-top: 16px;
+  padding: 13px;
+  border-left: 3px solid var(--color-juniper);
+  background: rgba(63, 117, 107, 0.055);
+}
+
+.definition-revision-ledger__eyebrow,
+.definition-revision-ledger__item,
+.definition-revision-ledger__state {
+  display: block;
+}
+
+.definition-revision-ledger__eyebrow {
+  color: var(--color-juniper);
+  font-family: var(--font-metric);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+}
+
+.definition-revision-ledger__item,
+.definition-revision-ledger__state {
+  margin-top: 8px;
+  color: var(--color-muted);
+  font-family: var(--font-metric);
+  font-size: 9px;
+  line-height: 1.5;
+}

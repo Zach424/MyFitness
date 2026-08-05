@@ -8,6 +8,7 @@ import type {
 } from '@myfitness/contracts'
 
 import { buttonA11yProps } from '../../lib/accessibility'
+import { DefinitionRevisionLedger } from '../../components/definition-revision-ledger'
 import {
   ApiError,
   archiveFoodCatalogEntry,
@@ -48,15 +49,6 @@ const messageOf = (error: unknown) =>
 
 const requestKey = () =>
   `food-${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`}`
-
-const displayTime = (value: string) =>
-  new Intl.DateTimeFormat('zh-CN', {
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }).format(new Date(value))
 
 const formFromEntry = (entry: CustomFoodCatalogEntry): FoodForm => ({
   name: entry.name,
@@ -119,7 +111,9 @@ const FoodCatalogPage = () => {
   const [entries, setEntries] = useState<CustomFoodCatalogEntry[]>([])
   const [editing, setEditing] = useState<CustomFoodCatalogEntry>()
   const [archiving, setArchiving] = useState<CustomFoodCatalogEntry>()
-  const [history, setHistory] = useState<FoodCatalogEntryHistoryItem[]>([])
+  const [history, setHistory] = useState<FoodCatalogEntryHistoryItem[]>()
+  const [historyNextCursor, setHistoryNextCursor] = useState<string | null>(null)
+  const [historyLoadingMore, setHistoryLoadingMore] = useState(false)
   const [form, setForm] = useState(emptyForm)
   const [editorOpen, setEditorOpen] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -129,13 +123,35 @@ const FoodCatalogPage = () => {
   const openEditor = async (entry?: CustomFoodCatalogEntry) => {
     setEditing(entry)
     setForm(entry ? formFromEntry(entry) : emptyForm())
-    setHistory([])
+    setHistory(entry ? undefined : [])
+    setHistoryNextCursor(null)
+    setHistoryLoadingMore(false)
     setEditorOpen(true)
     if (!entry) return
     try {
-      setHistory((await getFoodCatalogEntryHistory(entry.id)).items)
+      const result = await getFoodCatalogEntryHistory(entry.id, { limit: 10 })
+      setHistory(result.items)
+      setHistoryNextCursor(result.nextCursor)
+    } catch (error) {
+      setHistory([])
+      setFeedback(messageOf(error))
+    }
+  }
+
+  const loadOlderHistory = async () => {
+    if (!editing || !historyNextCursor || historyLoadingMore) return
+    setHistoryLoadingMore(true)
+    try {
+      const result = await getFoodCatalogEntryHistory(editing.id, {
+        limit: 10,
+        cursor: historyNextCursor,
+      })
+      setHistory((current) => [...(current ?? []), ...result.items])
+      setHistoryNextCursor(result.nextCursor)
     } catch (error) {
       setFeedback(messageOf(error))
+    } finally {
+      setHistoryLoadingMore(false)
     }
   }
 
@@ -165,7 +181,8 @@ const FoodCatalogPage = () => {
   const closeEditor = () => {
     setEditorOpen(false)
     setEditing(undefined)
-    setHistory([])
+    setHistory(undefined)
+    setHistoryNextCursor(null)
     setForm(emptyForm())
   }
 
@@ -315,24 +332,13 @@ const FoodCatalogPage = () => {
                   </Button>
                 ))}
               </View>
-              {history.length ? (
-                <View className="food-editor__history">
-                  <Text className="food-catalog-eyebrow">REVISION LEDGER</Text>
-                  {history.map((item) => (
-                    <Text
-                      className="food-editor__revision"
-                      key={`${item.revision}-${item.changedAt}`}
-                    >
-                      R{item.revision} ·{' '}
-                      {item.action === 'created'
-                        ? '创建'
-                        : item.action === 'updated'
-                          ? '纠正'
-                          : '归档'}{' '}
-                      · {item.name} · {displayTime(item.changedAt)}
-                    </Text>
-                  ))}
-                </View>
+              {editing ? (
+                <DefinitionRevisionLedger
+                  items={history}
+                  nextCursor={historyNextCursor}
+                  loadingMore={historyLoadingMore}
+                  onLoadOlder={loadOlderHistory}
+                />
               ) : null}
               <View className="food-editor__actions">
                 {editing ? (

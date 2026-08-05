@@ -441,6 +441,16 @@ The 390 × 844 production-browser review created versions R1–R12, proved that 
 
 - [390 × 844 progressive revision history](../../output/playwright/iteration-047-progressive-revisions-mobile.png)
 
+## Progressive definition-ledger review — iteration 048
+
+Exercise and food definitions now share one compact **REVISION LEDGER**. It lists immutable `R#`, create/correct/archive action, saved name and change time without ranking definitions or implying that a newer exercise or nutrient value is safer, healthier or verified. Food keeps the ledger in its dedicated register; action correction gains visible audit evidence inside its existing editor.
+
+Both surfaces open with 10 versions, use the established quiet full-width `继续载入更早版本` action and end with `已载入全部版本`. The action disables in flight; already loaded evidence remains on continuation failure and the page's existing status region carries the error. New-definition forms omit an artificial empty ledger.
+
+The 390 × 844 browser review creates food definition R1–R12, proves 10 initial rows, loads the R2/R1 suffix and captures the complete compact ledger. The action lifecycle separately proves R1 after creation and R2/R1 after correction. Request, page and console error capture remained empty.
+
+- [390 × 844 progressive definition history](../../output/playwright/iteration-048-progressive-definition-revisions-mobile.png)
+
 ## Screenshot review checklist
 
 - The Rhythm Rail remains understandable without color.

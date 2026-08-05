@@ -180,6 +180,28 @@ describe('user exercise catalog API with PostgreSQL', () => {
     })
     expect(workouts.body.items[0].id).toBe(workout.body.id)
 
+    const firstHistoryPage = await request(app.getHttpServer())
+      .get(`/v1/exercise-catalog/${String(created.body.id)}/history?limit=1`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200)
+    expect(firstHistoryPage.body.items.map((item: { revision: number }) => item.revision)).toEqual([
+      2,
+    ])
+    expect(firstHistoryPage.body.nextCursor).toEqual(expect.any(String))
+    await request(app.getHttpServer())
+      .get(`/v1/exercise-catalog/${String(otherOwned.body.id)}/history`)
+      .query({ cursor: String(firstHistoryPage.body.nextCursor) })
+      .set('Authorization', `Bearer ${otherToken}`)
+      .expect(400)
+    const missingRevisionCursor = Buffer.from(
+      JSON.stringify({ v: 1, id: created.body.id, revision: 999 }),
+    ).toString('base64url')
+    await request(app.getHttpServer())
+      .get(`/v1/exercise-catalog/${String(created.body.id)}/history`)
+      .query({ cursor: missingRevisionCursor })
+      .set('Authorization', `Bearer ${token}`)
+      .expect(400)
+
     const archived = await request(app.getHttpServer())
       .delete(`/v1/exercise-catalog/${String(created.body.id)}`)
       .set('Authorization', `Bearer ${token}`)
@@ -187,6 +209,16 @@ describe('user exercise catalog API with PostgreSQL', () => {
       .expect(200)
     expect(archived.body).toMatchObject({ revision: 3, name: '单臂地雷管推举' })
     expect(archived.body.archivedAt).toBeTruthy()
+
+    const olderHistoryPage = await request(app.getHttpServer())
+      .get(`/v1/exercise-catalog/${String(created.body.id)}/history`)
+      .query({ limit: 1, cursor: String(firstHistoryPage.body.nextCursor) })
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200)
+    expect(olderHistoryPage.body.items.map((item: { revision: number }) => item.revision)).toEqual([
+      1,
+    ])
+    expect(olderHistoryPage.body.nextCursor).toBeNull()
 
     const activeList = await request(app.getHttpServer())
       .get('/v1/exercise-catalog')
@@ -206,6 +238,11 @@ describe('user exercise catalog API with PostgreSQL', () => {
       'created',
     ])
     expect(history.body.items[2]).toMatchObject({ name: '地雷管推举', revision: 1 })
+    expect(history.body.nextCursor).toBeNull()
+    await request(app.getHttpServer())
+      .get(`/v1/exercise-catalog/${String(created.body.id)}/history?limit=0`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(400)
 
     const privacy = await request(app.getHttpServer())
       .get('/v1/me/privacy')

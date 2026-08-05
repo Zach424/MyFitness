@@ -8,6 +8,7 @@ import {
   HttpCode,
   Param,
   Post,
+  Query,
   Put,
 } from '@nestjs/common'
 import {
@@ -20,6 +21,7 @@ import {
   ApiOkResponse,
   ApiOperation,
   ApiParam,
+  ApiQuery,
   ApiTags,
 } from '@nestjs/swagger'
 import {
@@ -27,6 +29,7 @@ import {
   customFoodCatalogEntrySchema,
   expectedRevisionHeaderSchema,
   foodCatalogEntryHistorySchema,
+  foodCatalogEntryHistoryQuerySchema,
   foodCatalogEntryIdSchema,
   foodCatalogEntryInputBaseSchema,
   foodCatalogListSchema,
@@ -145,10 +148,32 @@ export class FoodCatalogController {
   @Get(':entryId/history')
   @ApiOperation({ summary: 'Read immutable user-owned food definition revisions' })
   @ApiParam({ name: 'entryId', schema: { type: 'string', format: 'uuid' } })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    schema: { type: 'integer', minimum: 1, maximum: 50 },
+  })
+  @ApiQuery({
+    name: 'cursor',
+    required: false,
+    schema: { type: 'string', minLength: 24, maxLength: 256 },
+  })
   @ApiOkResponse({ schema: openApiSchema(foodCatalogEntryHistorySchema) })
+  @ApiBadRequestResponse({ description: 'Entry identifier, history limit or cursor is invalid.' })
   @ApiNotFoundResponse({ description: 'Food entry does not exist for this user.' })
-  async history(@CurrentUser() principal: AuthPrincipal, @Param('entryId') rawId: string) {
+  async history(
+    @CurrentUser() principal: AuthPrincipal,
+    @Param('entryId') rawId: string,
+    @Query() query: unknown,
+  ) {
     const id = parse(foodCatalogEntryIdSchema, rawId, 'entryId must be a UUID')
-    return foodCatalogEntryHistorySchema.parse(await this.catalog.history(principal.userId, id))
+    const parsed = parse(
+      foodCatalogEntryHistoryQuerySchema,
+      query,
+      'food definition history query is invalid',
+    )
+    return foodCatalogEntryHistorySchema.parse(
+      await this.catalog.history(principal.userId, id, parsed),
+    )
   }
 }

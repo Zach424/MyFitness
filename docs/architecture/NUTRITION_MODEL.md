@@ -1,6 +1,6 @@
 # Nutrition record model
 
-Status: manual meal/photo records, owner-created food definitions, daily observation, explicit occurrence editing, conflict-safe correction recovery and current/history pagination implemented through iteration 047
+Status: manual meal/photo records, owner-created food definitions, daily observation, explicit occurrence editing, conflict-safe correction recovery, record pagination and definition-history pagination implemented through iteration 048
 
 Nutrition records are user-confirmed snapshots of food, portion and context. They support personal recall and later deterministic summaries; they are not dietary prescriptions, laboratory measurements or judgments about food quality.
 
@@ -49,6 +49,8 @@ Owner-created foods now live in a separate versioned definition aggregate. The s
 Selecting a definition copies its current values into the existing meal draft/snapshot. Later correction or archive cannot rewrite that draft, a persisted meal, meal history or a favorite. Archived definitions leave normal search but stay in owner history/export until account erasure. Owner values remain reference data, not verified provider or laboratory facts.
 
 The definition register is a dedicated H5/WeApp route; the meal page refreshes active entries on show and searches owner aliases. Food-photo candidates remain limited to the controlled starter catalog. Barcode/provider search, branded variants, recipes, non-gram household conversion rules and catalog reconciliation are deferred.
+
+`GET /v1/food-catalog/:entryId/history` accepts `limit` (default 20, maximum 50) and an opaque UUID/revision cursor. The API validates the exact owner entry and anchor before returning `revision < boundary` newest first. The register initially renders 10 versions through the shared definition ledger and explicitly loads older pages; archive remains owner-readable. Pagination does not verify the user-confirmed nutrient values or reference.
 
 ## Daily observation
 

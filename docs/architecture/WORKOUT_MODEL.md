@@ -1,6 +1,6 @@
 # Workout record model
 
-Status: implemented in iteration 005; server-authoritative completion hardened in iteration 032; explicit plan-session relationship added in iteration 036; user-owned exercise catalog and snapshot semantics added in iteration 037; stable-key exercise observation added in iteration 038; explicit occurrence editing added in iteration 043; conflict-safe correction recovery added in iteration 044; current/history pagination completed in iteration 047
+Status: implemented in iteration 005; server-authoritative completion hardened in iteration 032; explicit plan-session relationship added in iteration 036; user-owned exercise catalog and snapshot semantics added in iteration 037; stable-key exercise observation added in iteration 038; explicit occurrence editing added in iteration 043; conflict-safe correction recovery added in iteration 044; current/aggregate-history pagination completed in iteration 047; definition-history pagination added in iteration 048
 
 Workout records are user-owned observations of what was actually attempted and completed. They are not exercise prescriptions, readiness diagnoses or claims that greater volume is always better.
 
@@ -87,6 +87,8 @@ This makes the previous workout a convenient structure template without presenti
 Repeat also copies the recorded tracking mode and equipment snapshot. It does not refresh the exercise from the current catalog, so a repeated draft remains visibly based on the earlier workout until the user selects another definition.
 
 Correction drafts are distinct from repeat drafts. A correction retains the workout UUID and base revision and can be restored only after an exact current owner read still reports that revision; stale/deleted targets are abandoned without a write even when the workout is outside the first list page. Saving a restored correction continues to send `expectedRevision`, while cancel/discard removes the local copy. Repeat drops all correction identity and creates a new session.
+
+The owner exercise-definition history endpoint accepts `limit` (default 20, maximum 50) and an opaque UUID/revision cursor. It validates the path entry, owner and exact anchor before returning the strictly older `revision DESC` suffix. Archived definitions remain readable, and the correction editor requests 10 versions at a time through the shared definition ledger. The audit view does not reinterpret saved workout snapshots or validate whether a user-authored exercise is appropriate or safe.
 
 ## Current-list pagination
 

@@ -1,12 +1,18 @@
 import { createHash, randomUUID } from 'node:crypto'
 
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common'
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common'
 import {
   exerciseCatalogVersion,
   starterExerciseCatalog,
   type CreateExerciseCatalogEntry,
   type CustomExerciseCatalogEntry,
   type ExerciseCatalogEntryHistoryItem,
+  type ExerciseCatalogEntryHistoryQuery,
   type ExerciseCatalogItem,
   type ExerciseEquipment,
   type ExerciseTrackingMode,
@@ -15,6 +21,7 @@ import {
 import type { QueryResult, QueryResultRow } from 'pg'
 
 import { DatabaseService } from '../database/database.service'
+import { decodeRecordPageCursor, encodeRecordPageCursor } from '../pagination/record-page-cursor'
 
 type QueryExecutor = {
   query<T extends QueryResultRow>(text: string, values?: unknown[]): Promise<QueryResult<T>>
@@ -232,30 +239,57 @@ export class ExerciseCatalogService {
     })
   }
 
-  async history(userId: string, entryId: string) {
+  async history(
+    userId: string,
+    entryId: string,
+    query: ExerciseCatalogEntryHistoryQuery = { limit: 20 },
+  ) {
+    const cursor = decodeRecordPageCursor(query.cursor, 'exercise definition history')
+    if (cursor && cursor.id !== entryId) {
+      throw new BadRequestException('exercise definition history cursor is invalid or expired')
+    }
     const owned = await this.database.query<{ id: string }>(
       'SELECT id FROM user_exercise_catalog_entries WHERE id = $1 AND user_id = $2',
       [entryId, userId],
     )
     if (!owned.rows[0]) throw new NotFoundException('exercise entry not found')
+    if (cursor) {
+      const anchor = await this.database.query<{ revision: number }>(
+        `SELECT revision FROM user_exercise_catalog_revisions
+         WHERE entry_id = $1 AND user_id = $2 AND revision = $3`,
+        [entryId, userId, cursor.revision],
+      )
+      if (!anchor.rows[0]) {
+        throw new BadRequestException('exercise definition history cursor is invalid or expired')
+      }
+    }
     const revisions = await this.database.query<{
+      revision: number
       action: ExerciseCatalogEntryHistoryItem['action']
       snapshot: CustomExerciseCatalogEntry
       changed_at: Date
     }>(
-      `SELECT action, snapshot, changed_at
+      `SELECT revision, action, snapshot, changed_at
        FROM user_exercise_catalog_revisions
        WHERE entry_id = $1 AND user_id = $2
-       ORDER BY revision DESC`,
-      [entryId, userId],
+         AND ($3::integer IS NULL OR revision < $3)
+       ORDER BY revision DESC
+       LIMIT $4`,
+      [entryId, userId, cursor?.revision ?? null, query.limit + 1],
     )
+    const hasMore = revisions.rows.length > query.limit
+    const rows = revisions.rows.slice(0, query.limit)
+    const items = rows.map((row) => ({
+      ...row.snapshot,
+      action: row.action,
+      changedAt: row.changed_at.toISOString(),
+    }))
+    const last = rows.at(-1)
     return {
       entryId,
-      items: revisions.rows.map((row) => ({
-        ...row.snapshot,
-        action: row.action,
-        changedAt: row.changed_at.toISOString(),
-      })),
+      items,
+      nextCursor:
+        hasMore && last ? encodeRecordPageCursor({ id: entryId, revision: last.revision }) : null,
     }
   }
 

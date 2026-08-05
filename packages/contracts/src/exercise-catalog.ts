@@ -8,6 +8,7 @@ import {
   exerciseTrackingModes,
 } from './exercise-catalog.constants'
 import { exerciseCategories } from './workout.constants'
+import { recordListQuerySchema, recordPageCursorSchema } from './pagination'
 
 export * from './exercise-catalog.constants'
 
@@ -125,9 +126,11 @@ export const exerciseCatalogEntryHistoryItemSchema = customExerciseCatalogEntryS
 export const exerciseCatalogEntryHistorySchema = z
   .object({
     entryId: z.string().uuid(),
-    items: z.array(exerciseCatalogEntryHistoryItemSchema),
+    items: z.array(exerciseCatalogEntryHistoryItemSchema).max(50),
+    nextCursor: recordPageCursorSchema.nullable(),
   })
   .strict()
+export const exerciseCatalogEntryHistoryQuerySchema = recordListQuerySchema(20, 50)
 
 export const exerciseCatalogEntryIdSchema = z.string().uuid()
 
@@ -139,3 +142,7 @@ export type StarterExerciseCatalogItem = z.infer<typeof starterExerciseCatalogIt
 export type CustomExerciseCatalogEntry = z.infer<typeof customExerciseCatalogEntrySchema>
 export type ExerciseCatalogItem = z.infer<typeof exerciseCatalogItemSchema>
 export type ExerciseCatalogEntryHistoryItem = z.infer<typeof exerciseCatalogEntryHistoryItemSchema>
+export type ExerciseCatalogEntryHistory = z.infer<typeof exerciseCatalogEntryHistorySchema>
+export type ExerciseCatalogEntryHistoryQuery = z.infer<
+  typeof exerciseCatalogEntryHistoryQuerySchema
+>

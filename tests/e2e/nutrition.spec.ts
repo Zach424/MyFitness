@@ -398,8 +398,8 @@ test('owned food stays reusable and corrections never rewrite the meal draft sna
   )
   await page.getByRole('button', { name: '编辑低脂家庭炖牛肉' }).click()
   expect((await revisedHistoryResponse).status()).toBe(200)
-  await expect(page.locator('.food-editor__history').getByText(/R2 · 纠正/)).toBeVisible()
-  await expect(page.locator('.food-editor__history').getByText(/R1 · 创建/)).toBeVisible()
+  await expect(page.getByLabel('定义修订历史').getByText(/R2 · 纠正/)).toBeVisible()
+  await expect(page.getByLabel('定义修订历史').getByText(/R1 · 创建/)).toBeVisible()
   await page.screenshot({
     path: 'output/playwright/iteration-039-user-food-catalog-mobile.png',
     fullPage: true,
@@ -418,6 +418,88 @@ test('owned food stays reusable and corrections never rewrite the meal draft sna
   await page.getByRole('button', { name: '返回餐食记录' }).click()
   await expect(page.getByRole('button', { name: '添加低脂家庭炖牛肉' })).toHaveCount(0)
   await expect(page.locator('.meal-item').getByText('家庭炖牛肉')).toBeVisible()
+  expect(browserErrors).toEqual([])
+})
+
+test('owned food definition history progressively loads immutable older revisions', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  const browserErrors = collectBrowserErrors(page)
+  await openNutrition(page)
+  await page.getByRole('button', { name: '管理我的食物' }).click()
+
+  const seed = await page.evaluate(async () => {
+    const rawToken = localStorage.getItem('myfitness.auth.accessToken')
+    if (!rawToken) throw new Error('development access token is missing')
+    let decoded: { data?: unknown } = {}
+    try {
+      decoded = JSON.parse(rawToken) as { data?: unknown }
+    } catch {
+      // Legacy H5 storage kept the access token as a plain string.
+    }
+    const token = typeof decoded.data === 'string' ? decoded.data : rawToken
+    const headers = {
+      authorization: `Bearer ${token}`,
+      'content-type': 'application/json',
+    }
+    const payload = (revision: number) => ({
+      name: '分页配方食物',
+      aliases: ['历史分页样本'],
+      category: 'custom',
+      nutrientsPer100g: {
+        energyKcal: 120 + revision,
+        proteinG: 8,
+        carbohydrateG: 12,
+        fatG: 4,
+      },
+      reference: `配方称量修订 R${revision}`,
+      defaultServing: { amount: 100, unit: 'g', grams: 100 },
+    })
+    const createdResponse = await fetch('http://127.0.0.1:3100/v1/food-catalog', {
+      method: 'POST',
+      headers: { ...headers, 'x-idempotency-key': 'progressive-food-definition-history' },
+      body: JSON.stringify(payload(1)),
+    })
+    let current = (await createdResponse.json()) as { id: string; revision: number }
+    const statuses = [createdResponse.status]
+    for (let revision = 2; revision <= 12; revision += 1) {
+      const response = await fetch(`http://127.0.0.1:3100/v1/food-catalog/${current.id}`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({ ...payload(revision), expectedRevision: current.revision }),
+      })
+      statuses.push(response.status)
+      current = (await response.json()) as { id: string; revision: number }
+    }
+    return { statuses, revision: current.revision }
+  })
+  expect(seed.statuses).toEqual([201, ...Array.from({ length: 11 }, () => 200)])
+  expect(seed.revision).toBe(12)
+
+  await page.reload()
+  const firstPageResponse = page.waitForResponse(
+    (response) =>
+      response.url().includes('/history?limit=10') && response.request().method() === 'GET',
+  )
+  await page.getByRole('button', { name: '编辑分页配方食物' }).click()
+  expect((await firstPageResponse).status()).toBe(200)
+  const history = page.getByLabel('定义修订历史')
+  await expect(history.locator('.definition-revision-ledger__item')).toHaveCount(10)
+  await expect(history.getByText(/R12 · 纠正/)).toBeVisible()
+
+  const olderPageResponse = page.waitForResponse(
+    (response) =>
+      response.url().includes('/history?limit=10&cursor=') && response.request().method() === 'GET',
+  )
+  await history.getByRole('button', { name: '继续载入更早版本' }).click()
+  expect((await olderPageResponse).status()).toBe(200)
+  await expect(history.locator('.definition-revision-ledger__item')).toHaveCount(12)
+  await expect(history.getByText(/R1 · 创建/)).toBeVisible()
+  await expect(history.getByText('已载入全部版本')).toBeVisible()
+  await history.screenshot({
+    path: 'output/playwright/iteration-048-progressive-definition-revisions-mobile.png',
+  })
   expect(browserErrors).toEqual([])
 })
 
