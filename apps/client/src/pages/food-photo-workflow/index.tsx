@@ -3,7 +3,7 @@ import { Button, Image, Input, ScrollView, Text, View } from '@tarojs/components
 import Taro from '@tarojs/taro'
 import type { ConfirmFoodPhotoCandidate, FoodPhotoAnalysis } from '@myfitness/contracts'
 
-import { buttonA11yProps } from '../../lib/accessibility'
+import { buttonA11yProps, buttonActivationProps, deferH5Focus } from '../../lib/accessibility'
 import {
   ApiError,
   confirmFoodPhotoCandidate,
@@ -54,6 +54,7 @@ const FoodPhotoWorkflowPage = () => {
   }
 
   useEffect(() => {
+    deferH5Focus('food-photo-back', 350)
     let active = true
     void listFoodPhotoCandidates()
       .then((result) => {
@@ -160,10 +161,10 @@ const FoodPhotoWorkflowPage = () => {
     <View className="food-photo-shell">
       <View className="food-photo-topbar">
         <Button
-          {...buttonA11yProps}
+          {...buttonActivationProps(() => void Taro.navigateBack())}
+          id="food-photo-back"
           className="food-photo-back"
           aria-label="返回餐食草稿"
-          onClick={() => void Taro.navigateBack()}
         >
           ←
         </Button>
@@ -190,7 +191,12 @@ const FoodPhotoWorkflowPage = () => {
           </View>
 
           {feedback ? (
-            <View className="food-photo-feedback" role="status" aria-live="polite">
+            <View
+              className="food-photo-feedback"
+              role="status"
+              aria-live="polite"
+              aria-atomic="true"
+            >
               <Text>{feedback}</Text>
             </View>
           ) : null}
@@ -210,20 +216,18 @@ const FoodPhotoWorkflowPage = () => {
                   小时，确认、删除、失败或到期时进入可追踪删除流程；不会自动创建餐食。
                 </Text>
                 <Button
-                  {...buttonA11yProps}
+                  {...buttonActivationProps(() => setConsent((current) => !current))}
                   className={`photo-consent ${consent ? 'photo-consent--active' : ''}`}
                   aria-pressed={consent}
-                  onClick={() => setConsent((current) => !current)}
                 >
                   <Text className="photo-consent__check">{consent ? '✓' : '□'}</Text>
                   <Text>我同意本次上传与上述处理</Text>
                 </Button>
                 <Button
-                  {...buttonA11yProps}
+                  {...buttonActivationProps(() => void choosePhoto(), !consent || busy)}
                   className="photo-choose"
                   disabled={!consent || busy}
                   aria-disabled={!consent || busy}
-                  onClick={() => void choosePhoto()}
                 >
                   {busy ? '正在制作校样…' : '选择一张餐食照片'}
                 </Button>
@@ -257,11 +261,10 @@ const FoodPhotoWorkflowPage = () => {
                     return (
                       <View className="photo-candidate" key={candidate.catalogKey}>
                         <Button
-                          {...buttonA11yProps}
+                          {...buttonActivationProps(() => toggleCandidate(candidate.catalogKey))}
                           className={`photo-candidate__select ${active ? 'photo-candidate__select--active' : ''}`}
                           aria-pressed={active}
                           aria-label={`${active ? '取消选择' : '选择'}${candidate.label}`}
-                          onClick={() => toggleCandidate(candidate.catalogKey)}
                         >
                           <Text className="photo-candidate__number metric">
                             {String(index + 1).padStart(2, '0')}
@@ -313,20 +316,18 @@ const FoodPhotoWorkflowPage = () => {
 
                 <View className="photo-review__actions">
                   <Button
-                    {...buttonA11yProps}
+                    {...buttonActivationProps(() => void discardPhoto(), busy)}
                     className="photo-review__discard"
                     style={{ color: 'var(--color-pulse)' }}
                     disabled={busy}
-                    onClick={() => void discardPhoto()}
                   >
                     删除校样
                   </Button>
                   <Button
-                    {...buttonA11yProps}
+                    {...buttonActivationProps(() => void confirmPhoto(), busy)}
                     className="photo-review__confirm"
                     style={{ color: 'var(--color-paper)' }}
                     disabled={busy}
-                    onClick={() => void confirmPhoto()}
                   >
                     {busy ? '正在确认…' : `确认 ${review.selected.length} 项并返回草稿`}
                   </Button>

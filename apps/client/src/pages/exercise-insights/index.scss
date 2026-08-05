@@ -347,9 +347,9 @@ button:focus-visible {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
+  .exercise-observation-page *,
+  .exercise-observation-page *::before,
+  .exercise-observation-page *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;

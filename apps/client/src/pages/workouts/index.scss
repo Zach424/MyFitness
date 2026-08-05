@@ -951,6 +951,12 @@ textarea:focus-visible {
   outline-offset: 2px;
 }
 
+.catalog-create:focus,
+.catalog-entry__edit:focus {
+  outline: 3px solid rgba(36, 76, 102, 0.34);
+  outline-offset: 3px;
+}
+
 @keyframes workout-sheet-up {
   from {
     opacity: 0;
@@ -1037,9 +1043,9 @@ textarea:focus-visible {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
+  .workouts-page *,
+  .workouts-page *::before,
+  .workouts-page *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;

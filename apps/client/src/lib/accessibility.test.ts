@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { keyboardActivationProps } from './accessibility'
+import { buttonActivationProps, focusElementById, keyboardActivationProps } from './accessibility'
 
 const keyboardEvent = (key: string, repeat = false) => ({
   key,
@@ -30,6 +30,44 @@ describe('keyboard activation accessibility', () => {
     keyboardActivationProps(activate, disabled).onKeyDown(event)
 
     expect(event.preventDefault).not.toHaveBeenCalled()
+    expect(activate).not.toHaveBeenCalled()
+  })
+})
+
+describe('focus restoration accessibility', () => {
+  it('focuses the requested element through an injectable document boundary', () => {
+    const focus = vi.fn()
+    const root = { getElementById: vi.fn(() => ({ focus })) }
+
+    expect(focusElementById('return-target', root)).toBe(true)
+    expect(root.getElementById).toHaveBeenCalledWith('return-target')
+    expect(focus).toHaveBeenCalledOnce()
+  })
+
+  it('reports a missing focus target without throwing', () => {
+    expect(focusElementById('missing', { getElementById: () => null })).toBe(false)
+    expect(focusElementById('missing')).toBe(false)
+  })
+})
+
+describe('Taro button activation accessibility', () => {
+  it('uses the same activation for pointer and keyboard input', () => {
+    const activate = vi.fn()
+    const props = buttonActivationProps(activate)
+
+    props.onClick()
+    props.onKeyDown(keyboardEvent('Enter'))
+
+    expect(activate).toHaveBeenCalledTimes(2)
+  })
+
+  it('blocks pointer and keyboard activation while disabled', () => {
+    const activate = vi.fn()
+    const props = buttonActivationProps(activate, true)
+
+    props.onClick()
+    props.onKeyDown(keyboardEvent(' '))
+
     expect(activate).not.toHaveBeenCalled()
   })
 })

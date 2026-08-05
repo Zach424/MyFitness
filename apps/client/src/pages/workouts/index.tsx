@@ -8,7 +8,7 @@ import type {
   WorkoutHistoryItem,
 } from '@myfitness/contracts'
 
-import { buttonA11yProps } from '../../lib/accessibility'
+import { buttonA11yProps, buttonActivationProps, deferH5Focus } from '../../lib/accessibility'
 import { parseBackfillIntent } from '../../lib/backfill-intent'
 import { LocalDraftNotice } from '../../components/local-draft-notice'
 import { OccurrenceField } from '../../components/occurrence-field'
@@ -105,6 +105,7 @@ const WorkoutsPage = () => {
   const [saving, setSaving] = useState(false)
   const [feedback, setFeedback] = useState('')
   const pendingKey = useRef('')
+  const catalogReturnFocusId = useRef('')
 
   useEffect(() => {
     void (async () => {
@@ -122,9 +123,33 @@ const WorkoutsPage = () => {
 
   useDidShow(() => {
     void listExerciseCatalog()
-      .then((result) => setCatalogItems(result.items))
-      .catch((error: unknown) => setFeedback(messageOf(error)))
+      .then((result) => {
+        setCatalogItems(result.items)
+        const returnTarget = catalogReturnFocusId.current
+        if (!returnTarget) return
+        catalogReturnFocusId.current = ''
+        const customEntryId = returnTarget.replace('workout-edit-action-', '')
+        const targetStillExists = result.items.some(
+          (entry) => entry.source === 'custom' && entry.id === customEntryId,
+        )
+        deferH5Focus(targetStillExists ? returnTarget : 'workout-manage-actions', 350)
+      })
+      .catch((error: unknown) => {
+        catalogReturnFocusId.current = ''
+        setFeedback(messageOf(error))
+      })
   })
+
+  const openExerciseCatalog = (returnFocusId: string, entryId?: string) => {
+    catalogReturnFocusId.current = returnFocusId
+    const query = entryId ? `&entryId=${encodeURIComponent(entryId)}` : ''
+    void Taro.navigateTo({
+      url: `/pages/food-catalog/index?kind=exercise${query}`,
+    }).catch((error: unknown) => {
+      catalogReturnFocusId.current = ''
+      setFeedback(messageOf(error))
+    })
+  }
 
   const loadOlderWorkouts = async () => {
     if (!nextCursor || loadingMore) return
@@ -581,11 +606,11 @@ const WorkoutsPage = () => {
                       </Text>
                     </View>
                     <Button
-                      {...buttonA11yProps}
+                      {...buttonActivationProps(() =>
+                        openExerciseCatalog('workout-manage-actions'),
+                      )}
+                      id="workout-manage-actions"
                       className="catalog-create"
-                      onClick={() =>
-                        void Taro.navigateTo({ url: '/pages/food-catalog/index?kind=exercise' })
-                      }
                     >
                       管理我的动作
                     </Button>
@@ -629,14 +654,12 @@ const WorkoutsPage = () => {
                             </Button>
                             {item.source === 'custom' ? (
                               <Button
-                                {...buttonA11yProps}
+                                {...buttonActivationProps(() =>
+                                  openExerciseCatalog(`workout-edit-action-${item.id}`, item.id),
+                                )}
+                                id={`workout-edit-action-${item.id}`}
                                 className="catalog-entry__edit"
                                 aria-label={`编辑自定义动作${item.name}`}
-                                onClick={() =>
-                                  void Taro.navigateTo({
-                                    url: `/pages/food-catalog/index?kind=exercise&entryId=${item.id}`,
-                                  })
-                                }
                               >
                                 编辑
                               </Button>
@@ -882,7 +905,12 @@ const WorkoutsPage = () => {
                   </View>
                 ) : null}
                 {feedback ? (
-                  <View className="workout-feedback" role="status">
+                  <View
+                    className="workout-feedback"
+                    role="status"
+                    aria-live="polite"
+                    aria-atomic="true"
+                  >
                     {feedback}
                   </View>
                 ) : null}

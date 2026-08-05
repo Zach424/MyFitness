@@ -486,6 +486,20 @@ Measured structure now matches the information hierarchy: nutrition falls from 4
 - [390 × 844 lazy food-photo proof workbench](../../output/playwright/iteration-051-lazy-food-photo-mobile.png)
 - [1440 × 1000 lazy food-photo proof workbench](../../output/playwright/iteration-051-lazy-food-photo-wide.png)
 
+## Accessibility state-matrix review — iteration 052
+
+This round does not introduce a new visual motif. It makes the existing hierarchy operable without a pointer: the home quick actions, primary navigation, lazy action register and private food-photo workbench expose the same explicit Enter/Space behavior as their pointer action. Focus rings use the established mineral-blue outline and paper offset; programmatically restored route and dialog targets remain visibly focused instead of relying on browser heuristics.
+
+The action archive dialog names and describes itself, focuses the non-destructive cancel action first and returns to the initiating archive control when cancelled. After a successful archive, focus moves to the stable new-action control because the archived trigger no longer exists. The food-photo workbench focuses its back action on entry, retains text labels such as `未确认 / PROOF`, confidence words, selected-state semantics and explicit action names, and returns focus to the photo launcher after confirmation. Status changes are polite atomic announcements; this is semantic H5 evidence, not a claim that VoiceOver, TalkBack or WeChat devices have been tested.
+
+Taro H5 renders buttons as custom elements, so `role="button"` and `tabIndex` alone did not provide native keyboard activation. The shared activation adapter now handles pointer, Enter and Space through one guarded action. Focus restoration waits for the Taro route transition and targets stable IDs. Every reduced-motion wildcard is scoped to its page root; a global wildcard had changed the router container itself during emulation and was removed.
+
+The 390 × 844 production-browser matrix completes both lazy workbenches with a keyboard, verifies dialog entry/cancel/success focus, route return focus, live status semantics, `aria-pressed` candidate selection and reduced-motion behavior. Existing 1440 × 1000 lifecycle coverage remains green. Three inspected artifacts record the risky states without treating screenshots as screen-reader proof.
+
+- [390 × 844 archived-action dialog focus](../../output/playwright/iteration-052-action-archive-focus-mobile.png)
+- [390 × 844 keyboard action workbench](../../output/playwright/iteration-052-keyboard-action-workbench-mobile.png)
+- [390 × 844 keyboard food-photo workbench](../../output/playwright/iteration-052-keyboard-food-photo-mobile.png)
+
 ## Screenshot review checklist
 
 - The Rhythm Rail remains understandable without color.
@@ -493,4 +507,4 @@ Measured structure now matches the information hierarchy: nutrition falls from 4
 - The next action is identifiable in under five seconds.
 - Quick record is reachable with one hand on a typical phone viewport.
 - Loading, empty, estimated, confirmed, edited, offline, and error states are visually distinct.
-- Focus, text scaling, reduced motion, and 320 px width are tested before calling the shell done.
+- Focus, text scaling, reduced motion, and 320 px width are tested before calling the shell done; real screen-reader/device support remains a separate release gate.

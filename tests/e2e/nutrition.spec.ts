@@ -3,6 +3,7 @@ import { DeleteObjectsCommand, ListObjectsV2Command, S3Client } from '@aws-sdk/c
 import { Pool } from 'pg'
 
 import { apiUrl } from './runtime'
+import { expectPoliteStatus, expectReducedMotion, expectVisibleFocus } from './accessibility'
 
 const subjectStorageKey = 'myfitness.dev.subject'
 const database = new Pool({
@@ -115,9 +116,11 @@ const validDemoMealPng = Buffer.from(
 )
 
 const uploadDemoMealPhoto = async (page: Page) => {
-  await page.getByRole('button', { name: /我同意本次上传与上述处理/ }).click()
+  await page.getByRole('button', { name: /我同意本次上传与上述处理/ }).focus()
+  await page.keyboard.press(' ')
   const fileChooserPromise = page.waitForEvent('filechooser')
-  await page.getByRole('button', { name: '选择一张餐食照片' }).click()
+  await page.getByRole('button', { name: '选择一张餐食照片' }).focus()
+  await page.keyboard.press('Enter')
   const fileChooser = await fileChooserPromise
   const uploadResponse = page.waitForResponse(
     (response) =>
@@ -131,9 +134,12 @@ const uploadDemoMealPhoto = async (page: Page) => {
 }
 
 const openFoodPhotoWorkflow = async (page: Page) => {
-  await page.getByRole('button', { name: '打开照片校样台' }).click()
+  const launcher = page.getByRole('button', { name: '打开照片校样台' })
+  await launcher.focus()
+  await page.keyboard.press('Enter')
   await expect(page.getByText('餐食照片校样台')).toBeVisible()
   await expect(page.getByText('先校样，再带回餐食。')).toBeVisible()
+  await expectVisibleFocus(page.getByRole('button', { name: '返回餐食草稿' }))
 }
 
 test('meal completes favorite, create, repeat, update, history and delete lifecycle', async ({
@@ -244,8 +250,10 @@ test('meal editor restores only whitelisted form fields and clears the draft aft
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 })
+  await page.emulateMedia({ reducedMotion: 'reduce' })
   const browserErrors = collectBrowserErrors(page)
   await openNutrition(page)
+  await expectReducedMotion(page)
 
   const title = page.locator('.nutrition-title-input input')
   await title.fill('训练后的晚餐')
@@ -527,9 +535,30 @@ test('food photo candidates require review, delete media and only fill an unsave
     'true',
   )
   await uploadDemoMealPhoto(page)
+  await expectPoliteStatus(page.locator('.food-photo-feedback'))
   await expect(page.getByText('未确认 / PROOF')).toBeVisible()
   await expect(page.getByText('估计 100–220 g')).toBeVisible()
   await expect(page.getByText('中置信')).toBeVisible()
+  await expect(page.getByRole('button', { name: '取消选择熟米饭' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+  const riceCandidate = page.getByRole('button', { name: '取消选择熟米饭' })
+  await riceCandidate.focus()
+  await page.keyboard.press(' ')
+  await expect(page.getByRole('button', { name: '选择熟米饭' })).toHaveAttribute(
+    'aria-pressed',
+    'false',
+  )
+  await page.keyboard.press(' ')
+  await expect(page.getByRole('button', { name: '取消选择熟米饭' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+  await page.screenshot({
+    path: 'output/playwright/iteration-052-keyboard-food-photo-mobile.png',
+    fullPage: true,
+  })
   await expect(page.locator('.meal-entry')).toHaveCount(0)
   await expect
     .poll(() => page.evaluate(() => localStorage.getItem('myfitness.local-draft.meal') ?? ''))
@@ -549,11 +578,14 @@ test('food photo candidates require review, delete media and only fill an unsave
   const confirmResponse = page.waitForResponse(
     (response) => response.url().endsWith('/confirm') && response.request().method() === 'POST',
   )
-  await page.getByRole('button', { name: '确认 2 项并返回草稿' }).click()
+  await page.getByRole('button', { name: '确认 2 项并返回草稿' }).focus()
+  await page.keyboard.press('Enter')
   expect((await confirmResponse).status()).toBe(200)
   await expect(
     page.getByText('候选已带入当前草稿，照片已删除；餐次尚未保存，请继续核对。'),
   ).toBeVisible()
+  await expectPoliteStatus(page.locator('.nutrition-feedback'))
+  await expectVisibleFocus(page.getByRole('button', { name: '打开照片校样台' }))
   await expect(page.getByText('未确认 / PROOF')).toHaveCount(0)
   await expect(page.locator('.nutrition-title-input input')).toHaveValue('照片校样后的午餐')
   await expect(page.locator('.meal-item')).toHaveCount(2)

@@ -10,7 +10,7 @@ import type {
 import { exerciseEquipmentOptions } from '@myfitness/contracts/exercise-catalog.constants'
 
 import { DefinitionRevisionLedger } from '../../components/definition-revision-ledger'
-import { buttonA11yProps } from '../../lib/accessibility'
+import { buttonA11yProps, buttonActivationProps, deferH5Focus } from '../../lib/accessibility'
 import {
   ApiError,
   archiveExerciseCatalogEntry,
@@ -60,6 +60,8 @@ const requestKey = () =>
 const ExerciseCatalogPage = () => {
   const requestedEntryId = useRef(Taro.getCurrentInstance().router?.params.entryId ?? '')
   const pendingCreateKey = useRef('')
+  const archiveReturnFocusId = useRef('')
+  const editorReturnFocusId = useRef('exercise-new-action')
   const [entries, setEntries] = useState<CustomExerciseCatalogEntry[]>([])
   const [editing, setEditing] = useState<CustomExerciseCatalogEntry>()
   const [archiving, setArchiving] = useState<CustomExerciseCatalogEntry>()
@@ -78,6 +80,7 @@ const ExerciseCatalogPage = () => {
   }
 
   const openEditor = async (entry?: CustomExerciseCatalogEntry) => {
+    editorReturnFocusId.current = entry ? `exercise-edit-${entry.id}` : 'exercise-new-action'
     setEditing(entry)
     setDraft(entry ? exerciseCatalogDraftFromItem(entry) : initialExerciseCatalogDraft())
     setHistory(entry ? undefined : [])
@@ -115,6 +118,7 @@ const ExerciseCatalogPage = () => {
   }
 
   useEffect(() => {
+    deferH5Focus('exercise-catalog-back', 350)
     let active = true
     void listExerciseCatalog()
       .then((result) => {
@@ -137,13 +141,19 @@ const ExerciseCatalogPage = () => {
     }
   }, [])
 
-  const closeEditor = () => {
+  useEffect(() => {
+    if (archiving) deferH5Focus('exercise-archive-cancel')
+  }, [archiving])
+
+  const closeEditor = (restoreFocus = true) => {
+    const returnTarget = editorReturnFocusId.current
     setEditorOpen(false)
     setEditing(undefined)
     setHistory(undefined)
     setHistoryNextCursor(null)
     setDraft(initialExerciseCatalogDraft())
     pendingCreateKey.current = ''
+    if (restoreFocus) deferH5Focus(returnTarget)
   }
 
   const toggleEquipment = (equipment: ExerciseEquipment) => {
@@ -192,13 +202,27 @@ const ExerciseCatalogPage = () => {
       await archiveExerciseCatalogEntry(archiving.id, archiving.revision)
       setEntries((current) => current.filter((entry) => entry.id !== archiving.id))
       setArchiving(undefined)
-      closeEditor()
+      closeEditor(false)
       setFeedback('动作已从未来选择中停用；训练草稿、历史训练与修订证据未被改写。')
+      archiveReturnFocusId.current = ''
+      deferH5Focus('exercise-new-action')
     } catch (error) {
       setFeedback(messageOf(error))
     } finally {
       setBusy(false)
     }
+  }
+
+  const requestArchive = (entry: CustomExerciseCatalogEntry) => {
+    archiveReturnFocusId.current = `exercise-archive-${entry.id}`
+    setArchiving(entry)
+  }
+
+  const cancelArchive = () => {
+    const returnTarget = archiveReturnFocusId.current
+    archiveReturnFocusId.current = ''
+    setArchiving(undefined)
+    if (returnTarget) deferH5Focus(returnTarget)
   }
 
   return (
@@ -207,10 +231,10 @@ const ExerciseCatalogPage = () => {
         <View className="food-catalog-shell">
           <View className="food-catalog-topbar">
             <Button
-              {...buttonA11yProps}
+              {...buttonActivationProps(() => void Taro.navigateBack())}
+              id="exercise-catalog-back"
               className="food-catalog-back"
               aria-label="返回训练记录"
-              onClick={() => void Taro.navigateBack()}
             >
               ←
             </Button>
@@ -233,9 +257,9 @@ const ExerciseCatalogPage = () => {
 
           <View className="food-catalog-actions">
             <Button
-              {...buttonA11yProps}
+              {...buttonActivationProps(() => void openEditor())}
+              id="exercise-new-action"
               className="food-catalog-new"
-              onClick={() => void openEditor()}
             >
               ＋ 新建动作
             </Button>
@@ -243,7 +267,12 @@ const ExerciseCatalogPage = () => {
           </View>
 
           {feedback ? (
-            <View className="food-catalog-feedback" role="status">
+            <View
+              className="food-catalog-feedback"
+              role="status"
+              aria-live="polite"
+              aria-atomic="true"
+            >
               {feedback}
             </View>
           ) : null}
@@ -359,11 +388,11 @@ const ExerciseCatalogPage = () => {
               <View className="food-editor__actions">
                 {editing ? (
                   <Button
-                    {...buttonA11yProps}
+                    {...buttonActivationProps(() => requestArchive(editing), busy)}
+                    id={`exercise-archive-${editing.id}`}
                     className="food-editor__archive"
                     style={{ color: 'var(--color-pulse)' }}
                     disabled={busy}
-                    onClick={() => setArchiving(editing)}
                   >
                     停用
                   </Button>
@@ -373,7 +402,7 @@ const ExerciseCatalogPage = () => {
                   className="food-editor__cancel"
                   style={{ color: 'var(--color-muted)' }}
                   disabled={busy}
-                  onClick={closeEditor}
+                  onClick={() => closeEditor()}
                 >
                   取消
                 </Button>
@@ -413,10 +442,10 @@ const ExerciseCatalogPage = () => {
                     </Text>
                   </View>
                   <Button
-                    {...buttonA11yProps}
+                    {...buttonActivationProps(() => void openEditor(entry))}
+                    id={`exercise-edit-${entry.id}`}
                     className="food-register__edit"
                     aria-label={`编辑自定义动作${entry.name}`}
-                    onClick={() => void openEditor(entry)}
                   >
                     修订
                   </Button>
@@ -436,23 +465,31 @@ const ExerciseCatalogPage = () => {
           className="food-modal"
           role="dialog"
           aria-modal="true"
-          aria-label="确认停用自定义动作"
+          aria-labelledby="exercise-archive-title"
+          aria-describedby="exercise-archive-description"
         >
           <View className="food-modal__card">
             <Text className="food-catalog-eyebrow">ARCHIVE OWNED MOVEMENT</Text>
-            <Text className="food-modal__title">停用“{archiving.name}”？</Text>
-            <Text className="food-modal__body">
+            <Text id="exercise-archive-title" className="food-modal__title">
+              停用“{archiving.name}”？
+            </Text>
+            <Text id="exercise-archive-description" className="food-modal__body">
               它会离开未来可选目录；当前训练草稿、历史训练和版本审计都保持原样。
             </Text>
             <View className="food-modal__actions">
-              <Button {...buttonA11yProps} disabled={busy} onClick={() => setArchiving(undefined)}>
+              <Button
+                {...buttonActivationProps(cancelArchive, busy)}
+                id="exercise-archive-cancel"
+                style={{ color: 'var(--color-muted)' }}
+                disabled={busy}
+              >
                 取消
               </Button>
               <Button
-                {...buttonA11yProps}
+                {...buttonActivationProps(() => void archive(), busy)}
                 className="food-modal__danger"
+                style={{ color: 'var(--color-pulse)' }}
                 disabled={busy}
-                onClick={() => void archive()}
               >
                 {busy ? '停用中…' : '确认停用'}
               </Button>

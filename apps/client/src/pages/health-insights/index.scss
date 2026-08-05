@@ -320,9 +320,9 @@ button:focus-visible {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
+  .health-observation-page *,
+  .health-observation-page *::before,
+  .health-observation-page *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;

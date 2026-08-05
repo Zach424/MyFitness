@@ -11,7 +11,7 @@ import type {
   MealHistoryItem,
 } from '@myfitness/contracts'
 
-import { buttonA11yProps } from '../../lib/accessibility'
+import { buttonA11yProps, buttonActivationProps, deferH5Focus } from '../../lib/accessibility'
 import { parseBackfillIntent } from '../../lib/backfill-intent'
 import { LocalDraftNotice } from '../../components/local-draft-notice'
 import { OccurrenceField } from '../../components/occurrence-field'
@@ -126,6 +126,7 @@ const NutritionPage = () => {
   const [saving, setSaving] = useState(false)
   const [feedback, setFeedback] = useState('')
   const pendingKey = useRef('')
+  const photoReturnFocus = useRef(false)
 
   useEffect(() => {
     void (async () => {
@@ -149,6 +150,10 @@ const NutritionPage = () => {
     void listFoodCatalog()
       .then((result) => setFoodCatalog(result.items))
       .catch((error: unknown) => setFeedback(messageOf(error)))
+    if (photoReturnFocus.current) {
+      photoReturnFocus.current = false
+      deferH5Focus('food-photo-launch', 350)
+    }
   })
 
   const loadOlderMeals = async () => {
@@ -256,6 +261,7 @@ const NutritionPage = () => {
   }
 
   const openFoodPhotoWorkflow = () => {
+    photoReturnFocus.current = true
     void Taro.navigateTo({
       url: '/pages/progress-photos/index?kind=food',
       events: {
@@ -273,6 +279,9 @@ const NutritionPage = () => {
           }
         },
       },
+    }).catch((error: unknown) => {
+      photoReturnFocus.current = false
+      setFeedback(messageOf(error))
     })
   }
 
@@ -560,9 +569,9 @@ const NutritionPage = () => {
                   </Text>
                 </View>
                 <Button
-                  {...buttonA11yProps}
+                  {...buttonActivationProps(openFoodPhotoWorkflow)}
+                  id="food-photo-launch"
                   className="photo-launch__action"
-                  onClick={openFoodPhotoWorkflow}
                 >
                   打开照片校样台
                 </Button>
@@ -767,7 +776,12 @@ const NutritionPage = () => {
               </View>
 
               {feedback ? (
-                <View className="nutrition-feedback" role="status">
+                <View
+                  className="nutrition-feedback"
+                  role="status"
+                  aria-live="polite"
+                  aria-atomic="true"
+                >
                   {feedback}
                 </View>
               ) : null}

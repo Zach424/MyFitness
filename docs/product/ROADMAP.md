@@ -59,8 +59,9 @@ Progress snapshot (2026-08-05): iterations 0–51 are complete locally. Current 
 | 50        | Dedicated lazy action-definition register           | Equivalent create/correct/archive/history flow and a smaller workout page artifact               |
 | 51        | Lazy food-photo review workflow                     | Explicit confirmed-candidate return, no sensitive draft persistence and a smaller nutrition page |
 | 52        | Automated accessibility state matrix                | Keyboard completion, status/name semantics, focus return, reduced motion and viewport proof      |
-| 53        | Managed shared deployment, beta hardening/release   | Real identity/custody/telemetry, rollback, security/a11y/filing review and staged rollout        |
-| 54        | Native App feasibility and device sync              | Retention gate reviewed; HealthKit/Health Connect/Huawei proof of concept                        |
+| 53        | Deterministic offline and request-failure recovery  | Safe draft retention, explicit idempotent retry, no duplicate/fake success and browser proof     |
+| 54        | Managed shared deployment, beta hardening/release   | Real identity/custody/telemetry, rollback, security/a11y/filing review and staged rollout        |
+| 55        | Native App feasibility and device sync              | Retention gate reviewed; HealthKit/Health Connect/Huawei proof of concept                        |
 
 ## Release gates
 

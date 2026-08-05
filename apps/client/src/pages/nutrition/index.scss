@@ -94,6 +94,15 @@
   display: block;
 }
 
+.photo-launch__action:focus,
+.nutrition-feedback:focus-visible,
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid rgba(36, 76, 102, 0.34);
+  outline-offset: 3px;
+}
+
 .nutrition-title {
   margin-top: 9px;
   font-size: clamp(32px, 8.6vw, 54px);

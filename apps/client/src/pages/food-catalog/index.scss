@@ -301,6 +301,18 @@
   border-color: rgba(233, 106, 91, 0.32) !important;
 }
 
+.food-catalog-back:focus,
+.food-catalog-new:focus,
+.food-register__edit:focus,
+.food-editor__archive:focus,
+.food-modal button:focus,
+.food-editor button:focus-visible,
+.food-editor input:focus-visible,
+.food-modal button:focus-visible {
+  outline: 3px solid rgba(36, 76, 102, 0.34);
+  outline-offset: 3px;
+}
+
 @media (min-width: 760px) {
   .food-catalog-shell {
     padding-inline: 26px;

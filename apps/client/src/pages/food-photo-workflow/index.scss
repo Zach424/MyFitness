@@ -494,6 +494,13 @@
   text-align: center;
 }
 
+.food-photo-back:focus,
+.food-photo-workbench button:focus-visible,
+.food-photo-workbench input:focus-visible {
+  outline: 3px solid rgba(36, 76, 102, 0.34);
+  outline-offset: 3px;
+}
+
 @media (min-width: 760px) {
   .food-photo-workbench {
     padding-top: 34px;

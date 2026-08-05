@@ -1,6 +1,8 @@
 import { expect, test, type Page } from '@playwright/test'
 import { Pool } from 'pg'
 
+import { expectPoliteStatus, expectReducedMotion, expectVisibleFocus } from './accessibility'
+
 const subjectStorageKey = 'myfitness.dev.subject'
 const database = new Pool({
   connectionString:
@@ -269,15 +271,21 @@ test('exercise observation uses completed sets and refreshes corrected evidence'
 test('user creates, searches, corrects and archives an owned exercise snapshot', async ({
   page,
 }) => {
+  test.slow()
   await page.setViewportSize({ width: 390, height: 844 })
   const browserErrors = collectBrowserErrors(page)
 
   await openWorkouts(page)
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await expectReducedMotion(page)
   await expect(page.getByRole('button', { name: '添加高脚杯深蹲' })).toBeVisible()
   await page.locator('.session-title-input input').fill('动作目录往返草稿')
-  await page.getByRole('button', { name: '管理我的动作' }).click()
+  await page.getByRole('button', { name: '管理我的动作' }).focus()
+  await page.keyboard.press('Enter')
   await expect(page.getByText('我的动作，是可修订的定义，不是会漂移的训练事实。')).toBeVisible()
-  await page.getByRole('button', { name: '新建动作' }).click()
+  await expectVisibleFocus(page.getByRole('button', { name: '返回训练记录' }))
+  await page.getByRole('button', { name: '新建动作' }).focus()
+  await page.keyboard.press('Enter')
   const editor = page.locator('.food-editor')
   await expect(editor).toBeVisible()
   await editor.locator('[aria-label="自定义动作名称"] input').fill('壶铃摆动')
@@ -293,6 +301,8 @@ test('user creates, searches, corrects and archives an owned exercise snapshot',
   expect((await createDefinition).status()).toBe(201)
   await expect(editor).not.toBeVisible()
   await expect(page.getByText('自定义动作已保存；返回训练页后可搜索并加入当前草稿。')).toBeVisible()
+  await expectPoliteStatus(page.locator('.food-catalog-feedback'))
+  await expectVisibleFocus(page.getByRole('button', { name: '新建动作' }))
 
   const refreshedAfterCreate = page.waitForResponse(
     (response) =>
@@ -300,6 +310,7 @@ test('user creates, searches, corrects and archives an owned exercise snapshot',
   )
   await page.getByRole('button', { name: '返回训练记录' }).click()
   expect((await refreshedAfterCreate).status()).toBe(200)
+  await expectVisibleFocus(page.getByRole('button', { name: '管理我的动作' }))
   await expect(page.locator('.session-title-input input')).toHaveValue('动作目录往返草稿')
   await page.locator('[aria-label="搜索动作目录"] input').fill('KB Swing')
   await expect(page.getByRole('button', { name: '添加壶铃摆动' })).toBeVisible()
@@ -314,8 +325,10 @@ test('user creates, searches, corrects and archives an owned exercise snapshot',
   const recorded = page.locator('.workout-entry').first()
   await expect(recorded.getByText(/高脚杯深蹲 · 壶铃摆动/)).toBeVisible()
 
-  await page.getByRole('button', { name: '编辑自定义动作壶铃摆动' }).click()
+  await page.getByRole('button', { name: '编辑自定义动作壶铃摆动' }).focus()
+  await page.keyboard.press('Enter')
   await expect(editor).toBeVisible()
+  await expectVisibleFocus(page.getByRole('button', { name: '返回训练记录' }))
   await expect(editor.getByLabel('定义修订历史').getByText(/R1 · 创建/)).toBeVisible()
   await editor.locator('[aria-label="自定义动作名称"] input').fill('双手壶铃摆动')
   const updateDefinition = page.waitForResponse(
@@ -328,8 +341,10 @@ test('user creates, searches, corrects and archives an owned exercise snapshot',
   await expect(
     page.locator('.food-register__name').filter({ hasText: '双手壶铃摆动' }),
   ).toBeVisible()
+  const correctedEdit = page.getByRole('button', { name: '编辑自定义动作双手壶铃摆动' })
+  await expectVisibleFocus(correctedEdit)
 
-  await page.getByRole('button', { name: '编辑自定义动作双手壶铃摆动' }).click()
+  await page.keyboard.press('Enter')
   const definitionHistory = editor.getByLabel('定义修订历史')
   await expect(definitionHistory.getByText(/R2 · 纠正/)).toBeVisible()
   await expect(definitionHistory.getByText(/R1 · 创建/)).toBeVisible()
@@ -339,19 +354,37 @@ test('user creates, searches, corrects and archives an owned exercise snapshot',
     fullPage: true,
   })
 
+  await editor.getByRole('button', { name: '停用' }).click()
+  const archiveDialog = page.getByRole('dialog', { name: /停用“双手壶铃摆动”/ })
+  await expect(archiveDialog).toBeVisible()
+  const cancelArchive = archiveDialog.getByRole('button', { name: '取消' })
+  await expectVisibleFocus(cancelArchive)
+  await page.screenshot({
+    path: 'output/playwright/iteration-052-action-archive-focus-mobile.png',
+    fullPage: true,
+  })
+  await page.keyboard.press('Enter')
+  await expect(archiveDialog).not.toBeVisible()
+  const archiveAction = editor.getByRole('button', { name: '停用' })
+  await expectVisibleFocus(archiveAction)
+
+  await page.keyboard.press('Enter')
+  await expect(archiveDialog).toBeVisible()
+  await expectVisibleFocus(cancelArchive)
+  await page.keyboard.press('Tab')
+  const confirmArchive = archiveDialog.getByRole('button', { name: '确认停用' })
+  await expectVisibleFocus(confirmArchive)
   const archiveDefinition = page.waitForResponse(
     (response) =>
       /\/v1\/exercise-catalog\/[0-9a-f-]{36}$/.test(response.url()) &&
       response.request().method() === 'DELETE',
   )
-  await editor.getByRole('button', { name: '停用' }).click()
-  const archiveDialog = page.getByRole('dialog', { name: '确认停用自定义动作' })
-  await expect(archiveDialog).toBeVisible()
-  await archiveDialog.getByRole('button', { name: '确认停用' }).click()
+  await page.keyboard.press('Enter')
   expect((await archiveDefinition).status()).toBe(200)
   await expect(
     page.getByText('动作已从未来选择中停用；训练草稿、历史训练与修订证据未被改写。'),
   ).toBeVisible()
+  await expectVisibleFocus(page.getByRole('button', { name: '新建动作' }))
 
   const refreshedAfterArchive = page.waitForResponse(
     (response) =>
@@ -359,6 +392,7 @@ test('user creates, searches, corrects and archives an owned exercise snapshot',
   )
   await page.getByRole('button', { name: '返回训练记录' }).click()
   expect((await refreshedAfterArchive).status()).toBe(200)
+  await expectVisibleFocus(page.getByRole('button', { name: '管理我的动作' }))
   await expect(page.getByRole('button', { name: '添加双手壶铃摆动' })).not.toBeVisible()
   await expect(recorded.getByText(/高脚杯深蹲 · 壶铃摆动/)).toBeVisible()
   expect(browserErrors).toEqual([])

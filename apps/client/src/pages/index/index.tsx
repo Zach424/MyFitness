@@ -3,7 +3,7 @@ import { Button, ScrollView, Text, View } from '@tarojs/components'
 import Taro, { useDidShow } from '@tarojs/taro'
 import type { Dashboard, TodayEvidence, WeeklyPlanListItem } from '@myfitness/contracts'
 
-import { buttonA11yProps } from '../../lib/accessibility'
+import { buttonA11yProps, buttonActivationProps } from '../../lib/accessibility'
 import { getDashboard, listWeeklyPlans } from '../../lib/api'
 import { todayPlanReconciliation } from '../plans/plan.model'
 import './index.scss'
@@ -35,6 +35,12 @@ const openWorkouts = () => void Taro.navigateTo({ url: '/pages/workouts/index' }
 const openNutrition = () => void Taro.navigateTo({ url: '/pages/nutrition/index' })
 const openPlans = () => void Taro.navigateTo({ url: '/pages/plans/index' })
 const openHistory = () => void Taro.navigateTo({ url: '/pages/history/index' })
+
+const openQuickAction = (key: (typeof quickActions)[number]['key']) => {
+  if (key === 'body' || key === 'recovery') openRecords()
+  else if (key === 'workout') openWorkouts()
+  else openNutrition()
+}
 
 const timezone = () => {
   try {
@@ -117,6 +123,13 @@ const IndexPage = () => {
     : undefined
   const trend = dashboard?.trends.find((item) => item.days === trendDays)
   const activeTicks = readiness.score === null ? 0 : Math.ceil(readiness.score / 20)
+
+  const activateNavigation = (key: (typeof navItems)[number]['key'], label: string) => {
+    if (key === 'me') void Taro.navigateTo({ url: '/pages/privacy/index' })
+    else if (key === 'record') openRecords()
+    else if (key === 'plan') openPlans()
+    else if (key !== 'today') setFeedback(`${label}模块将在后续迭代接入。`)
+  }
 
   return (
     <View className="today-page">
@@ -301,14 +314,9 @@ const IndexPage = () => {
                 <View className="quick-grid">
                   {quickActions.map((action) => (
                     <Button
-                      {...buttonA11yProps}
+                      {...buttonActivationProps(() => openQuickAction(action.key))}
                       className="quick-action"
                       key={action.key}
-                      onClick={() => {
-                        if (action.key === 'body' || action.key === 'recovery') openRecords()
-                        else if (action.key === 'workout') openWorkouts()
-                        else if (action.key === 'meal') openNutrition()
-                      }}
                     >
                       <Text className="quick-action__glyph" aria-hidden="true">
                         {action.glyph}
@@ -330,21 +338,10 @@ const IndexPage = () => {
       <View className="bottom-nav" role="navigation" aria-label="主要导航">
         {navItems.map((item) => (
           <Button
-            {...buttonA11yProps}
+            {...buttonActivationProps(() => activateNavigation(item.key, item.label))}
             className={`nav-item ${item.key === 'today' ? 'nav-item--active' : ''}`}
             key={item.key}
             aria-current={item.key === 'today' ? 'page' : undefined}
-            onClick={() => {
-              if (item.key === 'me') {
-                void Taro.navigateTo({ url: '/pages/privacy/index' })
-              } else if (item.key === 'record') {
-                openRecords()
-              } else if (item.key === 'plan') {
-                openPlans()
-              } else if (item.key !== 'today') {
-                setFeedback(`${item.label}模块将在后续迭代接入。`)
-              }
-            }}
           >
             <Text className="nav-item__glyph" aria-hidden="true">
               {item.glyph}
