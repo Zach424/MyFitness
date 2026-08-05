@@ -195,6 +195,69 @@ test('mobile privacy ledger inventories and downloads an owned-data export', asy
   expect(browserErrors).toEqual([])
 })
 
+test('privacy export validates local content and media type before download success', async ({
+  page,
+  request,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  const browserErrors = collectBrowserErrors(page)
+  await seedAccount(page, request)
+  let downloads = 0
+  page.on('download', () => {
+    downloads += 1
+  })
+
+  await page.route(
+    '**/v1/me/privacy/export',
+    async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ schemaVersion: 'myfitness-portable-export-v3' }),
+      })
+    },
+    { times: 1 },
+  )
+  await page.getByRole('button', { name: '下载我的数据' }).click()
+  await expect(page.getByText(/未通过当前版本与结构验证/)).toBeVisible()
+  expect(downloads).toBe(0)
+  await page.locator('.privacy-scroll').evaluate((element) => {
+    element.scrollTop = 0
+  })
+  await page.screenshot({
+    path: 'output/playwright/iteration-083-export-verification-mobile.png',
+    fullPage: true,
+  })
+  await page.getByRole('button', { name: '关闭' }).click()
+
+  await page.route(
+    '**/v1/me/privacy/export',
+    async (route) => {
+      const response = await route.fetch()
+      await route.fulfill({
+        status: response.status(),
+        headers: { ...response.headers(), 'content-type': 'text/plain' },
+        body: await response.body(),
+      })
+    },
+    { times: 1 },
+  )
+  await page.getByRole('button', { name: '下载我的数据' }).click()
+  await expect(page.getByText(/不是受支持的 JSON 文件/)).toBeVisible()
+  expect(downloads).toBe(0)
+  await page.getByRole('button', { name: '关闭' }).click()
+
+  const downloadPromise = page.waitForEvent('download')
+  await page.getByRole('button', { name: '下载我的数据' }).click()
+  const download = await downloadPromise
+  expect(download.suggestedFilename()).toMatch(/^myfitness-export-\d{4}-\d{2}-\d{2}\.json$/)
+  await expect(
+    page.getByText(/已通过 myfitness-portable-export-v4 结构验证，已开始下载/),
+  ).toBeVisible()
+  expect(downloads).toBe(1)
+  expect(browserErrors).toEqual([])
+})
+
 test('logout removes every local editor draft before starting a new session', async ({
   page,
   request,

@@ -233,7 +233,7 @@ const requestAuthSession = () => {
 
 let pendingAuthSession: Promise<ClientSession> | undefined
 
-const getAccessToken = async () => {
+export const getClientAccessToken = async () => {
   const stored = Taro.getStorageSync<string>(TOKEN_KEY)
   if (stored) return stored
   pendingAuthSession ??= requestAuthSession().finally(() => {
@@ -243,6 +243,8 @@ const getAccessToken = async () => {
 }
 
 const privateApiUrl = (path: string) => `${API_BASE_URL.replace(/\/v1$/, '')}${path}`
+export const getClientApiBaseUrl = () => API_BASE_URL
+export const clearClientAccessToken = () => Taro.removeStorageSync(TOKEN_KEY)
 
 export const getOidcAuthorizationConfig = async (): Promise<OidcAuthorizationConfig> => {
   const response = await Taro.request<unknown>({
@@ -285,7 +287,7 @@ const authenticatedRequest = async <T>(
   headers: Record<string, string> = {},
   retry = true,
 ): Promise<T> => {
-  const token = await getAccessToken()
+  const token = await getClientAccessToken()
   const response = await Taro.request<T>({
     url: `${API_BASE_URL}${path}`,
     method,
@@ -482,7 +484,7 @@ export const uploadFoodPhoto = async (
   filePath: string,
   retry = true,
 ): Promise<FoodPhotoAnalysis> => {
-  const token = await getAccessToken()
+  const token = await getClientAccessToken()
   const response = await Taro.uploadFile({
     url: privateApiUrl(uploadPath),
     filePath,
@@ -528,7 +530,7 @@ export const uploadProgressPhoto = async (
   filePath: string,
   retry = true,
 ): Promise<ProgressPhotoItem> => {
-  const token = await getAccessToken()
+  const token = await getClientAccessToken()
   const response = await Taro.uploadFile({
     url: privateApiUrl(uploadPath),
     filePath,
@@ -646,40 +648,6 @@ export const revokeOptionalConsent = (purpose: RevocableConsentPurpose) =>
   authenticatedRequest<ConsentRevocationResult>(`/me/privacy/consents/${purpose}/revoke`, 'POST', {
     confirmed: true,
   })
-
-export const downloadPrivacyExport = async (
-  retry = true,
-): Promise<{ fileName: string; filePath: string; byteLength: number | null }> => {
-  const token = await getAccessToken()
-  const response = await Taro.downloadFile({
-    url: `${API_BASE_URL}/me/privacy/export`,
-    header: { authorization: `Bearer ${token}` },
-    withCredentials: true,
-  })
-  if (response.statusCode === 401 && retry) {
-    Taro.removeStorageSync(TOKEN_KEY)
-    return downloadPrivacyExport(false)
-  }
-  if (response.statusCode < 200 || response.statusCode >= 300) {
-    throw new ApiError(response.statusCode, { message: '数据导出生成失败' })
-  }
-
-  const fileName = `myfitness-export-${new Date().toISOString().slice(0, 10)}.json`
-  if (process.env.TARO_ENV === 'h5' && typeof document !== 'undefined') {
-    const anchor = document.createElement('a')
-    anchor.href = response.tempFilePath
-    anchor.download = fileName
-    anchor.style.display = 'none'
-    document.body.appendChild(anchor)
-    anchor.click()
-    anchor.remove()
-    return { fileName, filePath: response.tempFilePath, byteLength: response.dataLength ?? null }
-  }
-
-  const saved = await Taro.saveFile({ tempFilePath: response.tempFilePath })
-  const filePath = 'savedFilePath' in saved ? saved.savedFilePath : response.tempFilePath
-  return { fileName, filePath, byteLength: response.dataLength ?? null }
-}
 
 export const getErasureReceiptStatus = async (
   receiptId: string,

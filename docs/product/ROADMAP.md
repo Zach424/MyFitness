@@ -90,8 +90,9 @@ Progress snapshot (2026-08-05): iterations 0–82 are complete locally. Optional
 | 81        | Profile/goal response-loss recovery                 | Exact revision/content reconciliation prevents blind PUT replay or silent local-draft rebase      |
 | 82        | Optional-consent revocation response recovery       | Current-overview evidence prevents blind revocation replay or overstated cleanup                  |
 | 83        | Portable-export client artifact validation          | Version/content verification prevents malformed custody artifacts from becoming success           |
-| 84        | Managed shared deployment, beta hardening/release   | Real identity/custody/telemetry, rollback, security/a11y/filing review and staged rollout         |
-| 85        | Native App feasibility and device sync              | Retention gate reviewed; HealthKit/Health Connect/Huawei proof of concept                         |
+| 84        | Bounded consent-receipt history                     | Owner-scoped event pagination separates historical consent evidence from current authority        |
+| 85        | Managed shared deployment, beta hardening/release   | Real identity/custody/telemetry, rollback, security/a11y/filing review and staged rollout         |
+| 86        | Native App feasibility and device sync              | Retention gate reviewed; HealthKit/Health Connect/Huawei proof of concept                         |
 
 ## Release gates
 

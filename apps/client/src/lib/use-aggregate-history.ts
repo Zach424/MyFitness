@@ -40,6 +40,14 @@ export const useAggregateHistory = <Target extends AggregateTarget, Item>(
     [],
   )
 
+  useEffect(() => {
+    if (target && focusBoundary?.initialFocusId) deferH5Focus(focusBoundary.initialFocusId)
+  }, [focusBoundary?.initialFocusId, target])
+
+  useEffect(() => {
+    if (failure) deferH5Focus(retryId)
+  }, [failure, retryId])
+
   const read = async (
     currentTarget: Target,
     operation: AggregateHistoryReadOperation,
@@ -58,7 +66,6 @@ export const useAggregateHistory = <Target extends AggregateTarget, Item>(
     } catch (error) {
       if (requestToken.current !== token) return
       setFailure({ kind: classifyAggregateHistoryReadFailure(error), operation })
-      deferH5Focus(retryId, 80)
     } finally {
       if (requestToken.current === token) setBusy(false)
     }
@@ -72,7 +79,6 @@ export const useAggregateHistory = <Target extends AggregateTarget, Item>(
     setNextCursor(null)
     setFailure(undefined)
     void read(nextTarget, 'initial')
-    if (focusBoundary) deferH5Focus(focusBoundary.initialFocusId, 40)
   }
 
   const close = () => {

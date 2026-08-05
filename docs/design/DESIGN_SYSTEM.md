@@ -1,6 +1,6 @@
 # Design system baseline
 
-Status: implemented and visually validated through iteration-082 optional-consent revocation response-loss evidence
+Status: implemented and visually validated through iteration-083 portable-export client artifact verification
 
 Working brand: 衡迹 / MyFitness
 
@@ -848,6 +848,16 @@ The old inventory remains fully readable because it is the last accepted evidenc
 Only current `已撤回` evidence permits green completion copy, and that copy explicitly withholds cleanup counts lost with the POST response. Current `有效` evidence restores a later fresh confirmation without replay; missing or never-granted state becomes divergent rather than an inferred success. The visual state adds no optimistic check mark, hidden retry, persisted purpose or medical/privacy claim beyond current authorization evidence.
 
 - [390 × 844 unresolved optional-consent revocation above retained custody inventory](../../output/playwright/iteration-082-privacy-revocation-recovery-mobile.png)
+
+## Portable-export client artifact verification — iteration 083
+
+The custody desk now treats transport success and a valid portable artifact as separate states. The export action dynamically loads its file adapter, reads the temporary H5 Blob or WeApp file and accepts only the current JSON media type, exact v4 envelope/collection topology, valid generated time/account UUID and bounded byte length before allowing download or persistent save.
+
+At 390 × 844, a rejected old-version artifact keeps the established masthead, safety thesis and complete nine-item ownership ledger visible. One red product-owned alert states that version/structure verification failed and that no download/save location was written; it exposes neither raw response text nor exported content. A valid artifact instead reports only the schema version, locale-formatted byte length and generated time before the existing download/save wording. No account ID, record body or file path becomes page feedback.
+
+The browser flow proves old-version rejection, wrong-media rejection and one valid real-service download. The visual evidence deliberately captures the rejected artifact because false success is the highest-risk state. H5 Blob URLs are released after use or rejection. The WeApp branch compiles and reads before `saveFile`, but its real-device file-system behavior remains a release gate rather than a screenshot claim.
+
+- [390 × 844 rejected old-version export above retained custody inventory](../../output/playwright/iteration-083-export-verification-mobile.png)
 
 ## Screenshot review checklist
 

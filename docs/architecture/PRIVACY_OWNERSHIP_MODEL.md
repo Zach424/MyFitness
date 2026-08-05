@@ -1,6 +1,6 @@
 # Privacy ownership model
 
-Status: durable local ownership/erasure boundary with lost-response recovery, purpose-separated photo custody, catalog history, conflict-safe expiring record drafts and evidence-first optional-consent revocation implemented through iteration 082
+Status: durable local ownership/erasure boundary with lost-response recovery, purpose-separated photo custody, catalog history, conflict-safe expiring record drafts, evidence-first optional-consent revocation and pre-save portable-export verification implemented through iteration 083
 
 ## User-owned surface
 
@@ -30,6 +30,8 @@ The onboarding register contains broad identity, planning, risk and required-con
 - Progress-photo declared view, retention/lifecycle and machine capture-quality provenance plus any still-retained sanitized JPEG as base64.
 
 Raw session tokens, token hashes, idempotency keys, request/input fingerprints, storage keys and provider response identifiers are excluded. The synchronous JSON path is a closed-beta implementation; large-account streaming archives, password/envelope encryption and async delivery remain an operations gate.
+
+Transport completion is not sufficient client evidence. A lazily loaded file adapter reads the H5 Blob or WeApp temporary file before any H5 download action or WeApp persistent save. A dependency-free verifier requires `application/json` (an optional charset is accepted), the exact four-field v4 envelope, the current data-collection key set, object/array topology, a valid offset generation time, UUID account identifier and an exact UTF-8 size no larger than 50 MiB. Invalid, old-version, wrong-media, oversized or unreadable artifacts never enter success and use product-owned copy only. The page retains only schema version, generation time and byte length as its receipt; account ID and export content are not logged, persisted or rendered. Temporary H5 Blob URLs are revoked on failure and after download. WeApp production compilation proves adapter compatibility, while real-device temporary-file and saved-file behavior remains an explicit external gate.
 
 ## Consent lifecycle
 
@@ -99,7 +101,7 @@ The client retains the bearer receipt secret across reloads until explicit local
 
 - Production identity, account recovery and linked-account deletion are not implemented.
 - A real local `pg_dump → pg_restore → ledger replay` drill passes, but production backup schedule/retention, independent ledger replication, HMAC-secret recovery and isolated restore ownership are not configured.
-- Export is generated in API memory and the Mini Program download API has a 50 MiB practical boundary.
+- Export is generated in API memory and the client rejects artifacts above its 50 MiB boundary; Mini Program real-device download/read/save behavior is not yet exercised.
 - Retained progress photos increase that export/custody burden; capture-quality checks do not establish posture, composition or health outcomes.
 - Receipt status recovery is secret-gated and tested across response loss/reload, but client secure-storage and final token-retention policy are not yet approved.
 - Expiring drafts are minimized and owner-scoped, but H5/Mini Program application-storage encryption, shared-device semantics and operating-system backup behavior still require closed-beta review.

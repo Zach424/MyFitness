@@ -17,7 +17,6 @@ import {
 } from '../../lib/accessibility'
 import {
   deletePrivacyAccount,
-  downloadPrivacyExport,
   forgetErasureReceipt,
   getErasureReceiptStatus,
   getPrivacyOverview,
@@ -211,12 +210,13 @@ const PrivacyPage = () => {
     setExporting(true)
     setError('')
     try {
+      const { downloadPrivacyExport } = await import('../../lib/privacy-export-download')
       const result = await downloadPrivacyExport()
       setExportChoice('downloaded')
       setFeedback(
         process.env.TARO_ENV === 'h5'
-          ? `${result.fileName} 已开始下载。`
-          : `${result.fileName} 已保存到本地文件。`,
+          ? `${result.fileName} 已通过 ${result.schemaVersion} 结构验证，已开始下载（${result.byteLength.toLocaleString('zh-CN')} 字节）。`
+          : `${result.fileName} 已通过 ${result.schemaVersion} 结构验证，已保存到本地（${result.byteLength.toLocaleString('zh-CN')} 字节）。`,
       )
     } catch (downloadError) {
       setError(downloadError instanceof Error ? downloadError.message : '数据导出生成失败')
