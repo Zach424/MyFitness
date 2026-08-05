@@ -11,7 +11,12 @@ import type {
   MealHistoryItem,
 } from '@myfitness/contracts'
 
-import { buttonA11yProps, buttonActivationProps, deferH5Focus } from '../../lib/accessibility'
+import {
+  buttonA11yProps,
+  buttonActivationProps,
+  deferH5Focus,
+  escapeDismissProps,
+} from '../../lib/accessibility'
 import { parseBackfillIntent } from '../../lib/backfill-intent'
 import {
   AggregateHistoryEmptyState,
@@ -181,6 +186,10 @@ const NutritionPage = () => {
   const historyRead = useAggregateHistory<Meal, MealHistoryItem>(
     getMealHistory,
     'meal-history-read-retry',
+    {
+      initialFocusId: 'meal-history-close',
+      fallbackFocusId: 'nutrition-read-refresh',
+    },
   )
 
   const invalidatePendingSave = (nextFeedback = '') => {
@@ -1030,11 +1039,13 @@ const NutritionPage = () => {
                           修改
                         </Button>
                         <Button
-                          {...buttonA11yProps}
+                          id={`meal-history-trigger-${meal.id}`}
                           className="entry-action"
                           disabled={!readAuthorityReady}
-                          aria-disabled={!readAuthorityReady}
-                          onClick={() => historyRead.open(meal)}
+                          {...buttonActivationProps(
+                            () => historyRead.open(meal, `meal-history-trigger-${meal.id}`),
+                            !readAuthorityReady,
+                          )}
                         >
                           历史
                         </Button>
@@ -1111,12 +1122,17 @@ const NutritionPage = () => {
       ) : null}
 
       {historyRead.target ? (
-        <View className="meal-history" role="dialog" aria-modal="true" aria-label="餐次历史">
+        <View
+          className="meal-history"
+          role="dialog"
+          aria-modal="true"
+          aria-label="餐次历史"
+          {...escapeDismissProps(historyRead.dismiss)}
+        >
           <Button
-            {...buttonA11yProps}
             className="meal-history__scrim"
             aria-label="关闭餐次历史"
-            onClick={historyRead.close}
+            {...buttonActivationProps(historyRead.dismiss)}
           />
           <View className="meal-history__sheet">
             <View className="nutrition-section-heading">
@@ -1125,10 +1141,10 @@ const NutritionPage = () => {
                 <Text className="nutrition-panel-title">{historyRead.target.title}历史</Text>
               </View>
               <Button
-                {...buttonA11yProps}
+                id="meal-history-close"
                 className="history-close"
                 aria-label="关闭餐次历史"
-                onClick={historyRead.close}
+                {...buttonActivationProps(historyRead.dismiss)}
               >
                 ×
               </Button>

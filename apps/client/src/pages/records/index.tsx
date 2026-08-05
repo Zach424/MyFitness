@@ -8,7 +8,12 @@ import type {
   UnitCode,
 } from '@myfitness/contracts'
 
-import { buttonActivationProps, buttonA11yProps, deferH5Focus } from '../../lib/accessibility'
+import {
+  buttonActivationProps,
+  buttonA11yProps,
+  deferH5Focus,
+  escapeDismissProps,
+} from '../../lib/accessibility'
 import { parseBackfillIntent } from '../../lib/backfill-intent'
 import {
   AggregateHistoryEmptyState,
@@ -137,6 +142,10 @@ const RecordsPage = () => {
   const historyRead = useAggregateHistory<HealthRecord, HealthRecordHistoryItem>(
     getHealthRecordHistory,
     'health-history-read-retry',
+    {
+      initialFocusId: 'health-history-close',
+      fallbackFocusId: 'record-read-refresh',
+    },
   )
 
   const loadRecords = async (isActive: () => boolean = () => true) => {
@@ -798,11 +807,13 @@ const RecordsPage = () => {
                             修改
                           </Button>
                           <Button
-                            {...buttonA11yProps}
+                            id={`health-history-trigger-${record.id}`}
                             className="log-action"
                             disabled={!readAuthorityReady}
-                            aria-disabled={!readAuthorityReady}
-                            onClick={() => historyRead.open(record)}
+                            {...buttonActivationProps(
+                              () => historyRead.open(record, `health-history-trigger-${record.id}`),
+                              !readAuthorityReady,
+                            )}
                           >
                             历史
                           </Button>
@@ -886,12 +897,17 @@ const RecordsPage = () => {
       ) : null}
 
       {historyRead.target ? (
-        <View className="history-layer" role="dialog" aria-modal="true" aria-label="记录历史">
+        <View
+          className="history-layer"
+          role="dialog"
+          aria-modal="true"
+          aria-label="记录历史"
+          {...escapeDismissProps(historyRead.dismiss)}
+        >
           <Button
-            {...buttonA11yProps}
             className="history-layer__scrim"
             aria-label="关闭历史"
-            onClick={historyRead.close}
+            {...buttonActivationProps(historyRead.dismiss)}
           />
           <View className="history-sheet">
             <View className="history-sheet__heading">
@@ -902,10 +918,10 @@ const RecordsPage = () => {
                 </Text>
               </View>
               <Button
-                {...buttonA11yProps}
+                id="health-history-close"
                 className="history-close"
                 aria-label="关闭历史"
-                onClick={historyRead.close}
+                {...buttonActivationProps(historyRead.dismiss)}
               >
                 ×
               </Button>

@@ -446,15 +446,24 @@ test('meal completes favorite, create, repeat, update, history and delete lifecy
       new URL(response.url()).pathname.endsWith('/history') &&
       response.request().method() === 'GET',
   )
-  await page.locator('.meal-entry').first().getByRole('button', { name: '历史' }).click()
+  const mealHistoryTrigger = page
+    .locator('.meal-entry')
+    .first()
+    .getByRole('button', { name: '历史' })
+  await mealHistoryTrigger.focus()
+  await page.keyboard.press('Enter')
   expect((await historyPromise).status()).toBe(200)
-  await expect(page.getByRole('dialog', { name: '餐次历史' }).getByText('修改餐次')).toBeVisible()
-  await expect(page.getByRole('dialog', { name: '餐次历史' }).getByText('创建餐次')).toBeVisible()
+  const mealHistoryDialog = page.getByRole('dialog', { name: '餐次历史' })
+  await expect(mealHistoryDialog.getByText('修改餐次')).toBeVisible()
+  await expect(mealHistoryDialog.getByText('创建餐次')).toBeVisible()
+  await expect(mealHistoryDialog.locator('#meal-history-close')).toBeFocused()
   await page.screenshot({
     path: 'output/playwright/iteration-006-nutrition-mobile.png',
     fullPage: true,
   })
-  await page.getByRole('button', { name: '关闭餐次历史' }).first().click()
+  await page.keyboard.press('Escape')
+  await expect(mealHistoryDialog).toHaveCount(0)
+  await expect(mealHistoryTrigger).toBeFocused()
 
   await page.locator('.meal-entry').first().getByRole('button', { name: '删除' }).click()
   await expect(page.getByRole('dialog', { name: '确认删除餐次' })).toBeVisible()

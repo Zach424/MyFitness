@@ -679,13 +679,31 @@ test('health history sheet progressively loads immutable older revisions', async
   await page.reload()
   const currentEntry = page.locator('.log-entry').first()
   await expect(currentEntry.getByText('v12')).toBeVisible()
+  const historyTrigger = currentEntry.getByRole('button', { name: '历史' })
   const firstPageResponse = page.waitForResponse(
     (response) =>
       response.url().includes('/history?limit=10') && response.request().method() === 'GET',
   )
-  await currentEntry.getByRole('button', { name: '历史' }).click()
+  await historyTrigger.focus()
+  await page.keyboard.press('Enter')
   expect((await firstPageResponse).status()).toBe(200)
   const historyDialog = page.getByRole('dialog', { name: '记录历史' })
+  await expect(historyDialog.locator('.history-entry')).toHaveCount(10)
+  await expect(historyDialog.locator('#health-history-close')).toBeFocused()
+  await page.screenshot({
+    path: 'output/playwright/iteration-076-history-focus-mobile.png',
+    fullPage: false,
+  })
+
+  await page.keyboard.press('Escape')
+  await expect(historyDialog).toHaveCount(0)
+  await expect(historyTrigger).toBeFocused()
+  const reopenedPageResponse = page.waitForResponse(
+    (response) =>
+      response.url().includes('/history?limit=10') && response.request().method() === 'GET',
+  )
+  await page.keyboard.press('Enter')
+  expect((await reopenedPageResponse).status()).toBe(200)
   await expect(historyDialog.locator('.history-entry')).toHaveCount(10)
 
   const olderPageResponse = page.waitForResponse(
@@ -717,9 +735,12 @@ test('health history freezes its accepted revisions when an older page is unavai
   await page.reload()
   const currentEntry = page.locator('.log-entry').first()
   await expect(currentEntry.getByText('v12')).toBeVisible()
-  await currentEntry.getByRole('button', { name: '历史' }).click()
+  const historyTrigger = currentEntry.getByRole('button', { name: '历史' })
+  await historyTrigger.click()
   const dialog = page.getByRole('dialog', { name: '记录历史' })
   await expect(dialog.locator('.history-entry')).toHaveCount(10)
+  await expect(dialog.locator('#health-history-close')).toBeFocused()
+  await page.screenshot({ path: 'output/playwright/iteration-076-history-focus-wide.png' })
 
   let olderReads = 0
   await page.route(/\/history\?limit=10&cursor=/, async (route) => {
@@ -758,6 +779,9 @@ test('health history freezes its accepted revisions when an older page is unavai
   await expect(dialog.locator('.history-entry')).toHaveCount(12)
   await expect(dialog.getByText('已载入全部版本')).toBeVisible()
   expect(olderReads).toBe(2)
+  await dialog.locator('.history-layer__scrim').click({ position: { x: 4, y: 4 } })
+  await expect(dialog).toHaveCount(0)
+  await expect(historyTrigger).toBeFocused()
 })
 
 test('progress-photo inventory retains one private item after a refused refresh', async ({

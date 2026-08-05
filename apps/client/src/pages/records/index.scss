@@ -902,6 +902,8 @@
   font-size: 9px;
 }
 
+.history-close:focus,
+.log-action:focus,
 button:focus-visible,
 input:focus-visible {
   outline: 3px solid rgba(36, 76, 102, 0.3);

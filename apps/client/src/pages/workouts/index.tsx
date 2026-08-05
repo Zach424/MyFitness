@@ -8,7 +8,12 @@ import type {
   WorkoutHistoryItem,
 } from '@myfitness/contracts'
 
-import { buttonA11yProps, buttonActivationProps, deferH5Focus } from '../../lib/accessibility'
+import {
+  buttonA11yProps,
+  buttonActivationProps,
+  deferH5Focus,
+  escapeDismissProps,
+} from '../../lib/accessibility'
 import { parseBackfillIntent } from '../../lib/backfill-intent'
 import {
   AggregateHistoryEmptyState,
@@ -160,6 +165,10 @@ const WorkoutsPage = () => {
   const historyRead = useAggregateHistory<Workout, WorkoutHistoryItem>(
     getWorkoutHistory,
     'workout-history-read-retry',
+    {
+      initialFocusId: 'workout-history-close',
+      fallbackFocusId: 'workout-read-refresh',
+    },
   )
 
   const invalidatePendingSave = (nextFeedback = '') => {
@@ -1179,11 +1188,14 @@ const WorkoutsPage = () => {
                           修改
                         </Button>
                         <Button
-                          {...buttonA11yProps}
+                          id={`workout-history-trigger-${workout.id}`}
                           className="entry-action"
                           disabled={!readAuthorityReady}
-                          aria-disabled={!readAuthorityReady}
-                          onClick={() => historyRead.open(workout)}
+                          {...buttonActivationProps(
+                            () =>
+                              historyRead.open(workout, `workout-history-trigger-${workout.id}`),
+                            !readAuthorityReady,
+                          )}
                         >
                           历史
                         </Button>
@@ -1260,12 +1272,17 @@ const WorkoutsPage = () => {
       ) : null}
 
       {historyRead.target ? (
-        <View className="workout-history" role="dialog" aria-modal="true" aria-label="训练历史">
+        <View
+          className="workout-history"
+          role="dialog"
+          aria-modal="true"
+          aria-label="训练历史"
+          {...escapeDismissProps(historyRead.dismiss)}
+        >
           <Button
-            {...buttonA11yProps}
             className="workout-history__scrim"
             aria-label="关闭训练历史"
-            onClick={historyRead.close}
+            {...buttonActivationProps(historyRead.dismiss)}
           />
           <View className="workout-history__sheet">
             <View className="workout-section-heading">
@@ -1274,10 +1291,10 @@ const WorkoutsPage = () => {
                 <Text className="workout-panel-title">{historyRead.target.title}历史</Text>
               </View>
               <Button
-                {...buttonA11yProps}
+                id="workout-history-close"
                 className="history-close-button"
                 aria-label="关闭训练历史"
-                onClick={historyRead.close}
+                {...buttonActivationProps(historyRead.dismiss)}
               >
                 ×
               </Button>

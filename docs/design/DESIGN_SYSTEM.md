@@ -775,6 +775,17 @@ The receipt deliberately does not disable local inspection of the accepted curre
 
 - [1440 × 1000 retained weekly-plan decisions and accepted-empty explanations](../../output/playwright/iteration-075-plan-history-stale-wide.png)
 
+## Aggregate-history dialog focus boundary — iteration 076
+
+The body/recovery, workout and meal revision sheets now behave as one keyboard surface while retaining their separate ledger identities. Enter or Space on a row's `历史` control opens the requested sheet; successful entry moves focus to the circular close action, while an initial or continuation failure may supersede it with the amber retry action. The close action uses a visible double mineral ring on Taro's custom element rather than depending on a native `button:focus-visible` selector that H5 does not render.
+
+On 390 × 844 H5, the bottom sheet leaves the blurred record ledger recognizable behind it, keeps `AUDIT TRAIL / 体重历史` above the immutable v12–v7 rows and exposes the focused close action within thumb reach. On 1440 × 1000 H5, the same focus mark anchors the top-right of the narrow audit rail without competing with the retained record editor beneath the scrim. Escape, the circular action and scrim all close through one path and return to the exact row trigger; the stable refresh control is only a fallback when that trigger no longer exists.
+
+The treatment adds no animation, persistence or data copy. It does not claim focus trapping, screen-reader support or physical keyboard behavior on untested WeChat devices; those remain release evidence. Programmatic close during parent refresh deliberately does not restore focus into a ledger whose authority is being replaced.
+
+- [390 × 844 safe focus entry in the health-history bottom sheet](../../output/playwright/iteration-076-history-focus-mobile.png)
+- [1440 × 1000 safe focus entry in the health-history side rail](../../output/playwright/iteration-076-history-focus-wide.png)
+
 ## Screenshot review checklist
 
 - The Rhythm Rail remains understandable without color.

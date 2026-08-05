@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { buttonActivationProps, focusElementById, keyboardActivationProps } from './accessibility'
+import {
+  buttonActivationProps,
+  escapeDismissProps,
+  focusElementById,
+  focusElementByIdWithFallback,
+  keyboardActivationProps,
+} from './accessibility'
 
 const keyboardEvent = (key: string, repeat = false) => ({
   key,
@@ -48,6 +54,29 @@ describe('focus restoration accessibility', () => {
     expect(focusElementById('missing', { getElementById: () => null })).toBe(false)
     expect(focusElementById('missing')).toBe(false)
   })
+
+  it('uses the fallback only when the primary target is missing', () => {
+    const fallbackFocus = vi.fn()
+    const root = {
+      getElementById: vi.fn((id: string) =>
+        id === 'fallback-target' ? { focus: fallbackFocus } : null,
+      ),
+    }
+
+    expect(focusElementByIdWithFallback('missing', 'fallback-target', root)).toBe(true)
+    expect(root.getElementById).toHaveBeenNthCalledWith(1, 'missing')
+    expect(root.getElementById).toHaveBeenNthCalledWith(2, 'fallback-target')
+    expect(fallbackFocus).toHaveBeenCalledOnce()
+  })
+
+  it('does not inspect the fallback after the primary target receives focus', () => {
+    const primaryFocus = vi.fn()
+    const root = { getElementById: vi.fn(() => ({ focus: primaryFocus })) }
+
+    expect(focusElementByIdWithFallback('primary-target', 'fallback-target', root)).toBe(true)
+    expect(root.getElementById).toHaveBeenCalledOnce()
+    expect(primaryFocus).toHaveBeenCalledOnce()
+  })
 })
 
 describe('Taro button activation accessibility', () => {
@@ -70,5 +99,29 @@ describe('Taro button activation accessibility', () => {
 
     expect(activate).not.toHaveBeenCalled()
     expect(props['aria-disabled']).toBe(true)
+  })
+})
+
+describe('dialog dismissal accessibility', () => {
+  it('dismisses once for Escape and prevents the key from escaping the dialog boundary', () => {
+    const dismiss = vi.fn()
+    const event = { ...keyboardEvent('Escape'), stopPropagation: vi.fn() }
+
+    escapeDismissProps(dismiss).onKeyDown(event)
+
+    expect(event.preventDefault).toHaveBeenCalledOnce()
+    expect(event.stopPropagation).toHaveBeenCalledOnce()
+    expect(dismiss).toHaveBeenCalledOnce()
+  })
+
+  it.each(['Enter', ' '])('ignores non-Escape key %s', (key) => {
+    const dismiss = vi.fn()
+    const event = { ...keyboardEvent(key), stopPropagation: vi.fn() }
+
+    escapeDismissProps(dismiss).onKeyDown(event)
+
+    expect(event.preventDefault).not.toHaveBeenCalled()
+    expect(event.stopPropagation).not.toHaveBeenCalled()
+    expect(dismiss).not.toHaveBeenCalled()
   })
 })

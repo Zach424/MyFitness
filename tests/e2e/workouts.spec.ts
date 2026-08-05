@@ -260,7 +260,9 @@ test('workout history keeps its requested aggregate visible after an initial off
     await route.continue()
   })
 
-  await entry.getByRole('button', { name: '历史' }).click()
+  const historyTrigger = entry.getByRole('button', { name: '历史' })
+  await historyTrigger.focus()
+  await page.keyboard.press('Enter')
   const dialog = page.getByRole('dialog', { name: '训练历史' })
   await expect(dialog).toBeVisible()
   const readState = dialog.locator('.aggregate-history-read-state')
@@ -280,6 +282,9 @@ test('workout history keeps its requested aggregate visible after an initial off
   await expect(dialog.locator('.workout-history-entry')).toHaveCount(1)
   await expect(dialog.getByText('已载入全部版本')).toBeVisible()
   expect(historyReads).toBe(2)
+  await dialog.locator('#workout-history-close').click()
+  await expect(dialog).toHaveCount(0)
+  await expect(historyTrigger).toBeFocused()
 })
 
 test('action definition editor keeps an initial offline revision ledger unknown', async ({

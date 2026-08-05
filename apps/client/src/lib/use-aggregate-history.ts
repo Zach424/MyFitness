@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 
-import { deferH5Focus } from './accessibility'
+import { deferH5Focus, deferH5FocusWithFallback } from './accessibility'
 import {
   aggregateHistoryReadPhase,
   classifyAggregateHistoryReadFailure,
@@ -15,9 +15,15 @@ type AggregateHistoryReader<Item> = (
   options: { limit: number; cursor?: string },
 ) => Promise<AggregateHistoryPage<Item>>
 
+type AggregateHistoryFocusBoundary = {
+  initialFocusId: string
+  fallbackFocusId: string
+}
+
 export const useAggregateHistory = <Target extends AggregateTarget, Item>(
   readPage: AggregateHistoryReader<Item>,
   retryId: string,
+  focusBoundary?: AggregateHistoryFocusBoundary,
 ) => {
   const [target, setTarget] = useState<Target>()
   const [items, setItems] = useState<Item[]>()
@@ -25,6 +31,7 @@ export const useAggregateHistory = <Target extends AggregateTarget, Item>(
   const [busy, setBusy] = useState(false)
   const [failure, setFailure] = useState<AggregateHistoryReadFailure>()
   const requestToken = useRef(0)
+  const returnFocusId = useRef('')
 
   useEffect(
     () => () => {
@@ -57,22 +64,32 @@ export const useAggregateHistory = <Target extends AggregateTarget, Item>(
     }
   }
 
-  const open = (nextTarget: Target) => {
+  const open = (nextTarget: Target, triggerId = '') => {
     requestToken.current += 1
+    returnFocusId.current = triggerId
     setTarget(nextTarget)
     setItems(undefined)
     setNextCursor(null)
     setFailure(undefined)
     void read(nextTarget, 'initial')
+    if (focusBoundary) deferH5Focus(focusBoundary.initialFocusId, 40)
   }
 
   const close = () => {
     requestToken.current += 1
+    returnFocusId.current = ''
     setTarget(undefined)
     setItems(undefined)
     setNextCursor(null)
     setBusy(false)
     setFailure(undefined)
+  }
+
+  const dismiss = () => {
+    const focusId = returnFocusId.current
+    const fallbackFocusId = focusBoundary?.fallbackFocusId ?? ''
+    close()
+    if (focusId || fallbackFocusId) deferH5FocusWithFallback(focusId, fallbackFocusId, 40)
   }
 
   const phase = aggregateHistoryReadPhase({
@@ -95,5 +112,5 @@ export const useAggregateHistory = <Target extends AggregateTarget, Item>(
     void read(target, 'initial')
   }
 
-  return { target, items, nextCursor, busy, failure, phase, open, close, loadOlder, retry }
+  return { target, items, nextCursor, busy, failure, phase, open, close, dismiss, loadOlder, retry }
 }

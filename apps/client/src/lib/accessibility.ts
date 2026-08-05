@@ -19,9 +19,26 @@ export const focusElementById = (id: string, root?: FocusRoot) => {
   return true
 }
 
+export const focusElementByIdWithFallback = (
+  primaryId: string,
+  fallbackId: string,
+  root?: FocusRoot,
+) =>
+  (primaryId ? focusElementById(primaryId, root) : false) ||
+  (fallbackId ? focusElementById(fallbackId, root) : false)
+
 export const deferH5Focus = (id: string, delayMs = 0) => {
   if (process.env.TARO_ENV !== 'h5' || typeof document === 'undefined') return false
   globalThis.setTimeout(() => focusElementById(id, document), Math.max(0, delayMs))
+  return true
+}
+
+export const deferH5FocusWithFallback = (primaryId: string, fallbackId: string, delayMs = 0) => {
+  if (process.env.TARO_ENV !== 'h5' || typeof document === 'undefined') return false
+  globalThis.setTimeout(
+    () => focusElementByIdWithFallback(primaryId, fallbackId, document),
+    Math.max(0, delayMs),
+  )
   return true
 }
 
@@ -29,6 +46,10 @@ type KeyboardActivationEvent = {
   key: string
   repeat: boolean
   preventDefault: () => void
+}
+
+type EscapeDismissEvent = KeyboardActivationEvent & {
+  stopPropagation?: () => void
 }
 
 export const keyboardActivationProps = (activate: () => void, disabled = false) => ({
@@ -45,5 +66,14 @@ export const buttonActivationProps = (activate: () => void, disabled = false) =>
   ...keyboardActivationProps(activate, disabled),
   onClick: () => {
     if (!disabled) activate()
+  },
+})
+
+export const escapeDismissProps = (dismiss: () => void) => ({
+  onKeyDown: (event: EscapeDismissEvent) => {
+    if (event.repeat || event.key !== 'Escape') return
+    event.preventDefault()
+    event.stopPropagation?.()
+    dismiss()
   },
 })
