@@ -829,6 +829,16 @@ A matching food/default-serving snapshot proves PUT completion; absence proves D
 
 - [390 × 844 unresolved favorite save above the retained meal snapshot](../../output/playwright/iteration-080-favorite-reconciliation-mobile.png)
 
+## Profile/goal response-loss recovery — iteration 081
+
+An interrupted profile/goal PUT now turns the existing three-sheet editor into a locked evidence surface. `PROFILE SAVE UNKNOWN / 禁止直接重放` appears below the unchanged safety and consent sheet, names the submitted base revision and provides one full-width `核对保存结果` action. The regular save action disappears until current evidence resolves; step navigation remains available for reviewing the frozen input.
+
+On 390 × 844 H5, all six risk choices retain readable disabled text, the four consent switches remain visibly on, and the amber ruled receipt sits immediately after them. Visual review corrected Taro's native disabled treatment, which initially made unselected risk labels nearly disappear. Explicit muted/juniper text fill now keeps both selected and unselected facts readable without making them look interactive, while the recovery action retains the mineral double focus ring.
+
+Only an advanced/current-first revision with complete profile, goal, constraint, risk-flag and consent-version equality becomes green success. Same-revision or confirmed-absence evidence restores a fresh explicit save; divergent evidence preserves the frozen local input and enters the established discard/load-current choice. Revision alone never implies a safety or consent fact, and the page adds no autosave, background replay or persistent profile draft.
+
+- [390 × 844 unresolved profile save below frozen risk and consent input](../../output/playwright/iteration-081-profile-save-reconciliation-mobile.png)
+
 ## Screenshot review checklist
 
 - The Rhythm Rail remains understandable without color.

@@ -11,7 +11,7 @@ import {
   sexForCalculationOptions,
   weekdays,
 } from '@myfitness/contracts/onboarding.constants'
-import type { OnboardingResponse } from '@myfitness/contracts'
+import type { OnboardingRequest, OnboardingResponse } from '@myfitness/contracts'
 
 import { ApiError, apiBaseUrl, getOnboarding, saveOnboarding } from '../../lib/api'
 import { buttonA11yProps, buttonActivationProps, deferH5Focus } from '../../lib/accessibility'
@@ -29,6 +29,12 @@ import {
   validateStep,
   type OnboardingDraft,
 } from './onboarding.model'
+import {
+  classifyOnboardingSaveEvidence,
+  describeOnboardingReconciliationFailure,
+  describeOnboardingSaveFailure,
+  type OnboardingRecoveryReceipt,
+} from './onboarding-recovery'
 import './index.scss'
 
 const labels = {
@@ -92,16 +98,18 @@ const Chip = ({
   selected,
   label,
   onClick,
+  disabled = false,
 }: {
   selected: boolean
   label: string
   onClick: () => void
+  disabled?: boolean
 }) => (
   <Button
-    {...buttonA11yProps}
+    {...buttonActivationProps(onClick, disabled)}
     className={`choice-chip ${selected ? 'choice-chip--selected' : ''}`}
+    disabled={disabled}
     aria-pressed={selected}
-    onClick={onClick}
   >
     {label}
   </Button>
@@ -138,6 +146,12 @@ const OnboardingPage = () => {
   const [message, setMessage] = useState('')
   const [readBusy, setReadBusy] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [saveRecoveryBusy, setSaveRecoveryBusy] = useState(false)
+  const [saveRecovery, setSaveRecovery] = useState<{
+    baseRevision: number | null
+    submitted: OnboardingRequest
+    receipt: OnboardingRecoveryReceipt
+  }>()
   const [result, setResult] = useState<OnboardingResponse>()
   const pageActive = useRef(true)
   const readInFlight = useRef(false)
@@ -199,6 +213,7 @@ const OnboardingPage = () => {
   }, [])
 
   const patchDraft = (patch: Partial<OnboardingDraft>) => {
+    if (saving || saveRecovery) return
     setDraft((current) => ({ ...current, ...patch }))
     draftDirtyRef.current = true
     setDraftDirty(true)
@@ -238,10 +253,15 @@ const OnboardingPage = () => {
       readFailure !== undefined ||
       acceptedProfile === undefined ||
       draftBaseRevision === undefined ||
-      draftOutdated
+      draftOutdated ||
+      saveRecovery
     ) {
-      setMessage('请先重新核对当前资料底稿；保存不会使用未知或过期的修订。')
-      deferH5Focus('onboarding-read-retry')
+      setMessage(
+        saveRecovery
+          ? '请先核对上一次保存结果；页面不会用新的 PUT 覆盖未知结果。'
+          : '请先重新核对当前资料底稿；保存不会使用未知或过期的修订。',
+      )
+      deferH5Focus(saveRecovery ? 'onboarding-save-recovery' : 'onboarding-read-retry')
       return
     }
     const validationError = validateStep(draft, 2)
@@ -251,10 +271,10 @@ const OnboardingPage = () => {
     }
     setSaving(true)
     setMessage('')
+    setResult(undefined)
+    const submitted = buildOnboardingRequest(draft, draftBaseRevision ?? undefined)
     try {
-      const saved = await saveOnboarding(
-        buildOnboardingRequest(draft, draftBaseRevision ?? undefined),
-      )
+      const saved = await saveOnboarding(submitted)
       acceptedProfileRef.current = saved
       draftBaseRevisionRef.current = saved.revision
       draftDirtyRef.current = false
@@ -275,10 +295,90 @@ const OnboardingPage = () => {
         const refreshed = await loadProfileAuthority()
         if (refreshed) deferH5Focus('onboarding-load-accepted', 80)
       } else {
-        setMessage(error instanceof Error ? error.message : '保存失败，请稍后再试')
+        draftDirtyRef.current = true
+        setDraftDirty(true)
+        setSaveRecovery({
+          baseRevision: draftBaseRevision,
+          submitted,
+          receipt: describeOnboardingSaveFailure(error),
+        })
+        setMessage('')
+        deferH5Focus('onboarding-save-recovery', 80)
       }
     } finally {
       setSaving(false)
+    }
+  }
+
+  const reconcileSave = async () => {
+    if (!saveRecovery || saveRecoveryBusy) return
+    if (saveRecovery.receipt.authority === 'terminal') {
+      setSaveRecovery(undefined)
+      setMessage('服务端明确没有接受上一次保存；本地输入仍保留。')
+      deferH5Focus(step === 2 ? 'onboarding-save' : 'onboarding-display-name', 80)
+      return
+    }
+
+    const pending = saveRecovery
+    setSaveRecoveryBusy(true)
+    setMessage('')
+    try {
+      const current = await getOnboarding()
+      if (!pageActive.current) return
+      const evidence = classifyOnboardingSaveEvidence(
+        pending.baseRevision,
+        current,
+        pending.submitted,
+      )
+
+      if (evidence === 'applied' && current) {
+        acceptedProfileRef.current = current
+        draftBaseRevisionRef.current = current.revision
+        draftDirtyRef.current = false
+        setAcceptedProfile(current)
+        setDraftBaseRevision(current.revision)
+        setDraftDirty(false)
+        setDraftOutdated(false)
+        setReadFailure(undefined)
+        setSaveRecovery(undefined)
+        setResult(current)
+        setMessage(
+          current.eligibility.status === 'eligible'
+            ? `已从当前资料 v${current.revision} 确认上一次资料与目标保存完成。`
+            : `已从当前资料 v${current.revision} 确认保存完成；专业许可安全边界继续生效。`,
+        )
+        deferH5Focus('onboarding-read-refresh', 80)
+        return
+      }
+
+      publishAuthority(current)
+      setSaveRecovery(undefined)
+      setResult(undefined)
+      if (evidence === 'not_applied') {
+        setMessage(
+          current
+            ? `当前仍是资料 v${current.revision}，没有上一次保存已落库的证据。如仍需保存，请再次明确点击。`
+            : '服务仍确认当前尚未建档，没有上一次保存已落库的证据。如仍需保存，请再次明确点击。',
+        )
+        deferH5Focus(step === 2 ? 'onboarding-save' : 'onboarding-display-name', 80)
+        return
+      }
+
+      setMessage(
+        current
+          ? `当前资料已是 v${current.revision}，但资料、目标、风险标记或同意版本与上次提交不完全一致。本地输入仍保留；请明确载入当前底稿后再编辑。`
+          : '当前资料已不存在，与上次提交依据不一致。本地输入仍保留；请明确载入当前未建档状态后再编辑。',
+      )
+      deferH5Focus('onboarding-load-accepted', 80)
+    } catch {
+      if (!pageActive.current) return
+      setSaveRecovery({
+        ...pending,
+        receipt: describeOnboardingReconciliationFailure(),
+      })
+      deferH5Focus('onboarding-save-recovery', 80)
+    } finally {
+      if (pageActive.current) setSaveRecoveryBusy(false)
     }
   }
 
@@ -293,9 +393,19 @@ const OnboardingPage = () => {
     : undefined
   const acceptedRevision = acceptedProfile?.revision ?? null
   const authorityMatchesDraft = onboardingAuthorityMatchesBase(acceptedRevision, draftBaseRevision)
-  const canSubmit = !saving && readPhase === 'ready' && authorityMatchesDraft && !draftOutdated
-  const authorityLabel =
-    readPhase === 'ready'
+  const canSubmit =
+    !saving &&
+    !saveRecovery &&
+    !saveRecoveryBusy &&
+    readPhase === 'ready' &&
+    authorityMatchesDraft &&
+    !draftOutdated
+  const editorLocked = saving || saveRecoveryBusy || Boolean(saveRecovery)
+  const authorityLabel = saveRecovery
+    ? acceptedProfile
+      ? `待核对保存 · 提交基于资料 v${saveRecovery.baseRevision ?? 0}`
+      : '待核对保存 · 提交基于尚未建档'
+    : readPhase === 'ready'
       ? acceptedProfile
         ? `已确认底稿 · 资料 v${acceptedProfile.revision}`
         : '已确认底稿 · 当前尚未建档'
@@ -368,7 +478,7 @@ const OnboardingPage = () => {
                   <Button
                     {...buttonActivationProps(
                       () => void loadProfileAuthority(),
-                      readBusy || saving,
+                      readBusy || saving || Boolean(saveRecovery),
                     )}
                     id="onboarding-read-refresh"
                     className="profile-authority-toolbar__action"
@@ -478,6 +588,7 @@ const OnboardingPage = () => {
                       maxlength={40}
                       placeholder="例如：小陈"
                       value={draft.displayName}
+                      disabled={editorLocked}
                       onInput={(event) => patchDraft({ displayName: event.detail.value })}
                     />
                   </View>
@@ -488,6 +599,7 @@ const OnboardingPage = () => {
                       {ageBands.map((item) => (
                         <Chip
                           key={item}
+                          disabled={editorLocked}
                           label={labels.ageBand[item]}
                           selected={draft.ageBand === item}
                           onClick={() => patchDraft({ ageBand: item })}
@@ -503,6 +615,7 @@ const OnboardingPage = () => {
                       {sexForCalculationOptions.map((item) => (
                         <Chip
                           key={item}
+                          disabled={editorLocked}
                           label={labels.sex[item]}
                           selected={draft.sexForCalculations === item}
                           onClick={() => patchDraft({ sexForCalculations: item })}
@@ -519,6 +632,7 @@ const OnboardingPage = () => {
                           className="text-input text-input--number"
                           type="digit"
                           value={draft.height}
+                          disabled={editorLocked}
                           onInput={(event) => patchDraft({ height: event.detail.value })}
                         />
                         <Text className="number-input-wrap__unit">
@@ -528,11 +642,13 @@ const OnboardingPage = () => {
                     </View>
                     <View className="unit-toggle">
                       <Chip
+                        disabled={editorLocked}
                         label="公制"
                         selected={draft.unitSystem === 'metric'}
                         onClick={() => patchDraft({ unitSystem: 'metric', height: '170' })}
                       />
                       <Chip
+                        disabled={editorLocked}
                         label="英制"
                         selected={draft.unitSystem === 'imperial'}
                         onClick={() => patchDraft({ unitSystem: 'imperial', height: '67' })}
@@ -550,6 +666,7 @@ const OnboardingPage = () => {
                       {primaryGoals.map((item) => (
                         <Chip
                           key={item}
+                          disabled={editorLocked}
                           label={labels.goal[item]}
                           selected={draft.primaryGoal === item}
                           onClick={() => patchDraft({ primaryGoal: item })}
@@ -564,6 +681,7 @@ const OnboardingPage = () => {
                       {experienceLevels.map((item) => (
                         <Chip
                           key={item}
+                          disabled={editorLocked}
                           label={labels.experience[item]}
                           selected={draft.experience === item}
                           onClick={() => patchDraft({ experience: item })}
@@ -581,6 +699,7 @@ const OnboardingPage = () => {
                       {weekdays.map((item) => (
                         <Chip
                           key={item}
+                          disabled={editorLocked}
                           label={labels.weekday[item]}
                           selected={draft.availableDays.includes(item)}
                           onClick={() =>
@@ -602,6 +721,7 @@ const OnboardingPage = () => {
                       {[30, 45, 60].map((minutes) => (
                         <Chip
                           key={minutes}
+                          disabled={editorLocked}
                           label={`${minutes} 分钟`}
                           selected={draft.sessionMinutes === minutes}
                           onClick={() => patchDraft({ sessionMinutes: minutes })}
@@ -616,6 +736,7 @@ const OnboardingPage = () => {
                       {equipmentOptions.map((item) => (
                         <Chip
                           key={item}
+                          disabled={editorLocked}
                           label={labels.equipment[item]}
                           selected={draft.equipment.includes(item)}
                           onClick={() =>
@@ -646,6 +767,7 @@ const OnboardingPage = () => {
                       {riskFlags.map((item) => (
                         <Chip
                           key={item}
+                          disabled={editorLocked}
                           label={labels.risk[item]}
                           selected={draft.riskFlags.includes(item)}
                           onClick={() =>
@@ -668,6 +790,7 @@ const OnboardingPage = () => {
                         <Switch
                           checked={Boolean(draft[key as keyof OnboardingDraft])}
                           color="var(--color-juniper)"
+                          disabled={editorLocked}
                           onChange={(event) =>
                             patchDraft({ [key]: event.detail.value } as Partial<OnboardingDraft>)
                           }
@@ -675,6 +798,34 @@ const OnboardingPage = () => {
                       </View>
                     ))}
                   </View>
+                </View>
+              ) : null}
+
+              {saveRecovery ? (
+                <View
+                  className={`profile-save-recovery profile-save-recovery--${saveRecovery.receipt.kind}`}
+                  role="status"
+                  aria-live="polite"
+                  aria-atomic="true"
+                >
+                  <Text className="profile-save-recovery__eyebrow">
+                    {saveRecovery.receipt.eyebrow}
+                  </Text>
+                  <Text className="profile-save-recovery__copy">
+                    {saveRecovery.receipt.message}
+                  </Text>
+                  <Text className="profile-save-recovery__base metric">
+                    {saveRecovery.baseRevision === null
+                      ? 'SUBMITTED BASE · 尚未建档'
+                      : `SUBMITTED BASE · 资料 v${saveRecovery.baseRevision}`}
+                  </Text>
+                  <Button
+                    id="onboarding-save-recovery"
+                    className="profile-save-recovery__action"
+                    {...buttonActivationProps(() => void reconcileSave(), saveRecoveryBusy)}
+                  >
+                    {saveRecoveryBusy ? '正在核对…' : saveRecovery.receipt.actionLabel}
+                  </Button>
                 </View>
               ) : null}
 
@@ -704,9 +855,10 @@ const OnboardingPage = () => {
                       继续
                       <Text aria-hidden="true"> →</Text>
                     </Button>
-                  ) : (
+                  ) : saveRecovery ? null : (
                     <Button
                       {...buttonActivationProps(() => void submit(), !canSubmit)}
+                      id="onboarding-save"
                       className="primary-action"
                       disabled={!canSubmit}
                     >

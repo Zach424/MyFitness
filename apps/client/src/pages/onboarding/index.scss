@@ -204,6 +204,76 @@
   background: var(--color-paper);
 }
 
+.profile-save-recovery {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+  padding: 14px 15px;
+  border-left: 4px solid var(--color-warning);
+  background: var(--color-warning-soft);
+}
+
+.profile-save-recovery--server_rejected {
+  border-left-color: var(--color-pulse);
+  background: rgba(233, 106, 91, 0.09);
+}
+
+.profile-save-recovery__eyebrow,
+.profile-save-recovery__copy,
+.profile-save-recovery__base {
+  display: block;
+}
+
+.profile-save-recovery__eyebrow {
+  color: var(--color-ink);
+  font-family: var(--font-display);
+  font-size: 9px;
+  font-weight: 760;
+  letter-spacing: 0.1em;
+}
+
+.profile-save-recovery__copy {
+  color: var(--color-ink);
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.profile-save-recovery__base {
+  color: var(--color-mineral);
+  font-size: 10px;
+  font-weight: 720;
+}
+
+.profile-save-recovery__action {
+  width: 100%;
+  min-height: 44px;
+  margin: 3px 0 0;
+  border: 1px solid rgba(36, 76, 102, 0.25);
+  border-radius: var(--radius-control);
+  color: var(--color-mineral);
+  background: rgba(255, 255, 255, 0.72);
+  font-size: 11px;
+  font-weight: 740;
+  line-height: 44px;
+}
+
+.profile-save-recovery__action[aria-disabled='true'] {
+  opacity: 0.5;
+}
+
+.choice-chip[aria-disabled='true'] {
+  color: var(--color-muted) !important;
+  background: var(--color-paper);
+  -webkit-text-fill-color: var(--color-muted);
+  opacity: 0.68;
+}
+
+.choice-chip--selected[aria-disabled='true'] {
+  color: var(--color-juniper) !important;
+  background: var(--color-juniper-soft);
+  -webkit-text-fill-color: var(--color-juniper);
+}
+
 .profile-authority-drift__action[aria-disabled='true'] {
   opacity: 0.55;
 }
@@ -563,7 +633,9 @@
 .profile-authority-state__action:focus,
 .profile-authority-state__action:focus-visible,
 .profile-authority-drift__action:focus,
-.profile-authority-drift__action:focus-visible {
+.profile-authority-drift__action:focus-visible,
+.profile-save-recovery__action:focus,
+.profile-save-recovery__action:focus-visible {
   outline: 3px solid rgba(36, 76, 102, 0.3);
   outline-offset: 2px;
 }

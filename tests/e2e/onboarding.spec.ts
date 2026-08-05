@@ -59,6 +59,7 @@ const collectBrowserErrors = (
   page: Page,
   options: {
     allowOnboardingRequestFailure?: boolean
+    allowOnboardingWriteFailure?: boolean
     expectedOnboardingStatus?: number
     expectedOnboardingWriteStatus?: number
   } = {},
@@ -74,8 +75,8 @@ const collectBrowserErrors = (
   page.on('pageerror', (error) => errors.push(error.message))
   page.on('requestfailed', (request) => {
     if (
-      options.allowOnboardingRequestFailure &&
-      request.method() === 'GET' &&
+      ((options.allowOnboardingRequestFailure && request.method() === 'GET') ||
+        (options.allowOnboardingWriteFailure && request.method() === 'PUT')) &&
       request.url().endsWith('/v1/me/onboarding')
     )
       return
@@ -332,5 +333,93 @@ test('profile register refuses to rebase a local draft over a newer revision', a
   await page.getByRole('button', { name: '放弃本地修改并载入最新底稿' }).click()
   await expect(displayName).toHaveValue('服务端资料 v2')
   await expect(page.getByText('本地修改基于较早的资料修订')).toHaveCount(0)
+  expect(browserErrors).toEqual([])
+})
+
+test('profile save reconciles exact current evidence before another PUT', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  const browserErrors = collectBrowserErrors(page, { allowOnboardingWriteFailure: true })
+  const sessionPromise = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/v1/auth/dev/session') && response.request().method() === 'POST',
+  )
+  await page.goto('/')
+  const session = await sessionPromise
+  expect(session.status()).toBe(200)
+  const { accessToken } = (await session.json()) as { accessToken: string }
+  const seeded = await page.request.put(`${apiUrl}/me/onboarding`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    data: onboardingPayload('资料 v1'),
+  })
+  expect(seeded.status()).toBe(200)
+
+  await page.getByRole('button', { name: '建立或更新个人资料' }).click()
+  const displayName = page.getByRole('textbox', { name: '例如：小陈' })
+  await expect(displayName).toHaveValue('资料 v1')
+  await displayName.fill('已提交但响应丢失')
+  await page.getByRole('button', { name: '继续' }).click()
+  await page.getByRole('button', { name: '继续' }).click()
+
+  let putAttempts = 0
+  await page.route(`${apiUrl}/me/onboarding`, async (route) => {
+    if (route.request().method() !== 'PUT') {
+      await route.continue()
+      return
+    }
+    putAttempts += 1
+    if (putAttempts === 1) {
+      const committedResponse = await route.fetch()
+      expect(committedResponse.status()).toBe(200)
+      await route.abort('failed')
+      return
+    }
+    if (putAttempts === 2) {
+      await route.abort('failed')
+      return
+    }
+    await route.continue()
+  })
+
+  await page.getByRole('button', { name: '保存资料' }).click()
+  const recovery = page.locator('.profile-save-recovery')
+  await expect(recovery.getByText('PROFILE SAVE UNKNOWN / 禁止直接重放')).toBeVisible()
+  await expect(page.locator('#onboarding-save-recovery')).toBeFocused()
+  await expect(page.getByRole('button', { name: '保存资料' })).toHaveCount(0)
+  expect(putAttempts).toBe(1)
+  await page.screenshot({
+    path: 'output/playwright/iteration-081-profile-save-reconciliation-mobile.png',
+    fullPage: true,
+  })
+
+  await page.getByRole('button', { name: '上一步' }).click()
+  await page.getByRole('button', { name: '上一步' }).click()
+  await expect(displayName).toHaveValue('已提交但响应丢失')
+  await expect(displayName).toBeDisabled()
+  await recovery.getByRole('button', { name: '核对保存结果' }).click()
+
+  await expect(page.getByText('已确认底稿 · 资料 v2')).toBeVisible()
+  await expect(page.locator('.form-message')).toContainText('确认上一次资料与目标保存完成')
+  await expect(displayName).toHaveValue('已提交但响应丢失')
+  await expect(displayName).toBeEnabled()
+  expect(putAttempts).toBe(1)
+
+  await displayName.fill('未提交的新资料')
+  await page.getByRole('button', { name: '继续' }).click()
+  await page.getByRole('button', { name: '继续' }).click()
+  await page.getByRole('button', { name: '保存资料' }).click()
+  await expect(recovery.getByText('PROFILE SAVE UNKNOWN / 禁止直接重放')).toBeVisible()
+  expect(putAttempts).toBe(2)
+  await recovery.getByRole('button', { name: '核对保存结果' }).click()
+
+  await expect(page.locator('.form-message')).toContainText(
+    '当前仍是资料 v2，没有上一次保存已落库的证据',
+  )
+  await expect(page.getByRole('button', { name: '保存资料' })).toBeEnabled()
+  expect(putAttempts).toBe(2)
+
+  await page.getByRole('button', { name: '保存资料' }).click()
+  await expect(page.locator('.form-message')).toContainText('资料已保存')
+  await expect(page.getByText('已确认底稿 · 资料 v3')).toBeVisible()
+  expect(putAttempts).toBe(3)
   expect(browserErrors).toEqual([])
 })
