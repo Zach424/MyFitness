@@ -148,6 +148,10 @@
   background: var(--color-mineral);
 }
 
+.exercise-observation-choice[aria-disabled='true'] {
+  opacity: 0.45;
+}
+
 .exercise-observation-windows {
   margin-top: 10px;
 }

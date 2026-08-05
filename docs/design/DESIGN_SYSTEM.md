@@ -1,6 +1,6 @@
 # Design system baseline
 
-Status: implemented and visually validated through iteration-065 health-record ledger read-authority evidence
+Status: implemented and visually validated through iteration-069 long-term observation read-authority evidence
 
 Working brand: 衡迹 / MyFitness
 
@@ -681,6 +681,26 @@ On wide H5, a rejected favorite refresh retains `MEALS 1 / FAVORITES 1 / FOODS 1
 
 - [390 × 844 unread meal desk](../../output/playwright/iteration-067-nutrition-initial-offline-mobile.png)
 - [1440 × 1000 retained meal/favorite/food snapshot](../../output/playwright/iteration-067-nutrition-stale-wide.png)
+
+## Owner-definition register read authority — iteration 068
+
+The two dedicated definition registers now use one visual contract without erasing their domain identities. Before a successful read, the page count and active-definition count are em dashes and the list says it has not been checked; the dominant new/create action is visibly inert. The amber ruled receipt sits between the short register instruction and the definition list, so it describes the exact directory rather than reading as a global account outage.
+
+On wide food H5, a rejected refresh retains `OWNED FOODS 1` and the accepted oatmeal definition below it, with edit muted but readable. On mobile action H5, `OWNED MOVEMENTS —` and the unknown list replace the former false empty invitation. Initial success focuses back after route transition; initial failure focuses retry instead, preventing competing delayed focus from hiding recovery.
+
+- [390 × 844 unread owner-action register](../../output/playwright/iteration-068-action-register-offline-mobile.png)
+- [1440 × 1000 retained owner-food register](../../output/playwright/iteration-068-food-register-stale-wide.png)
+
+## Long-term observation read authority — iteration 069
+
+Health, movement and nutrition observations now share a compact evidence-note/update row followed by the same ruled authority receipt used elsewhere, but their retained state stays deliberately read-only rather than looking disabled wholesale. The note names the exact boundary—source identity plus projection for health/movement, current meal projection for nutrition—and keeps non-diagnostic/non-prescriptive language above the visualization.
+
+The mobile health initial-error composition uses `METRIC — · POINTS —`, one full-width retry and an explicit unverified card instead of an empty-observation invitation. The wide nutrition stale composition retains `LOCAL DAYS 90`, one recorded day and the locally selected 7-day ribbon under the warning. Server-backed identity switches and ordinary update are muted, while local time windows and nutrient tabs remain full-strength because they only reshape accepted response data.
+
+Visual review confirms that both evidence states preserve the calm logbook hierarchy: mineral toolbar, amber uncertainty receipt, paper projection. The mobile capture waits for the Taro route boundary; the wide capture resets the nested scroll container after changing time window so the masthead, authority and retained evidence remain in one trustworthy frame.
+
+- [390 × 844 unread health observation](../../output/playwright/iteration-069-health-observation-offline-mobile.png)
+- [1440 × 1000 retained nutrition observation](../../output/playwright/iteration-069-nutrition-observation-stale-wide.png)
 
 ## Screenshot review checklist
 

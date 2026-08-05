@@ -3,8 +3,18 @@ import { Button, ScrollView, Text, View } from '@tarojs/components'
 import Taro from '@tarojs/taro'
 import type { HealthInsight, MetricCode } from '@myfitness/contracts'
 
-import { buttonA11yProps } from '../../lib/accessibility'
-import { ApiError, getHealthInsight, listHealthRecords } from '../../lib/api'
+import {
+  ObservationReadState,
+  ObservationReadToolbar,
+} from '../../components/observation-read-state'
+import { buttonA11yProps, buttonActivationProps, deferH5Focus } from '../../lib/accessibility'
+import { getHealthInsight, listHealthRecords } from '../../lib/api'
+import {
+  classifyObservationReadFailure,
+  observationReadFailureCopy,
+  observationReadPhase,
+  type ObservationReadFailureKind,
+} from '../../lib/observation-read'
 import {
   formatInsightValue,
   formatRecordedInsightValue,
@@ -16,8 +26,7 @@ import {
 import { metricUiDefinitions, unitLabels } from '../records/record.model'
 import './index.scss'
 
-const messageOf = (error: unknown) =>
-  error instanceof ApiError || error instanceof Error ? error.message : '指标观察加载失败'
+type HealthObservationIntent = { metric?: MetricCode; reuseChoices: boolean }
 
 const HealthInsightsPage = () => {
   const requestedMetric = useRef(Taro.getCurrentInstance().router?.params.metric ?? '')
@@ -26,53 +35,68 @@ const HealthInsightsPage = () => {
   const [days, setDays] = useState<7 | 30 | 90>(30)
   const [insight, setInsight] = useState<HealthInsight>()
   const [loading, setLoading] = useState(true)
-  const [feedback, setFeedback] = useState('')
+  const [hasReadSnapshot, setHasReadSnapshot] = useState(false)
+  const [readFailure, setReadFailure] = useState<ObservationReadFailureKind>()
+  const readInFlight = useRef(false)
+  const pageActive = useRef(true)
+  const pendingIntent = useRef<HealthObservationIntent>()
+
+  const loadObservationAuthority = async (intent: HealthObservationIntent) => {
+    if (readInFlight.current) return
+    const hadSnapshot = hasReadSnapshot
+    pendingIntent.current = intent
+    readInFlight.current = true
+    setLoading(true)
+    setReadFailure(undefined)
+    try {
+      const nextChoices = intent.reuseChoices
+        ? choices
+        : healthInsightChoices((await listHealthRecords()).items)
+      const nextMetric = nextChoices.some((choice) => choice.metric === intent.metric)
+        ? intent.metric
+        : nextChoices[0]?.metric
+      const nextInsight = nextMetric
+        ? await getHealthInsight(nextMetric, healthInsightTimezone())
+        : undefined
+      if (!pageActive.current) return
+      setChoices(nextChoices)
+      setMetric(nextMetric)
+      setInsight(nextInsight)
+      setHasReadSnapshot(true)
+      pendingIntent.current = undefined
+      if (!hadSnapshot) deferH5Focus('health-observation-back', 350)
+    } catch (error) {
+      if (!pageActive.current) return
+      setReadFailure(classifyObservationReadFailure(error))
+      deferH5Focus('health-observation-read-retry', hadSnapshot ? 80 : 500)
+    } finally {
+      readInFlight.current = false
+      if (pageActive.current) setLoading(false)
+    }
+  }
 
   useEffect(() => {
-    let active = true
-    void listHealthRecords()
-      .then((result) => {
-        if (!active) return
-        const nextChoices = healthInsightChoices(result.items)
-        setChoices(nextChoices)
-        setMetric(
-          nextChoices.some((choice) => choice.metric === requestedMetric.current)
-            ? (requestedMetric.current as MetricCode)
-            : nextChoices[0]?.metric,
-        )
-        if (!nextChoices.length) setLoading(false)
-      })
-      .catch((error: unknown) => {
-        if (active) {
-          setFeedback(messageOf(error))
-          setLoading(false)
-        }
-      })
+    pageActive.current = true
+    void loadObservationAuthority({
+      metric: requestedMetric.current as MetricCode,
+      reuseChoices: false,
+    })
     return () => {
-      active = false
+      pageActive.current = false
     }
   }, [])
 
-  useEffect(() => {
-    if (!metric) return
-    let active = true
-    setLoading(true)
-    setFeedback('')
-    setInsight(undefined)
-    void getHealthInsight(metric, healthInsightTimezone())
-      .then((result) => {
-        if (active) setInsight(result)
-      })
-      .catch((error: unknown) => {
-        if (active) setFeedback(messageOf(error))
-      })
-      .finally(() => {
-        if (active) setLoading(false)
-      })
-    return () => {
-      active = false
-    }
-  }, [metric])
+  const readPhase = observationReadPhase({
+    hasSnapshot: hasReadSnapshot,
+    busy: loading,
+    hasFailure: Boolean(readFailure),
+  })
+  const readAuthorityReady = readPhase === 'ready'
+  const readFailurePresentation = readFailure
+    ? observationReadFailureCopy(readFailure, 'health', hasReadSnapshot)
+    : undefined
+  const retryObservationAuthority = () =>
+    void loadObservationAuthority(pendingIntent.current ?? { metric, reuseChoices: false })
 
   const window = insight?.windows.find((candidate) => candidate.days === days)
   const points = useMemo(() => (insight ? healthInsightPoints(insight, days) : []), [days, insight])
@@ -89,6 +113,7 @@ const HealthInsightsPage = () => {
           <View className="health-observation-topbar">
             <Button
               {...buttonA11yProps}
+              id="health-observation-back"
               className="health-observation-back"
               aria-label="返回身体与恢复记录"
               onClick={() => void Taro.navigateBack()}
@@ -110,8 +135,27 @@ const HealthInsightsPage = () => {
             </Text>
           </View>
 
+          <ObservationReadToolbar
+            label="来源指标与所选观察会一起核对；不会合并不同单位或 AI 候选。"
+            buttonId="health-observation-refresh"
+            buttonLabel="更新身体与恢复长期观察"
+            busy={loading}
+            disabled={!hasReadSnapshot || !readAuthorityReady}
+            onRefresh={() => void loadObservationAuthority({ metric, reuseChoices: false })}
+          />
+
+          <ObservationReadState
+            phase={readPhase}
+            subject="health"
+            presentation={readFailurePresentation}
+            retainedLabel={`METRIC ${hasReadSnapshot ? (insight?.metric ?? 'EMPTY') : '—'} · POINTS ${hasReadSnapshot ? (insight?.series.length ?? 0) : '—'}`}
+            retryId="health-observation-read-retry"
+            retryLabel="重新核对身体与恢复长期观察"
+            onRetry={retryObservationAuthority}
+          />
+
           <View className="health-observation-card">
-            {choices.length ? (
+            {hasReadSnapshot && choices.length ? (
               <>
                 <Text className="health-observation-caption">选择指标</Text>
                 <ScrollView
@@ -123,11 +167,17 @@ const HealthInsightsPage = () => {
                   <View className="health-observation-choice-row">
                     {choices.map((choice) => (
                       <Button
-                        {...buttonA11yProps}
+                        {...buttonActivationProps(
+                          () =>
+                            void loadObservationAuthority({
+                              metric: choice.metric,
+                              reuseChoices: true,
+                            }),
+                          !readAuthorityReady,
+                        )}
                         className={`health-observation-choice ${metric === choice.metric ? 'health-observation-choice--active' : ''}`}
                         key={choice.metric}
                         aria-pressed={metric === choice.metric}
-                        onClick={() => setMetric(choice.metric)}
                       >
                         {choice.label}
                       </Button>
@@ -148,13 +198,7 @@ const HealthInsightsPage = () => {
                   ))}
                 </View>
 
-                {loading ? (
-                  <View className="health-observation-empty">正在按指标重算当前证据…</View>
-                ) : feedback ? (
-                  <View className="health-observation-error" role="status">
-                    {feedback}
-                  </View>
-                ) : insight && window && definition ? (
+                {insight && window && definition ? (
                   <>
                     <View className="health-observation-heading">
                       <View>
@@ -258,9 +302,11 @@ const HealthInsightsPage = () => {
                   </>
                 ) : null}
               </>
-            ) : feedback ? (
-              <View className="health-observation-error" role="status">
-                {feedback}
+            ) : loading && !hasReadSnapshot ? (
+              <View className="health-observation-empty">正在按指标重算当前证据…</View>
+            ) : !hasReadSnapshot ? (
+              <View className="health-observation-empty">
+                身体与恢复观察尚未核对；读取成功后才会显示可选指标或确认空白。
               </View>
             ) : (
               <View className="health-observation-empty">

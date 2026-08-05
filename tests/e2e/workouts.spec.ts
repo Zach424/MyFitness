@@ -553,6 +553,42 @@ test('exercise observation uses completed sets and refreshes corrected evidence'
   expect(browserErrors).toEqual([])
 })
 
+test('exercise observation does not publish source choices before its projection succeeds', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await openWorkouts(page)
+  await page.getByRole('button', { name: '保存训练', exact: true }).click()
+  await expect(page.locator('.workout-entry')).toHaveCount(1)
+
+  let insightReads = 0
+  await page.route(/\/v1\/insights\/exercises\/goblet_squat/, async (route) => {
+    if (route.request().method() !== 'GET') return route.continue()
+    insightReads += 1
+    if (insightReads === 1)
+      return route.fulfill({ status: 503, body: JSON.stringify({ message: 'raw hidden' }) })
+    await route.continue()
+  })
+  await page.getByRole('button', { name: '查看高脚杯深蹲趋势' }).click()
+  const state = page.locator('.observation-read-state')
+  await expect(state.getByText('SERVICE PAUSED / 服务暂不可用')).toBeVisible()
+  await expect(state).toContainText('动作观察暂时无法读取')
+  await expect(state).toContainText('MOVEMENT — · SESSIONS —')
+  await expect(state).not.toContainText('raw hidden')
+  await expect(page.getByRole('button', { name: '高脚杯深蹲' })).toHaveCount(0)
+  await expect(page.getByText(/保存含有已完成组的训练后/)).toHaveCount(0)
+  await expect(
+    page.getByText('动作观察尚未核对；读取成功后才会显示动作选择或确认空白。'),
+  ).toBeVisible()
+  const retry = page.getByRole('button', { name: '重新核对单动作长期观察' })
+  await expect(retry).toBeFocused()
+  await page.keyboard.press('Enter')
+  await expect(state).toHaveCount(0)
+  await expect(page.getByRole('button', { name: '高脚杯深蹲' })).toBeVisible()
+  await expect(page.getByText('有完成组的训练')).toBeVisible()
+  expect(insightReads).toBe(2)
+})
+
 test('user creates, searches, corrects and archives an owned exercise snapshot', async ({
   page,
 }) => {

@@ -1,10 +1,20 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Button, ScrollView, Text, View } from '@tarojs/components'
 import Taro from '@tarojs/taro'
 import type { NutritionInsight } from '@myfitness/contracts'
 
-import { buttonA11yProps } from '../../lib/accessibility'
-import { ApiError, getNutritionInsight } from '../../lib/api'
+import {
+  ObservationReadState,
+  ObservationReadToolbar,
+} from '../../components/observation-read-state'
+import { buttonA11yProps, deferH5Focus } from '../../lib/accessibility'
+import { getNutritionInsight } from '../../lib/api'
+import {
+  classifyObservationReadFailure,
+  observationReadFailureCopy,
+  observationReadPhase,
+  type ObservationReadFailureKind,
+} from '../../lib/observation-read'
 import {
   nutritionEvidenceLevel,
   nutritionInsightDays,
@@ -32,9 +42,6 @@ const shortMetricLabels: Record<NutritionInsightMetric, string> = {
   fiberG: '纤维',
 }
 
-const messageOf = (error: unknown) =>
-  error instanceof ApiError || error instanceof Error ? error.message : '营养观察加载失败'
-
 const displayValue = (value: number | null) => {
   if (value === null) return '—'
   return Number.isInteger(value) ? String(value) : value.toFixed(1).replace(/\.0$/, '')
@@ -45,24 +52,50 @@ const NutritionInsightsPage = () => {
   const [metric, setMetric] = useState<NutritionInsightMetric>('energyKcal')
   const [insight, setInsight] = useState<NutritionInsight>()
   const [loading, setLoading] = useState(true)
-  const [feedback, setFeedback] = useState('')
+  const [hasReadSnapshot, setHasReadSnapshot] = useState(false)
+  const [readFailure, setReadFailure] = useState<ObservationReadFailureKind>()
+  const readInFlight = useRef(false)
+  const pageActive = useRef(true)
+
+  const loadObservationAuthority = async () => {
+    if (readInFlight.current) return
+    const hadSnapshot = hasReadSnapshot
+    readInFlight.current = true
+    setLoading(true)
+    setReadFailure(undefined)
+    try {
+      const result = await getNutritionInsight(nutritionInsightTimezone())
+      if (!pageActive.current) return
+      setInsight(result)
+      setHasReadSnapshot(true)
+      if (!hadSnapshot) deferH5Focus('nutrition-observation-back', 350)
+    } catch (error) {
+      if (!pageActive.current) return
+      setReadFailure(classifyObservationReadFailure(error))
+      deferH5Focus('nutrition-observation-read-retry', hadSnapshot ? 80 : 500)
+    } finally {
+      readInFlight.current = false
+      if (pageActive.current) setLoading(false)
+    }
+  }
 
   useEffect(() => {
-    let active = true
-    void getNutritionInsight(nutritionInsightTimezone())
-      .then((result) => {
-        if (active) setInsight(result)
-      })
-      .catch((error: unknown) => {
-        if (active) setFeedback(messageOf(error))
-      })
-      .finally(() => {
-        if (active) setLoading(false)
-      })
+    pageActive.current = true
+    void loadObservationAuthority()
     return () => {
-      active = false
+      pageActive.current = false
     }
   }, [])
+
+  const readPhase = observationReadPhase({
+    hasSnapshot: hasReadSnapshot,
+    busy: loading,
+    hasFailure: Boolean(readFailure),
+  })
+  const readAuthorityReady = readPhase === 'ready'
+  const readFailurePresentation = readFailure
+    ? observationReadFailureCopy(readFailure, 'nutrition', hasReadSnapshot)
+    : undefined
 
   const window = insight?.windows.find((candidate) => candidate.days === days)
   const points = useMemo(
@@ -86,6 +119,7 @@ const NutritionInsightsPage = () => {
           <View className="nutrition-observation-topbar">
             <Button
               {...buttonA11yProps}
+              id="nutrition-observation-back"
               className="nutrition-observation-back"
               aria-label="返回餐食记录"
               onClick={() => void Taro.navigateBack()}
@@ -111,6 +145,25 @@ const NutritionInsightsPage = () => {
             </Text>
           </View>
 
+          <ObservationReadToolbar
+            label="仅复核当前餐次投影；本地时间窗与营养项不会发起写入。"
+            buttonId="nutrition-observation-refresh"
+            buttonLabel="更新每日营养观察"
+            busy={loading}
+            disabled={!hasReadSnapshot || !readAuthorityReady}
+            onRefresh={() => void loadObservationAuthority()}
+          />
+
+          <ObservationReadState
+            phase={readPhase}
+            subject="nutrition"
+            presentation={readFailurePresentation}
+            retainedLabel={`LOCAL DAYS ${hasReadSnapshot ? (insight?.series.length ?? 0) : '—'}`}
+            retryId="nutrition-observation-read-retry"
+            retryLabel="重新核对每日营养观察"
+            onRetry={() => void loadObservationAuthority()}
+          />
+
           <View className="nutrition-observation-card">
             <View className="nutrition-observation-windows" aria-label="观察时间范围">
               {([7, 30, 90] as const).map((windowDays) => (
@@ -126,12 +179,8 @@ const NutritionInsightsPage = () => {
               ))}
             </View>
 
-            {loading ? (
+            {loading && !hasReadSnapshot ? (
               <View className="nutrition-observation-empty">正在按本地日期整理餐次证据…</View>
-            ) : feedback ? (
-              <View className="nutrition-observation-error" role="status">
-                {feedback}
-              </View>
             ) : insight && window ? (
               <>
                 <View className="nutrition-observation-summary">
@@ -238,6 +287,10 @@ const NutritionInsightsPage = () => {
                   ))}
                 </View>
               </>
+            ) : !hasReadSnapshot ? (
+              <View className="nutrition-observation-empty">
+                营养观察尚未核对；读取成功后才会区分有记录日与无记录日。
+              </View>
             ) : null}
           </View>
 

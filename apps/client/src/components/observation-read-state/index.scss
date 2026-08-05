@@ -1,0 +1,115 @@
+.observation-read-toolbar {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-left: 3px solid var(--color-mineral);
+  color: var(--color-muted);
+  background: rgba(252, 253, 252, 0.72);
+  font-size: 9px;
+  line-height: 1.55;
+}
+
+.observation-read-refresh {
+  width: auto;
+  min-width: 104px;
+  min-height: 42px;
+  flex: none;
+  margin: 0;
+  padding: 0 13px;
+  border: 1px solid rgba(36, 76, 102, 0.2);
+  border-radius: 10px;
+  color: var(--color-mineral);
+  background: var(--color-paper);
+  font-size: 9px;
+  line-height: 40px;
+}
+
+.observation-read-refresh[aria-disabled='true'] {
+  opacity: 0.45;
+}
+
+.observation-read-state {
+  margin: 0 0 14px;
+  padding: 16px;
+  border: 1px solid rgba(169, 104, 33, 0.28);
+  border-left: 4px solid var(--color-warning);
+  border-radius: 14px;
+  background:
+    repeating-linear-gradient(
+      -12deg,
+      rgba(169, 104, 33, 0.035) 0,
+      rgba(169, 104, 33, 0.035) 1px,
+      transparent 1px,
+      transparent 12px
+    ),
+    rgba(255, 250, 241, 0.98);
+}
+
+.observation-read-state--refreshing {
+  border-color: rgba(36, 76, 102, 0.24);
+  border-left-color: var(--color-mineral);
+  background: var(--color-mineral-soft);
+}
+
+.observation-read-state__eyebrow,
+.observation-read-state__title,
+.observation-read-state__copy,
+.observation-read-state__retained {
+  display: block;
+}
+
+.observation-read-state__eyebrow,
+.observation-read-state__retained {
+  color: var(--color-warning);
+  font-family: var(--font-display);
+  font-size: 9px;
+  font-weight: 740;
+  letter-spacing: 0.1em;
+}
+
+.observation-read-state--refreshing .observation-read-state__eyebrow,
+.observation-read-state--refreshing .observation-read-state__retained {
+  color: var(--color-mineral);
+}
+
+.observation-read-state__title {
+  margin-top: 6px;
+  font-size: 18px;
+  font-weight: 770;
+}
+
+.observation-read-state__copy {
+  margin-top: 7px;
+  color: var(--color-muted);
+  font-size: 10px;
+  line-height: 1.7;
+}
+
+.observation-read-state__retained {
+  margin-top: 9px;
+}
+
+.observation-read-state__action {
+  min-height: 44px;
+  margin: 12px 0 0;
+  border: 1px solid var(--color-warning);
+  border-radius: 9px;
+  color: var(--color-warning);
+  background: var(--color-paper);
+  font-size: 10px;
+  line-height: 42px;
+}
+
+@media (max-width: 360px) {
+  .observation-read-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .observation-read-refresh {
+    width: 100%;
+  }
+}

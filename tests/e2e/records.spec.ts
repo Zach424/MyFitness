@@ -393,6 +393,50 @@ test('metric observation keeps canonical statistics and recorded units explicit'
   expect(browserErrors).toEqual([])
 })
 
+test('health observation keeps an initial source-ledger outage unknown', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  let sourceReads = 0
+  await page.route(/\/v1\/health-records$/, async (route) => {
+    if (route.request().method() !== 'GET') return route.continue()
+    sourceReads += 1
+    if (sourceReads === 1) return route.abort('failed')
+    await route.continue()
+  })
+
+  await openRecords(page)
+  await page.getByRole('button', { name: '查看体重长期观察' }).click()
+  const state = page.locator('.observation-read-state')
+  await expect(state.getByText('OFFLINE / 连接未完成')).toBeVisible()
+  await expect(state).toContainText('身体与恢复观察还没有读取')
+  await expect(state).toContainText('METRIC — · POINTS —')
+  await expect(page.getByText(/保存一条已确认的身体或恢复记录后/)).toHaveCount(0)
+  await expect(
+    page.getByText('身体与恢复观察尚未核对；读取成功后才会显示可选指标或确认空白。'),
+  ).toBeVisible()
+  await expect(page.getByRole('button', { name: '更新身体与恢复长期观察' })).toBeDisabled()
+  await expect
+    .poll(() =>
+      page.evaluate(() => ({
+        shellLeft: Math.round(
+          document.querySelector('.health-observation-shell')?.getBoundingClientRect().left ?? -1,
+        ),
+        viewportWidth: window.innerWidth,
+        documentWidth: document.documentElement.scrollWidth,
+      })),
+    )
+    .toEqual({ shellLeft: 0, viewportWidth: 390, documentWidth: 390 })
+  const retry = page.getByRole('button', { name: '重新核对身体与恢复长期观察' })
+  await expect(retry).toBeFocused()
+  await page.screenshot({
+    path: 'output/playwright/iteration-069-health-observation-offline-mobile.png',
+  })
+  await page.keyboard.press('Enter')
+  await expect(state).toHaveCount(0)
+  await expect(page.getByText(/保存一条已确认的身体或恢复记录后/)).toBeVisible()
+  await expect(page.getByRole('button', { name: '更新身体与恢复长期观察' })).toBeEnabled()
+  expect(sourceReads).toBe(2)
+})
+
 test('health editor restores an owner-scoped local draft and clears it after save', async ({
   page,
 }) => {

@@ -587,6 +587,49 @@ test('daily nutrition observation keeps recorded and missing local days explicit
   expect(browserErrors).toEqual([])
 })
 
+test('nutrition observation retains its projection after a refused wide refresh', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await openNutrition(page)
+  await page.getByRole('button', { name: '添加熟鸡胸肉' }).click()
+  await page.getByRole('button', { name: '保存餐次', exact: true }).click()
+  await expect(page.locator('.meal-entry')).toHaveCount(1)
+
+  let insightReads = 0
+  await page.route(/\/v1\/insights\/nutrition/, async (route) => {
+    if (route.request().method() !== 'GET') return route.continue()
+    insightReads += 1
+    if (insightReads === 2)
+      return route.fulfill({ status: 429, body: JSON.stringify({ message: 'raw hidden' }) })
+    await route.continue()
+  })
+  await page.getByRole('button', { name: '查看每日营养趋势' }).click()
+  await expect(page.getByLabel('有记录日 1')).toBeVisible()
+  await page.getByRole('button', { name: '更新每日营养观察' }).click()
+  const state = page.locator('.observation-read-state')
+  await expect(state.getByText('READ REFUSED / 读取被拒绝')).toBeVisible()
+  await expect(state).toContainText('LOCAL DAYS 90')
+  await expect(state).not.toContainText('raw hidden')
+  await expect(page.getByLabel('有记录日 1')).toBeVisible()
+  await expect(page.getByRole('button', { name: '更新每日营养观察' })).toBeDisabled()
+  const retry = page.getByRole('button', { name: '重新核对每日营养观察' })
+  await expect(retry).toBeFocused()
+  await page.getByRole('button', { name: '7 天' }).click()
+  await expect(page.locator('.nutrition-evidence-day')).toHaveCount(7)
+  await page.locator('.nutrition-observation-scroll').evaluate((element) => (element.scrollTop = 0))
+  await page.screenshot({
+    path: 'output/playwright/iteration-069-nutrition-observation-stale-wide.png',
+    fullPage: true,
+  })
+  await retry.focus()
+  await page.keyboard.press('Enter')
+  await expect(state).toHaveCount(0)
+  await expect(page.getByLabel('有记录日 1')).toBeVisible()
+  await expect(page.getByRole('button', { name: '更新每日营养观察' })).toBeEnabled()
+  expect(insightReads).toBe(3)
+})
+
 test('ambiguous owned food create reuses one request key and creates one definition', async ({
   page,
 }) => {

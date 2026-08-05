@@ -132,6 +132,9 @@
   color: var(--color-paper);
   background: var(--color-mineral);
 }
+.health-observation-choice[aria-disabled='true'] {
+  opacity: 0.45;
+}
 .health-observation-windows {
   margin-top: 10px;
 }

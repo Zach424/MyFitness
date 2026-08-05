@@ -3,8 +3,18 @@ import { Button, ScrollView, Text, View } from '@tarojs/components'
 import Taro from '@tarojs/taro'
 import type { ExerciseInsight } from '@myfitness/contracts'
 
-import { buttonA11yProps } from '../../lib/accessibility'
-import { ApiError, getExerciseInsight, listWorkouts } from '../../lib/api'
+import {
+  ObservationReadState,
+  ObservationReadToolbar,
+} from '../../components/observation-read-state'
+import { buttonA11yProps, buttonActivationProps, deferH5Focus } from '../../lib/accessibility'
+import { getExerciseInsight, listWorkouts } from '../../lib/api'
+import {
+  classifyObservationReadFailure,
+  observationReadFailureCopy,
+  observationReadPhase,
+  type ObservationReadFailureKind,
+} from '../../lib/observation-read'
 import {
   exerciseInsightChoices,
   exerciseInsightMetric,
@@ -15,8 +25,7 @@ import {
 } from '../workouts/exercise-insight.model'
 import './index.scss'
 
-const messageOf = (error: unknown) =>
-  error instanceof ApiError || error instanceof Error ? error.message : '动作趋势加载失败'
+type ExerciseObservationIntent = { exerciseKey?: string; reuseChoices: boolean }
 
 const displayValue = (value: number) =>
   Number.isInteger(value) ? String(value) : value.toFixed(1).replace(/\.0$/, '')
@@ -28,53 +37,65 @@ const ExerciseInsightsPage = () => {
   const [days, setDays] = useState<7 | 30 | 90>(30)
   const [insight, setInsight] = useState<ExerciseInsight>()
   const [loading, setLoading] = useState(true)
-  const [feedback, setFeedback] = useState('')
+  const [hasReadSnapshot, setHasReadSnapshot] = useState(false)
+  const [readFailure, setReadFailure] = useState<ObservationReadFailureKind>()
+  const readInFlight = useRef(false)
+  const pageActive = useRef(true)
+  const pendingIntent = useRef<ExerciseObservationIntent>()
+
+  const loadObservationAuthority = async (intent: ExerciseObservationIntent) => {
+    if (readInFlight.current) return
+    const hadSnapshot = hasReadSnapshot
+    pendingIntent.current = intent
+    readInFlight.current = true
+    setLoading(true)
+    setReadFailure(undefined)
+    try {
+      const nextChoices = intent.reuseChoices
+        ? choices
+        : exerciseInsightChoices((await listWorkouts()).items)
+      const nextExerciseKey = nextChoices.some((choice) => choice.key === intent.exerciseKey)
+        ? (intent.exerciseKey ?? '')
+        : (nextChoices[0]?.key ?? '')
+      const nextInsight = nextExerciseKey
+        ? await getExerciseInsight(nextExerciseKey, insightTimezone())
+        : undefined
+      if (!pageActive.current) return
+      setChoices(nextChoices)
+      setExerciseKey(nextExerciseKey)
+      setInsight(nextInsight)
+      setHasReadSnapshot(true)
+      pendingIntent.current = undefined
+      if (!hadSnapshot) deferH5Focus('exercise-observation-back', 350)
+    } catch (error) {
+      if (!pageActive.current) return
+      setReadFailure(classifyObservationReadFailure(error))
+      deferH5Focus('exercise-observation-read-retry', hadSnapshot ? 80 : 500)
+    } finally {
+      readInFlight.current = false
+      if (pageActive.current) setLoading(false)
+    }
+  }
 
   useEffect(() => {
-    let active = true
-    void listWorkouts()
-      .then((result) => {
-        if (!active) return
-        const nextChoices = exerciseInsightChoices(result.items)
-        setChoices(nextChoices)
-        setExerciseKey(
-          nextChoices.some((choice) => choice.key === requestedKey.current)
-            ? requestedKey.current
-            : (nextChoices[0]?.key ?? ''),
-        )
-        if (!nextChoices.length) setLoading(false)
-      })
-      .catch((error: unknown) => {
-        if (active) {
-          setFeedback(messageOf(error))
-          setLoading(false)
-        }
-      })
+    pageActive.current = true
+    void loadObservationAuthority({ exerciseKey: requestedKey.current, reuseChoices: false })
     return () => {
-      active = false
+      pageActive.current = false
     }
   }, [])
 
-  useEffect(() => {
-    if (!exerciseKey) return
-    let active = true
-    setLoading(true)
-    setFeedback('')
-    setInsight(undefined)
-    void getExerciseInsight(exerciseKey, insightTimezone())
-      .then((result) => {
-        if (active) setInsight(result)
-      })
-      .catch((error: unknown) => {
-        if (active) setFeedback(messageOf(error))
-      })
-      .finally(() => {
-        if (active) setLoading(false)
-      })
-    return () => {
-      active = false
-    }
-  }, [exerciseKey])
+  const readPhase = observationReadPhase({
+    hasSnapshot: hasReadSnapshot,
+    busy: loading,
+    hasFailure: Boolean(readFailure),
+  })
+  const readAuthorityReady = readPhase === 'ready'
+  const readFailurePresentation = readFailure
+    ? observationReadFailureCopy(readFailure, 'exercise', hasReadSnapshot)
+    : undefined
+  const retryObservationAuthority = () =>
+    void loadObservationAuthority(pendingIntent.current ?? { exerciseKey, reuseChoices: false })
 
   const window = insight?.windows.find((candidate) => candidate.days === days)
   const metric = exerciseInsightMetric(insight?.identity?.trackingMode ?? null)
@@ -91,6 +112,7 @@ const ExerciseInsightsPage = () => {
           <View className="exercise-observation-topbar">
             <Button
               {...buttonA11yProps}
+              id="exercise-observation-back"
               className="exercise-observation-back"
               aria-label="返回训练记录"
               onClick={() => void Taro.navigateBack()}
@@ -112,8 +134,27 @@ const ExerciseInsightsPage = () => {
             </Text>
           </View>
 
+          <ObservationReadToolbar
+            label="动作目录与所选完成组投影会一起核对；未完成组不会进入观察。"
+            buttonId="exercise-observation-refresh"
+            buttonLabel="更新单动作长期观察"
+            busy={loading}
+            disabled={!hasReadSnapshot || !readAuthorityReady}
+            onRefresh={() => void loadObservationAuthority({ exerciseKey, reuseChoices: false })}
+          />
+
+          <ObservationReadState
+            phase={readPhase}
+            subject="exercise"
+            presentation={readFailurePresentation}
+            retainedLabel={`MOVEMENT ${hasReadSnapshot ? (insight?.exerciseKey ?? 'EMPTY') : '—'} · SESSIONS ${hasReadSnapshot ? (insight?.series.length ?? 0) : '—'}`}
+            retryId="exercise-observation-read-retry"
+            retryLabel="重新核对单动作长期观察"
+            onRetry={retryObservationAuthority}
+          />
+
           <View className="exercise-observation-card">
-            {choices.length ? (
+            {hasReadSnapshot && choices.length ? (
               <>
                 <Text className="exercise-observation-caption">选择动作</Text>
                 <ScrollView
@@ -125,11 +166,17 @@ const ExerciseInsightsPage = () => {
                   <View className="exercise-observation-choice-row">
                     {choices.map((choice) => (
                       <Button
-                        {...buttonA11yProps}
+                        {...buttonActivationProps(
+                          () =>
+                            void loadObservationAuthority({
+                              exerciseKey: choice.key,
+                              reuseChoices: true,
+                            }),
+                          !readAuthorityReady,
+                        )}
                         className={`exercise-observation-choice ${exerciseKey === choice.key ? 'exercise-observation-choice--active' : ''}`}
                         key={choice.key}
                         aria-pressed={exerciseKey === choice.key}
-                        onClick={() => setExerciseKey(choice.key)}
                       >
                         {choice.label}
                       </Button>
@@ -151,13 +198,7 @@ const ExerciseInsightsPage = () => {
                   ))}
                 </View>
 
-                {loading ? (
-                  <View className="exercise-observation-empty">正在重算完成组证据…</View>
-                ) : feedback ? (
-                  <View className="exercise-observation-error" role="status">
-                    {feedback}
-                  </View>
-                ) : insight?.identity && window ? (
+                {insight?.identity && window ? (
                   <>
                     <View className="exercise-observation-heading">
                       <View>
@@ -250,9 +291,11 @@ const ExerciseInsightsPage = () => {
                   </View>
                 )}
               </>
-            ) : feedback ? (
-              <View className="exercise-observation-error" role="status">
-                {feedback}
+            ) : loading && !hasReadSnapshot ? (
+              <View className="exercise-observation-empty">正在重算完成组证据…</View>
+            ) : !hasReadSnapshot ? (
+              <View className="exercise-observation-empty">
+                动作观察尚未核对；读取成功后才会显示动作选择或确认空白。
               </View>
             ) : (
               <View className="exercise-observation-empty">
