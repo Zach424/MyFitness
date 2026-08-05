@@ -473,6 +473,19 @@ The final artifact makes the performance hierarchy match the information hierarc
 
 - [390 × 844 lazy owner-action register](../../output/playwright/iteration-050-lazy-exercise-catalog-mobile.png)
 
+## Lazy food-photo proof workbench review — iteration 051
+
+Nutrition now presents photo assistance as one compact `PHOTO PROOF / 按需打开` launcher instead of embedding consent and uncertain AI state inside the meal editor. Its copy states the actual handoff: photos, authorization and unconfirmed candidates stay outside the draft; only confirmed food and grams return. The launcher remains secondary to manual recording and does not imply that a photo is the preferred way to log a meal.
+
+The lazy workbench is grounded in private evidence custody rather than a generic AI upload card. A dark three-step rail names `本次授权 → 私有校样 → 确认后删图`; the single expressive element is the angled `未确认 / PROOF` stamp over the sanitized preview. Review cards use explicit index, food name, visual basis, confidence word, displayed gram range and editable integer input. Color reinforces but never replaces the text labels or selection state.
+
+The 390 × 844 browser review preserves a non-default meal title below the route stack, uploads the fixture image, proves the unconfirmed keys are absent from the saved meal-draft envelope, edits both portions and returns only after server confirmation. The 1440 × 1000 review checks the two-column proof sheet and explicit destructive control. Screenshot inspection caught a Taro H5 inherited-color defect that left the delete label visually blank despite its accessible name; explicit pulse/paper token colors corrected both destructive and primary controls.
+
+Measured structure now matches the information hierarchy: nutrition falls from 45,512 to 36,410 WeApp JavaScript bytes, the private-photo route is 32,956 and the largest page becomes workouts at 39,297. H5 total and largest async JavaScript fall to 2,409,603 and 185,926 bytes.
+
+- [390 × 844 lazy food-photo proof workbench](../../output/playwright/iteration-051-lazy-food-photo-mobile.png)
+- [1440 × 1000 lazy food-photo proof workbench](../../output/playwright/iteration-051-lazy-food-photo-wide.png)
+
 ## Screenshot review checklist
 
 - The Rhythm Rail remains understandable without color.

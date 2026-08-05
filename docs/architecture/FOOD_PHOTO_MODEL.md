@@ -1,6 +1,6 @@
 # Food-photo candidate model
 
-Status: durable private-media lifecycle implemented through iteration 015; adversarial prompt/output boundary v2 implemented in iteration 024; production storage/provider approval remains gated
+Status: durable private-media lifecycle implemented through iteration 015; adversarial prompt/output boundary v2 implemented in iteration 024; confirmed-only lazy client workbench implemented in iteration 051; production storage/provider approval remains gated
 
 ## Authority boundary
 
@@ -50,6 +50,14 @@ The API accepts JPEG, PNG and still WebP up to 6 MiB/20 megapixels. Sharp applie
 Confirmation, explicit deletion, rejection, failure, expiry and consent/account withdrawal create PostgreSQL durable jobs in the authoritative database transaction. Workers use two-minute leases, multi-replica-safe `SKIP LOCKED` claims, exponential retry and dead-letter state. API output separates logical deletion from `mediaDeletionStatus`; removing a row is never represented as proof that an unavailable object store has already deleted the bytes. Successful jobs clear their payload.
 
 Local development uses a pinned private MinIO container. Shared/production deployment requires HTTPS object storage, least-privilege IAM, KMS/SSE, lifecycle/versioning/replication, centralized job alerts and named dead-letter recovery. The bucket is part of readiness; a local healthy MinIO is not cloud custody approval.
+
+## Client workbench boundary
+
+The nutrition page contains only an explanation and launcher. It does not list photo candidates, own consent/upload/review state or receive an image. The complete optional workflow runs under `pages/progress-photos/index?kind=food`, reusing the existing registered private-photo route while keeping a separate component/model/style boundary.
+
+The still-open nutrition page registers one Taro opener event. The workbench validates the displayed selection, confirms it through the API and emits only the successful response's catalog keys and integer grams before navigating back. The channel is in-memory and single-hop: photos, preview URLs, consent state and unconfirmed candidates never enter URL parameters, application storage or the recoverable meal-draft envelope. After return, confirmed inputs become normal unsaved food drafts and may be protected by the meal-draft vault; they still require an explicit Save Meal action.
+
+A direct visit without an opener is allowed to inspect or delete owner-visible proof, but confirmation is blocked before its destructive API request because there is no safe draft destination. Refreshing the workbench recovers reviewable server state rather than a local candidate copy. This UI boundary is recorded in ADR-0049 and does not change server expiry, durable deletion or privacy-revocation authority.
 
 ## Provider contract and data controls
 

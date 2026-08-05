@@ -130,6 +130,12 @@ const uploadDemoMealPhoto = async (page: Page) => {
   await expect(page.getByText('本地演示夹具 · 非真实识别')).toBeVisible()
 }
 
+const openFoodPhotoWorkflow = async (page: Page) => {
+  await page.getByRole('button', { name: '打开照片校样台' }).click()
+  await expect(page.getByText('餐食照片校样台')).toBeVisible()
+  await expect(page.getByText('先校样，再带回餐食。')).toBeVisible()
+}
+
 test('meal completes favorite, create, repeat, update, history and delete lifecycle', async ({
   page,
 }) => {
@@ -512,6 +518,10 @@ test('food photo candidates require review, delete media and only fill an unsave
   const browserErrors = collectBrowserErrors(page)
   await openNutrition(page)
 
+  await page.locator('.nutrition-title-input input').fill('照片校样后的午餐')
+  await expect(page.getByRole('button', { name: '打开照片校样台' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '选择一张餐食照片' })).toHaveCount(0)
+  await openFoodPhotoWorkflow(page)
   await expect(page.getByRole('button', { name: '选择一张餐食照片' })).toHaveAttribute(
     'aria-disabled',
     'true',
@@ -521,22 +531,31 @@ test('food photo candidates require review, delete media and only fill an unsave
   await expect(page.getByText('估计 100–220 g')).toBeVisible()
   await expect(page.getByText('中置信')).toBeVisible()
   await expect(page.locator('.meal-entry')).toHaveCount(0)
+  await expect
+    .poll(() => page.evaluate(() => localStorage.getItem('myfitness.local-draft.meal') ?? ''))
+    .toContain('照片校样后的午餐')
+  const unconfirmedDraft = await page.evaluate(
+    () => localStorage.getItem('myfitness.local-draft.meal') ?? '',
+  )
+  expect(unconfirmedDraft).not.toContain('rice_cooked')
+  expect(unconfirmedDraft).not.toContain('previewPath')
   await page.locator('[aria-label="熟米饭确认克重"] input').fill('165')
   await page.locator('[aria-label="熟鸡胸肉确认克重"] input').fill('120')
   await page.screenshot({
-    path: 'output/playwright/iteration-010-food-photo-mobile.png',
+    path: 'output/playwright/iteration-051-lazy-food-photo-mobile.png',
     fullPage: true,
   })
 
   const confirmResponse = page.waitForResponse(
     (response) => response.url().endsWith('/confirm') && response.request().method() === 'POST',
   )
-  await page.getByRole('button', { name: '确认 2 项并带入草稿' }).click()
+  await page.getByRole('button', { name: '确认 2 项并返回草稿' }).click()
   expect((await confirmResponse).status()).toBe(200)
   await expect(
     page.getByText('候选已带入当前草稿，照片已删除；餐次尚未保存，请继续核对。'),
   ).toBeVisible()
   await expect(page.getByText('未确认 / PROOF')).toHaveCount(0)
+  await expect(page.locator('.nutrition-title-input input')).toHaveValue('照片校样后的午餐')
   await expect(page.locator('.meal-item')).toHaveCount(2)
   await expect(page.locator('.meal-entry')).toHaveCount(0)
   expect(browserErrors).toEqual([])
@@ -546,10 +565,11 @@ test('food photo proof sheet is readable at wide viewport and can be revoked', a
   await page.setViewportSize({ width: 1440, height: 1000 })
   const browserErrors = collectBrowserErrors(page)
   await openNutrition(page)
+  await openFoodPhotoWorkflow(page)
   await uploadDemoMealPhoto(page)
   await expect(page.locator('.photo-review')).toBeVisible()
   await page.screenshot({
-    path: 'output/playwright/iteration-010-food-photo-wide.png',
+    path: 'output/playwright/iteration-051-lazy-food-photo-wide.png',
     fullPage: true,
   })
 
@@ -560,6 +580,6 @@ test('food photo proof sheet is readable at wide viewport and can be revoked', a
   )
   await page.getByRole('button', { name: '删除校样' }).click()
   expect((await deleteResponse).status()).toBe(204)
-  await expect(page.getByText('照片和衍生候选已删除。')).toBeVisible()
+  await expect(page.getByText(/照片和衍生候选已删除/)).toBeVisible()
   expect(browserErrors).toEqual([])
 })

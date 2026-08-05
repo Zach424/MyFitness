@@ -1,6 +1,6 @@
 # Nutrition record model
 
-Status: manual meal/photo records, owner-created food definitions, daily observation, explicit occurrence editing, conflict-safe correction recovery, record pagination and definition-history pagination implemented through iteration 048
+Status: manual meal records, a lazy confirmed-only photo workbench, owner-created food definitions, daily observation, explicit occurrence editing, conflict-safe correction recovery, record pagination and definition-history pagination implemented through iteration 051
 
 Nutrition records are user-confirmed snapshots of food, portion and context. They support personal recall and later deterministic summaries; they are not dietary prescriptions, laboratory measurements or judgments about food quality.
 
@@ -84,8 +84,10 @@ An unsaved meal correction draft carries the meal UUID and base revision beside 
 
 “再记一次” copies the food and serving snapshots into a new draft, resets occurrence time and note, and then uses normal idempotent creation. It never mutates the previous meal or copies a server identity/revision.
 
-Food-photo assistance is a separate proposal aggregate. A private sanitized image can suggest catalog-bound foods, confidence words and portion ranges, but cannot create a meal or nutrient snapshot. The user selects and edits candidates; confirmation deletes the image and returns gram-based food drafts. Only the existing manual Save Meal path can create `nutrition_meals` and immutable meal revisions.
+Food-photo assistance is a separate proposal aggregate and lazy client workflow. The nutrition page opens the workbench on the existing private-photo route without passing its draft and no longer requests photo candidates during normal initialization. A private sanitized image can suggest catalog-bound foods, confidence words and portion ranges, but cannot create a meal or nutrient snapshot. The user selects and edits candidates; confirmation deletes the image and returns only catalog keys/integer grams through the opener event channel. The preserved nutrition page maps that confirmed response to gram-based food drafts. Only the existing manual Save Meal path can create `nutrition_meals` and immutable meal revisions.
 
 Photo consent, media status, prompt/validator/provider/model provenance, failure, expiry and selected draft inputs live in `nutrition_photo_candidates`, not in historical meals. Media is removed on confirmation, rejection, failure, explicit delete or 24-hour expiry. The full boundary is documented in [FOOD_PHOTO_MODEL.md](FOOD_PHOTO_MODEL.md).
+
+Photos, previews, consent state and unconfirmed candidate content never enter the recoverable local meal-draft vault, URL parameters or a global handoff store. A direct workbench visit cannot confirm without a live opener destination. Once the API has confirmed and deletion has started, the returned catalog keys/grams are user-confirmed draft inputs and may be saved with the rest of the still-unsaved meal draft. ADR-0049 records this client boundary.
 
 The MVP excludes eating-disorder treatment, therapeutic diets and disease-specific advice. Later planning must screen the profile boundary and validate energy/macro changes before presenting them.

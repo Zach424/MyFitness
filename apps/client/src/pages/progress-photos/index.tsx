@@ -22,6 +22,7 @@ import {
   retainedPhotosForView,
   selectedComparisonPair,
 } from './progress-photo.model'
+import FoodPhotoWorkflowPage from '../food-photo-workflow'
 import './index.scss'
 
 const requestKey = () =>
@@ -516,4 +517,11 @@ const ProgressPhotosPage = () => {
   )
 }
 
-export default ProgressPhotosPage
+const PrivatePhotoRoutePage = () =>
+  Taro.getCurrentInstance().router?.params.kind === 'food' ? (
+    <FoodPhotoWorkflowPage />
+  ) : (
+    <ProgressPhotosPage />
+  )
+
+export default PrivatePhotoRoutePage
