@@ -9,6 +9,9 @@ export type WorkbenchOperation =
   | 'photo_upload'
   | 'photo_confirm'
   | 'photo_delete'
+  | 'progress_reserve'
+  | 'progress_upload'
+  | 'progress_delete'
 
 export type WorkbenchRecoveryAuthority = 'retry_same_request' | 'reconcile_required' | 'terminal'
 
@@ -22,7 +25,7 @@ export type WorkbenchRecovery = {
   eyebrow: string
   message: string
   actionLabel: string
-  preserves: 'definition_input' | 'review_input' | 'none'
+  preserves: 'definition_input' | 'review_input' | 'capture_intent' | 'none'
 }
 
 type OperationPolicy = {
@@ -82,6 +85,21 @@ export const workbenchOperationPolicies: Record<WorkbenchOperation, OperationPol
     uncertainAuthority: 'reconcile_required',
     preserves: 'none',
   },
+  progress_reserve: {
+    label: '进度照预约',
+    uncertainAuthority: 'retry_same_request',
+    preserves: 'capture_intent',
+  },
+  progress_upload: {
+    label: '进度照上传与画质检查',
+    uncertainAuthority: 'reconcile_required',
+    preserves: 'capture_intent',
+  },
+  progress_delete: {
+    label: '进度照删除',
+    uncertainAuthority: 'reconcile_required',
+    preserves: 'none',
+  },
 }
 
 const retryableServerStatuses = new Set([408, 425, 429, 500, 502, 503, 504])
@@ -134,19 +152,19 @@ export const describeWorkbenchFailure = (
   }
 
   if (policy.uncertainAuthority === 'retry_same_request') {
-    const subject = operation === 'photo_reserve' ? '预约' : '定义'
+    const isReservation = operation === 'photo_reserve' || operation === 'progress_reserve'
+    const subject = isReservation ? '预约' : '定义'
     return {
       operation,
       authority: 'retry_same_request',
       failureKind,
       eyebrow: 'SAME REQUEST / 仅同一请求可重试',
       message: `无法确认这次${policy.label}是否已提交。页面不保存照片或后台排队；仅在输入未变化时沿用同一请求编号重试，服务端只保留一笔${subject}。`,
-      actionLabel:
-        operation === 'photo_reserve'
-          ? '重新选择并重试预约'
-          : operation === 'food_create'
-            ? '重试保存食物定义（防重复）'
-            : '重试保存定义（防重复）',
+      actionLabel: isReservation
+        ? '重新选择并重试预约'
+        : operation === 'food_create'
+          ? '重试保存食物定义（防重复）'
+          : '重试保存定义（防重复）',
       preserves: policy.preserves,
     }
   }

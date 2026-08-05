@@ -1,13 +1,13 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Button, Image, ScrollView, Slider, Text, View } from '@tarojs/components'
 import Taro from '@tarojs/taro'
-import type { ProgressPhotoItem } from '@myfitness/contracts'
+import type { CreateProgressPhoto, ProgressPhotoItem } from '@myfitness/contracts'
 import {
   progressPhotoAnalysisConsentVersion,
   progressPhotoRetentionConsentVersion,
 } from '@myfitness/contracts/progress-photo.constants'
 
-import { buttonA11yProps } from '../../lib/accessibility'
+import { buttonActivationProps } from '../../lib/accessibility'
 import {
   ApiError,
   deleteProgressPhoto,
@@ -16,6 +16,7 @@ import {
   reserveProgressPhoto,
   uploadProgressPhoto,
 } from '../../lib/api'
+import { describeWorkbenchFailure, type WorkbenchRecovery } from '../../lib/workbench-recovery'
 import {
   progressViewCopy,
   qualityReasonCopy,
@@ -42,6 +43,8 @@ const captureTime = (value: string) =>
   }).format(new Date(value))
 
 const ProgressPhotosPage = () => {
+  const pendingReservation = useRef<{ key: string; payload: CreateProgressPhoto }>()
+  const pendingUploadId = useRef('')
   const [photos, setPhotos] = useState<ProgressPhotoItem[]>([])
   const [view, setView] = useState<ProgressPhotoItem['view']>('front')
   const [retained, setRetained] = useState(false)
@@ -54,6 +57,7 @@ const ProgressPhotosPage = () => {
   const [currentId, setCurrentId] = useState('')
   const [overlayOpacity, setOverlayOpacity] = useState(52)
   const [deleting, setDeleting] = useState<ProgressPhotoItem>()
+  const [recovery, setRecovery] = useState<WorkbenchRecovery>()
 
   const load = async () => {
     setLoading(true)
@@ -77,6 +81,31 @@ const ProgressPhotosPage = () => {
     [baselineId, comparisonPhotos, currentId],
   )
 
+  const resetCaptureAttempt = () => {
+    pendingReservation.current = undefined
+    pendingUploadId.current = ''
+    setRecovery(undefined)
+  }
+
+  const finishCapture = (
+    uploaded: ProgressPhotoItem,
+    message?: string,
+    currentPhotos?: ProgressPhotoItem[],
+  ) => {
+    setPhotos(
+      currentPhotos ?? ((items) => [uploaded, ...items.filter((item) => item.id !== uploaded.id)]),
+    )
+    resetCaptureAttempt()
+    setAnalysisConsent(false)
+    setRetentionConsent(false)
+    setFeedback(
+      message ??
+        (uploaded.quality?.overallStatus === 'ready'
+          ? '照片已完成净化与对位条件检查。机器只检查画幅、清晰度、亮度和对比度。'
+          : '照片已保存；下方列出了需要调整的拍摄条件。这不是身体或体态判断。'),
+    )
+  }
+
   const choosePhoto = async () => {
     if (!analysisConsent) {
       setFeedback('请先确认本次本地画质检查授权。')
@@ -88,54 +117,153 @@ const ProgressPhotosPage = () => {
     }
     setBusy(true)
     setFeedback('')
-    let reservedId = ''
     try {
-      const selected = await Taro.chooseImage({
-        count: 1,
-        sizeType: ['original'],
-        sourceType: ['camera', 'album'],
-      })
+      let selected
+      try {
+        selected = await Taro.chooseImage({
+          count: 1,
+          sizeType: ['original'],
+          sourceType: ['camera', 'album'],
+        })
+      } catch (error) {
+        const message = messageOf(error)
+        if (!message.toLowerCase().includes('cancel')) setFeedback(message)
+        return
+      }
       const filePath = selected.tempFilePaths[0]
       if (!filePath) throw new Error('没有读取到所选照片')
-      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
-      const ticket = await reserveProgressPhoto(
-        {
-          view,
-          capturedAt: new Date().toISOString(),
-          timezone,
-          analysisConsent: {
-            granted: true,
-            version: progressPhotoAnalysisConsentVersion,
+
+      const reservation =
+        pendingReservation.current ??
+        ({
+          key: requestKey(),
+          payload: {
+            view,
+            capturedAt: new Date().toISOString(),
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+            analysisConsent: {
+              granted: true,
+              version: progressPhotoAnalysisConsentVersion,
+            },
+            retention: retained
+              ? {
+                  mode: 'retained',
+                  consent: {
+                    granted: true,
+                    version: progressPhotoRetentionConsentVersion,
+                  },
+                }
+              : { mode: 'analysis_only' },
           },
-          retention: retained
-            ? {
-                mode: 'retained',
-                consent: {
-                  granted: true,
-                  version: progressPhotoRetentionConsentVersion,
-                },
-              }
-            : { mode: 'analysis_only' },
-        },
-        requestKey(),
-      )
-      reservedId = ticket.id
-      const uploaded = await uploadProgressPhoto(ticket.upload.path, filePath)
-      setPhotos((items) => [uploaded, ...items.filter((item) => item.id !== uploaded.id)])
-      setAnalysisConsent(false)
-      setRetentionConsent(false)
-      setFeedback(
-        uploaded.quality?.overallStatus === 'ready'
-          ? '照片已完成净化与对位条件检查。机器只检查画幅、清晰度、亮度和对比度。'
-          : '照片已保存；下方列出了需要调整的拍摄条件。这不是身体或体态判断。',
-      )
+        } satisfies { key: string; payload: CreateProgressPhoto })
+      pendingReservation.current = reservation
+
+      let ticket
+      try {
+        ticket = await reserveProgressPhoto(reservation.payload, reservation.key)
+      } catch (error) {
+        setRecovery(describeWorkbenchFailure('progress_reserve', error))
+        return
+      }
+      pendingReservation.current = undefined
+      pendingUploadId.current = ticket.id
+
+      try {
+        finishCapture(await uploadProgressPhoto(ticket.upload.path, filePath))
+      } catch (error) {
+        setRecovery(describeWorkbenchFailure('progress_upload', error))
+      }
     } catch (error) {
-      if (reservedId) await deleteProgressPhoto(reservedId).catch(() => undefined)
-      const message = messageOf(error)
-      if (!message.toLowerCase().includes('cancel')) setFeedback(message)
+      setFeedback(messageOf(error))
     } finally {
       setBusy(false)
     }
+  }
+
+  const reconcileUpload = async () => {
+    if (!recovery || recovery.operation !== 'progress_upload' || !pendingUploadId.current) return
+    setBusy(true)
+    try {
+      const result = await listProgressPhotos()
+      const current = result.items.find((item) => item.id === pendingUploadId.current)
+      setPhotos(result.items)
+      if (current) {
+        finishCapture(
+          current,
+          '核对完成：净化照片已进入当前私有清单；机器结果仍只描述拍摄条件。',
+          result.items,
+        )
+        return
+      }
+      setRecovery({
+        ...recovery,
+        authority: 'terminal',
+        eyebrow: 'NO REVIEWABLE PHOTO / 未加入私有清单',
+        message:
+          '核对后，当前私有清单没有这次预约对应的照片。页面不会重放媒体；未使用预约与临时数据按既有到期清理。',
+        actionLabel: '返回重新拍摄',
+      })
+    } catch (error) {
+      setRecovery(describeWorkbenchFailure('progress_upload', error))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const reconcileDelete = async () => {
+    if (!recovery || recovery.operation !== 'progress_delete' || !deleting) return
+    setBusy(true)
+    try {
+      const result = await listProgressPhotos()
+      const current = result.items.find((item) => item.id === deleting.id)
+      setPhotos(result.items)
+      if (!current) {
+        if (baselineId === deleting.id) setBaselineId('')
+        if (currentId === deleting.id) setCurrentId('')
+        setDeleting(undefined)
+        setRecovery(undefined)
+        setFeedback(
+          '核对完成：照片已离开当前私有清单；对象删除由持久任务继续处理，不能仅据此声称物理字节已经删除。',
+        )
+        return
+      }
+      setRecovery({
+        ...recovery,
+        authority: 'terminal',
+        eyebrow: 'CURRENT STATE / 照片仍在私有清单',
+        message:
+          '核对后照片仍可见，本次删除没有成功证据。页面不会自动重放删除；请返回清单后重新明确确认。',
+        actionLabel: '返回检查照片',
+      })
+    } catch (error) {
+      setRecovery(describeWorkbenchFailure('progress_delete', error))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleRecoveryAction = () => {
+    if (!recovery) return
+    if (recovery.authority === 'terminal') {
+      const operation = recovery.operation
+      resetCaptureAttempt()
+      if (operation === 'progress_delete') setDeleting(undefined)
+      setFeedback(
+        operation === 'progress_delete'
+          ? '当前删除尝试已终止；请核对照片清单后重新明确确认。'
+          : '当前拍摄尝试已终止；页面未保存照片或重放媒体，请重新开始。',
+      )
+      return
+    }
+    if (recovery.operation === 'progress_reserve') {
+      void choosePhoto()
+      return
+    }
+    if (recovery.operation === 'progress_upload') {
+      void reconcileUpload()
+      return
+    }
+    if (recovery.operation === 'progress_delete') void reconcileDelete()
   }
 
   const confirmDelete = async () => {
@@ -144,10 +272,13 @@ const ProgressPhotosPage = () => {
     try {
       await deleteProgressPhoto(deleting.id)
       setPhotos((items) => items.filter((item) => item.id !== deleting.id))
+      if (baselineId === deleting.id) setBaselineId('')
+      if (currentId === deleting.id) setCurrentId('')
       setDeleting(undefined)
-      setFeedback('照片、机器画质检查与私有媒体对象均已删除。')
+      setRecovery(undefined)
+      setFeedback('照片已从当前私有清单移除；对象删除由持久任务处理，可在数据权限中继续核对。')
     } catch (error) {
-      setFeedback(messageOf(error))
+      setRecovery(describeWorkbenchFailure('progress_delete', error))
     } finally {
       setBusy(false)
     }
@@ -169,10 +300,9 @@ const ProgressPhotosPage = () => {
         <View className="progress-shell">
           <View className="progress-topbar">
             <Button
-              {...buttonA11yProps}
+              {...buttonActivationProps(() => void Taro.navigateBack())}
               className="progress-back"
               aria-label="返回身体记录"
-              onClick={() => void Taro.navigateBack()}
             >
               ←
             </Button>
@@ -181,9 +311,10 @@ const ProgressPhotosPage = () => {
               <Text className="progress-brand__en">ALIGNMENT CONTACT SHEET</Text>
             </View>
             <Button
-              {...buttonA11yProps}
+              {...buttonActivationProps(
+                () => void Taro.navigateTo({ url: '/pages/privacy/index' }),
+              )}
               className="privacy-link"
-              onClick={() => void Taro.navigateTo({ url: '/pages/privacy/index' })}
             >
               数据权限
             </Button>
@@ -198,13 +329,9 @@ const ProgressPhotosPage = () => {
           </View>
 
           {feedback ? (
-            <View className="progress-feedback" role="status">
+            <View className="progress-feedback" role="status" aria-live="polite" aria-atomic="true">
               <Text>{feedback}</Text>
-              <Button
-                {...buttonA11yProps}
-                className="feedback-close"
-                onClick={() => setFeedback('')}
-              >
+              <Button {...buttonActivationProps(() => setFeedback(''))} className="feedback-close">
                 关闭
               </Button>
             </View>
@@ -223,11 +350,11 @@ const ProgressPhotosPage = () => {
               <View className="view-tabs" aria-label="选择拍摄方向">
                 {(['front', 'side', 'back'] as const).map((item) => (
                   <Button
-                    {...buttonA11yProps}
+                    {...buttonActivationProps(() => setView(item), busy || Boolean(recovery))}
                     key={item}
                     className={`view-tab ${view === item ? 'view-tab--active' : ''}`}
                     aria-pressed={view === item}
-                    onClick={() => setView(item)}
+                    disabled={busy || Boolean(recovery)}
                   >
                     {progressViewCopy[item].label}
                   </Button>
@@ -255,13 +382,16 @@ const ProgressPhotosPage = () => {
 
               <View className="retention-choice">
                 <Button
-                  {...buttonA11yProps}
+                  {...buttonActivationProps(
+                    () => {
+                      setRetained(false)
+                      setRetentionConsent(false)
+                    },
+                    busy || Boolean(recovery),
+                  )}
                   className={`retention-option ${!retained ? 'retention-option--active' : ''}`}
                   aria-pressed={!retained}
-                  onClick={() => {
-                    setRetained(false)
-                    setRetentionConsent(false)
-                  }}
+                  disabled={busy || Boolean(recovery)}
                 >
                   <Text className="retention-option__title">仅本次分析</Text>
                   <Text className="retention-option__note">
@@ -269,10 +399,10 @@ const ProgressPhotosPage = () => {
                   </Text>
                 </Button>
                 <Button
-                  {...buttonA11yProps}
+                  {...buttonActivationProps(() => setRetained(true), busy || Boolean(recovery))}
                   className={`retention-option ${retained ? 'retention-option--active' : ''}`}
                   aria-pressed={retained}
-                  onClick={() => setRetained(true)}
+                  disabled={busy || Boolean(recovery)}
                 >
                   <Text className="retention-option__title">保留用于对比</Text>
                   <Text className="retention-option__note">保留净化照片，直到你删除或撤回授权</Text>
@@ -280,31 +410,63 @@ const ProgressPhotosPage = () => {
               </View>
 
               <Button
-                {...buttonA11yProps}
+                {...buttonActivationProps(
+                  () => setAnalysisConsent((value) => !value),
+                  busy || Boolean(recovery),
+                )}
                 className={`consent-toggle ${analysisConsent ? 'consent-toggle--checked' : ''}`}
+                style={{
+                  color: analysisConsent ? 'var(--color-ink)' : 'var(--color-muted)',
+                }}
                 aria-pressed={analysisConsent}
-                onClick={() => setAnalysisConsent((value) => !value)}
+                disabled={busy || Boolean(recovery)}
               >
                 <Text className="consent-toggle__box">{analysisConsent ? '✓' : ''}</Text>
                 <Text>同意本次照片净化与拍摄条件机器检查</Text>
               </Button>
               {retained ? (
                 <Button
-                  {...buttonA11yProps}
+                  {...buttonActivationProps(
+                    () => setRetentionConsent((value) => !value),
+                    busy || Boolean(recovery),
+                  )}
                   className={`consent-toggle ${retentionConsent ? 'consent-toggle--checked' : ''}`}
+                  style={{
+                    color: retentionConsent ? 'var(--color-ink)' : 'var(--color-muted)',
+                  }}
                   aria-pressed={retentionConsent}
-                  onClick={() => setRetentionConsent((value) => !value)}
+                  disabled={busy || Boolean(recovery)}
                 >
                   <Text className="consent-toggle__box">{retentionConsent ? '✓' : ''}</Text>
                   <Text>另行同意保留净化照片用于长期对比</Text>
                 </Button>
               ) : null}
 
+              {recovery && recovery.operation !== 'progress_delete' ? (
+                <View
+                  className="progress-recovery"
+                  role="status"
+                  aria-live="polite"
+                  aria-atomic="true"
+                >
+                  <Text className="progress-recovery__eyebrow">{recovery.eyebrow}</Text>
+                  <Text className="progress-recovery__message">{recovery.message}</Text>
+                  <Button
+                    {...buttonActivationProps(handleRecoveryAction, busy)}
+                    className="progress-recovery__action"
+                    style={{ color: 'var(--color-warning)' }}
+                    disabled={busy}
+                  >
+                    {busy ? '核对中…' : recovery.actionLabel}
+                  </Button>
+                </View>
+              ) : null}
+
               <Button
-                {...buttonA11yProps}
+                {...buttonActivationProps(() => void choosePhoto(), busy || Boolean(recovery))}
                 className="capture-action"
-                disabled={busy}
-                onClick={() => void choosePhoto()}
+                style={{ color: 'var(--color-paper)' }}
+                disabled={busy || Boolean(recovery)}
               >
                 {busy ? '正在处理…' : '拍摄或选择照片'}
               </Button>
@@ -442,25 +604,22 @@ const ProgressPhotosPage = () => {
                         {photo.retentionMode === 'retained' && photo.view === view ? (
                           <>
                             <Button
-                              {...buttonA11yProps}
+                              {...buttonActivationProps(() => setAsBaseline(photo.id))}
                               className={`photo-action ${comparisonPair?.baseline.id === photo.id ? 'photo-action--active' : ''}`}
-                              onClick={() => setAsBaseline(photo.id)}
                             >
                               设为基准
                             </Button>
                             <Button
-                              {...buttonA11yProps}
+                              {...buttonActivationProps(() => setAsCurrent(photo.id))}
                               className={`photo-action ${comparisonPair?.current.id === photo.id ? 'photo-action--active' : ''}`}
-                              onClick={() => setAsCurrent(photo.id)}
                             >
                               设为当前
                             </Button>
                           </>
                         ) : null}
                         <Button
-                          {...buttonA11yProps}
+                          {...buttonActivationProps(() => setDeleting(photo))}
                           className="photo-action photo-action--danger"
-                          onClick={() => setDeleting(photo)}
                         >
                           删除
                         </Button>
@@ -493,19 +652,39 @@ const ProgressPhotosPage = () => {
             <Text className="delete-card__body">
               净化照片与机器拍摄条件检查会一起删除；该操作不能撤销。
             </Text>
+            {recovery?.operation === 'progress_delete' ? (
+              <View
+                className="progress-recovery progress-recovery--dialog"
+                role="status"
+                aria-live="polite"
+                aria-atomic="true"
+              >
+                <Text className="progress-recovery__eyebrow">{recovery.eyebrow}</Text>
+                <Text className="progress-recovery__message">{recovery.message}</Text>
+                <Button
+                  {...buttonActivationProps(handleRecoveryAction, busy)}
+                  className="progress-recovery__action"
+                  style={{ color: 'var(--color-warning)' }}
+                  disabled={busy}
+                >
+                  {busy ? '核对中…' : recovery.actionLabel}
+                </Button>
+              </View>
+            ) : null}
             <View className="delete-card__actions">
               <Button
-                {...buttonA11yProps}
+                {...buttonActivationProps(() => setDeleting(undefined), busy || Boolean(recovery))}
                 className="delete-button"
-                onClick={() => setDeleting(undefined)}
+                style={{ color: 'var(--color-ink)' }}
+                disabled={busy || Boolean(recovery)}
               >
                 保留照片
               </Button>
               <Button
-                {...buttonA11yProps}
+                {...buttonActivationProps(() => void confirmDelete(), busy || Boolean(recovery))}
                 className="delete-button delete-button--danger"
-                disabled={busy}
-                onClick={() => void confirmDelete()}
+                style={{ color: 'var(--color-paper)' }}
+                disabled={busy || Boolean(recovery)}
               >
                 确认删除
               </Button>

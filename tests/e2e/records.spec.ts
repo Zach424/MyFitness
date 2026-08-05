@@ -56,6 +56,26 @@ const openRecords = async (page: Page) => {
   await expect(page.getByText('记录身体，也记录恢复。')).toBeVisible()
 }
 
+const validDemoProgressPng = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAIAAAACUFjqAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAAFUlEQVQYlWO4cWQWHsQwKn0ES7AAAP7B3Rk90PKpAAAAAElFTkSuQmCC',
+  'base64',
+)
+
+const collectBrowserErrors = (page: Page) => {
+  const errors: string[] = []
+  page.on('console', (message) => {
+    if (message.type() === 'error') errors.push(message.text())
+  })
+  page.on('pageerror', (error) => errors.push(error.message))
+  return errors
+}
+
+const openProgressPhotos = async (page: Page) => {
+  await openRecords(page)
+  await page.getByRole('button', { name: '打开进度照 →' }).click()
+  await expect(page.getByText('用相同条件，看见自己的长期变化。')).toBeVisible()
+}
+
 test('body record completes create, update, history and delete lifecycle', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   const browserErrors: string[] = []
@@ -519,4 +539,174 @@ test('health history sheet progressively loads immutable older revisions', async
     fullPage: false,
   })
   expect(browserErrors).toEqual([])
+})
+
+test('ambiguous progress-photo reservation reuses one key and deletion reconciles narrowly', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  const browserErrors = collectBrowserErrors(page)
+  await openProgressPhotos(page)
+  const analysisConsent = page.getByRole('button', {
+    name: '同意本次照片净化与拍摄条件机器检查',
+  })
+  await analysisConsent.click()
+
+  let reservationAttempts = 0
+  const idempotencyKeys: string[] = []
+  await page.route('**/v1/progress-photos', async (route) => {
+    if (route.request().method() !== 'POST') {
+      await route.continue()
+      return
+    }
+    reservationAttempts += 1
+    idempotencyKeys.push(route.request().headers()['x-idempotency-key'] ?? '')
+    if (reservationAttempts === 1) {
+      const committedResponse = await route.fetch()
+      expect(committedResponse.status()).toBe(201)
+      await route.abort('failed')
+      return
+    }
+    await route.continue()
+  })
+
+  const firstChooserPromise = page.waitForEvent('filechooser')
+  await page.getByRole('button', { name: '拍摄或选择照片' }).click()
+  const firstChooser = await firstChooserPromise
+  await firstChooser.setFiles({
+    name: 'progress.png',
+    mimeType: 'image/png',
+    buffer: validDemoProgressPng,
+  })
+
+  const reserveRecovery = page.locator('.progress-recovery')
+  await expect(reserveRecovery.getByText('SAME REQUEST / 仅同一请求可重试')).toBeVisible()
+  await expect(reserveRecovery).toContainText('无法确认这次进度照预约是否已提交')
+  await expect(analysisConsent).toHaveAttribute('aria-pressed', 'true')
+  const captureAction = page.getByRole('button', { name: '拍摄或选择照片' })
+  await expect(captureAction).toBeDisabled()
+  await expect(captureAction).toHaveCSS('opacity', '0.58')
+  const retryReservation = reserveRecovery.getByRole('button', { name: '重新选择并重试预约' })
+  await expect(retryReservation).toBeEnabled()
+  await expect(retryReservation).toHaveCSS('opacity', '1')
+  const unresolvedStorage = await page.evaluate(() => JSON.stringify({ ...localStorage }))
+  expect(unresolvedStorage).not.toContain('progress.png')
+  expect(unresolvedStorage).not.toContain('data:image')
+  await reserveRecovery.scrollIntoViewIfNeeded()
+  await page.screenshot({
+    path: 'output/playwright/iteration-057-progress-reserve-recovery-mobile.png',
+  })
+
+  const retryChooserPromise = page.waitForEvent('filechooser')
+  await retryReservation.click()
+  const retryChooser = await retryChooserPromise
+  const uploadResponse = page.waitForResponse(
+    (response) =>
+      response.url().includes('/v1/progress-photos/') &&
+      response.url().includes('/upload?token=') &&
+      response.request().method() === 'POST',
+  )
+  await retryChooser.setFiles({
+    name: 'progress.png',
+    mimeType: 'image/png',
+    buffer: validDemoProgressPng,
+  })
+  expect((await uploadResponse).status()).toBe(201)
+  await expect(page.locator('.photo-strip')).toHaveCount(1)
+  expect(reservationAttempts).toBe(2)
+  expect(idempotencyKeys[0]).not.toBe('')
+  expect(idempotencyKeys[1]).toBe(idempotencyKeys[0])
+
+  await page.route('**/v1/progress-photos/*', async (route) => {
+    if (route.request().method() !== 'DELETE') {
+      await route.continue()
+      return
+    }
+    const committedResponse = await route.fetch()
+    expect(committedResponse.status()).toBe(204)
+    await route.abort('failed')
+  })
+  await page.getByRole('button', { name: '删除', exact: true }).click()
+  const deleteDialog = page.getByRole('dialog', { name: '确认删除进度照' })
+  await deleteDialog.getByRole('button', { name: '确认删除' }).click()
+  const deleteRecovery = deleteDialog.locator('.progress-recovery')
+  await expect(deleteRecovery.getByText('RECONCILE FIRST / 禁止直接重放')).toBeVisible()
+  await expect(
+    page.getByText('照片已从当前私有清单移除；对象删除由持久任务处理，可在数据权限中继续核对。'),
+  ).toHaveCount(0)
+  await page.screenshot({
+    path: 'output/playwright/iteration-057-progress-delete-reconciliation-mobile.png',
+  })
+  await deleteRecovery.getByRole('button', { name: '核对服务端状态' }).click()
+  await expect(
+    page.getByText(
+      '核对完成：照片已离开当前私有清单；对象删除由持久任务继续处理，不能仅据此声称物理字节已经删除。',
+    ),
+  ).toBeVisible()
+  await expect(page.locator('.photo-strip')).toHaveCount(0)
+  expect(
+    browserErrors.filter((error) => error !== 'Failed to load resource: net::ERR_FAILED'),
+  ).toEqual([])
+})
+
+test('ambiguous progress-photo upload reconciles ready state without replaying media', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  const browserErrors = collectBrowserErrors(page)
+  await openProgressPhotos(page)
+  const analysisConsent = page.getByRole('button', {
+    name: '同意本次照片净化与拍摄条件机器检查',
+  })
+  await analysisConsent.click()
+
+  await page.route(/\/v1\/progress-photos\/[0-9a-f-]{36}\/upload\?token=/, async (route) => {
+    const committedResponse = await route.fetch()
+    expect(committedResponse.status()).toBe(201)
+    await route.abort('failed')
+  })
+  const chooserPromise = page.waitForEvent('filechooser')
+  await page.getByRole('button', { name: '拍摄或选择照片' }).click()
+  const chooser = await chooserPromise
+  await chooser.setFiles({
+    name: 'progress.png',
+    mimeType: 'image/png',
+    buffer: validDemoProgressPng,
+  })
+
+  const uploadRecovery = page.locator('.progress-recovery')
+  await expect(uploadRecovery.getByText('RECONCILE FIRST / 禁止直接重放')).toBeVisible()
+  await expect(uploadRecovery).toContainText('无法确认进度照上传与画质检查的服务端结果')
+  await expect(page.locator('.photo-strip')).toHaveCount(0)
+  await expect(analysisConsent).toHaveAttribute('aria-pressed', 'true')
+  await uploadRecovery.scrollIntoViewIfNeeded()
+  await page.screenshot({
+    path: 'output/playwright/iteration-057-progress-upload-reconciliation-mobile.png',
+  })
+
+  await uploadRecovery.getByRole('button', { name: '核对服务端状态' }).click()
+  await expect(
+    page.getByText('核对完成：净化照片已进入当前私有清单；机器结果仍只描述拍摄条件。'),
+  ).toBeVisible()
+  await expect(page.locator('.photo-strip')).toHaveCount(1)
+
+  const deleteResponse = page.waitForResponse(
+    (response) =>
+      /\/v1\/progress-photos\/[0-9a-f-]{36}$/.test(response.url()) &&
+      response.request().method() === 'DELETE',
+  )
+  await page.getByRole('button', { name: '删除', exact: true }).click()
+  await page
+    .getByRole('dialog', { name: '确认删除进度照' })
+    .getByRole('button', {
+      name: '确认删除',
+    })
+    .click()
+  expect((await deleteResponse).status()).toBe(204)
+  await expect(
+    page.getByText('照片已从当前私有清单移除；对象删除由持久任务处理，可在数据权限中继续核对。'),
+  ).toBeVisible()
+  expect(
+    browserErrors.filter((error) => error !== 'Failed to load resource: net::ERR_FAILED'),
+  ).toEqual([])
 })

@@ -20,6 +20,7 @@ The existing food-photo path already strips metadata, uses private object storag
 6. Comparison is user-controlled and only offered for two retained photos with the same declared view. The client presents an adjustable onion-skin overlay, registration marks and capture reminders. It does not compute a change score or claim causation.
 7. Every delete path is explicit or retention-driven, transactionally enqueues durable object deletion and remains visible as pending if storage is unavailable. Export and privacy inventory include active sanitized progress media and lifecycle provenance but never storage keys, fingerprints or signed URLs.
 8. No external dataset or model is required for this boundary. Introducing landmark/body-composition inference later would be a new product/safety decision with licensed data, bias, privacy, expert and policy evidence rather than an extension of this feature.
+9. Reservation recovery may reuse only one unchanged in-memory request key and capture-intent payload, while the user reselects the local image. Upload and deletion are never automatically replayed after an ambiguous response. Upload first reads the exact ready item from the owner list; deletion absence proves only removal from the private contact sheet. Selected media/path and replay commands are not persisted, and durable object deletion is never inferred from list absence.
 
 ## Consequences
 
@@ -28,6 +29,8 @@ Users can make repeatable visual comparisons without converting appearance into 
 Brightness, contrast, distance, clothing and camera setup can still change perception even when all four checks pass. The interface therefore describes the result as capture readiness, shows the original visual comparison without conclusions and repeats that discomfort or health concerns belong with a qualified professional.
 
 Retained photos increase custody obligations and portable-export size. Production requires bucket encryption/IAM/lifecycle/versioning, independent deletion/restore evidence, policy text and real-device review. The synchronous JSON export remains a closed-beta size limit.
+
+Ambiguous browser responses now preserve the consent/view/retention decision without storing media or inventing custody success. The former catch-path deletion after any upload exception is removed because upload may already have committed. Even a normal delete response says that the item left the private list and durable object cleanup continues; a completed physical deletion claim still requires operations evidence.
 
 ## Alternatives considered
 

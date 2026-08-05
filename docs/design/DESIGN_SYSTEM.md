@@ -552,6 +552,20 @@ The three 390 × 844 artifacts are real-service response-loss states: create com
 - [390 × 844 food-correction reconciliation](../../output/playwright/iteration-056-food-update-reconciliation-mobile.png)
 - [390 × 844 food-archive reconciliation](../../output/playwright/iteration-056-food-archive-reconciliation-mobile.png)
 
+## Progress-photo recovery — iteration 057
+
+The private contact sheet now applies the same authority strip to three media stages while keeping its existing registration-board aesthetic. Reservation loss uses `SAME REQUEST` below the retained view, 24-hour/retained choice and explicit consent. The page keeps those non-media choices visible, disables the ordinary capture action and asks the user to choose the local image again; no file name, path or data URL is stored.
+
+Upload loss uses `RECONCILE FIRST` in the same position. Its single outline action reads the current private list for the exact reserved photo ID and never resends bytes. A recovered item still says that the machine checks only orientation, resolution, lighting and contrast. If the item is absent, the terminal copy says it was not added to the private list and leaves unused reservation/temporary cleanup to the existing lifecycle.
+
+Delete recovery stays inside the established destructive dialog. The original “keep” and “confirm delete” controls remain visible but inert until the user reads current server state. List absence closes the contact sheet item with the narrow statement that durable object cleanup continues; it never equates an absent row with physical deletion. Normal deletion uses the same custody wording.
+
+Visual review found that Taro preserved the consent toggle's accessible name but rendered its label blank after the control became unavailable. Explicit ink/muted token color restores visible authorization text, and disabled capture-intent controls use enough opacity to remain readable while event-level pointer/keyboard guards enforce the authority state.
+
+- [390 × 844 progress reservation same-key recovery](../../output/playwright/iteration-057-progress-reserve-recovery-mobile.png)
+- [390 × 844 progress upload reconciliation](../../output/playwright/iteration-057-progress-upload-reconciliation-mobile.png)
+- [390 × 844 progress deletion reconciliation](../../output/playwright/iteration-057-progress-delete-reconciliation-mobile.png)
+
 ## Screenshot review checklist
 
 - The Rhythm Rail remains understandable without color.

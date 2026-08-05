@@ -1,6 +1,6 @@
 # Progress-photo assistance model
 
-Status: privacy-first local implementation complete through iteration 031
+Status: privacy-first local implementation with authority-aware reservation/upload/deletion recovery complete through iteration 057
 
 ## Product boundary
 
@@ -27,6 +27,16 @@ Lifecycle states are:
 - `ready`: a sanitized private JPEG exists and the item can be listed/previewed.
 - `deleted`: explicit deletion or consent withdrawal removed user-visible data and enqueued media removal.
 - `expired`: an unused reservation or 24-hour analysis-only record crossed its deadline and was reconciled.
+
+## Ambiguous response recovery
+
+The three client writes follow server authority rather than one generic retry rule:
+
+- Reservation is owner/key/request-fingerprint idempotent while `reserved` and uploadable. The page retains the exact captured-at/view/retention/consent payload and key in memory, but no selected file/path. An explicit retry reopens the chooser and sends the same reservation request.
+- Upload sanitizes/stores media and transitions one reservation to `ready`; it is not replay-safe. If its response is lost, the page reads the owner-visible ready list and accepts only the exact reserved photo ID. Absence ends the attempt without replaying bytes; reserved/temporary state follows the existing ten-minute/24-hour lifecycle.
+- Delete hides the row and transactionally enqueues durable object removal; it is not replayed after an uncertain response. Owner-list absence proves only that the item left the private contact sheet. It does not prove the object deletion job completed.
+
+The page retains non-media capture intent while unresolved and disables ordinary pointer/Enter/Space writes. It persists no request, key, image, path or replay command. The former automatic catch-path delete after upload error is intentionally removed because the upload may have committed before its response disappeared. A normal delete response also uses the narrow list-removal/durable-cleanup language rather than claiming immediate physical-byte deletion.
 
 ## Two-purpose consent
 

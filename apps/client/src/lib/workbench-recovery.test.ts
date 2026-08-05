@@ -10,7 +10,7 @@ const serverError = (statusCode: number, message: string) =>
   Object.assign(new Error(message), { statusCode })
 
 describe('authority-aware workbench recovery contract', () => {
-  it.each(['action_create', 'food_create', 'photo_reserve'] as const)(
+  it.each(['action_create', 'food_create', 'photo_reserve', 'progress_reserve'] as const)(
     'allows only a same-key retry for ambiguous %s',
     (operation) => {
       const recovery = describeWorkbenchFailure(operation, new Error('Failed to fetch'))
@@ -29,6 +29,8 @@ describe('authority-aware workbench recovery contract', () => {
     'photo_upload',
     'photo_confirm',
     'photo_delete',
+    'progress_upload',
+    'progress_delete',
   ] as const)('requires read-side reconciliation before repeating %s', (operation) => {
     const recovery = describeWorkbenchFailure(operation, serverError(503, 'unavailable'))
 
@@ -63,5 +65,8 @@ describe('authority-aware workbench recovery contract', () => {
     expect(workbenchOperationPolicies.photo_reserve.preserves).toBe('none')
     expect(workbenchOperationPolicies.photo_upload.preserves).toBe('none')
     expect(workbenchOperationPolicies.photo_delete.preserves).toBe('none')
+    expect(workbenchOperationPolicies.progress_reserve.preserves).toBe('capture_intent')
+    expect(workbenchOperationPolicies.progress_upload.preserves).toBe('capture_intent')
+    expect(workbenchOperationPolicies.progress_delete.preserves).toBe('none')
   })
 })
