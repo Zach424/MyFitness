@@ -77,8 +77,9 @@ Progress snapshot (2026-08-05): iterations 0–67 are complete locally. The nutr
 | 68        | Owner-definition register read authority            | Unknown catalog cannot enable correction/archive; explicit retry restores both register variants  |
 | 69        | Long-term observation read authority                | Unknown projection cannot become empty evidence; explicit retry restores all observation variants |
 | 70        | Private-photo inventory read authority              | Unknown private list cannot enable media/custody actions; explicit retry restores both workflows  |
-| 71        | Managed shared deployment, beta hardening/release   | Real identity/custody/telemetry, rollback, security/a11y/filing review and staged rollout         |
-| 72        | Native App feasibility and device sync              | Retention gate reviewed; HealthKit/Health Connect/Huawei proof of concept                         |
+| 71        | Profile/goal register read authority                | Confirmed absence differs from outage; unavailable base revision cannot overwrite owner settings  |
+| 72        | Managed shared deployment, beta hardening/release   | Real identity/custody/telemetry, rollback, security/a11y/filing review and staged rollout         |
+| 73        | Native App feasibility and device sync              | Retention gate reviewed; HealthKit/Health Connect/Huawei proof of concept                         |
 
 ## Release gates
 

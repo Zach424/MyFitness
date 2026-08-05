@@ -1,6 +1,6 @@
 # Design system baseline
 
-Status: implemented and visually validated through iteration-069 long-term observation read-authority evidence
+Status: implemented and visually validated through iteration-070 private-photo inventory read-authority evidence
 
 Working brand: 衡迹 / MyFitness
 
@@ -701,6 +701,19 @@ Visual review confirms that both evidence states preserve the calm logbook hiera
 
 - [390 × 844 unread health observation](../../output/playwright/iteration-069-health-observation-offline-mobile.png)
 - [1440 × 1000 retained nutrition observation](../../output/playwright/iteration-069-nutrition-observation-stale-wide.png)
+
+## Private-photo inventory read authority — iteration 070
+
+The two purpose-separated private-photo routes now share one small inventory grammar without flattening their established visual identities. A ruled `PRIVATE INVENTORY` toolbar states whether the item count is accepted or unknown; one paper receipt below it uses mineral blue while checking and amber when authority is unavailable. The food route keeps its dark proof masthead and rounded workbench, while the progress route keeps its registration-grid contact-sheet composition.
+
+On the 390 × 844 food route, initial transport loss shows `PRIVATE ITEMS UNKNOWN` and one full-width focused retry. The entire intake/proof card is absent, so neither “choose a photo” nor “no candidate” can masquerade as current custody evidence. The footer retains the non-diagnostic/non-recognition caveat and the settled page has no horizontal overflow.
+
+On the 1440 × 1000 progress route, a service outage retains `PRIVATE ITEMS 1 · PAGE MEMORY` and the last accepted capture/contact-sheet evidence. Capture direction, retention choice, consent, baseline/current assignment and deletion remain readable but inactive. The amber receipt spans the content width above the two-column capture/overlay area, making the freeze apply to the whole inventory rather than looking like a local image error. A previously composed opacity view remains a presentation-only control.
+
+Visual review caught that delayed programmatic focus did not always match `:focus-visible` even though the recovery action was the active element. The shared component now provides the same visible mineral outline for `:focus` and `:focus-visible`; automated proof checks the computed indicator rather than focus state alone.
+
+- [390 × 844 unread food-proof inventory](../../output/playwright/iteration-070-food-inventory-offline-mobile.png)
+- [1440 × 1000 retained progress-photo inventory](../../output/playwright/iteration-070-progress-inventory-stale-wide.png)
 
 ## Screenshot review checklist
 

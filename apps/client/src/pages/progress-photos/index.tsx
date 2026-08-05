@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Button, Image, ScrollView, Slider, Text, View } from '@tarojs/components'
 import Taro from '@tarojs/taro'
 import type { CreateProgressPhoto, ProgressPhotoItem } from '@myfitness/contracts'
@@ -7,7 +7,11 @@ import {
   progressPhotoRetentionConsentVersion,
 } from '@myfitness/contracts/progress-photo.constants'
 
-import { buttonActivationProps } from '../../lib/accessibility'
+import { buttonActivationProps, deferH5Focus } from '../../lib/accessibility'
+import {
+  PrivateInventoryReadState,
+  PrivateInventoryReadToolbar,
+} from '../../components/private-inventory-read-state'
 import {
   ApiError,
   deleteProgressPhoto,
@@ -17,6 +21,12 @@ import {
   uploadProgressPhoto,
 } from '../../lib/api'
 import { describeWorkbenchFailure, type WorkbenchRecovery } from '../../lib/workbench-recovery'
+import {
+  classifyPrivateInventoryReadFailure,
+  privateInventoryReadFailureCopy,
+  privateInventoryReadPhase,
+  type PrivateInventoryReadFailureKind,
+} from '../../lib/private-inventory-read'
 import {
   progressViewCopy,
   qualityReasonCopy,
@@ -45,12 +55,17 @@ const captureTime = (value: string) =>
 const ProgressPhotosPage = () => {
   const pendingReservation = useRef<{ key: string; payload: CreateProgressPhoto }>()
   const pendingUploadId = useRef('')
+  const inventoryRequest = useRef(0)
+  const inventoryBusyRef = useRef(false)
+  const hasInventorySnapshotRef = useRef(false)
   const [photos, setPhotos] = useState<ProgressPhotoItem[]>([])
+  const [hasInventorySnapshot, setHasInventorySnapshot] = useState(false)
+  const [inventoryBusy, setInventoryBusy] = useState(true)
+  const [inventoryFailure, setInventoryFailure] = useState<PrivateInventoryReadFailureKind>()
   const [view, setView] = useState<ProgressPhotoItem['view']>('front')
   const [retained, setRetained] = useState(false)
   const [analysisConsent, setAnalysisConsent] = useState(false)
   const [retentionConsent, setRetentionConsent] = useState(false)
-  const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [feedback, setFeedback] = useState('')
   const [baselineId, setBaselineId] = useState('')
@@ -59,21 +74,62 @@ const ProgressPhotosPage = () => {
   const [deleting, setDeleting] = useState<ProgressPhotoItem>()
   const [recovery, setRecovery] = useState<WorkbenchRecovery>()
 
-  const load = async () => {
-    setLoading(true)
+  const acceptInventory = useCallback((items: ProgressPhotoItem[]) => {
+    setPhotos(items)
+    hasInventorySnapshotRef.current = true
+    setHasInventorySnapshot(true)
+    setInventoryFailure(undefined)
+    setBaselineId((id) =>
+      items.some((item) => item.id === id && item.retentionMode === 'retained') ? id : '',
+    )
+    setCurrentId((id) =>
+      items.some((item) => item.id === id && item.retentionMode === 'retained') ? id : '',
+    )
+  }, [])
+
+  const loadInventory = useCallback(async () => {
+    if (inventoryBusyRef.current) return
+    inventoryBusyRef.current = true
+    const request = ++inventoryRequest.current
+    const hadSnapshot = hasInventorySnapshotRef.current
+    setInventoryBusy(true)
+    setInventoryFailure(undefined)
+    setDeleting(undefined)
     try {
       const result = await listProgressPhotos()
-      setPhotos(result.items)
+      if (request !== inventoryRequest.current) return
+      acceptInventory(result.items)
+      if (!hadSnapshot) deferH5Focus('progress-photo-back', 350)
     } catch (error) {
-      setFeedback(messageOf(error))
+      if (request !== inventoryRequest.current) return
+      setInventoryFailure(classifyPrivateInventoryReadFailure(error))
+      deferH5Focus('progress-photo-inventory-retry', hadSnapshot ? 80 : 500)
     } finally {
-      setLoading(false)
+      if (request === inventoryRequest.current) {
+        inventoryBusyRef.current = false
+        setInventoryBusy(false)
+      }
     }
-  }
+  }, [acceptInventory])
 
   useEffect(() => {
-    void load()
-  }, [])
+    inventoryBusyRef.current = false
+    void loadInventory()
+    return () => {
+      inventoryRequest.current += 1
+      inventoryBusyRef.current = false
+    }
+  }, [loadInventory])
+
+  const inventoryPhase = privateInventoryReadPhase({
+    hasSnapshot: hasInventorySnapshot,
+    busy: inventoryBusy,
+    hasFailure: Boolean(inventoryFailure),
+  })
+  const inventoryActionsDisabled = inventoryPhase !== 'ready'
+  const inventoryFailurePresentation = inventoryFailure
+    ? privateInventoryReadFailureCopy(inventoryFailure, 'progress-photo', hasInventorySnapshot)
+    : undefined
 
   const comparisonPhotos = useMemo(() => retainedPhotosForView(photos, view), [photos, view])
   const comparisonPair = useMemo(
@@ -92,6 +148,9 @@ const ProgressPhotosPage = () => {
     message?: string,
     currentPhotos?: ProgressPhotoItem[],
   ) => {
+    hasInventorySnapshotRef.current = true
+    setHasInventorySnapshot(true)
+    setInventoryFailure(undefined)
     setPhotos(
       currentPhotos ?? ((items) => [uploaded, ...items.filter((item) => item.id !== uploaded.id)]),
     )
@@ -107,6 +166,7 @@ const ProgressPhotosPage = () => {
   }
 
   const choosePhoto = async () => {
+    if (inventoryActionsDisabled) return
     if (!analysisConsent) {
       setFeedback('请先确认本次本地画质检查授权。')
       return
@@ -186,7 +246,7 @@ const ProgressPhotosPage = () => {
     try {
       const result = await listProgressPhotos()
       const current = result.items.find((item) => item.id === pendingUploadId.current)
-      setPhotos(result.items)
+      acceptInventory(result.items)
       if (current) {
         finishCapture(
           current,
@@ -216,7 +276,7 @@ const ProgressPhotosPage = () => {
     try {
       const result = await listProgressPhotos()
       const current = result.items.find((item) => item.id === deleting.id)
-      setPhotos(result.items)
+      acceptInventory(result.items)
       if (!current) {
         if (baselineId === deleting.id) setBaselineId('')
         if (currentId === deleting.id) setCurrentId('')
@@ -267,7 +327,7 @@ const ProgressPhotosPage = () => {
   }
 
   const confirmDelete = async () => {
-    if (!deleting) return
+    if (!deleting || inventoryActionsDisabled) return
     setBusy(true)
     try {
       await deleteProgressPhoto(deleting.id)
@@ -285,11 +345,13 @@ const ProgressPhotosPage = () => {
   }
 
   const setAsBaseline = (id: string) => {
+    if (inventoryActionsDisabled) return
     if (currentId === id) setCurrentId(baselineId)
     setBaselineId(id)
   }
 
   const setAsCurrent = (id: string) => {
+    if (inventoryActionsDisabled) return
     if (baselineId === id) setBaselineId(currentId)
     setCurrentId(id)
   }
@@ -301,6 +363,7 @@ const ProgressPhotosPage = () => {
           <View className="progress-topbar">
             <Button
               {...buttonActivationProps(() => void Taro.navigateBack())}
+              id="progress-photo-back"
               className="progress-back"
               aria-label="返回身体记录"
             >
@@ -328,6 +391,32 @@ const ProgressPhotosPage = () => {
             </Text>
           </View>
 
+          <PrivateInventoryReadToolbar
+            label={
+              hasInventorySnapshot
+                ? `PRIVATE INVENTORY · ${photos.length} ITEMS`
+                : 'PRIVATE INVENTORY · UNKNOWN'
+            }
+            buttonId="progress-photo-inventory-refresh"
+            busy={inventoryBusy}
+            disabled={inventoryPhase !== 'ready' || busy || Boolean(recovery)}
+            onRefresh={() => void loadInventory()}
+          />
+
+          <PrivateInventoryReadState
+            phase={inventoryPhase}
+            subject="progress-photo"
+            presentation={inventoryFailurePresentation}
+            retainedLabel={
+              hasInventorySnapshot
+                ? `PRIVATE ITEMS ${photos.length} · PAGE MEMORY`
+                : 'PRIVATE ITEMS UNKNOWN'
+            }
+            retryId="progress-photo-inventory-retry"
+            retryLabel="重新核对私有进度照片清单"
+            onRetry={() => void loadInventory()}
+          />
+
           {feedback ? (
             <View className="progress-feedback" role="status" aria-live="polite" aria-atomic="true">
               <Text>{feedback}</Text>
@@ -337,304 +426,337 @@ const ProgressPhotosPage = () => {
             </View>
           ) : null}
 
-          <View className="progress-grid">
-            <View className="capture-card paper-card">
-              <View className="card-heading">
-                <View>
-                  <Text className="section-kicker">CAPTURE REGISTER</Text>
-                  <Text className="section-title">建立一张可对位的照片</Text>
-                </View>
-                <Text className="card-index">01</Text>
-              </View>
-
-              <View className="view-tabs" aria-label="选择拍摄方向">
-                {(['front', 'side', 'back'] as const).map((item) => (
-                  <Button
-                    {...buttonActivationProps(() => setView(item), busy || Boolean(recovery))}
-                    key={item}
-                    className={`view-tab ${view === item ? 'view-tab--active' : ''}`}
-                    aria-pressed={view === item}
-                    disabled={busy || Boolean(recovery)}
-                  >
-                    {progressViewCopy[item].label}
-                  </Button>
-                ))}
-              </View>
-
-              <View
-                className="capture-register"
-                aria-label={`${progressViewCopy[view].label}拍摄参考框`}
-              >
-                <View className="register-corner register-corner--tl" />
-                <View className="register-corner register-corner--tr" />
-                <View className="register-corner register-corner--bl" />
-                <View className="register-corner register-corner--br" />
-                <View className="register-axis register-axis--vertical" />
-                <View className="register-axis register-axis--horizontal" />
-                <View className={`body-marker body-marker--${view}`} aria-hidden="true">
-                  <View className="body-marker__head" />
-                  <View className="body-marker__torso" />
-                  <View className="body-marker__legs" />
-                </View>
-                <Text className="register-view">{progressViewCopy[view].label}</Text>
-              </View>
-              <Text className="capture-cue">{progressViewCopy[view].cue}</Text>
-
-              <View className="retention-choice">
-                <Button
-                  {...buttonActivationProps(
-                    () => {
-                      setRetained(false)
-                      setRetentionConsent(false)
-                    },
-                    busy || Boolean(recovery),
-                  )}
-                  className={`retention-option ${!retained ? 'retention-option--active' : ''}`}
-                  aria-pressed={!retained}
-                  disabled={busy || Boolean(recovery)}
-                >
-                  <Text className="retention-option__title">仅本次分析</Text>
-                  <Text className="retention-option__note">
-                    24 小时内自动删除，不能进入长期对比
-                  </Text>
-                </Button>
-                <Button
-                  {...buttonActivationProps(() => setRetained(true), busy || Boolean(recovery))}
-                  className={`retention-option ${retained ? 'retention-option--active' : ''}`}
-                  aria-pressed={retained}
-                  disabled={busy || Boolean(recovery)}
-                >
-                  <Text className="retention-option__title">保留用于对比</Text>
-                  <Text className="retention-option__note">保留净化照片，直到你删除或撤回授权</Text>
-                </Button>
-              </View>
-
-              <Button
-                {...buttonActivationProps(
-                  () => setAnalysisConsent((value) => !value),
-                  busy || Boolean(recovery),
-                )}
-                className={`consent-toggle ${analysisConsent ? 'consent-toggle--checked' : ''}`}
-                style={{
-                  color: analysisConsent ? 'var(--color-ink)' : 'var(--color-muted)',
-                }}
-                aria-pressed={analysisConsent}
-                disabled={busy || Boolean(recovery)}
-              >
-                <Text className="consent-toggle__box">{analysisConsent ? '✓' : ''}</Text>
-                <Text>同意本次照片净化与拍摄条件机器检查</Text>
-              </Button>
-              {retained ? (
-                <Button
-                  {...buttonActivationProps(
-                    () => setRetentionConsent((value) => !value),
-                    busy || Boolean(recovery),
-                  )}
-                  className={`consent-toggle ${retentionConsent ? 'consent-toggle--checked' : ''}`}
-                  style={{
-                    color: retentionConsent ? 'var(--color-ink)' : 'var(--color-muted)',
-                  }}
-                  aria-pressed={retentionConsent}
-                  disabled={busy || Boolean(recovery)}
-                >
-                  <Text className="consent-toggle__box">{retentionConsent ? '✓' : ''}</Text>
-                  <Text>另行同意保留净化照片用于长期对比</Text>
-                </Button>
-              ) : null}
-
-              {recovery && recovery.operation !== 'progress_delete' ? (
-                <View
-                  className="progress-recovery"
-                  role="status"
-                  aria-live="polite"
-                  aria-atomic="true"
-                >
-                  <Text className="progress-recovery__eyebrow">{recovery.eyebrow}</Text>
-                  <Text className="progress-recovery__message">{recovery.message}</Text>
-                  <Button
-                    {...buttonActivationProps(handleRecoveryAction, busy)}
-                    className="progress-recovery__action"
-                    style={{ color: 'var(--color-warning)' }}
-                    disabled={busy}
-                  >
-                    {busy ? '核对中…' : recovery.actionLabel}
-                  </Button>
-                </View>
-              ) : null}
-
-              <Button
-                {...buttonActivationProps(() => void choosePhoto(), busy || Boolean(recovery))}
-                className="capture-action"
-                style={{ color: 'var(--color-paper)' }}
-                disabled={busy || Boolean(recovery)}
-              >
-                {busy ? '正在处理…' : '拍摄或选择照片'}
-              </Button>
-              <Text className="capture-privacy">
-                上传前后都会剥离 EXIF；原图不会公开。分析结果始终标记为机器估计。
-              </Text>
-            </View>
-
-            <View className="compare-card paper-card">
-              <View className="card-heading">
-                <View>
-                  <Text className="section-kicker">ONION-SKIN COMPARE</Text>
-                  <Text className="section-title">同视角叠片对比</Text>
-                </View>
-                <Text className="card-index">02</Text>
-              </View>
-
-              {comparisonPair ? (
-                <>
-                  <View className="comparison-stage">
-                    <Image
-                      className="comparison-image comparison-image--baseline"
-                      src={privatePhotoUrl(comparisonPair.baseline.previewPath)}
-                      mode="aspectFit"
-                    />
-                    <Image
-                      className="comparison-image comparison-image--current"
-                      src={privatePhotoUrl(comparisonPair.current.previewPath)}
-                      mode="aspectFit"
-                      style={{ opacity: overlayOpacity / 100 }}
-                    />
-                    <View className="comparison-seam" style={{ left: `${overlayOpacity}%` }}>
-                      <View className="comparison-seam__handle">↔</View>
+          {hasInventorySnapshot ? (
+            <>
+              <View className="progress-grid">
+                <View className="capture-card paper-card">
+                  <View className="card-heading">
+                    <View>
+                      <Text className="section-kicker">CAPTURE REGISTER</Text>
+                      <Text className="section-title">建立一张可对位的照片</Text>
                     </View>
-                    <View className="comparison-cross comparison-cross--top" />
-                    <View className="comparison-cross comparison-cross--bottom" />
-                    <Text className="comparison-label comparison-label--baseline">基准</Text>
-                    <Text className="comparison-label comparison-label--current">当前</Text>
+                    <Text className="card-index">01</Text>
                   </View>
-                  <View className="opacity-control">
-                    <Text>当前照片透明度</Text>
-                    <Text className="metric">{overlayOpacity}%</Text>
+
+                  <View className="view-tabs" aria-label="选择拍摄方向">
+                    {(['front', 'side', 'back'] as const).map((item) => (
+                      <Button
+                        {...buttonActivationProps(
+                          () => setView(item),
+                          busy || Boolean(recovery) || inventoryActionsDisabled,
+                        )}
+                        key={item}
+                        className={`view-tab ${view === item ? 'view-tab--active' : ''}`}
+                        aria-pressed={view === item}
+                        disabled={busy || Boolean(recovery) || inventoryActionsDisabled}
+                      >
+                        {progressViewCopy[item].label}
+                      </Button>
+                    ))}
                   </View>
-                  <Slider
-                    min={10}
-                    max={90}
-                    value={overlayOpacity}
-                    activeColor="#3F756B"
-                    backgroundColor="#D5E0DD"
-                    blockColor="#244C66"
-                    blockSize={22}
-                    onChange={(event) => setOverlayOpacity(event.detail.value)}
-                  />
-                  <View className="comparison-meta">
-                    <Text>基准 · {captureTime(comparisonPair.baseline.capturedAt)}</Text>
-                    <Text>当前 · {captureTime(comparisonPair.current.capturedAt)}</Text>
+
+                  <View
+                    className="capture-register"
+                    aria-label={`${progressViewCopy[view].label}拍摄参考框`}
+                  >
+                    <View className="register-corner register-corner--tl" />
+                    <View className="register-corner register-corner--tr" />
+                    <View className="register-corner register-corner--bl" />
+                    <View className="register-corner register-corner--br" />
+                    <View className="register-axis register-axis--vertical" />
+                    <View className="register-axis register-axis--horizontal" />
+                    <View className={`body-marker body-marker--${view}`} aria-hidden="true">
+                      <View className="body-marker__head" />
+                      <View className="body-marker__torso" />
+                      <View className="body-marker__legs" />
+                    </View>
+                    <Text className="register-view">{progressViewCopy[view].label}</Text>
                   </View>
-                </>
-              ) : (
-                <View className="comparison-empty">
-                  <Text className="comparison-empty__mark">＋</Text>
-                  <Text className="comparison-empty__title">需要两张同视角保留照片</Text>
-                  <Text>
-                    选择“保留用于对比”并以相同方向拍摄两次后，这里会生成可调透明度的叠片。
+                  <Text className="capture-cue">{progressViewCopy[view].cue}</Text>
+
+                  <View className="retention-choice">
+                    <Button
+                      {...buttonActivationProps(
+                        () => {
+                          setRetained(false)
+                          setRetentionConsent(false)
+                        },
+                        busy || Boolean(recovery) || inventoryActionsDisabled,
+                      )}
+                      className={`retention-option ${!retained ? 'retention-option--active' : ''}`}
+                      aria-pressed={!retained}
+                      disabled={busy || Boolean(recovery) || inventoryActionsDisabled}
+                    >
+                      <Text className="retention-option__title">仅本次分析</Text>
+                      <Text className="retention-option__note">
+                        24 小时内自动删除，不能进入长期对比
+                      </Text>
+                    </Button>
+                    <Button
+                      {...buttonActivationProps(
+                        () => setRetained(true),
+                        busy || Boolean(recovery) || inventoryActionsDisabled,
+                      )}
+                      className={`retention-option ${retained ? 'retention-option--active' : ''}`}
+                      aria-pressed={retained}
+                      disabled={busy || Boolean(recovery) || inventoryActionsDisabled}
+                    >
+                      <Text className="retention-option__title">保留用于对比</Text>
+                      <Text className="retention-option__note">
+                        保留净化照片，直到你删除或撤回授权
+                      </Text>
+                    </Button>
+                  </View>
+
+                  <Button
+                    {...buttonActivationProps(
+                      () => setAnalysisConsent((value) => !value),
+                      busy || Boolean(recovery) || inventoryActionsDisabled,
+                    )}
+                    className={`consent-toggle ${analysisConsent ? 'consent-toggle--checked' : ''}`}
+                    style={{
+                      color: analysisConsent ? 'var(--color-ink)' : 'var(--color-muted)',
+                    }}
+                    aria-pressed={analysisConsent}
+                    disabled={busy || Boolean(recovery) || inventoryActionsDisabled}
+                  >
+                    <Text className="consent-toggle__box">{analysisConsent ? '✓' : ''}</Text>
+                    <Text>同意本次照片净化与拍摄条件机器检查</Text>
+                  </Button>
+                  {retained ? (
+                    <Button
+                      {...buttonActivationProps(
+                        () => setRetentionConsent((value) => !value),
+                        busy || Boolean(recovery) || inventoryActionsDisabled,
+                      )}
+                      className={`consent-toggle ${retentionConsent ? 'consent-toggle--checked' : ''}`}
+                      style={{
+                        color: retentionConsent ? 'var(--color-ink)' : 'var(--color-muted)',
+                      }}
+                      aria-pressed={retentionConsent}
+                      disabled={busy || Boolean(recovery) || inventoryActionsDisabled}
+                    >
+                      <Text className="consent-toggle__box">{retentionConsent ? '✓' : ''}</Text>
+                      <Text>另行同意保留净化照片用于长期对比</Text>
+                    </Button>
+                  ) : null}
+
+                  {recovery && recovery.operation !== 'progress_delete' ? (
+                    <View
+                      className="progress-recovery"
+                      role="status"
+                      aria-live="polite"
+                      aria-atomic="true"
+                    >
+                      <Text className="progress-recovery__eyebrow">{recovery.eyebrow}</Text>
+                      <Text className="progress-recovery__message">{recovery.message}</Text>
+                      <Button
+                        {...buttonActivationProps(handleRecoveryAction, busy)}
+                        className="progress-recovery__action"
+                        style={{ color: 'var(--color-warning)' }}
+                        disabled={busy}
+                      >
+                        {busy ? '核对中…' : recovery.actionLabel}
+                      </Button>
+                    </View>
+                  ) : null}
+
+                  <Button
+                    {...buttonActivationProps(
+                      () => void choosePhoto(),
+                      busy || Boolean(recovery) || inventoryActionsDisabled,
+                    )}
+                    className="capture-action"
+                    style={{ color: 'var(--color-paper)' }}
+                    disabled={busy || Boolean(recovery) || inventoryActionsDisabled}
+                  >
+                    {busy ? '正在处理…' : '拍摄或选择照片'}
+                  </Button>
+                  <Text className="capture-privacy">
+                    上传前后都会剥离 EXIF；原图不会公开。分析结果始终标记为机器估计。
                   </Text>
                 </View>
-              )}
-              <Text className="compare-safety">
-                对比仅呈现原始视觉差异。光线、距离、衣着和时间都会影响观感，请不要把它当作健康结论。
-              </Text>
-            </View>
-          </View>
 
-          <View className="history-card paper-card">
-            <View className="card-heading">
-              <View>
-                <Text className="section-kicker">PRIVATE CONTACT SHEET</Text>
-                <Text className="section-title">我的进度照</Text>
-              </View>
-              <Text className="card-index">{String(photos.length).padStart(2, '0')}</Text>
-            </View>
-
-            {loading ? (
-              <View className="history-state">正在核对私有照片清单…</View>
-            ) : photos.length ? (
-              <View className="photo-list">
-                {photos.map((photo) => (
-                  <View className="photo-strip" key={photo.id}>
-                    <View className="photo-thumb-wrap">
-                      <Image
-                        className="photo-thumb"
-                        src={privatePhotoUrl(photo.previewPath)}
-                        mode="aspectFill"
-                      />
-                      <View className="thumb-register" aria-hidden="true" />
+                <View className="compare-card paper-card">
+                  <View className="card-heading">
+                    <View>
+                      <Text className="section-kicker">ONION-SKIN COMPARE</Text>
+                      <Text className="section-title">同视角叠片对比</Text>
                     </View>
-                    <View className="photo-strip__body">
-                      <View className="photo-strip__heading">
-                        <View>
-                          <Text className="photo-strip__view">
-                            {progressViewCopy[photo.view].label}
-                          </Text>
-                          <Text className="photo-strip__date">{captureTime(photo.capturedAt)}</Text>
+                    <Text className="card-index">02</Text>
+                  </View>
+
+                  {comparisonPair ? (
+                    <>
+                      <View className="comparison-stage">
+                        <Image
+                          className="comparison-image comparison-image--baseline"
+                          src={privatePhotoUrl(comparisonPair.baseline.previewPath)}
+                          mode="aspectFit"
+                        />
+                        <Image
+                          className="comparison-image comparison-image--current"
+                          src={privatePhotoUrl(comparisonPair.current.previewPath)}
+                          mode="aspectFit"
+                          style={{ opacity: overlayOpacity / 100 }}
+                        />
+                        <View className="comparison-seam" style={{ left: `${overlayOpacity}%` }}>
+                          <View className="comparison-seam__handle">↔</View>
                         </View>
-                        <Text className={`retention-tag retention-tag--${photo.retentionMode}`}>
-                          {photo.retentionMode === 'retained' ? '已保留' : '24H 自动删除'}
-                        </Text>
+                        <View className="comparison-cross comparison-cross--top" />
+                        <View className="comparison-cross comparison-cross--bottom" />
+                        <Text className="comparison-label comparison-label--baseline">基准</Text>
+                        <Text className="comparison-label comparison-label--current">当前</Text>
                       </View>
+                      <View className="opacity-control">
+                        <Text>当前照片透明度</Text>
+                        <Text className="metric">{overlayOpacity}%</Text>
+                      </View>
+                      <Slider
+                        min={10}
+                        max={90}
+                        value={overlayOpacity}
+                        activeColor="#3F756B"
+                        backgroundColor="#D5E0DD"
+                        blockColor="#244C66"
+                        blockSize={22}
+                        onChange={(event) => setOverlayOpacity(event.detail.value)}
+                      />
+                      <View className="comparison-meta">
+                        <Text>基准 · {captureTime(comparisonPair.baseline.capturedAt)}</Text>
+                        <Text>当前 · {captureTime(comparisonPair.current.capturedAt)}</Text>
+                      </View>
+                    </>
+                  ) : (
+                    <View className="comparison-empty">
+                      <Text className="comparison-empty__mark">＋</Text>
+                      <Text className="comparison-empty__title">
+                        {inventoryActionsDisabled
+                          ? '上次清单不足两张同视角保留照片'
+                          : '需要两张同视角保留照片'}
+                      </Text>
+                      <Text>
+                        选择“保留用于对比”并以相同方向拍摄两次后，这里会生成可调透明度的叠片。
+                      </Text>
+                    </View>
+                  )}
+                  <Text className="compare-safety">
+                    对比仅呈现原始视觉差异。光线、距离、衣着和时间都会影响观感，请不要把它当作健康结论。
+                  </Text>
+                </View>
+              </View>
 
-                      {photo.quality ? (
-                        <View className="quality-sheet">
-                          <Text className="quality-sheet__label">
-                            机器拍摄条件检查 ·{' '}
-                            {photo.quality.overallStatus === 'ready' ? '可对位' : '建议调整'}
-                          </Text>
-                          <View className="quality-checks">
-                            {photo.quality.checks.map((check) => (
-                              <Text
-                                className={`quality-check quality-check--${check.status}`}
-                                key={check.key}
-                              >
-                                {check.status === 'ready' ? '✓' : '!'}{' '}
-                                {qualityReasonCopy[check.reason]}
+              <View className="history-card paper-card">
+                <View className="card-heading">
+                  <View>
+                    <Text className="section-kicker">PRIVATE CONTACT SHEET</Text>
+                    <Text className="section-title">我的进度照</Text>
+                  </View>
+                  <Text className="card-index">{String(photos.length).padStart(2, '0')}</Text>
+                </View>
+
+                {photos.length ? (
+                  <View className="photo-list">
+                    {photos.map((photo) => (
+                      <View className="photo-strip" key={photo.id}>
+                        <View className="photo-thumb-wrap">
+                          <Image
+                            className="photo-thumb"
+                            src={privatePhotoUrl(photo.previewPath)}
+                            mode="aspectFill"
+                          />
+                          <View className="thumb-register" aria-hidden="true" />
+                        </View>
+                        <View className="photo-strip__body">
+                          <View className="photo-strip__heading">
+                            <View>
+                              <Text className="photo-strip__view">
+                                {progressViewCopy[photo.view].label}
                               </Text>
-                            ))}
+                              <Text className="photo-strip__date">
+                                {captureTime(photo.capturedAt)}
+                              </Text>
+                            </View>
+                            <Text className={`retention-tag retention-tag--${photo.retentionMode}`}>
+                              {photo.retentionMode === 'retained' ? '已保留' : '24H 自动删除'}
+                            </Text>
+                          </View>
+
+                          {photo.quality ? (
+                            <View className="quality-sheet">
+                              <Text className="quality-sheet__label">
+                                机器拍摄条件检查 ·{' '}
+                                {photo.quality.overallStatus === 'ready' ? '可对位' : '建议调整'}
+                              </Text>
+                              <View className="quality-checks">
+                                {photo.quality.checks.map((check) => (
+                                  <Text
+                                    className={`quality-check quality-check--${check.status}`}
+                                    key={check.key}
+                                  >
+                                    {check.status === 'ready' ? '✓' : '!'}{' '}
+                                    {qualityReasonCopy[check.reason]}
+                                  </Text>
+                                ))}
+                              </View>
+                            </View>
+                          ) : (
+                            <Text className="analysis-revoked">
+                              机器检查授权已撤回；保留照片仍归你所有。
+                            </Text>
+                          )}
+
+                          <View className="photo-actions">
+                            {photo.retentionMode === 'retained' && photo.view === view ? (
+                              <>
+                                <Button
+                                  {...buttonActivationProps(
+                                    () => setAsBaseline(photo.id),
+                                    inventoryActionsDisabled,
+                                  )}
+                                  className={`photo-action ${comparisonPair?.baseline.id === photo.id ? 'photo-action--active' : ''}`}
+                                  disabled={inventoryActionsDisabled}
+                                >
+                                  设为基准
+                                </Button>
+                                <Button
+                                  {...buttonActivationProps(
+                                    () => setAsCurrent(photo.id),
+                                    inventoryActionsDisabled,
+                                  )}
+                                  className={`photo-action ${comparisonPair?.current.id === photo.id ? 'photo-action--active' : ''}`}
+                                  disabled={inventoryActionsDisabled}
+                                >
+                                  设为当前
+                                </Button>
+                              </>
+                            ) : null}
+                            <Button
+                              {...buttonActivationProps(
+                                () => setDeleting(photo),
+                                inventoryActionsDisabled,
+                              )}
+                              className="photo-action photo-action--danger"
+                              disabled={inventoryActionsDisabled}
+                            >
+                              删除
+                            </Button>
                           </View>
                         </View>
-                      ) : (
-                        <Text className="analysis-revoked">
-                          机器检查授权已撤回；保留照片仍归你所有。
-                        </Text>
-                      )}
-
-                      <View className="photo-actions">
-                        {photo.retentionMode === 'retained' && photo.view === view ? (
-                          <>
-                            <Button
-                              {...buttonActivationProps(() => setAsBaseline(photo.id))}
-                              className={`photo-action ${comparisonPair?.baseline.id === photo.id ? 'photo-action--active' : ''}`}
-                            >
-                              设为基准
-                            </Button>
-                            <Button
-                              {...buttonActivationProps(() => setAsCurrent(photo.id))}
-                              className={`photo-action ${comparisonPair?.current.id === photo.id ? 'photo-action--active' : ''}`}
-                            >
-                              设为当前
-                            </Button>
-                          </>
-                        ) : null}
-                        <Button
-                          {...buttonActivationProps(() => setDeleting(photo))}
-                          className="photo-action photo-action--danger"
-                        >
-                          删除
-                        </Button>
                       </View>
-                    </View>
+                    ))}
                   </View>
-                ))}
+                ) : (
+                  <View className="history-state">
+                    <Text className="history-state__title">
+                      {inventoryActionsDisabled ? '上次清单没有照片' : '这里还没有照片'}
+                    </Text>
+                    <Text>先建立一张拍摄条件明确、保留方式清楚的进度照。</Text>
+                  </View>
+                )}
               </View>
-            ) : (
-              <View className="history-state">
-                <Text className="history-state__title">这里还没有照片</Text>
-                <Text>先建立一张拍摄条件明确、保留方式清楚的进度照。</Text>
-              </View>
-            )}
-          </View>
+            </>
+          ) : null}
 
           <Text className="progress-footer">
             衡迹不会从照片诊断疾病、判断“好坏体态”或生成精确体脂率。身体不适请咨询专业医疗人员。

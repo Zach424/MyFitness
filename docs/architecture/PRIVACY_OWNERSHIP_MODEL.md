@@ -8,6 +8,10 @@ The privacy center gives the authenticated account one place to inspect what MyF
 
 The inventory has eight stable user-facing categories: profile/goals, health/recovery records, workouts/exercise definitions, nutrition/meals/favorites/food definitions, weekly plans, AI outputs, photo analyses/progress photos and consent receipts. Counts describe recognizable records rather than every normalized child row. `includesHistory` states whether the corresponding export also contains revision history.
 
+## Private-photo inventory read authority
+
+The purpose-separated food-proof and progress-photo owner lists are custody evidence, not optional decoration. Each client accepts empty only from a complete successful response. Initial failure exposes neither a false-empty sheet nor media actions; refresh failure retains the last successful item set only in page memory, labels it stale and freezes reservation, candidate confirmation, comparison assignment and deletion until explicit retry succeeds. Existing ambiguous-write reconciliation remains separate and cannot replay media or infer physical deletion from list absence. No image, path, list snapshot or recovery instruction is persisted; ADR-0065 records the boundary.
+
 ## Portable export
 
 `GET /v1/me/privacy/export` creates `myfitness-portable-export-v4` directly from a repeatable-read PostgreSQL snapshot. The JSON attachment is marked `no-store`, is not persisted as a server artifact and contains:

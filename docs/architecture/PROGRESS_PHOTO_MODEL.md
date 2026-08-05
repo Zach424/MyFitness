@@ -1,6 +1,6 @@
 # Progress-photo assistance model
 
-Status: privacy-first local implementation with authority-aware reservation/upload/deletion recovery complete through iteration 057
+Status: privacy-first local implementation with authority-aware reservation/upload/deletion recovery complete through iteration 057 and private-inventory read authority complete through iteration 070
 
 ## Product boundary
 
@@ -37,6 +37,8 @@ The three client writes follow server authority rather than one generic retry ru
 - Delete hides the row and transactionally enqueues durable object removal; it is not replayed after an uncertain response. Owner-list absence proves only that the item left the private contact sheet. It does not prove the object deletion job completed.
 
 The page retains non-media capture intent while unresolved and disables ordinary pointer/Enter/Space writes. It persists no request, key, image, path or replay command. The former automatic catch-path delete after upload error is intentionally removed because the upload may have committed before its response disappeared. A normal delete response also uses the narrow list-removal/durable-cleanup language rather than claiming immediate physical-byte deletion.
+
+Before any new capture, comparison assignment or deletion, the page requires one complete successful owner-list response. Initial failure is not an empty contact sheet and cannot show an insufficient-comparison conclusion. Refresh failure retains the last accepted list in page memory under a stale label while capture intent, baseline/current assignment and deletion freeze. An already composed overlay may still change opacity because that local presentation control performs no service or custody operation. Empty is accepted only from a successful response; no inventory, media or replay command is persisted. See [ADR-0065](decisions/0065-private-photo-inventory-read-authority.md).
 
 ## Two-purpose consent
 

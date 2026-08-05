@@ -700,6 +700,105 @@ test('health history sheet progressively loads immutable older revisions', async
   expect(browserErrors).toEqual([])
 })
 
+test('progress-photo inventory retains one private item after a refused refresh', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const browserErrors: string[] = []
+  page.on('console', (message) => {
+    if (message.type() === 'error') browserErrors.push(message.text())
+  })
+  page.on('pageerror', (error) => browserErrors.push(error.message))
+
+  await openProgressPhotos(page)
+  await page.getByRole('button', { name: '保留用于对比' }).click()
+  await page.getByRole('button', { name: '同意本次照片净化与拍摄条件机器检查' }).click()
+  await page.getByRole('button', { name: '另行同意保留净化照片用于长期对比' }).click()
+  const chooserPromise = page.waitForEvent('filechooser')
+  await page.getByRole('button', { name: '拍摄或选择照片' }).click()
+  const chooser = await chooserPromise
+  const uploadResponse = page.waitForResponse(
+    (response) =>
+      response.url().includes('/v1/progress-photos/') &&
+      response.url().includes('/upload?token=') &&
+      response.request().method() === 'POST',
+  )
+  await chooser.setFiles({
+    name: 'progress.png',
+    mimeType: 'image/png',
+    buffer: validDemoProgressPng,
+  })
+  expect((await uploadResponse).status()).toBe(201)
+  const retainedPhoto = page.locator('.photo-strip')
+  await expect(retainedPhoto).toHaveCount(1)
+
+  let refreshReads = 0
+  await page.route('**/v1/progress-photos', async (route) => {
+    if (route.request().method() !== 'GET') {
+      await route.continue()
+      return
+    }
+    refreshReads += 1
+    if (refreshReads === 1) {
+      await route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'raw storage outage must stay hidden' }),
+      })
+      return
+    }
+    await route.continue()
+  })
+
+  await page.getByRole('button', { name: '更新私密照片清单' }).click()
+  const readState = page.locator('.private-inventory-state')
+  await expect(readState.getByText('SERVICE PAUSED / 服务暂不可用')).toBeVisible()
+  await expect(readState).toContainText('PRIVATE ITEMS 1 · PAGE MEMORY')
+  await expect(readState).not.toContainText('raw storage outage')
+  await expect(retainedPhoto).toHaveCount(1)
+  await expect(page.getByRole('button', { name: '拍摄或选择照片' })).toBeDisabled()
+  await expect(page.getByRole('button', { name: '正面' })).toBeDisabled()
+  await expect(retainedPhoto.getByRole('button', { name: '设为基准' })).toBeDisabled()
+  await expect(retainedPhoto.getByRole('button', { name: '设为当前' })).toBeDisabled()
+  await expect(retainedPhoto.getByRole('button', { name: '删除', exact: true })).toBeDisabled()
+  const retry = page.getByRole('button', { name: '重新核对私有进度照片清单' })
+  await expect(retry).toBeFocused()
+  expect(
+    await page.locator('.progress-page').evaluate((element) => {
+      const bounds = element.getBoundingClientRect()
+      return bounds.width <= window.innerWidth && element.scrollWidth <= window.innerWidth
+    }),
+  ).toBe(true)
+
+  await readState.scrollIntoViewIfNeeded()
+  await page.screenshot({
+    path: 'output/playwright/iteration-070-progress-inventory-stale-wide.png',
+  })
+
+  const retryResponse = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/v1/progress-photos') && response.request().method() === 'GET',
+  )
+  await retry.click()
+  expect((await retryResponse).status()).toBe(200)
+  await expect(readState).toHaveCount(0)
+  await expect(retainedPhoto.getByRole('button', { name: '删除', exact: true })).toBeEnabled()
+  expect(refreshReads).toBe(2)
+
+  const deleteResponse = page.waitForResponse(
+    (response) =>
+      /\/v1\/progress-photos\/[0-9a-f-]{36}$/.test(response.url()) &&
+      response.request().method() === 'DELETE',
+  )
+  await retainedPhoto.getByRole('button', { name: '删除', exact: true }).click()
+  await page
+    .getByRole('dialog', { name: '确认删除进度照' })
+    .getByRole('button', { name: '确认删除' })
+    .click()
+  expect((await deleteResponse).status()).toBe(204)
+  expect(browserErrors.filter((error) => !error.includes('status of 503'))).toEqual([])
+})
+
 test('ambiguous progress-photo reservation reuses one key and deletion reconciles narrowly', async ({
   page,
 }) => {

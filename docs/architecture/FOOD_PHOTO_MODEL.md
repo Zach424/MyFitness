@@ -1,6 +1,6 @@
 # Food-photo candidate model
 
-Status: durable private-media lifecycle implemented through iteration 015; adversarial prompt/output boundary v2 implemented in iteration 024; confirmed-only lazy client workbench implemented in iteration 051; authority-aware client recovery implemented in iteration 055; production storage/provider approval remains gated
+Status: durable private-media lifecycle implemented through iteration 015; adversarial prompt/output boundary v2 implemented in iteration 024; confirmed-only lazy client workbench implemented in iteration 051; authority-aware write recovery implemented in iteration 055; private-inventory read authority implemented in iteration 070; production storage/provider approval remains gated
 
 ## Authority boundary
 
@@ -62,6 +62,8 @@ A direct visit without an opener is allowed to inspect or delete owner-visible p
 Reservation is the only photo stage with an owner-scoped idempotency key. If its response is lost, the page may ask the user to choose again and reuse the same in-memory key; it does not retain the file path or write media into the meal-draft vault. Once an upload ticket is known, upload, candidate confirmation and deletion are reconcile-first operations. The page performs only `GET /photo-candidates` before offering another explicit user operation and never automatically replays media bytes, confirmation or deletion.
 
 Reconciliation claims only what the read model proves. A matching reviewable candidate after upload/confirmation/delete ambiguity remains a proposal and can be reviewed again. If a committed confirmation disappears from the reviewable list before its response reaches the browser, the client cannot reconstruct the cleared selection: it emits no opener event, clears no meal fact and explicitly requires a new proof flow. If a deletion target disappears, the page may remove the proof sheet but does not claim the durable object job has physically deleted bytes. Review selections may remain in page memory while visible; photos, paths, consent and replay commands remain non-persistent. See [ADR-0052](decisions/0052-authority-aware-sensitive-workbench-recovery.md).
+
+The reviewable-candidate list is also the authority required before a new media or custody action begins. Initial request failure stays unknown and renders neither the intake nor an empty/unavailable proof result. A failed foreground refresh retains the last accepted item set and same-proof gram edits in page memory, labels that set stale and freezes reservation, candidate editing, confirmation and deletion until explicit retry succeeds. Empty intake is valid only after a successful empty response. This adds no photo/list persistence, polling or background replay; see [ADR-0065](decisions/0065-private-photo-inventory-read-authority.md).
 
 ## Provider contract and data controls
 

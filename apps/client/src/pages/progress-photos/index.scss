@@ -809,6 +809,10 @@
   color: #a14d43;
 }
 
+.photo-action[aria-disabled='true'] {
+  opacity: 0.52;
+}
+
 .history-state {
   min-height: 190px;
   margin-top: 20px;

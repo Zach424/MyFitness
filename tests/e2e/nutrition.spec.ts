@@ -910,6 +910,65 @@ test('owned food definition history progressively loads immutable older revision
   expect(browserErrors).toEqual([])
 })
 
+test('food-photo inventory keeps an initial transport outage unknown', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  const browserErrors = collectBrowserErrors(page)
+  await openNutrition(page)
+
+  let inventoryReads = 0
+  await page.route('**/v1/nutrition/photo-candidates', async (route) => {
+    if (route.request().method() !== 'GET') {
+      await route.continue()
+      return
+    }
+    inventoryReads += 1
+    if (inventoryReads === 1) {
+      await route.abort('failed')
+      return
+    }
+    await route.continue()
+  })
+
+  await page.getByRole('button', { name: '打开照片校样台' }).click()
+  await expect(page.getByText('餐食照片校样台')).toBeVisible()
+  const readState = page.locator('.private-inventory-state')
+  await expect(readState.getByText('OFFLINE / 连接未完成')).toBeVisible()
+  await expect(readState).toContainText('餐食照片校样清单还没有读取')
+  await expect(readState).toContainText('PRIVATE ITEMS UNKNOWN')
+  await expect(page.getByText('选择一张餐食照片')).toHaveCount(0)
+  await expect(page.getByText('没有生成可用候选')).toHaveCount(0)
+  await expect(page.getByText('raw backend detail')).toHaveCount(0)
+  const retry = page.getByRole('button', { name: '重新核对餐食照片校样清单' })
+  await expectVisibleFocus(retry)
+  expect(
+    await page.locator('.food-photo-shell').evaluate((element) => {
+      const bounds = element.getBoundingClientRect()
+      return bounds.width <= window.innerWidth && element.scrollWidth <= window.innerWidth
+    }),
+  ).toBe(true)
+
+  await page.screenshot({
+    path: 'output/playwright/iteration-070-food-inventory-offline-mobile.png',
+  })
+
+  const retryResponse = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/v1/nutrition/photo-candidates') &&
+      response.request().method() === 'GET',
+  )
+  await page.keyboard.press('Enter')
+  expect((await retryResponse).status()).toBe(200)
+  await expect(page.locator('.photo-intake__title')).toHaveText('选择一张餐食照片')
+  await expect(page.getByRole('button', { name: '选择一张餐食照片' })).toHaveAttribute(
+    'aria-disabled',
+    'true',
+  )
+  expect(inventoryReads).toBe(2)
+  expect(
+    browserErrors.filter((error) => error !== 'Failed to load resource: net::ERR_FAILED'),
+  ).toEqual([])
+})
+
 test('food photo candidates require review, delete media and only fill an unsaved draft', async ({
   page,
 }) => {
