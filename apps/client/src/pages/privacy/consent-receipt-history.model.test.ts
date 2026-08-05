@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   consentReceiptHistoryFailurePresentation,
   consentReceiptHistoryReadPhase,
+  consentReceiptHistoryRequestCanCommit,
 } from './consent-receipt-history.model'
 
 describe('consent receipt history read authority', () => {
@@ -97,5 +98,20 @@ describe('consent receipt history read authority', () => {
         hasFailure: true,
       }),
     ).toBe('retained-stale')
+  })
+
+  it('rejects late request commits after collapse, remount, or parent authority loss', () => {
+    const current = {
+      requestGeneration: 4,
+      currentGeneration: 4,
+      opened: true,
+      mounted: true,
+      disabled: false,
+    }
+    expect(consentReceiptHistoryRequestCanCommit(current)).toBe(true)
+    expect(consentReceiptHistoryRequestCanCommit({ ...current, currentGeneration: 5 })).toBe(false)
+    expect(consentReceiptHistoryRequestCanCommit({ ...current, opened: false })).toBe(false)
+    expect(consentReceiptHistoryRequestCanCommit({ ...current, mounted: false })).toBe(false)
+    expect(consentReceiptHistoryRequestCanCommit({ ...current, disabled: true })).toBe(false)
   })
 })

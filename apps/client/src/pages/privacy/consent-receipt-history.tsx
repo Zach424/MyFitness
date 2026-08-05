@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import type { ConsentReceipt } from '@myfitness/contracts'
 import { Button, Text, View } from '@tarojs/components'
@@ -13,12 +13,19 @@ import {
 import {
   consentReceiptHistoryFailurePresentation,
   consentReceiptHistoryReadPhase,
+  consentReceiptHistoryRequestCanCommit,
   type ConsentReceiptHistoryOperation,
 } from './consent-receipt-history.model'
 
 type HistoryFailure = {
   kind: PrivacyReadFailureKind
   operation: ConsentReceiptHistoryOperation
+}
+
+type ActiveHistoryRequest = {
+  generation: number
+  operation: ConsentReceiptHistoryOperation
+  cursor?: string
 }
 
 const formatHistoryDate = (value: string) =>
@@ -39,15 +46,61 @@ export const ConsentReceiptHistory = ({ disabled }: { disabled: boolean }) => {
   const [operation, setOperation] = useState<ConsentReceiptHistoryOperation>('initial')
   const [failure, setFailure] = useState<HistoryFailure>()
   const inFlight = useRef(false)
+  const requestGeneration = useRef(0)
+  const activeRequest = useRef<ActiveHistoryRequest>()
+  const interruptedRequest = useRef<Omit<ActiveHistoryRequest, 'generation'>>()
+  const mounted = useRef(true)
+  const openedRef = useRef(false)
+  const disabledRef = useRef(disabled)
+  disabledRef.current = disabled
+
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+      openedRef.current = false
+      requestGeneration.current += 1
+      activeRequest.current = undefined
+      interruptedRequest.current = undefined
+      inFlight.current = false
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!disabled || !activeRequest.current) return
+    requestGeneration.current += 1
+    activeRequest.current = undefined
+    interruptedRequest.current = undefined
+    inFlight.current = false
+    setBusy(false)
+    setFailure(undefined)
+  }, [disabled])
 
   const load = async (nextOperation: ConsentReceiptHistoryOperation, cursor?: string) => {
-    if (inFlight.current || disabled) return
+    if (inFlight.current || disabledRef.current || !openedRef.current) return
+    const request: ActiveHistoryRequest = {
+      generation: requestGeneration.current + 1,
+      operation: nextOperation,
+      cursor,
+    }
+    requestGeneration.current = request.generation
+    activeRequest.current = request
     inFlight.current = true
     setBusy(true)
     setOperation(nextOperation)
     setFailure(undefined)
     try {
       const page = await getConsentReceiptHistory({ limit: 10, cursor })
+      if (
+        !consentReceiptHistoryRequestCanCommit({
+          requestGeneration: request.generation,
+          currentGeneration: requestGeneration.current,
+          opened: openedRef.current,
+          mounted: mounted.current,
+          disabled: disabledRef.current,
+        })
+      )
+        return
       if (nextOperation === 'continuation') {
         setItems((current) => {
           const accepted = current ?? []
@@ -59,21 +112,52 @@ export const ConsentReceiptHistory = ({ disabled }: { disabled: boolean }) => {
       }
       setNextCursor(page.nextCursor)
     } catch (error) {
+      if (
+        !consentReceiptHistoryRequestCanCommit({
+          requestGeneration: request.generation,
+          currentGeneration: requestGeneration.current,
+          opened: openedRef.current,
+          mounted: mounted.current,
+          disabled: disabledRef.current,
+        })
+      )
+        return
       setFailure({ kind: classifyPrivacyReadFailure(error), operation: nextOperation })
       deferH5Focus('consent-history-retry', 80)
     } finally {
+      if (requestGeneration.current !== request.generation) return
+      activeRequest.current = undefined
       inFlight.current = false
-      setBusy(false)
+      if (mounted.current) setBusy(false)
     }
   }
 
   const toggle = () => {
     if (opened) {
+      openedRef.current = false
+      if (activeRequest.current) {
+        interruptedRequest.current = {
+          operation: activeRequest.current.operation,
+          cursor: activeRequest.current.cursor,
+        }
+        requestGeneration.current += 1
+        activeRequest.current = undefined
+        inFlight.current = false
+        setBusy(false)
+        setFailure(undefined)
+      }
       setOpened(false)
       return
     }
     if (disabled) return
+    openedRef.current = true
     setOpened(true)
+    const interrupted = interruptedRequest.current
+    interruptedRequest.current = undefined
+    if (interrupted) {
+      void load(interrupted.operation, interrupted.cursor)
+      return
+    }
     if (items === null) void load('initial')
   }
 

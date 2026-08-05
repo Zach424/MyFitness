@@ -33,6 +33,20 @@ export const consentReceiptHistoryReadPhase = ({
   return hasSnapshot ? 'ready' : 'initial-loading'
 }
 
+export const consentReceiptHistoryRequestCanCommit = ({
+  requestGeneration,
+  currentGeneration,
+  opened,
+  mounted,
+  disabled,
+}: {
+  requestGeneration: number
+  currentGeneration: number
+  opened: boolean
+  mounted: boolean
+  disabled: boolean
+}) => requestGeneration === currentGeneration && opened && mounted && !disabled
+
 const failureTitles: Record<PrivacyReadFailureKind, { eyebrow: string; title: string }> = {
   offline: {
     eyebrow: 'OFFLINE / 连接未完成',

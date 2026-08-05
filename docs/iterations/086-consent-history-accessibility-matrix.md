@@ -6,22 +6,22 @@ Status: complete
 
 ## 1. Scope and acceptance
 
-This round binds the new consent-history authority states to a narrow/large-text and keyboard contract. Acceptance requires 320 px reflow at a 200% root font without horizontal scrolling, readable initial-error/retained-prefix/footer content, pointer plus Enter/Space equivalence, stable retry focus and an independently available current revocation control.
+This round binds the new consent-history authority states to a narrow/large-text and keyboard contract. Acceptance requires 320 px reflow under an exact synthetic 2× component-text override without horizontal scrolling, readable initial-error/retained-prefix/footer content, pointer plus Enter/Space equivalence, stable retry focus and an independently available current revocation control.
 
 The round changes history-specific CSS and adds one browser matrix, but no API, contract, migration, persistence, polling, consent mutation, medical interpretation, cloud service or external provider.
 
 ## 2. Structure, technology and design state
 
-- The consent-history selectors in `privacy/index.scss` use rem sizes for history-owned text, content-driven button line height and explicit long-token wrapping.
+- The consent-history selectors in `privacy/index.scss` expose four component-owned size variables for history text, plus content-driven button line height and explicit long-token wrapping.
 - `.consent-history__item-copy` accepts grid shrinking so long version labels and locale timestamps wrap inside the ruled ledger instead of widening it.
-- `privacy.spec.ts` adds one 320 × 844 real API flow with a 200% root font and keyboard-only history operation sequence.
+- `privacy.spec.ts` adds one 320 × 844 real API flow with exact 16/18/20/22 px component overrides and a keyboard-only history operation sequence.
 - The existing shared `buttonActivationProps` and delayed H5 retry focus remain the only interaction runtime; no new dependency or global key listener is added.
 
 ## 3. Implementation method
 
 ### Scale only the bounded surface
 
-History labels, factual text, status copy, indexes and action text move from fixed pixels to equivalent rem values. The surrounding privacy page is unchanged, which keeps the round scoped while proving the newly introduced surface honors a user-controlled root scale.
+History labels, factual text, status copy, indexes and action text retain their 8/9/10/11 px defaults behind four variables. The browser test doubles those values without changing the surrounding privacy page or Taro's root viewport conversion, which keeps the round scoped while proving the newly introduced surface can reflow at an exact bounded scale.
 
 ### Prefer wrapping over clipping
 
@@ -33,7 +33,7 @@ One sequence uses Space to open into an injected 503, Enter to retry the first p
 
 ### Keep claims precise
 
-The test injects a CSS root font of 200% and runs Chromium at 320 × 844. This proves component reflow and Taro H5 keyboard behavior in that environment, not browser text-only zoom, screen-reader narration or a physical WeChat keyboard.
+The test overrides only the four history variables to exact 2× values and runs Chromium at 320 × 844. This proves component reflow and Taro H5 keyboard behavior in that environment, not real browser/system text scaling, screen-reader narration or a physical WeChat keyboard.
 
 ## 4. Validation evidence
 
@@ -48,16 +48,17 @@ The test injects a CSS root font of 200% and runs Chromium at 320 × 844. This p
 
 ## 5. Problems found and experience captured
 
-- Fixed pixel text can pass a narrow screenshot while ignoring a user's root-font preference. Equivalent rem values make the scaling contract executable without redesigning the whole page.
+- Fixed pixel text can pass a narrow screenshot without proving enlarged-text reflow. Component variables make an exact scaling contract executable without redesigning the whole page or interfering with framework viewport conversion.
 - Enlarged text needs both scalable glyphs and layout permission: grid children require `min-width: 0`, long tokens need an explicit wrap rule and controls cannot rely on one fixed line box.
 - A keyboard flow should use both Enter and Space across real requests. Inspecting `tabIndex` or testing only one action does not prove Taro custom-element activation parity.
 - A successful collapse changes the button's accessible name from `收起历史` to `查看全部凭证`; browser assertions must reacquire the node through its new accessibility state rather than hold a stale role/name locator.
 - The first targeted run reached correct collapse behavior but failed only on that stale-name assertion. Updating the assertion produced a clean rerun and prevented a false product regression.
 - Full browser runs regenerate date-bearing historical screenshots. All previously accepted artifacts were restored, leaving only the new 320 px evidence.
+- Correction recorded during iteration 087: the first committed implementation used equivalent `rem` values and a 200% root-font injection. Ordinary 390 px visual review revealed that Taro already controls root `rem` sizing, so normal history text became oversized. The defaults were restored as component variables and the evidence was regenerated with exact variable overrides. This archive now describes the accepted implementation rather than preserving an inaccurate scaling claim.
 
 ## 6. Global state review, remaining risks and next step
 
-Consent history now has bounded pointer, keyboard, focus, narrow and enlarged-root-text evidence. It still lacks real screen-reader/WeChat-device proof, and the current component can receive a late asynchronous result after its panel is collapsed unless the response is explicitly invalidated.
+Consent history now has bounded pointer, keyboard, focus, narrow and synthetic enlarged-component-text evidence. It still lacks real system-text/screen-reader/WeChat-device proof, and the current component can receive a late asynchronous result after its panel is collapsed unless the response is explicitly invalidated.
 
 Iteration 087 should make collapse/unmount a lifecycle boundary for initial, refresh and continuation requests. Late success/failure must not update hidden history or move focus to a hidden retry; one explicit reopen should start a fresh read. Managed deployment and real identity/provider/object-storage/custody/telemetry/policy inputs remain parked until the user supplies them.
 

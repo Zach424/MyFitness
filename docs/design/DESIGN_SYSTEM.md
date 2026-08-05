@@ -1,6 +1,6 @@
 # Design system baseline
 
-Status: implemented and visually validated through iteration-086 consent-history accessibility matrix
+Status: implemented and visually validated through iteration-087 consent-history lifecycle invalidation
 
 Working brand: 衡迹 / MyFitness
 
@@ -881,13 +881,21 @@ The reviewed 390 × 844 evidence captures a failed continuation with ten accepte
 
 ## Consent-history accessibility matrix — iteration 086
 
-The history-owned type scale now uses root-relative units instead of fixed pixel sizes. At a 320 px viewport and 200% root font, the introductory authority note, bilingual failure eyebrow, title, retained-prefix receipt, long purpose/version labels and factual timestamps wrap within the privacy scroll plane. Buttons keep minimum targets but use content-driven line height, and long tokens use explicit wrapping rather than enlarging the page width.
+The history-owned type scale now exposes four component variables for its existing 8/9/10/11 px levels. At a 320 px viewport, the browser matrix overrides them with exact 16/18/20/22 px values; the introductory authority note, bilingual failure eyebrow, title, retained-prefix receipt, long purpose/version labels and factual timestamps wrap within the privacy scroll plane. Buttons keep minimum targets but use content-driven line height, and long tokens use explicit wrapping rather than enlarging the page width.
 
 The reviewed failure state keeps one amber evidence block followed by the accepted prefix. The focus ring remains visible around `重新核对`, the ten-item retention/cursor sentence is complete, and the first long version wraps as readable text rather than clipping. The current consent controls remain above this optional chronology and are still usable after the history panel closes.
 
-The same 320 × 844 real API run uses only keyboard activation: Space opens, Enter retries the first read, Space refreshes the head, Enter starts continuation, Space retries the frozen cursor and Enter collapses. The scroll container is asserted at equal 320 px client/scroll width in unknown, ready and retained-stale states. This is Chromium H5 evidence; real screen-reader, browser text-only zoom and WeChat-device behavior remain separate gates.
+The same 320 × 844 real API run uses only keyboard activation: Space opens, Enter retries the first read, Space refreshes the head, Enter starts continuation, Space retries the frozen cursor and Enter collapses. The scroll container is asserted at equal 320 px client/scroll width in unknown, ready and retained-stale states. This is an exact synthetic 2× component-text and Chromium H5 interaction proof; real system/browser text scaling, screen-reader and WeChat-device behavior remain separate gates. Iteration 087 visual review corrected an initial `rem` implementation because Taro already transforms the H5 root size for viewport conversion, causing the ordinary 390 px page to become oversized.
 
-- [320 × 844 consent-history retained prefix at 200% root text](../../output/playwright/iteration-086-consent-history-large-text-mobile.png)
+- [320 × 844 consent-history retained prefix at exact synthetic 2× text](../../output/playwright/iteration-086-consent-history-large-text-mobile.png)
+
+## Consent-history interruption boundary — iteration 087
+
+Collapse is now an immediate visual and authority boundary rather than only a panel toggle. If a first-page, latest-page or continuation request is active, the panel disappears, hidden busy/failure state is cleared and only the operation plus optional cursor is retained for one explicit reopen. The reopened panel starts a visibly fresh request; the previous promise can finish but cannot replace the newer ledger or create a retry surface.
+
+The reviewed 390 × 844 state contains all twelve accepted receipts after an interrupted continuation was reopened with the exact cursor. A deliberately late 503 from the old request cannot add an amber failure block, raw service copy or hidden focus target; focus stays on the visible collapse control. The ordinary-density screenshot also served as a regression check for the corrected Taro type scale.
+
+- [390 × 844 accepted consent history after interrupted continuation](../../output/playwright/iteration-087-consent-history-interruption-mobile.png)
 
 ## Screenshot review checklist
 

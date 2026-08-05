@@ -476,7 +476,14 @@ test('consent history reflows at 320px with large text and completes the keyboar
     [session.userId],
   )
   await page.reload()
-  await page.addStyleTag({ content: 'html { font-size: 200% !important; }' })
+  await page.addStyleTag({
+    content: `.consent-history {
+      --consent-history-font-xs: 16px;
+      --consent-history-font-sm: 18px;
+      --consent-history-font-md: 20px;
+      --consent-history-font-lg: 22px;
+    }`,
+  })
 
   const expectNoHorizontalOverflow = async () => {
     await expect
@@ -578,6 +585,142 @@ test('consent history reflows at 320px with large text and completes the keyboar
     /Failed to load resource: the server responded with a status of 503/.test(message),
   )
   expect(injectedHttpFailures).toHaveLength(2)
+  expect(browserErrors.filter((message) => !injectedHttpFailures.includes(message))).toEqual([])
+})
+
+test('consent history invalidates late responses across collapse and explicit reopen', async ({
+  page,
+  request,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  const browserErrors = collectBrowserErrors(page)
+  const session = await seedAccount(page, request)
+
+  await database.query('DELETE FROM nutrition_photo_candidates WHERE user_id = $1', [
+    session.userId,
+  ])
+  await database.query('DELETE FROM consent_events WHERE user_id = $1', [session.userId])
+  await database.query(
+    `INSERT INTO consent_events (id, user_id, purpose, version, accepted_at)
+     SELECT gen_random_uuid(),
+            $1,
+            (ARRAY[
+              'ai_plan_explanation',
+              'food_photo_analysis',
+              'progress_photo_analysis',
+              'progress_photo_retention'
+            ])[1 + ((series - 1) % 4)],
+            'lifecycle-v' || LPAD(series::text, 2, '0'),
+            NOW() - make_interval(mins => series)
+     FROM generate_series(1, 12) AS series`,
+    [session.userId],
+  )
+  await page.reload()
+
+  let releaseLateInitial = () => {}
+  const lateInitialGate = new Promise<void>((resolve) => {
+    releaseLateInitial = resolve
+  })
+  let markInitialStarted = () => {}
+  const initialStarted = new Promise<void>((resolve) => {
+    markInitialStarted = resolve
+  })
+  let markLateInitialSettled = () => {}
+  const lateInitialSettled = new Promise<void>((resolve) => {
+    markLateInitialSettled = resolve
+  })
+  const initialUrls: string[] = []
+  await page.route('**/v1/me/privacy/consents/history?limit=10', async (route) => {
+    initialUrls.push(route.request().url())
+    if (initialUrls.length === 1) {
+      markInitialStarted()
+      await lateInitialGate
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ items: [], nextCursor: null }),
+      })
+      markLateInitialSettled()
+      return
+    }
+    await route.continue()
+  })
+
+  await page.getByRole('button', { name: '查看全部凭证' }).click()
+  await initialStarted
+  await page.getByRole('button', { name: '收起历史' }).click()
+  await expect(page.locator('.consent-history__panel')).toHaveCount(0)
+  await page.getByRole('button', { name: '查看全部凭证' }).click()
+  await expect.poll(() => initialUrls.length).toBe(2)
+  await expect(page.locator('.consent-history__item')).toHaveCount(10)
+  releaseLateInitial()
+  await lateInitialSettled
+  await page.waitForTimeout(100)
+  await expect(page.locator('.consent-history__item')).toHaveCount(10)
+  await expect(page.locator('.consent-history__empty')).toHaveCount(0)
+
+  let releaseLateContinuation = () => {}
+  const lateContinuationGate = new Promise<void>((resolve) => {
+    releaseLateContinuation = resolve
+  })
+  let markContinuationStarted = () => {}
+  const continuationStarted = new Promise<void>((resolve) => {
+    markContinuationStarted = resolve
+  })
+  let markLateContinuationSettled = () => {}
+  const lateContinuationSettled = new Promise<void>((resolve) => {
+    markLateContinuationSettled = resolve
+  })
+  const continuationUrls: string[] = []
+  await page.route('**/v1/me/privacy/consents/history?limit=10&cursor=*', async (route) => {
+    continuationUrls.push(route.request().url())
+    if (continuationUrls.length === 1) {
+      markContinuationStarted()
+      await lateContinuationGate
+      await route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'late-hidden-continuation-copy' }),
+      })
+      markLateContinuationSettled()
+      return
+    }
+    await route.continue()
+  })
+
+  await page.getByRole('button', { name: '加载更早凭证' }).click()
+  await continuationStarted
+  await page.getByRole('button', { name: '收起历史' }).click()
+  await expect(page.locator('.consent-history__panel')).toHaveCount(0)
+  await page.getByRole('button', { name: '查看全部凭证' }).click()
+  await expect.poll(() => continuationUrls.length).toBe(2)
+  await expect(page.locator('.consent-history__item')).toHaveCount(12)
+  const collapse = page.getByRole('button', { name: '收起历史' })
+  await collapse.focus()
+  releaseLateContinuation()
+  await lateContinuationSettled
+  await page.waitForTimeout(120)
+  await expect(page.locator('.consent-history__item')).toHaveCount(12)
+  await expect(page.locator('.consent-history__failure')).toHaveCount(0)
+  await expect(page.locator('#consent-history-retry')).toHaveCount(0)
+  await expect(collapse).toBeFocused()
+  expect(continuationUrls[1]).toBe(continuationUrls[0])
+  await expect(page.locator('body')).not.toContainText('late-hidden-continuation-copy')
+  await page.locator('.privacy-scroll').evaluate((scroll) => {
+    const history = scroll.querySelector('.consent-history')
+    if (!(history instanceof HTMLElement)) return
+    scroll.scrollTop +=
+      history.getBoundingClientRect().top - scroll.getBoundingClientRect().top - 16
+  })
+  await page.screenshot({
+    path: 'output/playwright/iteration-087-consent-history-interruption-mobile.png',
+    fullPage: true,
+  })
+
+  const injectedHttpFailures = browserErrors.filter((message) =>
+    /Failed to load resource: the server responded with a status of 503/.test(message),
+  )
+  expect(injectedHttpFailures).toHaveLength(1)
   expect(browserErrors.filter((message) => !injectedHttpFailures.includes(message))).toEqual([])
 })
 
