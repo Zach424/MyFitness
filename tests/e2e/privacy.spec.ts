@@ -54,7 +54,11 @@ const onboarding = {
   },
 }
 
-const seedAccount = async (page: Page, request: APIRequestContext) => {
+const seedAccount = async (
+  page: Page,
+  request: APIRequestContext,
+  beforeOpen?: () => Promise<void>,
+) => {
   const sessionResponse = page.waitForResponse(
     (response) => response.url().endsWith('/v1/auth/dev/session') && response.status() === 200,
   )
@@ -108,6 +112,7 @@ const seedAccount = async (page: Page, request: APIRequestContext) => {
     [session.userId, aiPlanConsentVersion],
   )
   await page.reload()
+  await beforeOpen?.()
   await page.getByRole('button', { name: '我的', exact: true }).click()
   await expect(page.getByText('把数据带走，也能彻底离开。')).toBeVisible()
   return session
@@ -336,4 +341,113 @@ test('privacy page recovers a committed deletion receipt after the response and 
     })
     .toBe('0')
   trackedSubject = undefined
+})
+
+test('initial offline privacy read retries receipt recovery before showing a mobile inventory', async ({
+  page,
+  request,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  const browserErrors = collectBrowserErrors(page)
+  await seedAccount(page, request, async () => {
+    await page.route(
+      '**/v1/me/privacy',
+      async (route) => {
+        expect(route.request().method()).toBe('GET')
+        await route.abort('internetdisconnected')
+      },
+      { times: 1 },
+    )
+  })
+
+  await expect(page.getByText('OFFLINE / 连接未完成')).toBeVisible()
+  await expect(page.getByText('还没有核对销户回执与数据清单')).toBeVisible()
+  await expect(page.getByText('我的数据清单')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: '下载我的数据' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: '永久删除账户' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: '重新核对销户回执与数据清单' })).toBeFocused()
+  await expect
+    .poll(() =>
+      page.locator('.privacy-page').evaluate((element) => element.getBoundingClientRect().left),
+    )
+    .toBe(0)
+  await page.screenshot({
+    path: 'output/playwright/iteration-064-privacy-initial-offline-mobile.png',
+  })
+
+  await page.keyboard.press('Enter')
+  await expect(page.getByText('我的数据清单')).toBeVisible()
+  await expect(page.getByRole('button', { name: '下载我的数据' })).toBeEnabled()
+  expect(
+    browserErrors.filter(
+      (error) =>
+        !error.includes('net::ERR_INTERNET_DISCONNECTED') &&
+        !(error.includes('Request failed: GET') && error.includes('/v1/me/privacy')),
+    ),
+  ).toEqual([])
+})
+
+test('failed post-revocation refresh retains a wide privacy ledger but freezes custody actions', async ({
+  page,
+  request,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const browserErrors = collectBrowserErrors(page)
+  await seedAccount(page, request)
+  const retainedTotal = await page.locator('.custody-total__value').textContent()
+  expect(retainedTotal).toMatch(/^\d+$/)
+  const photoConsent = page.locator('.consent-row').filter({ hasText: '餐食照片分析' })
+
+  await page.route(
+    '**/v1/me/privacy',
+    async (route) => {
+      expect(route.request().method()).toBe('GET')
+      await route.fulfill({
+        status: 429,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { code: 'rate_limited', message: 'retry later' } }),
+      })
+    },
+    { times: 1 },
+  )
+  await photoConsent.getByRole('button', { name: '撤回这项授权' }).click()
+  await photoConsent.getByRole('button', { name: '确认撤回' }).click()
+
+  await expect(page.getByText('READ REFUSED / 读取被拒绝')).toBeVisible()
+  await expect(
+    page.getByText(new RegExp(`RETAINED INVENTORY · ${retainedTotal} ITEMS`)),
+  ).toBeVisible()
+  await expect(photoConsent.getByText('有效', { exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: '下载我的数据' })).toHaveAttribute(
+    'aria-disabled',
+    'true',
+  )
+  await expect(photoConsent.getByRole('button', { name: '撤回这项授权' })).toHaveAttribute(
+    'aria-disabled',
+    'true',
+  )
+  await expect(page.getByRole('button', { name: '不导出' })).toHaveAttribute(
+    'aria-disabled',
+    'true',
+  )
+  await expect(page.getByRole('checkbox', { name: /我知道删除无法撤销/ })).toHaveAttribute(
+    'aria-disabled',
+    'true',
+  )
+  await expect(
+    page.locator(`input[placeholder="${accountDeletionConfirmationPhrase}"]`),
+  ).toBeDisabled()
+  const retry = page.getByRole('button', { name: '重新核对销户回执与数据清单' })
+  await expect(retry).toBeFocused()
+  await page.screenshot({ path: 'output/playwright/iteration-064-privacy-stale-wide.png' })
+
+  await page.keyboard.press('Enter')
+  await expect(page.getByText('READ REFUSED / 读取被拒绝')).toHaveCount(0)
+  await expect(photoConsent.getByText('已撤回', { exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: '下载我的数据' })).toBeEnabled()
+  expect(
+    browserErrors.filter(
+      (error) => !(error.includes('Failed to load resource:') && error.includes('429')),
+    ),
+  ).toEqual([])
 })

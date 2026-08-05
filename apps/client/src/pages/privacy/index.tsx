@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import type {
   AccountDeletionResult,
@@ -9,7 +9,12 @@ import { accountDeletionConfirmationPhrase } from '@myfitness/contracts/privacy.
 import { Button, Input, ScrollView, Text, View } from '@tarojs/components'
 import Taro from '@tarojs/taro'
 
-import { buttonA11yProps, checkboxA11yProps } from '../../lib/accessibility'
+import {
+  buttonActivationProps,
+  buttonA11yProps,
+  checkboxA11yProps,
+  deferH5Focus,
+} from '../../lib/accessibility'
 import {
   deletePrivacyAccount,
   downloadPrivacyExport,
@@ -22,16 +27,59 @@ import {
   revokeOptionalConsent,
 } from '../../lib/api'
 import {
+  classifyPrivacyReadFailure,
   consentCopy,
   consentStatusCopy,
   deletionReady,
   formatInventoryCount,
   formatReceiptToken,
+  privacyReadPhase,
   privacyCategoryCopy,
+  type PrivacyReadFailureKind,
 } from './privacy.model'
 import './index.scss'
 
 type ExportChoice = 'downloaded' | 'skip' | null
+
+const privacyReadFailureCopy = (
+  kind: PrivacyReadFailureKind,
+  hasSnapshot: boolean,
+): { eyebrow: string; title: string; detail: string } => {
+  if (kind === 'offline') {
+    return {
+      eyebrow: 'OFFLINE / 连接未完成',
+      title: hasSnapshot ? '数据清单复核没有完成' : '还没有核对销户回执与数据清单',
+      detail: hasSnapshot
+        ? '上次成功读取的清单仍在下方，但导出、撤回授权与永久删除均已冻结。'
+        : '页面必须先核对本机是否有待恢复的销户回执，再读取账户清单；当前不会显示零数据或开放敏感操作。',
+    }
+  }
+  if (kind === 'refused') {
+    return {
+      eyebrow: 'READ REFUSED / 读取被拒绝',
+      title: hasSnapshot ? '服务拒绝了本次清单复核' : '服务没有接受本次隐私核对',
+      detail: hasSnapshot
+        ? '旧清单继续只读保留；重新读取前不会生成导出、撤回授权或准备销户。'
+        : '销户回执与数据库存仍是未知状态；页面不会用空清单代替。',
+    }
+  }
+  if (kind === 'service') {
+    return {
+      eyebrow: 'SERVICE PAUSED / 服务暂不可用',
+      title: hasSnapshot ? '本次清单复核暂未完成' : '隐私台账暂时无法读取',
+      detail: hasSnapshot
+        ? '下方保留上次清单用于查看，所有数据保管操作保持冻结。'
+        : '服务暂时没有返回销户回执或库存证据；请稍后明确重试。',
+    }
+  }
+  return {
+    eyebrow: 'READ UNKNOWN / 结果未知',
+    title: hasSnapshot ? '无法确认当前数据清单' : '无法确认账户保管状态',
+    detail: hasSnapshot
+      ? '旧清单继续只读保留；重新读取前不会提交任何导出或不可逆操作。'
+      : '页面尚未取得可信的回执与清单快照，也不会推断账户没有数据。',
+  }
+}
 
 const formatDate = (value: string | null) =>
   value
@@ -48,6 +96,8 @@ const formatDate = (value: string | null) =>
 const PrivacyPage = () => {
   const [overview, setOverview] = useState<PrivacyOverview | null>(null)
   const [loading, setLoading] = useState(true)
+  const [hasReadSnapshot, setHasReadSnapshot] = useState(false)
+  const [readFailure, setReadFailure] = useState<PrivacyReadFailureKind>()
   const [error, setError] = useState('')
   const [feedback, setFeedback] = useState('')
   const [exporting, setExporting] = useState(false)
@@ -58,6 +108,7 @@ const PrivacyPage = () => {
   const [understandsPermanent, setUnderstandsPermanent] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [deleted, setDeleted] = useState<AccountDeletionResult | null>(null)
+  const readInFlight = useRef(false)
 
   useEffect(() => {
     if (!deleted || deleted.status === 'completed' || deleted.status === 'dead_letter') return
@@ -71,51 +122,79 @@ const PrivacyPage = () => {
     return () => clearTimeout(timer)
   }, [deleted])
 
-  const loadOverview = async () => {
+  const acceptOverview = (nextOverview: PrivacyOverview) => {
+    setOverview(nextOverview)
+    setHasReadSnapshot(true)
+    setReadFailure(undefined)
+  }
+
+  const loadOverview = async (focusOnFailure = true) => {
+    if (readInFlight.current) return false
+    readInFlight.current = true
     setLoading(true)
-    setError('')
+    setReadFailure(undefined)
     try {
-      setOverview(await getPrivacyOverview())
+      acceptOverview(await getPrivacyOverview())
+      return true
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : '数据清单读取失败')
+      setReadFailure(classifyPrivacyReadFailure(loadError))
+      if (focusOnFailure) deferH5Focus('privacy-read-retry', 80)
+      return false
     } finally {
+      readInFlight.current = false
       setLoading(false)
+    }
+  }
+
+  const loadPrivacyAuthority = async (isActive: () => boolean = () => true) => {
+    if (readInFlight.current) return
+    readInFlight.current = true
+    setLoading(true)
+    setReadFailure(undefined)
+    try {
+      const receipt = await recoverPendingAccountDeletion()
+      if (!isActive()) return
+      if (receipt) {
+        setDeleted(receipt)
+        return
+      }
+      const nextOverview = await getPrivacyOverview()
+      if (isActive()) acceptOverview(nextOverview)
+    } catch (authorityError) {
+      if (!isActive()) return
+      setReadFailure(classifyPrivacyReadFailure(authorityError))
+      deferH5Focus('privacy-read-retry', 80)
+    } finally {
+      readInFlight.current = false
+      if (isActive()) setLoading(false)
     }
   }
 
   useEffect(() => {
     let active = true
-    void recoverPendingAccountDeletion()
-      .then((receipt) => {
-        if (!active) return
-        if (receipt) {
-          setDeleted(receipt)
-          setLoading(false)
-          return
-        }
-        void loadOverview()
-      })
-      .catch((recoveryError) => {
-        if (!active) return
-        setError(
-          recoveryError instanceof Error
-            ? recoveryError.message
-            : '删除回执恢复失败，请检查网络后重试。',
-        )
-        setLoading(false)
-      })
+    void loadPrivacyAuthority(() => active)
     return () => {
       active = false
     }
   }, [])
 
+  const readPhase = privacyReadPhase({
+    hasSnapshot: hasReadSnapshot,
+    busy: loading,
+    hasFailure: Boolean(readFailure),
+  })
+  const readAuthorityReady = readPhase === 'ready'
+  const readFailurePresentation = readFailure
+    ? privacyReadFailureCopy(readFailure, hasReadSnapshot)
+    : undefined
+
   const readyToDelete = useMemo(
-    () => deletionReady({ phrase, exportChoice, understandsPermanent }),
-    [exportChoice, phrase, understandsPermanent],
+    () => readAuthorityReady && deletionReady({ phrase, exportChoice, understandsPermanent }),
+    [exportChoice, phrase, readAuthorityReady, understandsPermanent],
   )
 
   const handleExport = async () => {
-    if (exporting) return
+    if (exporting || !readAuthorityReady) return
     setExporting(true)
     setError('')
     try {
@@ -134,7 +213,7 @@ const PrivacyPage = () => {
   }
 
   const handleRevoke = async (purpose: RevocableConsentPurpose) => {
-    if (revoking) return
+    if (revoking || !readAuthorityReady) return
     setRevoking(true)
     setError('')
     try {
@@ -149,7 +228,7 @@ const PrivacyPage = () => {
               : 'AI 计划解释授权已撤回，新的解释和待处理任务已停止。',
       )
       setRevokeTarget(null)
-      await loadOverview()
+      await loadOverview(true)
     } catch (revokeError) {
       setError(revokeError instanceof Error ? revokeError.message : '授权撤回失败')
     } finally {
@@ -158,7 +237,7 @@ const PrivacyPage = () => {
   }
 
   const handleDelete = async () => {
-    if (!readyToDelete || deleting) return
+    if (!readyToDelete || deleting || !readAuthorityReady) return
     setDeleting(true)
     setError('')
     try {
@@ -271,12 +350,8 @@ const PrivacyPage = () => {
           {error ? (
             <View className="privacy-alert" role="alert">
               <Text>{error}</Text>
-              <Button
-                {...buttonA11yProps}
-                className="text-action"
-                onClick={() => void loadOverview()}
-              >
-                重新读取
+              <Button {...buttonA11yProps} className="text-action" onClick={() => setError('')}>
+                关闭
               </Button>
             </View>
           ) : null}
@@ -289,6 +364,45 @@ const PrivacyPage = () => {
                 onClick={() => setFeedback('')}
               >
                 关闭
+              </Button>
+            </View>
+          ) : null}
+
+          {readPhase === 'refreshing' && hasReadSnapshot ? (
+            <View className="privacy-read-state privacy-read-state--refreshing" role="status">
+              <View>
+                <Text className="privacy-read-state__eyebrow">CHECKING CUSTODY / 保留上次清单</Text>
+                <Text className="privacy-read-state__title">正在复核数据清单与授权状态</Text>
+                <Text className="privacy-read-state__copy">
+                  复核完成前，下方清单只读保留；导出、撤回授权与永久删除均已冻结。
+                </Text>
+              </View>
+            </View>
+          ) : readFailurePresentation ? (
+            <View className={`privacy-read-state privacy-read-state--${readPhase}`} role="status">
+              <View>
+                <Text className="privacy-read-state__eyebrow">
+                  {readFailurePresentation.eyebrow}
+                </Text>
+                <Text className="privacy-read-state__title">{readFailurePresentation.title}</Text>
+                <Text className="privacy-read-state__copy">{readFailurePresentation.detail}</Text>
+                {hasReadSnapshot && overview ? (
+                  <Text className="privacy-read-state__retained metric">
+                    RETAINED INVENTORY · {overview.totalRecordCount} ITEMS ·{' '}
+                    {formatDate(overview.generatedAt)}
+                  </Text>
+                ) : null}
+              </View>
+              <Button
+                id="privacy-read-retry"
+                className="privacy-read-state__action"
+                aria-label="重新核对销户回执与数据清单"
+                {...buttonActivationProps(
+                  () => void (hasReadSnapshot ? loadOverview(true) : loadPrivacyAuthority()),
+                  loading,
+                )}
+              >
+                重新核对
               </Button>
             </View>
           ) : null}
@@ -367,7 +481,8 @@ const PrivacyPage = () => {
                   <Button
                     {...buttonA11yProps}
                     className="primary-action"
-                    aria-disabled={exporting}
+                    disabled={exporting || !readAuthorityReady}
+                    aria-disabled={exporting || !readAuthorityReady}
                     onClick={() => void handleExport()}
                   >
                     {exporting ? '正在生成…' : '下载我的数据'}
@@ -424,7 +539,8 @@ const PrivacyPage = () => {
                                   <Button
                                     {...buttonA11yProps}
                                     className="revoke-action"
-                                    aria-disabled={revoking}
+                                    disabled={revoking || !readAuthorityReady}
+                                    aria-disabled={revoking || !readAuthorityReady}
                                     onClick={() => void handleRevoke(optionalPurpose)}
                                   >
                                     {revoking ? '正在撤回…' : '确认撤回'}
@@ -435,7 +551,11 @@ const PrivacyPage = () => {
                               <Button
                                 {...buttonA11yProps}
                                 className="text-action"
-                                onClick={() => setRevokeTarget(optionalPurpose)}
+                                disabled={!readAuthorityReady}
+                                aria-disabled={!readAuthorityReady}
+                                onClick={() => {
+                                  if (readAuthorityReady) setRevokeTarget(optionalPurpose)
+                                }}
                               >
                                 撤回这项授权
                               </Button>
@@ -486,7 +606,12 @@ const PrivacyPage = () => {
                         <Button
                           {...buttonA11yProps}
                           className="step-action"
-                          onClick={() => setExportChoice(exportChoice === 'skip' ? null : 'skip')}
+                          disabled={!readAuthorityReady}
+                          aria-disabled={!readAuthorityReady}
+                          onClick={() => {
+                            if (readAuthorityReady)
+                              setExportChoice(exportChoice === 'skip' ? null : 'skip')
+                          }}
                         >
                           {exportChoice === 'skip' ? '取消跳过' : '不导出'}
                         </Button>
@@ -496,8 +621,12 @@ const PrivacyPage = () => {
                     <Button
                       {...checkboxA11yProps}
                       className={`deletion-check ${understandsPermanent ? 'deletion-check--checked' : ''}`}
+                      disabled={!readAuthorityReady}
                       aria-checked={understandsPermanent}
-                      onClick={() => setUnderstandsPermanent((value) => !value)}
+                      aria-disabled={!readAuthorityReady}
+                      onClick={() => {
+                        if (readAuthorityReady) setUnderstandsPermanent((value) => !value)
+                      }}
                     >
                       <Text className="deletion-check__box" aria-hidden="true">
                         {understandsPermanent ? '✓' : ''}
@@ -515,6 +644,7 @@ const PrivacyPage = () => {
                         value={phrase}
                         maxlength={accountDeletionConfirmationPhrase.length}
                         placeholder={accountDeletionConfirmationPhrase}
+                        disabled={!readAuthorityReady}
                         onInput={(event) => setPhrase(event.detail.value)}
                       />
                     </View>
@@ -523,6 +653,7 @@ const PrivacyPage = () => {
                   <Button
                     {...buttonA11yProps}
                     className={`delete-action ${readyToDelete ? 'delete-action--ready' : ''}`}
+                    disabled={!readyToDelete || deleting || !readAuthorityReady}
                     aria-disabled={!readyToDelete || deleting}
                     onClick={() => void handleDelete()}
                   >

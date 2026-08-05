@@ -1,6 +1,6 @@
 # Design system baseline
 
-Status: implemented and visually validated through iteration-063 Week Fold read-authority evidence
+Status: implemented and visually validated through iteration-064 privacy custody read-authority evidence
 
 Working brand: 衡迹 / MyFitness
 
@@ -635,6 +635,17 @@ Visual review also caught an evidence-timing error: the first mobile screenshot 
 
 - [390 × 844 initial offline Week Fold](../../output/playwright/iteration-063-plan-initial-offline-mobile.png)
 - [1440 × 1000 retained Week Fold revision](../../output/playwright/iteration-063-plan-stale-wide.png)
+
+## Privacy custody read authority — iteration 064
+
+The privacy custody desk no longer turns an unread account into a plausible zero inventory. Before the first accepted response, the mobile composition keeps the established masthead and safety note but replaces all inventory, consent, export and erasure controls with one amber authority card. Its `OFFLINE / 连接未完成` line explains that both the recoverable erasure receipt and service inventory remain unknown; the single full-width retry receives keyboard focus.
+
+After a consent mutation, a rejected overview refresh retains the last successful nine-item inventory beneath a wider amber rail. `RETAINED INVENTORY · 9 ITEMS` identifies the page-memory evidence without presenting it as current truth. The old active-consent row may remain visible, so export, consent revocation, export skipping, acknowledgement, confirmation input and permanent deletion all carry disabled semantics until retry succeeds. Back, profile editing and logout remain available because they do not act on the uncertain ledger.
+
+The wide evidence keeps the custody rail adjacent to the retained ledger instead of replacing it with a generic error page. Product copy separates offline, refusal, service outage and unknown outcomes; raw backend messages never define the visual state. No polling, background action or persistent inventory cache is implied.
+
+- [390 × 844 initial offline privacy desk](../../output/playwright/iteration-064-privacy-initial-offline-mobile.png)
+- [1440 × 1000 retained privacy inventory](../../output/playwright/iteration-064-privacy-stale-wide.png)
 
 ## Screenshot review checklist
 

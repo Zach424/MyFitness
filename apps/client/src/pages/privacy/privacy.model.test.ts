@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest'
 
 import { accountDeletionConfirmationPhrase } from '@myfitness/contracts/privacy.constants'
 
-import { deletionReady, formatInventoryCount, formatReceiptToken } from './privacy.model'
+import {
+  classifyPrivacyReadFailure,
+  deletionReady,
+  formatInventoryCount,
+  formatReceiptToken,
+  privacyReadPhase,
+} from './privacy.model'
 
 describe('privacy page model', () => {
   it('formats zero separately from owned items', () => {
@@ -26,5 +32,30 @@ describe('privacy page model', () => {
     const token = 'abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG'
     expect(formatReceiptToken(token)).toBe('abcd…BCDEFG')
     expect(formatReceiptToken(token)).not.toContain(token)
+  })
+
+  it('does not treat a failed custody read as an authoritative empty inventory', () => {
+    expect(privacyReadPhase({ hasSnapshot: false, busy: true, hasFailure: false })).toBe(
+      'initial-loading',
+    )
+    expect(privacyReadPhase({ hasSnapshot: false, busy: false, hasFailure: true })).toBe(
+      'initial-error',
+    )
+    expect(privacyReadPhase({ hasSnapshot: true, busy: false, hasFailure: false })).toBe('ready')
+  })
+
+  it('retains a custody snapshot as refreshing or stale without making it actionable', () => {
+    expect(privacyReadPhase({ hasSnapshot: true, busy: true, hasFailure: false })).toBe(
+      'refreshing',
+    )
+    expect(privacyReadPhase({ hasSnapshot: true, busy: false, hasFailure: true })).toBe('stale')
+  })
+
+  it('classifies transport, refusal, outage, and unknown custody-read failures', () => {
+    expect(classifyPrivacyReadFailure(new Error('network failed'))).toBe('offline')
+    expect(classifyPrivacyReadFailure({ errMsg: 'request:fail' })).toBe('offline')
+    expect(classifyPrivacyReadFailure({ statusCode: 429 })).toBe('refused')
+    expect(classifyPrivacyReadFailure({ statusCode: 503 })).toBe('service')
+    expect(classifyPrivacyReadFailure({ statusCode: 302 })).toBe('unknown')
   })
 })
