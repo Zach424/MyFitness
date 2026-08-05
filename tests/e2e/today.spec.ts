@@ -118,3 +118,95 @@ test('real Today empty state remains balanced on wide H5', async ({ page }) => {
   await page.screenshot({ path: 'output/playwright/iteration-007-today-wide.png', fullPage: true })
   expect(errors).toEqual([])
 })
+
+test('Today refuses to turn an initial offline read into a zero-value empty state', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  const errors = browserErrors(page)
+  let dashboardReads = 0
+  await page.route('**/v1/insights/dashboard**', async (route) => {
+    dashboardReads += 1
+    if (dashboardReads === 1) await route.abort('internetdisconnected')
+    else await route.continue()
+  })
+
+  await page.goto('/')
+  await expect(page.getByText('OFFLINE / 连接未完成')).toBeVisible()
+  await expect(page.getByText('还没有读取到今日证据')).toBeVisible()
+  await expect(page.getByText('记录数量仍是未知状态')).toBeVisible()
+  await expect(page.getByText('今天还没有已确认记录')).toHaveCount(0)
+  await expect(page.getByText('有记录天数').locator('..').getByText('—')).toBeVisible()
+
+  const retry = page.getByRole('button', { name: '重新读取今日证据' })
+  await expect(retry).toBeFocused()
+  await page.screenshot({
+    path: 'output/playwright/iteration-062-today-initial-offline-mobile.png',
+    fullPage: true,
+  })
+  await page.keyboard.press('Enter')
+  await expect(page.getByText('今天还没有已确认记录')).toBeVisible()
+  await expect(page.getByText('OFFLINE / 连接未完成')).toHaveCount(0)
+  expect(dashboardReads).toBe(2)
+  expect(errors.filter((error) => !error.includes('net::ERR_INTERNET_DISCONNECTED'))).toEqual([])
+})
+
+test('Today preserves one confirmed snapshot when a wide refresh is refused and retries', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const errors = browserErrors(page)
+  const sessionPromise = page.waitForResponse((response) =>
+    response.url().endsWith('/v1/auth/dev/session'),
+  )
+  await page.goto('/')
+  const { accessToken } = (await (await sessionPromise).json()) as { accessToken: string }
+  await expect(page.getByText('今天还没有已确认记录')).toBeVisible()
+
+  const healthResponse = await page.request.post(`${apiUrl}/health-records`, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'x-idempotency-key': `today-refresh-health-${Date.now()}`,
+    },
+    data: {
+      metric: 'recovery.energy',
+      value: 4,
+      unit: 'score_1_5',
+      source: { kind: 'manual' },
+      status: 'confirmed',
+      occurredAt: new Date().toISOString(),
+      timezone: 'Asia/Shanghai',
+    },
+  })
+  expect(healthResponse.status()).toBe(201)
+  await page.getByRole('button', { name: '手动更新今日证据' }).click()
+  await expect(page.getByText('4 /5', { exact: true })).toBeVisible()
+
+  let refuseNextRead = true
+  await page.route('**/v1/insights/dashboard**', async (route) => {
+    if (refuseNextRead) {
+      refuseNextRead = false
+      await route.fulfill({
+        status: 429,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'test read refusal' }),
+      })
+    } else await route.continue()
+  })
+  await page.getByRole('button', { name: '手动更新今日证据' }).click()
+  await expect(page.getByText('READ REFUSED / 读取被拒绝')).toBeVisible()
+  await expect(page.getByText('服务拒绝了本次更新')).toBeVisible()
+  await expect(page.getByText('4 /5', { exact: true })).toBeVisible()
+  await expect(page.getByText('1', { exact: true }).first()).toBeVisible()
+  await page.screenshot({
+    path: 'output/playwright/iteration-062-today-stale-wide.png',
+    fullPage: true,
+  })
+
+  const retry = page.getByRole('button', { name: '重新读取今日证据' })
+  await retry.focus()
+  await page.keyboard.press('Enter')
+  await expect(page.getByText('READ REFUSED / 读取被拒绝')).toHaveCount(0)
+  await expect(page.getByText('4 /5', { exact: true })).toBeVisible()
+  expect(errors.filter((error) => !error.includes('429 (Too Many Requests)'))).toEqual([])
+})

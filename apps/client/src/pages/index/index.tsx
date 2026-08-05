@@ -1,11 +1,16 @@
-import { useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { Button, ScrollView, Text, View } from '@tarojs/components'
 import Taro, { useDidShow } from '@tarojs/taro'
 import type { Dashboard, TodayEvidence, WeeklyPlanListItem } from '@myfitness/contracts'
 
-import { buttonA11yProps, buttonActivationProps } from '../../lib/accessibility'
+import { buttonA11yProps, buttonActivationProps, deferH5Focus } from '../../lib/accessibility'
 import { getDashboard, listWeeklyPlans } from '../../lib/api'
 import { todayPlanReconciliation } from '../plans/plan.model'
+import {
+  classifyTodayReadFailure,
+  todayReadPhase,
+  type TodayReadFailureKind,
+} from './today-read.model'
 import './index.scss'
 
 const quickActions = [
@@ -64,6 +69,46 @@ const displayTime = (value: string) =>
     new Date(value),
   )
 
+const readFailureCopy = (
+  kind: TodayReadFailureKind,
+  hasSnapshot: boolean,
+): { eyebrow: string; title: string; detail: string } => {
+  if (kind === 'offline') {
+    return {
+      eyebrow: 'OFFLINE / 连接未完成',
+      title: hasSnapshot ? '更新没有完成，上次证据仍在' : '还没有读取到今日证据',
+      detail: hasSnapshot
+        ? '设备暂时无法连接服务。下面继续显示上次成功读取的已确认记录，不会把它们改成新状态。'
+        : '设备暂时无法连接服务。页面不会把未知状态显示成零条记录。',
+    }
+  }
+  if (kind === 'refused') {
+    return {
+      eyebrow: 'READ REFUSED / 读取被拒绝',
+      title: hasSnapshot ? '服务拒绝了本次更新' : '服务没有接受本次读取',
+      detail: hasSnapshot
+        ? '下面保留上次成功读取的证据；请稍后手动重试，不会自动轮询。'
+        : '今日证据仍是未知状态；请稍后手动重试，页面不会用空数据代替。',
+    }
+  }
+  if (kind === 'service') {
+    return {
+      eyebrow: 'SERVICE PAUSED / 服务暂不可用',
+      title: hasSnapshot ? '本次更新暂未完成' : '今日证据暂时无法读取',
+      detail: hasSnapshot
+        ? '下面保留上次成功读取的证据；服务恢复后可手动重试。'
+        : '服务暂时没有返回证据；页面不会把这次失败解释成没有记录。',
+    }
+  }
+  return {
+    eyebrow: 'READ UNKNOWN / 结果未知',
+    title: hasSnapshot ? '无法确认本次更新结果' : '无法确认今日证据状态',
+    detail: hasSnapshot
+      ? '下面保留上次成功读取的证据；需要手动重试后才能确认更新。'
+      : '页面尚未取得可信快照，也不会显示推测的零值。',
+  }
+}
+
 const RailEntry = ({ item }: { item: TodayEvidence }) => (
   <View className="rail-entry rail-entry--confirmed">
     <View className="rail-entry__time metric">{displayTime(item.occurredAt)}</View>
@@ -89,32 +134,52 @@ const IndexPage = () => {
   const [plans, setPlans] = useState<WeeklyPlanListItem[]>([])
   const [trendDays, setTrendDays] = useState<7 | 30 | 90>(7)
   const [feedback, setFeedback] = useState('')
+  const [readFailure, setReadFailure] = useState<TodayReadFailureKind>()
   const [loading, setLoading] = useState(true)
+  const dashboardRef = useRef<Dashboard>()
+  const loadingRef = useRef(false)
 
-  useDidShow(() => {
-    void (async () => {
-      setLoading(true)
-      try {
-        const [nextDashboard, nextPlans] = await Promise.all([
-          getDashboard(timezone()),
-          listWeeklyPlans(),
-        ])
-        setDashboard(nextDashboard)
-        setPlans(nextPlans.items)
-      } catch (error) {
-        setFeedback(error instanceof Error ? error.message : '今日数据暂时无法读取，请稍后重试。')
-      } finally {
-        setLoading(false)
-      }
-    })()
+  const readToday = useCallback(async () => {
+    if (loadingRef.current) return
+    const hadSnapshot = Boolean(dashboardRef.current)
+    loadingRef.current = true
+    setLoading(true)
+    setReadFailure(undefined)
+    try {
+      const [nextDashboard, nextPlans] = await Promise.all([
+        getDashboard(timezone()),
+        listWeeklyPlans(),
+      ])
+      dashboardRef.current = nextDashboard
+      setDashboard(nextDashboard)
+      setPlans(nextPlans.items)
+    } catch (error) {
+      setReadFailure(classifyTodayReadFailure(error))
+      if (!hadSnapshot) deferH5Focus('today-read-retry', 80)
+    } finally {
+      loadingRef.current = false
+      setLoading(false)
+    }
+  }, [])
+
+  useDidShow(() => void readToday())
+
+  const hasSnapshot = Boolean(dashboard)
+  const readPhase = todayReadPhase({
+    hasSnapshot,
+    busy: loading,
+    hasFailure: Boolean(readFailure),
   })
+  const failureCopy = readFailure ? readFailureCopy(readFailure, hasSnapshot) : undefined
 
   const readiness = dashboard?.readiness ?? {
     score: null,
-    label: loading ? '正在整理记录' : '等待恢复记录',
+    label: loading ? '正在整理记录' : readFailure ? '今日证据尚未读取' : '等待恢复记录',
     note: loading
       ? '正在读取已确认的身体、恢复、训练与饮食记录。'
-      : '先完成一条记录，今日页会在这里整理真实证据。',
+      : readFailure
+        ? '证据读取完成后才会显示今日记录、恢复摘要与趋势。'
+        : '先完成一条记录，今日页会在这里整理真实证据。',
     factors: [],
   }
   const rail = dashboard?.today.items ?? []
@@ -140,14 +205,24 @@ const IndexPage = () => {
               <Text className="wordmark__cn">衡迹</Text>
               <Text className="wordmark__en">DAILY NOTE</Text>
             </View>
-            <Button
-              {...buttonA11yProps}
-              className="profile-mark"
-              aria-label="建立或更新个人资料"
-              onClick={() => void Taro.navigateTo({ url: '/pages/onboarding/index' })}
-            >
-              陈
-            </Button>
+            <View className="topbar__actions">
+              <Button
+                id="today-refresh"
+                className="today-refresh"
+                aria-label={loading ? '今日证据正在读取' : '手动更新今日证据'}
+                {...buttonActivationProps(() => void readToday(), loading)}
+              >
+                {loading ? (hasSnapshot ? '正在更新' : '正在读取') : '更新证据'}
+              </Button>
+              <Button
+                {...buttonA11yProps}
+                className="profile-mark"
+                aria-label="建立或更新个人资料"
+                onClick={() => void Taro.navigateTo({ url: '/pages/onboarding/index' })}
+              >
+                陈
+              </Button>
+            </View>
           </View>
 
           <View className="desktop-grid">
@@ -156,7 +231,13 @@ const IndexPage = () => {
                 <Text className="eyebrow">{dateLabel(dashboard?.today.date)}</Text>
                 <Text className="hero__greeting">今天的真实记录</Text>
                 <Text className="hero__title">
-                  {rail.length ? '已经发生的，清楚可见' : '从第一条证据开始'}
+                  {hasSnapshot
+                    ? rail.length
+                      ? '已经发生的，清楚可见'
+                      : '从第一条证据开始'
+                    : readPhase === 'initial-loading'
+                      ? '正在读取今日证据'
+                      : '今日证据尚未读取'}
                 </Text>
                 <Text className="hero__body">{readiness.note}</Text>
                 <View className="readiness">
@@ -179,6 +260,30 @@ const IndexPage = () => {
                   </View>
                 </View>
               </View>
+
+              {readPhase === 'refreshing' ? (
+                <View className="today-read-state today-read-state--refreshing" role="status">
+                  <Text className="today-read-state__eyebrow">REFRESHING / 保留已有证据</Text>
+                  <Text className="today-read-state__title">正在核对最新记录</Text>
+                  <Text className="today-read-state__detail">
+                    更新完成前，下面继续显示上次成功读取的已确认记录。
+                  </Text>
+                </View>
+              ) : failureCopy ? (
+                <View className={`today-read-state today-read-state--${readPhase}`} role="status">
+                  <Text className="today-read-state__eyebrow">{failureCopy.eyebrow}</Text>
+                  <Text className="today-read-state__title">{failureCopy.title}</Text>
+                  <Text className="today-read-state__detail">{failureCopy.detail}</Text>
+                  <Button
+                    id="today-read-retry"
+                    className="today-read-state__retry"
+                    aria-label="重新读取今日证据"
+                    {...buttonActivationProps(() => void readToday(), loading)}
+                  >
+                    重新读取
+                  </Button>
+                </View>
+              ) : null}
 
               {planReconciliation?.day.session ? (
                 <View
@@ -230,12 +335,27 @@ const IndexPage = () => {
                     <Text className="section-heading__title">今日节律</Text>
                   </View>
                   <View className="completion">
-                    <Text className="completion__value metric">{rail.length}</Text>
+                    <Text className="completion__value metric">
+                      {hasSnapshot ? rail.length : '—'}
+                    </Text>
                     <Text className="completion__label">条记录</Text>
                   </View>
                 </View>
 
-                {rail.length ? (
+                {!hasSnapshot ? (
+                  <View className="today-empty today-empty--unknown" role="status">
+                    <Text className="today-empty__title">
+                      {readPhase === 'initial-loading'
+                        ? '正在读取已确认记录'
+                        : '记录数量仍是未知状态'}
+                    </Text>
+                    <Text className="today-empty__body">
+                      {readPhase === 'initial-loading'
+                        ? '读取完成后才会显示今日节律与记录数量。'
+                        : '读取失败不等于今天没有记录；请使用上方重新读取。'}
+                    </Text>
+                  </View>
+                ) : rail.length ? (
                   <View className="rail" aria-label="今日已确认记录">
                     {rail.map((item) => (
                       <RailEntry item={item} key={`${item.kind}-${item.id}`} />
@@ -278,11 +398,10 @@ const IndexPage = () => {
                 <View className="trend-tabs">
                   {([7, 30, 90] as const).map((days) => (
                     <Button
-                      {...buttonA11yProps}
                       className={`trend-tab ${trendDays === days ? 'trend-tab--active' : ''}`}
                       aria-pressed={trendDays === days}
                       key={days}
-                      onClick={() => setTrendDays(days)}
+                      {...buttonActivationProps(() => setTrendDays(days), !hasSnapshot)}
                     >
                       {days} 天
                     </Button>
@@ -290,12 +409,19 @@ const IndexPage = () => {
                 </View>
                 <View className="evidence-list">
                   {[
-                    ['有记录天数', `${trend?.activeDays ?? 0} 天`],
-                    ['身体/恢复', `${trend?.measurementCount ?? 0} 条`],
-                    ['训练', `${trend?.workoutCount ?? 0} 次 · ${trend?.workoutVolumeKg ?? 0} kg`],
+                    ['有记录天数', hasSnapshot ? `${trend?.activeDays ?? 0} 天` : '—'],
+                    ['身体/恢复', hasSnapshot ? `${trend?.measurementCount ?? 0} 条` : '—'],
+                    [
+                      '训练',
+                      hasSnapshot
+                        ? `${trend?.workoutCount ?? 0} 次 · ${trend?.workoutVolumeKg ?? 0} kg`
+                        : '—',
+                    ],
                     [
                       '饮食',
-                      `${trend?.mealCount ?? 0} 餐 · ${Math.round(trend?.energyKcal ?? 0)} kcal`,
+                      hasSnapshot
+                        ? `${trend?.mealCount ?? 0} 餐 · ${Math.round(trend?.energyKcal ?? 0)} kcal`
+                        : '—',
                     ],
                   ].map(([label, value]) => (
                     <View className="evidence" key={label}>

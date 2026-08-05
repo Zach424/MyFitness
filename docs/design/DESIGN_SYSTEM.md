@@ -614,6 +614,17 @@ Only five runs are initially expanded into the list; one full-width outline acti
 - [390 × 844 two-revision AI ledger](../../output/playwright/iteration-061-ai-ledger-mobile.png)
 - [1440 × 1100 wide AI ledger](../../output/playwright/iteration-061-ai-ledger-wide.png)
 
+## Today read authority — iteration 062
+
+The Today entry surface now treats “not read” as a visible state rather than a visually plausible empty day. Before the first successful response, the headline says that evidence is not yet read, the readiness card remains an em dash and every trend value is an em dash. The confirmed-evidence card names the count as unknown; only a successful response may render the established empty-state copy and real zeros.
+
+One compact `更新证据` control joins the profile action in the top bar. During a read it carries explicit disabled semantics and names whether it is initially reading or updating an existing snapshot. Offline, refused, unavailable and unknown states use product-owned copy rather than raw server messages. The amber rail states either that no snapshot exists or that the previous successful snapshot remains below; it never claims local caching, synchronization or freshness it cannot prove.
+
+On an initial failure the single full-width retry action receives delayed H5 focus, so Enter recovery is immediate and visible. On a refresh failure, the existing evidence rail, readiness and trend totals remain unchanged while the warning sits directly above them. The 390 × 844 artifact shows unknown count and offline retry without a false empty state; the 1440 × 1000 artifact keeps the prior `4/5` record and trend evidence beside a rejected-refresh warning.
+
+- [390 × 844 initial offline Today](../../output/playwright/iteration-062-today-initial-offline-mobile.png)
+- [1440 × 1000 retained Today snapshot](../../output/playwright/iteration-062-today-stale-wide.png)
+
 ## Screenshot review checklist
 
 - The Rhythm Rail remains understandable without color.
