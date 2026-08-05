@@ -538,6 +538,20 @@ Four 390 × 844 artifacts cover the risky states; the wide photo deletion reconc
 - [390 × 844 photo-reservation same-key recovery](../../output/playwright/iteration-055-photo-reserve-recovery-mobile.png)
 - [390 × 844 photo-confirmation terminal handoff](../../output/playwright/iteration-055-photo-confirm-reconciliation-mobile.png)
 
+## Owner-food definition recovery — iteration 056
+
+The owner-food register now uses the same three authority labels as the action and photo workbenches without changing its definition/fact hierarchy. An interrupted create places the amber `SAME REQUEST / 仅同一请求可重试` strip immediately above the retained nutrient/reference form. The ordinary save stays visible but inert, while the only active outline control explicitly says that it retries the food definition with duplicate protection. Editing any form value removes the old recovery state and invalidates that attempted key.
+
+Correction uses `RECONCILE FIRST / 禁止直接重放` and keeps every user-authored nutrient, serving and reference field visible for comparison. The page does not call these values verified nutrition. Only an advanced current server revision whose complete fields match the retained form can close the editor as a recovered success; a same or different revision keeps the comparison honest.
+
+Archive recovery stays inside the existing confirmation dialog ahead of the disabled destructive action. Its copy says that active-catalog absence proves only that the food will not appear in future choices. It does not imply meal/favorite rewriting or any nutritional judgment. Explicit inline token colors keep cancel, destructive and recovery labels visually present in Taro H5, while the shared activation adapter prevents pointer and keyboard replay during uncertainty.
+
+The three 390 × 844 artifacts are real-service response-loss states: create commits before the browser response is aborted, correction commits R2 before loss and archive removes the active definition before loss. The first two viewport screenshots scroll the authority strip into view while retaining enough form context to prove input preservation; the modal screenshot shows the blocked destructive control and narrow custody claim.
+
+- [390 × 844 food-create same-key recovery](../../output/playwright/iteration-056-food-create-recovery-mobile.png)
+- [390 × 844 food-correction reconciliation](../../output/playwright/iteration-056-food-update-reconciliation-mobile.png)
+- [390 × 844 food-archive reconciliation](../../output/playwright/iteration-056-food-archive-reconciliation-mobile.png)
+
 ## Screenshot review checklist
 
 - The Rhythm Rail remains understandable without color.

@@ -399,6 +399,75 @@ test('daily nutrition observation keeps recorded and missing local days explicit
   expect(browserErrors).toEqual([])
 })
 
+test('ambiguous owned food create reuses one request key and creates one definition', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  const browserErrors = collectBrowserErrors(page)
+  await openNutrition(page)
+
+  await page.getByRole('button', { name: '管理我的食物' }).click()
+  await page.getByRole('button', { name: '＋ 新建食物' }).click()
+  await page.locator('[aria-label="自定义食物名称"] input').fill('响应丢失燕麦碗')
+  await page.locator('[aria-label="自定义默认克重"] input').fill('150')
+  await page.locator('[aria-label="自定义热量 kcal"] input').fill('128')
+  await page.locator('[aria-label="自定义蛋白质 g"] input').fill('6')
+  await page.locator('[aria-label="自定义碳水 g"] input').fill('20')
+  await page.locator('[aria-label="自定义脂肪 g"] input').fill('3')
+  await page.locator('[aria-label="自定义数据依据（必填）"] input').fill('家庭配方估算：2026-08-05')
+
+  let createAttempts = 0
+  const idempotencyKeys: string[] = []
+  await page.route('**/v1/food-catalog', async (route) => {
+    if (route.request().method() !== 'POST') {
+      await route.continue()
+      return
+    }
+    createAttempts += 1
+    idempotencyKeys.push(route.request().headers()['x-idempotency-key'] ?? '')
+    if (createAttempts === 1) {
+      const committedResponse = await route.fetch()
+      expect(committedResponse.status()).toBe(201)
+      await route.abort('failed')
+      return
+    }
+    await route.continue()
+  })
+
+  await page.getByRole('button', { name: '保存定义' }).click()
+  const recovery = page.locator('.workbench-recovery')
+  await expect(recovery.getByText('SAME REQUEST / 仅同一请求可重试')).toBeVisible()
+  await expect(recovery).toContainText('无法确认这次食物定义新建是否已提交')
+  await expect(page.locator('#food-definition-name input')).toHaveValue('响应丢失燕麦碗')
+  const primarySave = page.getByRole('button', { name: '保存定义' })
+  await expect(primarySave).toBeDisabled()
+  await expect(primarySave).toHaveCSS('opacity', '0.45')
+  const retry = recovery.getByRole('button', { name: '重试保存食物定义（防重复）' })
+  await expect(retry).toBeEnabled()
+  await expect(retry).toHaveCSS('opacity', '1')
+
+  await recovery.scrollIntoViewIfNeeded()
+  await page.screenshot({
+    path: 'output/playwright/iteration-056-food-create-recovery-mobile.png',
+  })
+
+  const retryResponse = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/v1/food-catalog') && response.request().method() === 'POST',
+  )
+  await retry.click()
+  expect((await retryResponse).status()).toBe(201)
+  await expect(
+    page.locator('.food-register__name').filter({ hasText: '响应丢失燕麦碗' }),
+  ).toHaveCount(1)
+  expect(createAttempts).toBe(2)
+  expect(idempotencyKeys[0]).not.toBe('')
+  expect(idempotencyKeys[1]).toBe(idempotencyKeys[0])
+  expect(
+    browserErrors.filter((error) => error !== 'Failed to load resource: net::ERR_FAILED'),
+  ).toEqual([])
+})
+
 test('owned food stays reusable and corrections never rewrite the meal draft snapshot', async ({
   page,
 }) => {
@@ -446,16 +515,34 @@ test('owned food stays reusable and corrections never rewrite the meal draft sna
   await page
     .locator('[aria-label="自定义数据依据（必填）"] input')
     .fill('家庭配方重新称量：2026-08-06')
-  const updateResponse = page.waitForResponse(
-    (response) =>
-      /\/v1\/food-catalog\/[0-9a-f-]{36}$/.test(response.url()) &&
-      response.request().method() === 'PUT',
-  )
+  let updateAttempts = 0
+  await page.route('**/v1/food-catalog/*', async (route) => {
+    if (route.request().method() !== 'PUT') {
+      await route.continue()
+      return
+    }
+    updateAttempts += 1
+    const committedResponse = await route.fetch()
+    expect(committedResponse.status()).toBe(200)
+    await route.abort('failed')
+  })
   await page.getByRole('button', { name: '保存纠正' }).click()
-  expect((await updateResponse).status()).toBe(200)
+  const updateRecovery = page.locator('.workbench-recovery')
+  await expect(updateRecovery.getByText('RECONCILE FIRST / 禁止直接重放')).toBeVisible()
+  await expect(updateRecovery).toContainText('核对前不会重放操作')
+  await expect(page.locator('#food-definition-name input')).toHaveValue('低脂家庭炖牛肉')
   await expect(
     page.getByText('定义已纠正；餐食页中的当前草稿、历史餐食和收藏快照不会被改写。'),
+  ).toHaveCount(0)
+  await updateRecovery.scrollIntoViewIfNeeded()
+  await page.screenshot({
+    path: 'output/playwright/iteration-056-food-update-reconciliation-mobile.png',
+  })
+  await updateRecovery.getByRole('button', { name: '核对服务端状态' }).click()
+  await expect(
+    page.getByText('核对完成：服务端 R2 与保留输入一致，上次纠正已经提交。'),
   ).toBeVisible()
+  expect(updateAttempts).toBe(1)
   await page.getByRole('button', { name: '返回餐食记录' }).click()
   await expect(page.locator('.meal-item').getByText('家庭炖牛肉')).toBeVisible()
   await expect(page.locator('.meal-item').getByText('低脂家庭炖牛肉')).toHaveCount(0)
@@ -475,20 +562,39 @@ test('owned food stays reusable and corrections never rewrite the meal draft sna
     fullPage: true,
   })
 
-  const archiveResponse = page.waitForResponse(
-    (response) =>
-      /\/v1\/food-catalog\/[0-9a-f-]{36}$/.test(response.url()) &&
-      response.request().method() === 'DELETE',
-  )
+  let archiveAttempts = 0
+  await page.route('**/v1/food-catalog/*', async (route) => {
+    if (route.request().method() !== 'DELETE') {
+      await route.continue()
+      return
+    }
+    archiveAttempts += 1
+    const committedResponse = await route.fetch()
+    expect(committedResponse.status()).toBe(200)
+    await route.abort('failed')
+  })
   await page.getByRole('button', { name: '归档', exact: true }).click()
-  await expect(page.getByRole('dialog', { name: '确认归档自建食物' })).toBeVisible()
+  const archiveDialog = page.getByRole('dialog', { name: '确认归档自建食物' })
+  await expect(archiveDialog).toBeVisible()
   await page.getByRole('button', { name: '确认归档' }).click()
-  expect((await archiveResponse).status()).toBe(200)
-  await expect(page.getByText('自建食物已归档；历史餐食与收藏未被改写。')).toBeVisible()
+  const archiveRecovery = archiveDialog.locator('.workbench-recovery')
+  await expect(archiveRecovery.getByText('RECONCILE FIRST / 禁止直接重放')).toBeVisible()
+  await expect(page.getByText('自建食物已归档；历史餐食与收藏未被改写。')).toHaveCount(0)
+  await page.screenshot({
+    path: 'output/playwright/iteration-056-food-archive-reconciliation-mobile.png',
+    fullPage: true,
+  })
+  await archiveRecovery.getByRole('button', { name: '核对服务端状态' }).click()
+  await expect(
+    page.getByText('核对完成：服务端当前目录已不再包含此食物；仅据此确认它不会用于未来选择。'),
+  ).toBeVisible()
+  expect(archiveAttempts).toBe(1)
   await page.getByRole('button', { name: '返回餐食记录' }).click()
   await expect(page.getByRole('button', { name: '添加低脂家庭炖牛肉' })).toHaveCount(0)
   await expect(page.locator('.meal-item').getByText('家庭炖牛肉')).toBeVisible()
-  expect(browserErrors).toEqual([])
+  expect(
+    browserErrors.filter((error) => error !== 'Failed to load resource: net::ERR_FAILED'),
+  ).toEqual([])
 })
 
 test('owned food definition history progressively loads immutable older revisions', async ({

@@ -20,10 +20,13 @@ A mutable live catalog must not become historical truth: changing a recipe estim
 6. Keep food-photo candidate generation bound only to the controlled starter allow-list. Custom definitions require a separate reviewed identity/reconciliation policy before they can participate in image or barcode matching.
 7. Include active and archived custom definitions plus immutable revisions in `myfitness-portable-export-v4`; exclude idempotency keys, request hashes and owner foreign-key duplication. Count definitions in the stable nutrition inventory category. Account erasure relies on owner foreign keys with cascade deletion.
 8. Put definition create/correct/archive/history on a dedicated H5/WeApp register page. The meal page refreshes active catalog entries when shown and only selects/copies them. This keeps mutable definition management visually and technically separate from the meal fact ledger.
+9. Treat an ambiguous create response as the same idempotent request while the form is unchanged. Correction and archive are never blindly replayed: the register first reloads the active owner catalog, accepts a lost correction only when an advanced revision exactly matches every retained field and treats absence after archive only as evidence that the definition left future choices. Nutrient/reference input remains visible owner-authored data, not verified nutrition.
 
 ## Consequences
 
 Users can define missing foods once, find them by name or alias and correct future reuse without losing an audit trail or rewriting old meal evidence. The required reference makes provenance visible but does not prove accuracy. Archived definitions leave normal search while historical meals, favorites and export history remain intact until account erasure.
+
+Committed-but-lost browser responses no longer force duplicate food definitions or false correction/archive success. The create key exists only in memory and resets on input change; correction/archive reconciliation is explicit and foreground-only. There is no offline queue, background replay or new nutritional-authority claim.
 
 The dedicated page restores the unchanged 45 KB WeApp page-JavaScript ceiling after an embedded editor reached 46,721 bytes. One additional lazy route raises only reviewed total-tree ceilings: H5 from 1.85 MB to 2.00 MB and WeApp from 700 KB to 725 KB. H5 entry/async and WeApp vendor/page limits remain unchanged.
 

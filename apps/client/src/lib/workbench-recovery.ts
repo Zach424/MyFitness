@@ -2,6 +2,9 @@ export type WorkbenchOperation =
   | 'action_create'
   | 'action_update'
   | 'action_archive'
+  | 'food_create'
+  | 'food_update'
+  | 'food_archive'
   | 'photo_reserve'
   | 'photo_upload'
   | 'photo_confirm'
@@ -41,6 +44,21 @@ export const workbenchOperationPolicies: Record<WorkbenchOperation, OperationPol
   },
   action_archive: {
     label: '动作停用',
+    uncertainAuthority: 'reconcile_required',
+    preserves: 'none',
+  },
+  food_create: {
+    label: '食物定义新建',
+    uncertainAuthority: 'retry_same_request',
+    preserves: 'definition_input',
+  },
+  food_update: {
+    label: '食物定义纠正',
+    uncertainAuthority: 'reconcile_required',
+    preserves: 'definition_input',
+  },
+  food_archive: {
+    label: '食物定义归档',
     uncertainAuthority: 'reconcile_required',
     preserves: 'none',
   },
@@ -123,7 +141,12 @@ export const describeWorkbenchFailure = (
       failureKind,
       eyebrow: 'SAME REQUEST / 仅同一请求可重试',
       message: `无法确认这次${policy.label}是否已提交。页面不保存照片或后台排队；仅在输入未变化时沿用同一请求编号重试，服务端只保留一笔${subject}。`,
-      actionLabel: operation === 'photo_reserve' ? '重新选择并重试预约' : '重试保存定义（防重复）',
+      actionLabel:
+        operation === 'photo_reserve'
+          ? '重新选择并重试预约'
+          : operation === 'food_create'
+            ? '重试保存食物定义（防重复）'
+            : '重试保存定义（防重复）',
       preserves: policy.preserves,
     }
   }

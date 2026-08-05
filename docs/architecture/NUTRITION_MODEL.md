@@ -1,6 +1,6 @@
 # Nutrition record model
 
-Status: manual meal records, a lazy confirmed-only photo workbench, owner-created food definitions, daily observation, explicit occurrence editing, conflict-safe correction recovery, record pagination and definition-history pagination implemented through iteration 051
+Status: manual meal records, a lazy confirmed-only photo workbench, owner-created food definitions with authority-aware write recovery, daily observation, explicit occurrence editing, conflict-safe correction recovery, record pagination and definition-history pagination implemented through iteration 056
 
 Nutrition records are user-confirmed snapshots of food, portion and context. They support personal recall and later deterministic summaries; they are not dietary prescriptions, laboratory measurements or judgments about food quality.
 
@@ -51,6 +51,8 @@ Selecting a definition copies its current values into the existing meal draft/sn
 The definition register is a dedicated H5/WeApp route; the meal page refreshes active entries on show and searches owner aliases. Food-photo candidates remain limited to the controlled starter catalog. Barcode/provider search, branded variants, recipes, non-gram household conversion rules and catalog reconciliation are deferred.
 
 `GET /v1/food-catalog/:entryId/history` accepts `limit` (default 20, maximum 50) and an opaque UUID/revision cursor. The API validates the exact owner entry and anchor before returning `revision < boundary` newest first. The register initially renders 10 versions through the shared definition ledger and explicitly loads older pages; archive remains owner-readable. Pagination does not verify the user-confirmed nutrient values or reference.
+
+Definition creation retains one owner-scoped idempotency key in memory only while every submitted field remains unchanged. If a browser loses the response after the API commits, the register labels the outcome unresolved and offers only the same-request retry; the server's owner/key/request-hash guard returns the one accepted definition. Correction and archive have optimistic revisions but no create-level replay promise, so an ambiguous result disables the ordinary write and requires a foreground active-catalog read. A correction is accepted only when the current revision advanced and its complete nutrient/reference/default-serving payload matches the retained form. Archive absence establishes only that the definition is no longer selectable in future; it does not prove anything about meal history, favorites or nutritional accuracy. No request, key or form is persisted as a background queue.
 
 ## Daily observation
 

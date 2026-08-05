@@ -7,7 +7,7 @@ import type {
   FoodSnapshot,
 } from '@myfitness/contracts'
 
-import { buttonA11yProps } from '../../lib/accessibility'
+import { buttonActivationProps } from '../../lib/accessibility'
 import { DefinitionRevisionLedger } from '../../components/definition-revision-ledger'
 import {
   ApiError,
@@ -17,6 +17,7 @@ import {
   listFoodCatalog,
   updateFoodCatalogEntry,
 } from '../../lib/api'
+import { describeWorkbenchFailure, type WorkbenchRecovery } from '../../lib/workbench-recovery'
 import ExerciseCatalogPage from '../exercise-catalog'
 import './index.scss'
 
@@ -50,6 +51,9 @@ const messageOf = (error: unknown) =>
 
 const requestKey = () =>
   `food-${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`}`
+
+const customEntriesFrom = (items: Awaited<ReturnType<typeof listFoodCatalog>>['items']) =>
+  items.filter((entry): entry is CustomFoodCatalogEntry => entry.source === 'custom')
 
 const formFromEntry = (entry: CustomFoodCatalogEntry): FoodForm => ({
   name: entry.name,
@@ -107,8 +111,27 @@ const payloadFromForm = (form: FoodForm) => {
   }
 }
 
+const entryMatchesForm = (entry: CustomFoodCatalogEntry, form: FoodForm) => {
+  const payload = payloadFromForm(form)
+  return (
+    entry.name === payload.name &&
+    JSON.stringify(entry.aliases) === JSON.stringify(payload.aliases ?? []) &&
+    entry.category === payload.category &&
+    entry.nutrientsPer100g.energyKcal === payload.nutrientsPer100g.energyKcal &&
+    entry.nutrientsPer100g.proteinG === payload.nutrientsPer100g.proteinG &&
+    entry.nutrientsPer100g.carbohydrateG === payload.nutrientsPer100g.carbohydrateG &&
+    entry.nutrientsPer100g.fatG === payload.nutrientsPer100g.fatG &&
+    entry.nutrientsPer100g.fiberG === payload.nutrientsPer100g.fiberG &&
+    entry.reference === payload.reference &&
+    entry.defaultServing.amount === payload.defaultServing.amount &&
+    entry.defaultServing.unit === payload.defaultServing.unit &&
+    entry.defaultServing.grams === payload.defaultServing.grams
+  )
+}
+
 const FoodCatalogPage = () => {
   const requestedEntryId = useRef(Taro.getCurrentInstance().router?.params.entryId ?? '')
+  const pendingCreateKey = useRef('')
   const [entries, setEntries] = useState<CustomFoodCatalogEntry[]>([])
   const [editing, setEditing] = useState<CustomFoodCatalogEntry>()
   const [archiving, setArchiving] = useState<CustomFoodCatalogEntry>()
@@ -120,6 +143,14 @@ const FoodCatalogPage = () => {
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [feedback, setFeedback] = useState('')
+  const [recovery, setRecovery] = useState<WorkbenchRecovery>()
+
+  const patchForm = (patch: Partial<FoodForm>) => {
+    setForm((current) => ({ ...current, ...patch }))
+    if (!editing) pendingCreateKey.current = ''
+    setRecovery(undefined)
+    setFeedback('')
+  }
 
   const openEditor = async (entry?: CustomFoodCatalogEntry) => {
     setEditing(entry)
@@ -128,6 +159,9 @@ const FoodCatalogPage = () => {
     setHistoryNextCursor(null)
     setHistoryLoadingMore(false)
     setEditorOpen(true)
+    setFeedback('')
+    setRecovery(undefined)
+    pendingCreateKey.current = ''
     if (!entry) return
     try {
       const result = await getFoodCatalogEntryHistory(entry.id, { limit: 10 })
@@ -161,9 +195,7 @@ const FoodCatalogPage = () => {
     void listFoodCatalog()
       .then((result) => {
         if (!active) return
-        const custom = result.items.filter(
-          (entry): entry is CustomFoodCatalogEntry => entry.source === 'custom',
-        )
+        const custom = customEntriesFrom(result.items)
         setEntries(custom)
         const requested = custom.find((entry) => entry.id === requestedEntryId.current)
         if (requested) void openEditor(requested)
@@ -185,6 +217,8 @@ const FoodCatalogPage = () => {
     setHistory(undefined)
     setHistoryNextCursor(null)
     setForm(emptyForm())
+    pendingCreateKey.current = ''
+    setRecovery(undefined)
   }
 
   const save = async () => {
@@ -203,8 +237,9 @@ const FoodCatalogPage = () => {
             ...payload,
             expectedRevision: editing.revision,
           })
-        : await createFoodCatalogEntry(payload, requestKey())
+        : await createFoodCatalogEntry(payload, (pendingCreateKey.current ||= requestKey()))
       setEntries((current) => [saved, ...current.filter((entry) => entry.id !== saved.id)])
+      setRecovery(undefined)
       closeEditor()
       setFeedback(
         wasCorrection
@@ -212,10 +247,99 @@ const FoodCatalogPage = () => {
           : '自建食物已保存；返回餐食页后可从“我的”列表加入本餐。',
       )
     } catch (error) {
-      setFeedback(messageOf(error))
+      setRecovery(describeWorkbenchFailure(editing ? 'food_update' : 'food_create', error))
     } finally {
       setBusy(false)
     }
+  }
+
+  const reconcileDefinition = async () => {
+    if (!recovery || recovery.operation !== 'food_update' || !editing) return
+    setBusy(true)
+    try {
+      const result = await listFoodCatalog()
+      const custom = customEntriesFrom(result.items)
+      const current = custom.find((entry) => entry.id === editing.id)
+      setEntries(custom)
+      if (!current) {
+        setRecovery({
+          ...recovery,
+          authority: 'terminal',
+          eyebrow: 'CURRENT STATE / 定义已不可编辑',
+          message:
+            '核对后，服务端当前目录已没有这条可编辑食物定义。页面仍保留营养值与依据输入，但不会把上次纠正报告为成功。',
+          actionLabel: '返回检查目录',
+        })
+        return
+      }
+      if (current.revision > editing.revision && entryMatchesForm(current, form)) {
+        closeEditor()
+        setFeedback(`核对完成：服务端 R${current.revision} 与保留输入一致，上次纠正已经提交。`)
+        return
+      }
+      setEditing(current)
+      setRecovery(undefined)
+      setFeedback(
+        current.revision === editing.revision
+          ? `核对完成：服务端仍为 R${current.revision}，没有纠正成功的证据；营养值与依据输入已保留。`
+          : `核对完成：服务端已到 R${current.revision} 且内容不同；输入已保留，请重新核对来源后再保存。`,
+      )
+    } catch (error) {
+      setRecovery(describeWorkbenchFailure('food_update', error))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const reconcileArchive = async () => {
+    if (!recovery || recovery.operation !== 'food_archive' || !archiving) return
+    setBusy(true)
+    try {
+      const result = await listFoodCatalog()
+      const custom = customEntriesFrom(result.items)
+      const current = custom.find((entry) => entry.id === archiving.id)
+      setEntries(custom)
+      setRecovery(undefined)
+      setArchiving(undefined)
+      if (!current) {
+        closeEditor()
+        setFeedback('核对完成：服务端当前目录已不再包含此食物；仅据此确认它不会用于未来选择。')
+        return
+      }
+      setEditing(current)
+      setFeedback(
+        '核对完成：服务端仍显示此食物可用，本次归档没有成功证据；如仍需归档，请再次明确确认。',
+      )
+    } catch (error) {
+      setRecovery(describeWorkbenchFailure('food_archive', error))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const cancelArchive = () => {
+    setArchiving(undefined)
+    if (recovery?.operation === 'food_archive') setRecovery(undefined)
+  }
+
+  const handleRecoveryAction = () => {
+    if (!recovery) return
+    if (recovery.authority === 'terminal') {
+      const operation = recovery.operation
+      setRecovery(undefined)
+      setFeedback('当前尝试已终止；营养值与依据输入仍保留，请检查后重新开始。')
+      if (operation === 'food_archive') cancelArchive()
+      return
+    }
+    if (recovery.authority === 'retry_same_request' && recovery.operation === 'food_create') {
+      void save()
+      return
+    }
+    if (recovery.operation === 'food_update') {
+      void reconcileDefinition()
+      return
+    }
+    if (recovery.operation === 'food_archive') void reconcileArchive()
   }
 
   const archive = async () => {
@@ -225,10 +349,11 @@ const FoodCatalogPage = () => {
       await archiveFoodCatalogEntry(archiving.id, archiving.revision)
       setEntries((current) => current.filter((entry) => entry.id !== archiving.id))
       setArchiving(undefined)
+      setRecovery(undefined)
       closeEditor()
       setFeedback('自建食物已归档；历史餐食与收藏未被改写。')
     } catch (error) {
-      setFeedback(messageOf(error))
+      setRecovery(describeWorkbenchFailure('food_archive', error))
     } finally {
       setBusy(false)
     }
@@ -240,10 +365,10 @@ const FoodCatalogPage = () => {
         <View className="food-catalog-shell">
           <View className="food-catalog-topbar">
             <Button
-              {...buttonA11yProps}
+              {...buttonActivationProps(() => void Taro.navigateBack())}
+              id="food-catalog-back"
               className="food-catalog-back"
               aria-label="返回餐食记录"
-              onClick={() => void Taro.navigateBack()}
             >
               ←
             </Button>
@@ -265,9 +390,9 @@ const FoodCatalogPage = () => {
 
           <View className="food-catalog-actions">
             <Button
-              {...buttonA11yProps}
+              {...buttonActivationProps(() => void openEditor())}
+              id="food-new-definition"
               className="food-catalog-new"
-              onClick={() => void openEditor()}
             >
               ＋ 新建食物
             </Button>
@@ -275,8 +400,33 @@ const FoodCatalogPage = () => {
           </View>
 
           {feedback ? (
-            <View className="food-catalog-feedback" role="status">
+            <View
+              className="food-catalog-feedback"
+              role="status"
+              aria-live="polite"
+              aria-atomic="true"
+            >
               {feedback}
+            </View>
+          ) : null}
+
+          {recovery && recovery.operation !== 'food_archive' ? (
+            <View
+              className="workbench-recovery"
+              role="status"
+              aria-live="polite"
+              aria-atomic="true"
+            >
+              <Text className="workbench-recovery__eyebrow">{recovery.eyebrow}</Text>
+              <Text className="workbench-recovery__message">{recovery.message}</Text>
+              <Button
+                {...buttonActivationProps(handleRecoveryAction, busy)}
+                className="workbench-recovery__action"
+                style={{ color: 'var(--color-warning)' }}
+                disabled={busy}
+              >
+                {busy ? '处理中…' : recovery.actionLabel}
+              </Button>
             </View>
           ) : null}
 
@@ -308,14 +458,13 @@ const FoodCatalogPage = () => {
                   <View className="food-editor__field" key={key}>
                     <Text>{label}</Text>
                     <Input
+                      id={key === 'name' ? 'food-definition-name' : undefined}
                       className="food-editor__input metric"
                       type={['name', 'aliases', 'reference'].includes(key) ? 'text' : 'digit'}
                       value={form[key]}
                       placeholder={placeholder}
                       aria-label={`自定义${label}`}
-                      onInput={(event) =>
-                        setForm((current) => ({ ...current, [key]: event.detail.value }))
-                      }
+                      onInput={(event) => patchForm({ [key]: event.detail.value })}
                     />
                   </View>
                 ))}
@@ -323,11 +472,10 @@ const FoodCatalogPage = () => {
               <View className="food-editor__categories" aria-label="食物分类">
                 {(Object.keys(categoryLabels) as FoodSnapshot['category'][]).map((category) => (
                   <Button
-                    {...buttonA11yProps}
+                    {...buttonActivationProps(() => patchForm({ category }))}
                     className={`food-editor__category ${form.category === category ? 'food-editor__category--active' : ''}`}
                     aria-pressed={form.category === category}
                     key={category}
-                    onClick={() => setForm((current) => ({ ...current, category }))}
                   >
                     {categoryLabels[category]}
                   </Button>
@@ -344,27 +492,30 @@ const FoodCatalogPage = () => {
               <View className="food-editor__actions">
                 {editing ? (
                   <Button
-                    {...buttonA11yProps}
+                    {...buttonActivationProps(
+                      () => setArchiving(editing),
+                      busy || Boolean(recovery),
+                    )}
                     className="food-editor__archive"
-                    disabled={busy}
-                    onClick={() => setArchiving(editing)}
+                    style={{ color: 'var(--color-pulse)' }}
+                    disabled={busy || Boolean(recovery)}
                   >
                     归档
                   </Button>
                 ) : null}
                 <Button
-                  {...buttonA11yProps}
+                  {...buttonActivationProps(closeEditor, busy)}
                   className="food-editor__cancel"
+                  style={{ color: 'var(--color-muted)' }}
                   disabled={busy}
-                  onClick={closeEditor}
                 >
                   取消
                 </Button>
                 <Button
-                  {...buttonA11yProps}
+                  {...buttonActivationProps(() => void save(), busy || Boolean(recovery))}
                   className="food-editor__save"
-                  disabled={busy}
-                  onClick={() => void save()}
+                  style={{ color: 'var(--color-paper)' }}
+                  disabled={busy || Boolean(recovery)}
                 >
                   {busy ? '保存中…' : editing ? '保存纠正' : '保存定义'}
                 </Button>
@@ -394,10 +545,9 @@ const FoodCatalogPage = () => {
                     <Text className="food-register__reference">依据：{entry.reference}</Text>
                   </View>
                   <Button
-                    {...buttonA11yProps}
+                    {...buttonActivationProps(() => void openEditor(entry))}
                     className="food-register__edit"
                     aria-label={`编辑${entry.name}`}
-                    onClick={() => void openEditor(entry)}
                   >
                     修订
                   </Button>
@@ -420,15 +570,38 @@ const FoodCatalogPage = () => {
             <Text className="food-modal__body">
               它会离开可选目录；已有餐食、收藏和版本历史都保持原样。
             </Text>
+            {recovery?.operation === 'food_archive' ? (
+              <View
+                className="workbench-recovery workbench-recovery--modal"
+                role="status"
+                aria-live="polite"
+                aria-atomic="true"
+              >
+                <Text className="workbench-recovery__eyebrow">{recovery.eyebrow}</Text>
+                <Text className="workbench-recovery__message">{recovery.message}</Text>
+                <Button
+                  {...buttonActivationProps(handleRecoveryAction, busy)}
+                  className="workbench-recovery__action"
+                  style={{ color: 'var(--color-warning)' }}
+                  disabled={busy}
+                >
+                  {busy ? '核对中…' : recovery.actionLabel}
+                </Button>
+              </View>
+            ) : null}
             <View className="food-modal__actions">
-              <Button {...buttonA11yProps} disabled={busy} onClick={() => setArchiving(undefined)}>
+              <Button
+                {...buttonActivationProps(cancelArchive, busy)}
+                style={{ color: 'var(--color-muted)' }}
+                disabled={busy}
+              >
                 取消
               </Button>
               <Button
-                {...buttonA11yProps}
+                {...buttonActivationProps(() => void archive(), busy || Boolean(recovery))}
                 className="food-modal__danger"
-                disabled={busy}
-                onClick={() => void archive()}
+                style={{ color: 'var(--color-pulse)' }}
+                disabled={busy || Boolean(recovery)}
               >
                 {busy ? '归档中…' : '确认归档'}
               </Button>

@@ -10,7 +10,7 @@ const serverError = (statusCode: number, message: string) =>
   Object.assign(new Error(message), { statusCode })
 
 describe('authority-aware workbench recovery contract', () => {
-  it.each(['action_create', 'photo_reserve'] as const)(
+  it.each(['action_create', 'food_create', 'photo_reserve'] as const)(
     'allows only a same-key retry for ambiguous %s',
     (operation) => {
       const recovery = describeWorkbenchFailure(operation, new Error('Failed to fetch'))
@@ -24,6 +24,8 @@ describe('authority-aware workbench recovery contract', () => {
   it.each([
     'action_update',
     'action_archive',
+    'food_update',
+    'food_archive',
     'photo_upload',
     'photo_confirm',
     'photo_delete',
@@ -54,6 +56,9 @@ describe('authority-aware workbench recovery contract', () => {
   it('preserves only page-owned non-media input', () => {
     expect(workbenchOperationPolicies.action_create.preserves).toBe('definition_input')
     expect(workbenchOperationPolicies.action_update.preserves).toBe('definition_input')
+    expect(workbenchOperationPolicies.food_create.preserves).toBe('definition_input')
+    expect(workbenchOperationPolicies.food_update.preserves).toBe('definition_input')
+    expect(workbenchOperationPolicies.food_archive.preserves).toBe('none')
     expect(workbenchOperationPolicies.photo_confirm.preserves).toBe('review_input')
     expect(workbenchOperationPolicies.photo_reserve.preserves).toBe('none')
     expect(workbenchOperationPolicies.photo_upload.preserves).toBe('none')
