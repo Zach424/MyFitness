@@ -503,3 +503,121 @@ test('user explicitly reconciles a planned session with one actual workout', asy
   await expect(page.getByText('系统不会预选或自动匹配。')).toBeVisible()
   expect(errors).toEqual([])
 })
+
+test('lost plan-link responses reconcile one exact active relationship without replay', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  const errors = collectBrowserErrors(page)
+  const todayWeekday = new Intl.DateTimeFormat('en-US', {
+    weekday: 'short',
+    timeZone: 'Asia/Shanghai',
+  })
+    .format(new Date())
+    .toLowerCase()
+  const accessToken = await seedProfileAndOpenPlans(page, [], [todayWeekday])
+  const generation = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/v1/plans/weekly') && response.request().method() === 'POST',
+  )
+  await page.getByRole('button', { name: /生成 .* 初稿/ }).click()
+  const generated = (await (await generation).json()) as {
+    days: Array<{ date: string; session: unknown }>
+  }
+  const sessionDate = generated.days.find((day) => day.session)?.date
+  expect(sessionDate).toBeTruthy()
+  await page.getByRole('button', { name: '采用这份计划' }).click()
+  await expect(page.getByText('已采用', { exact: true })).toBeVisible()
+
+  const localMidnight = Date.parse(`${sessionDate}T00:00:00+08:00`)
+  const actualWorkoutEnd = Math.min(localMidnight + 30 * 60_000, Date.now() - 1_000)
+  const actualWorkoutStart = Math.max(localMidnight, actualWorkoutEnd - 30 * 60_000)
+  const workout = await page.request.post(`${apiUrl}/workouts`, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'x-idempotency-key': `plan-link-recovery-${randomUUID()}`,
+    },
+    data: {
+      title: '响应丢失关联训练',
+      source: { kind: 'manual' },
+      exercises: [
+        {
+          position: 1,
+          exerciseKey: 'goblet_squat',
+          name: '高脚杯深蹲',
+          category: 'strength',
+          sets: [{ position: 1, kind: 'working', reps: 8, completed: true }],
+        },
+      ],
+      startedAt: new Date(actualWorkoutStart).toISOString(),
+      endedAt: new Date(actualWorkoutEnd).toISOString(),
+      timezone: 'Asia/Shanghai',
+      painLevel: 0,
+      fatigue: 2,
+    },
+  })
+  expect(workout.status()).toBe(201)
+  await page.getByRole('button', { name: '检查版本' }).click()
+  const workoutChoice = page.getByRole('button', { name: /响应丢失关联训练.*全部完成.*v1/ })
+  await expect(workoutChoice).toBeVisible()
+
+  let linkWrites = 0
+  let unlinkWrites = 0
+  page.on('request', (request) => {
+    if (request.url().endsWith('/session-links') && request.method() === 'POST') linkWrites += 1
+    if (request.url().includes('/session-links/') && request.method() === 'DELETE') {
+      unlinkWrites += 1
+    }
+  })
+  await page.route(
+    '**/v1/plans/weekly/*/session-links',
+    async (route) => {
+      const response = await route.fetch()
+      expect(response.status()).toBe(201)
+      await route.abort('failed')
+    },
+    { times: 1 },
+  )
+  await workoutChoice.click()
+  let recovery = page.getByRole('alert')
+  await expect(recovery).toContainText('RECONCILE FIRST')
+  await expect(recovery).toContainText('响应丢失关联训练')
+  await expect(recovery).toContainText('计划 v2')
+  await expect(workoutChoice).toHaveAttribute('aria-disabled', 'true')
+  await page.locator('.plans-scroll').evaluate((element) => element.scrollTo({ top: 0 }))
+  await page.screenshot({
+    path: 'output/playwright/iteration-059-plan-link-reconciliation-mobile.png',
+  })
+
+  await page.getByRole('button', { name: '核对服务端状态' }).click()
+  await expect(page.getByText(/已与 .* 的计划 v2 精确关联/)).toBeVisible()
+  await expect(
+    page.getByText('这是你的明确选择，不是根据标题、日期或时长推测的完成情况。'),
+  ).toBeVisible()
+  expect(linkWrites).toBe(1)
+
+  await page.route(
+    '**/v1/plans/weekly/*/session-links/*',
+    async (route) => {
+      const response = await route.fetch()
+      expect(response.status()).toBe(200)
+      await route.abort('failed')
+    },
+    { times: 1 },
+  )
+  await page.getByRole('button', { name: '解除关联' }).click()
+  recovery = page.getByRole('alert')
+  await expect(recovery).toContainText('RECONCILE FIRST')
+  await expect(recovery).toContainText(/解除 .*响应丢失关联训练 的活动关联/)
+  await page.locator('.plans-scroll').evaluate((element) => element.scrollTo({ top: 0 }))
+  await page.screenshot({
+    path: 'output/playwright/iteration-059-plan-unlink-reconciliation-mobile.png',
+  })
+
+  await page.getByRole('button', { name: '核对服务端状态' }).click()
+  await expect(page.getByText(/目标关联已不再活动/)).toBeVisible()
+  await expect(page.getByText(/不能证明具体关闭原因/)).toBeVisible()
+  await expect(page.getByText('系统不会预选或自动匹配。')).toBeVisible()
+  expect(unlinkWrites).toBe(1)
+  expect(errors.filter((error) => !error.includes('net::ERR_FAILED'))).toEqual([])
+})

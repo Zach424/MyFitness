@@ -16,6 +16,8 @@ export type WorkbenchOperation =
   | 'plan_accept'
   | 'plan_modify'
   | 'plan_skip'
+  | 'plan_link'
+  | 'plan_unlink'
 
 export type WorkbenchRecoveryAuthority = 'retry_same_request' | 'reconcile_required' | 'terminal'
 
@@ -29,7 +31,13 @@ export type WorkbenchRecovery = {
   eyebrow: string
   message: string
   actionLabel: string
-  preserves: 'definition_input' | 'review_input' | 'capture_intent' | 'decision_input' | 'none'
+  preserves:
+    | 'definition_input'
+    | 'review_input'
+    | 'capture_intent'
+    | 'decision_input'
+    | 'link_intent'
+    | 'none'
 }
 
 type OperationPolicy = {
@@ -123,6 +131,16 @@ export const workbenchOperationPolicies: Record<WorkbenchOperation, OperationPol
     label: '周计划跳过',
     uncertainAuthority: 'reconcile_required',
     preserves: 'none',
+  },
+  plan_link: {
+    label: '计划日与实际训练关联',
+    uncertainAuthority: 'reconcile_required',
+    preserves: 'link_intent',
+  },
+  plan_unlink: {
+    label: '计划与实际训练解除关联',
+    uncertainAuthority: 'reconcile_required',
+    preserves: 'link_intent',
   },
 }
 

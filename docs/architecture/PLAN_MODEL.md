@@ -1,6 +1,6 @@
 # Weekly plan model
 
-Status: implemented as `deterministic-v1` in iteration 008; bounded record-evidence freshness added in iteration 035; explicit plan-to-workout links added in iteration 036; stable revision-history pagination added in iteration 049; authority-aware plan-write recovery added in iteration 058
+Status: implemented as `deterministic-v1` in iteration 008; bounded record-evidence freshness added in iteration 035; explicit plan-to-workout links added in iteration 036; stable revision-history pagination added in iteration 049; authority-aware plan/association write recovery added in iterations 058–059
 
 ## Purpose and boundary
 
@@ -78,6 +78,17 @@ Creation is allowed only for the current `accepted` plan revision with current p
 The relationship does not mutate either source aggregate. If the workout is edited later, the read model reports both the originally bound `workoutRevision` and the `currentWorkoutRevision`; if the plan is regenerated, the old link remains attached to the old plan revision and is not silently migrated. User unlink and workout soft deletion close the link with a reason, timestamp and incremented link revision rather than erasing it. All rows are included in the owner export and removed by account erasure.
 
 `GET /plans/weekly` projects active links. The Week Fold uses a check mark only for an exact current-revision link, and Today shows one accepted current session as `planned` or `recorded`. Neither surface compares titles, dates, duration or exercises to infer adherence. A link is an owner-confirmed association, not a quality score or load-adaptation signal.
+
+### Ambiguous association recovery
+
+The create endpoint is tuple-idempotent without a client key: under a transaction lock it returns the existing active link only when plan ID/revision, session date, workout ID and bound workout revision all match. Unlink instead closes one active link only at its expected link revision. Week Fold still reconciles both through `GET /plans/weekly` before offering any new explicit action so the user sees the same foreground authority model.
+
+- Before create, the page retains the exact plan ID/revision, session date and workout ID/revision in memory and renders that intent in the amber authority strip. Recovery succeeds only when one active projected link matches the complete tuple. Another activity link is loaded as a conflict; absence is “no success evidence”, not permission to auto-repeat.
+- Before unlink, the page retains the exact link ID/revision and session date. If that ID is still active, there is no success evidence and a fresh explicit unlink is required. If absent, the target is removed from the current view; the client says only that it is no longer active because the projection does not expose whether user unlink, workout deletion or another lifecycle event closed it.
+- Reconciliation reloads the exact plan projection and restores the intended session date. It never migrates an old-revision link, infers adherence, rewrites a workout/plan or interprets closure as a training outcome.
+- While unresolved, day selection, workout choices, link/unlink, plan refresh, substitution and decisions publish `aria-disabled` and reject pointer/keyboard callbacks. The pending relationship remains visible; no request enters application storage or a background queue.
+
+Real local browser/API fault injection commits one link and one user closure before aborting each browser-facing response. Read-side recovery observes the exact active tuple and then target absence, while request counters remain one create and one delete. This proves local H5/NestJS/PostgreSQL behavior, not real device/radio timing.
 
 ## Known limitations
 

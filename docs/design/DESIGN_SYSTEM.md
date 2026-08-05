@@ -580,6 +580,19 @@ Visual review confirmed that the amber card remains readable at mobile width, th
 - [390 × 844 substitution response-loss reconciliation](../../output/playwright/iteration-058-plan-modify-reconciliation-mobile.png)
 - [390 × 844 skip response-loss reconciliation](../../output/playwright/iteration-058-plan-skip-reconciliation-mobile.png)
 
+## Plan-to-workout association reconciliation — iteration 059
+
+The Week Fold reuses `WRITE ? → READ` for association uncertainty, but the retained line now names the relationship rather than a generic save: workout title, local plan date and plan revision for create; local date and workout title for unlink. This is important because the relationship card may sit below the viewport after the amber strip appears. The user can still identify the paused intent without scrolling or relying on the check mark.
+
+Both 390 × 844 artifacts preserve the adopted v2 Week Fold beneath the authority strip. Before create reconciliation the selected day dot remains visible but no recorded check is claimed; before unlink reconciliation the check remains because the target is still the last locally known active relationship. The screen therefore distinguishes “response unknown” from “optimistically changed”. Only the read action is live.
+
+Day leaves, workout choices, link/unlink, refresh, substitution and plan-decision controls emit explicit `aria-disabled` and share event-level pointer/Enter/Space guards while the association is unresolved. Their opacity is tied to `aria-disabled='true'`, avoiding Taro's rendered `disabled="false"` selector trap. The amber retained-intent line remains high contrast and the full-width recovery action stays a mobile thumb target.
+
+After reconciliation, functional assertions—not screenshots—prove the exact active tuple and later target absence. Copy says an absent link is no longer active but cannot prove the closure reason, preserving the distinction between current UI state and retained audit history.
+
+- [390 × 844 exact link reconciliation](../../output/playwright/iteration-059-plan-link-reconciliation-mobile.png)
+- [390 × 844 unlink reconciliation](../../output/playwright/iteration-059-plan-unlink-reconciliation-mobile.png)
+
 ## Screenshot review checklist
 
 - The Rhythm Rail remains understandable without color.

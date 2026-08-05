@@ -669,6 +669,13 @@
   background: transparent;
 }
 
+.week-fold__day[aria-disabled='true'],
+.session-link-option[aria-disabled='true'],
+.session-link-card__unlink[aria-disabled='true'],
+.session-link-card__open-workouts[aria-disabled='true'] {
+  opacity: 0.52;
+}
+
 .plan-activity {
   padding: 15px;
   border: 1px solid rgba(36, 76, 102, 0.1);

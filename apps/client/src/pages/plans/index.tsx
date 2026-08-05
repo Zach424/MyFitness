@@ -61,6 +61,23 @@ type PendingPlanDecision = {
   selections: PlanSelections
 }
 
+type PendingSessionLinkWrite =
+  | {
+      kind: 'link'
+      planId: string
+      planRevision: number
+      sessionDate: string
+      workoutId: string
+      workoutRevision: number
+    }
+  | {
+      kind: 'unlink'
+      planId: string
+      linkId: string
+      linkRevision: number
+      sessionDate: string
+    }
+
 const weekdayLabels: Record<WeeklyPlan['days'][number]['weekday'], string> = {
   mon: '一',
   tue: '二',
@@ -241,6 +258,7 @@ const PlansPage = () => {
   const pendingAiKey = useRef('')
   const pendingGeneration = useRef<PendingPlanGeneration>()
   const pendingDecision = useRef<PendingPlanDecision>()
+  const pendingSessionLink = useRef<PendingSessionLinkWrite>()
   const divergentProjection = useRef<WeeklyPlanListItem>()
   const savedPlanRef = useRef<WeeklyPlan>()
   const freshnessRef = useRef<PlanFreshness>()
@@ -280,6 +298,7 @@ const PlansPage = () => {
     setPlanRecovery(undefined)
     pendingGeneration.current = undefined
     pendingDecision.current = undefined
+    pendingSessionLink.current = undefined
     divergentProjection.current = undefined
   }
 
@@ -606,10 +625,98 @@ const PlansPage = () => {
     }
   }
 
+  const reconcileSessionLinkWrite = async () => {
+    const pending = pendingSessionLink.current
+    if (!pending) return
+    const operation: WorkbenchOperation = pending.kind === 'link' ? 'plan_link' : 'plan_unlink'
+    setSaving(true)
+    setFeedback('')
+    try {
+      const plans = await listWeeklyPlans()
+      const projected = plans.items.find((item) => item.id === pending.planId)
+      if (!projected) {
+        setPlanRecovery(
+          terminalPlanRecovery(
+            operation,
+            '服务端当前计划列表中已没有原计划，无法确认这次关联操作。页面不会自动重放。',
+            '结束本次核对',
+            'link_intent',
+          ),
+        )
+        return
+      }
+
+      if (pending.kind === 'link') {
+        const exact = projected.sessionLinks.find(
+          (link) =>
+            link.planRevision === pending.planRevision &&
+            link.sessionDate === pending.sessionDate &&
+            link.workoutId === pending.workoutId &&
+            link.workoutRevision === pending.workoutRevision,
+        )
+        if (exact) {
+          applyProjectedPlan(projected)
+          setSelectedDate(pending.sessionDate)
+          resetPlanRecovery()
+          setFeedback(
+            `核对完成：${exact.workoutTitle} 已与 ${shortDate(exact.sessionDate)} 的计划 v${exact.planRevision} 精确关联；页面未重复提交。`,
+          )
+          return
+        }
+        const activeLinks = plans.items.flatMap((plan) => plan.sessionLinks)
+        const conflicting = activeLinks.find(
+          (link) =>
+            link.workoutId === pending.workoutId ||
+            (link.planId === pending.planId &&
+              link.planRevision === pending.planRevision &&
+              link.sessionDate === pending.sessionDate),
+        )
+        if (conflicting) {
+          applyProjectedPlan(projected)
+          setSelectedDate(pending.sessionDate)
+          setPlanRecovery(
+            terminalPlanRecovery(
+              operation,
+              `服务端已有另一条活动关联：${conflicting.workoutTitle}，计划 v${conflicting.planRevision}。页面已加载当前关联，不会覆盖或重复提交。`,
+              '结束本次核对',
+              'link_intent',
+            ),
+          )
+          return
+        }
+        resetPlanRecovery()
+        setFeedback(
+          '核对完成：服务端没有这条精确关联的成功证据。页面未自动重放；如仍需要，请重新选择训练记录。',
+        )
+        return
+      }
+
+      const targetStillActive = plans.items.some((plan) =>
+        plan.sessionLinks.some((link) => link.id === pending.linkId),
+      )
+      applyProjectedPlan(projected)
+      setSelectedDate(pending.sessionDate)
+      resetPlanRecovery()
+      setFeedback(
+        targetStillActive
+          ? `核对完成：目标关联仍以 v${pending.linkRevision} 活动，未发现本次解除成功证据。页面未自动重放；如仍需要，请重新明确解除。`
+          : '核对完成：目标关联已不再活动，页面已移除它；关闭历史仍保留，但当前列表不能证明具体关闭原因。',
+      )
+    } catch (error) {
+      setPlanRecovery(describeWorkbenchFailure(operation, error))
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const handlePlanRecoveryAction = async () => {
     if (!planRecovery) return
     if (planRecovery.authority !== 'terminal') {
-      await reconcilePlanWrite()
+      if (planRecovery.operation === 'plan_link' || planRecovery.operation === 'plan_unlink') {
+        await reconcileSessionLinkWrite()
+      } else {
+        await reconcilePlanWrite()
+      }
       return
     }
     const projected = divergentProjection.current
@@ -637,35 +744,54 @@ const PlansPage = () => {
   }
 
   const linkWorkout = async (workout: Workout) => {
-    if (!savedPlan || !selectedDay?.session) return
+    if (!savedPlan || !selectedDay?.session || planRecovery) return
     setSaving(true)
     setFeedback('')
+    pendingSessionLink.current = {
+      kind: 'link',
+      planId: savedPlan.id,
+      planRevision: savedPlan.revision,
+      sessionDate: selectedDay.date,
+      workoutId: workout.id,
+      workoutRevision: workout.revision,
+    }
     try {
-      await linkPlanWorkout(savedPlan.id, {
+      const link = await linkPlanWorkout(savedPlan.id, {
         expectedPlanRevision: savedPlan.revision,
         sessionDate: selectedDay.date,
         workoutId: workout.id,
         expectedWorkoutRevision: workout.revision,
       })
+      resetPlanRecovery()
+      setSessionLinks((current) => [link, ...current.filter((item) => item.id !== link.id)])
       await refreshPlanProjection(false, true)
       setFeedback('已按你的选择关联实际训练；计划和训练原版本都未被改写。')
     } catch (error) {
-      setFeedback(messageOf(error))
+      setPlanRecovery(describeWorkbenchFailure('plan_link', error))
     } finally {
       setSaving(false)
     }
   }
 
   const unlinkWorkout = async (link: PlanWorkoutLink) => {
-    if (!savedPlan) return
+    if (!savedPlan || planRecovery) return
     setSaving(true)
     setFeedback('')
+    pendingSessionLink.current = {
+      kind: 'unlink',
+      planId: savedPlan.id,
+      linkId: link.id,
+      linkRevision: link.revision,
+      sessionDate: link.sessionDate,
+    }
     try {
       await unlinkPlanWorkout(savedPlan.id, link.id, link.revision)
+      resetPlanRecovery()
+      setSessionLinks((current) => current.filter((item) => item.id !== link.id))
       await refreshPlanProjection(false, true)
       setFeedback('关联已解除；关闭时间仍保留在导出与审计记录中。')
     } catch (error) {
-      setFeedback(messageOf(error))
+      setPlanRecovery(describeWorkbenchFailure('plan_unlink', error))
     } finally {
       setSaving(false)
     }
@@ -712,6 +838,19 @@ const PlansPage = () => {
   const currentExplanation = aiActionable
     ? aiHistory.find((item) => item.planRevision === draftPlan?.revision)
     : undefined
+  const pendingLinkIntent = pendingSessionLink.current
+  const pendingLinkIntentCopy =
+    pendingLinkIntent?.kind === 'link'
+      ? `待核对：${
+          workouts.find((workout) => workout.id === pendingLinkIntent.workoutId)?.title ??
+          '所选训练'
+        } ↔ ${shortDate(pendingLinkIntent.sessionDate)} 计划 v${pendingLinkIntent.planRevision}；核对前不会再次提交。`
+      : pendingLinkIntent?.kind === 'unlink'
+        ? `待核对：解除 ${shortDate(pendingLinkIntent.sessionDate)} 的 ${
+            sessionLinks.find((link) => link.id === pendingLinkIntent.linkId)?.workoutTitle ??
+            '所选训练'
+          } 的活动关联；核对前不会再次提交。`
+        : ''
 
   return (
     <View className="plans-page">
@@ -772,6 +911,8 @@ const PlansPage = () => {
                     <Text className="plan-recovery__preserved">
                       当前替代动作选择仍留在本页；核对完成前不会再次提交。
                     </Text>
+                  ) : planRecovery.preserves === 'link_intent' && pendingLinkIntentCopy ? (
+                    <Text className="plan-recovery__preserved">{pendingLinkIntentCopy}</Text>
                   ) : null}
                 </View>
                 <Button
@@ -889,12 +1030,15 @@ const PlansPage = () => {
                   )
                   return (
                     <Button
-                      {...buttonA11yProps}
                       className={`week-fold__day ${selectedDate === day.date ? 'week-fold__day--selected' : ''} ${day.session ? 'week-fold__day--planned' : ''} ${recorded ? 'week-fold__day--recorded' : ''}`}
                       aria-label={`${weekdayLabels[day.weekday]} ${shortDate(day.date)}${recorded ? '，已明确关联训练记录' : day.session ? '，有计划训练' : '，无计划训练'}`}
                       aria-selected={selectedDate === day.date}
+                      disabled={Boolean(planRecovery)}
                       key={day.date}
-                      onClick={() => setSelectedDate(day.date)}
+                      {...buttonActivationProps(
+                        () => setSelectedDate(day.date),
+                        Boolean(planRecovery),
+                      )}
                     >
                       <Text className="week-fold__weekday">{weekdayLabels[day.weekday]}</Text>
                       <Text className="week-fold__date metric">{shortDate(day.date)}</Text>
@@ -965,10 +1109,12 @@ const PlansPage = () => {
                                 这是你的明确选择，不是根据标题、日期或时长推测的完成情况。
                               </Text>
                               <Button
-                                {...buttonA11yProps}
                                 className="session-link-card__unlink"
-                                disabled={saving}
-                                onClick={() => void unlinkWorkout(selectedCurrentLink)}
+                                disabled={planWriteBlocked}
+                                {...buttonActivationProps(
+                                  () => void unlinkWorkout(selectedCurrentLink),
+                                  planWriteBlocked,
+                                )}
                               >
                                 解除关联
                               </Button>
@@ -983,10 +1129,12 @@ const PlansPage = () => {
                                 {savedPlan?.revision}，系统不会自动迁移历史关联。
                               </Text>
                               <Button
-                                {...buttonA11yProps}
                                 className="session-link-card__unlink"
-                                disabled={saving}
-                                onClick={() => void unlinkWorkout(selectedPreviousLink)}
+                                disabled={planWriteBlocked}
+                                {...buttonActivationProps(
+                                  () => void unlinkWorkout(selectedPreviousLink),
+                                  planWriteBlocked,
+                                )}
                               >
                                 解除旧版关联
                               </Button>
@@ -1000,11 +1148,13 @@ const PlansPage = () => {
                                 <View className="session-link-options">
                                   {workouts.slice(0, 5).map((workout) => (
                                     <Button
-                                      {...buttonA11yProps}
                                       className="session-link-option"
-                                      disabled={saving}
+                                      disabled={planWriteBlocked}
                                       key={workout.id}
-                                      onClick={() => void linkWorkout(workout)}
+                                      {...buttonActivationProps(
+                                        () => void linkWorkout(workout),
+                                        planWriteBlocked,
+                                      )}
                                     >
                                       <Text>{workout.title}</Text>
                                       <Text className="metric">
@@ -1016,11 +1166,12 @@ const PlansPage = () => {
                                 </View>
                               ) : (
                                 <Button
-                                  {...buttonA11yProps}
                                   className="session-link-card__open-workouts"
-                                  onClick={() =>
-                                    void Taro.navigateTo({ url: '/pages/workouts/index' })
-                                  }
+                                  disabled={planWriteBlocked}
+                                  {...buttonActivationProps(
+                                    () => void Taro.navigateTo({ url: '/pages/workouts/index' }),
+                                    planWriteBlocked,
+                                  )}
                                 >
                                   先记录一次训练
                                 </Button>
