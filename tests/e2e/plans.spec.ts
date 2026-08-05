@@ -82,6 +82,7 @@ const seedProfileAndOpenPlans = async (
   page: Page,
   riskFlags: string[] = [],
   availableDays?: string[],
+  beforeOpen?: () => Promise<void>,
 ) => {
   const sessionPromise = page.waitForResponse((response) =>
     response.url().endsWith('/v1/auth/dev/session'),
@@ -95,6 +96,7 @@ const seedProfileAndOpenPlans = async (
     data: onboarding(riskFlags, availableDays),
   })
   expect(profile.status()).toBe(200)
+  await beforeOpen?.()
   await page.getByRole('button', { name: '计划' }).click()
   await expect(page.getByText('这一周，先留出余地')).toBeVisible()
   return accessToken
@@ -723,4 +725,100 @@ test('lost plan-link responses reconcile one exact active relationship without r
   await expect(page.getByText('系统不会预选或自动匹配。')).toBeVisible()
   expect(unlinkWrites).toBe(1)
   expect(errors.filter((error) => !error.includes('net::ERR_FAILED'))).toEqual([])
+})
+
+test('initial offline plan read stays unknown until an explicit mobile retry succeeds', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  const errors = collectBrowserErrors(page)
+  await seedProfileAndOpenPlans(page, [], undefined, async () => {
+    await page.route(
+      '**/v1/plans/weekly',
+      async (route) => {
+        expect(route.request().method()).toBe('GET')
+        await route.abort('internetdisconnected')
+      },
+      { times: 1 },
+    )
+  })
+  await expect(page.getByText('OFFLINE / 连接未完成')).toBeVisible()
+  await expect(page.getByText('还没有读取到本周计划')).toBeVisible()
+  await expect(page.getByText('NO WEEK YET')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: '重新读取周计划与版本历史' })).toBeFocused()
+  await expect
+    .poll(() =>
+      page.locator('.plans-page').evaluate((element) => element.getBoundingClientRect().left),
+    )
+    .toBe(0)
+  await page.screenshot({
+    path: 'output/playwright/iteration-063-plan-initial-offline-mobile.png',
+  })
+
+  await page.keyboard.press('Enter')
+  await expect(page.getByText('NO WEEK YET')).toBeVisible()
+  await expect(page.getByRole('button', { name: /生成 .* 初稿/ })).toBeEnabled()
+  expect(errors.filter((error) => !error.includes('net::ERR_INTERNET_DISCONNECTED'))).toEqual([])
+})
+
+test('failed plan refresh retains one wide revision while freezing writes and AI', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const errors = collectBrowserErrors(
+    page,
+    (response) => response.status() === 429 && response.url().endsWith('/v1/plans/weekly'),
+  )
+  await seedProfileAndOpenPlans(page)
+  const generation = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/v1/plans/weekly') && response.request().method() === 'POST',
+  )
+  await page.getByRole('button', { name: /生成 .* 初稿/ }).click()
+  expect((await generation).status()).toBe(201)
+  await expect(page.getByText('v1', { exact: true }).first()).toBeVisible()
+  await expect(page.getByText('生成初稿', { exact: true }).last()).toBeVisible()
+
+  await page.route(
+    '**/v1/plans/weekly',
+    async (route) => {
+      expect(route.request().method()).toBe('GET')
+      await route.fulfill({
+        status: 429,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { code: 'rate_limited', message: 'retry later' } }),
+      })
+    },
+    { times: 1 },
+  )
+  await page.getByRole('button', { name: '检查版本' }).click()
+
+  await expect(page.getByText('READ REFUSED / 读取被拒绝')).toBeVisible()
+  await expect(page.getByText('RETAINED PLAN v1 · 1 HISTORY ROWS')).toBeVisible()
+  await expect(page.getByText('v1', { exact: true }).first()).toBeVisible()
+  await expect(page.getByRole('button', { name: '高脚杯深蹲' })).toHaveAttribute(
+    'aria-disabled',
+    'true',
+  )
+  await expect(page.getByRole('button', { name: '采用这份计划' })).toHaveAttribute(
+    'aria-disabled',
+    'true',
+  )
+  await expect(page.getByRole('button', { name: '本周暂不采用' })).toHaveAttribute(
+    'aria-disabled',
+    'true',
+  )
+  await expect(
+    page.getByRole('checkbox', { name: '同意本次 AI 计划解释数据处理' }),
+  ).toHaveAttribute('aria-disabled', 'true')
+  const retry = page.getByRole('button', { name: '重新读取周计划与版本历史' })
+  await expect(retry).toBeFocused()
+  await page.screenshot({ path: 'output/playwright/iteration-063-plan-stale-wide.png' })
+
+  await page.keyboard.press('Enter')
+  await expect(page.getByText('READ REFUSED / 读取被拒绝')).toHaveCount(0)
+  await expect(page.getByText('v1', { exact: true }).first()).toBeVisible()
+  await expect(page.getByText('生成初稿', { exact: true }).last()).toBeVisible()
+  await expect(page.getByRole('button', { name: '采用这份计划' })).toBeEnabled()
+  expect(errors).toEqual([])
 })

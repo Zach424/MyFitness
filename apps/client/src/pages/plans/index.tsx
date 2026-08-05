@@ -17,6 +17,7 @@ import {
   buttonActivationProps,
   buttonA11yProps,
   checkboxA11yProps,
+  deferH5Focus,
   keyboardActivationProps,
 } from '../../lib/accessibility'
 import {
@@ -45,6 +46,7 @@ import {
   planFreshnessProjectionKey,
   updatePlanSelection,
 } from './plan.model'
+import { classifyPlanReadFailure, planReadPhase, type PlanReadFailureKind } from './plan-read.model'
 import './index.scss'
 
 type PlanActivity = NonNullable<WeeklyPlan['days'][number]['session']>['activities'][number]
@@ -83,6 +85,12 @@ type PendingAiExplanationWrite = {
   planId: string
   planRevision: number
   idempotencyKey: string
+}
+
+type PlanHistorySnapshot = {
+  items: WeeklyPlanHistoryItem[]
+  nextCursor: string | null
+  explanations: AiExplanation[]
 }
 
 const weekdayLabels: Record<WeeklyPlan['days'][number]['weekday'], string> = {
@@ -144,6 +152,46 @@ const aiRequestKey = () =>
 
 const messageOf = (error: unknown) =>
   error instanceof ApiError || error instanceof Error ? error.message : '操作失败，请稍后重试'
+
+const planReadFailureCopy = (
+  kind: PlanReadFailureKind,
+  hasSnapshot: boolean,
+): { eyebrow: string; title: string; detail: string } => {
+  if (kind === 'offline') {
+    return {
+      eyebrow: 'OFFLINE / 连接未完成',
+      title: hasSnapshot ? '版本复核没有完成' : '还没有读取到本周计划',
+      detail: hasSnapshot
+        ? '下面保留上次成功读取的计划、版本与历史；重新读取前不会开放任何计划写入或模型调用。'
+        : '设备暂时无法连接服务。页面不会把未知状态显示成“尚未生成”，也不会开放生成操作。',
+    }
+  }
+  if (kind === 'refused') {
+    return {
+      eyebrow: 'READ REFUSED / 读取被拒绝',
+      title: hasSnapshot ? '服务拒绝了本次版本复核' : '服务没有接受本次计划读取',
+      detail: hasSnapshot
+        ? '旧折页继续只读保留；请手动重新读取后再做替换、采用、跳过、关联或 AI 解释。'
+        : '本周计划仍是未知状态；请手动重试，页面不会用空计划代替。',
+    }
+  }
+  if (kind === 'service') {
+    return {
+      eyebrow: 'SERVICE PAUSED / 服务暂不可用',
+      title: hasSnapshot ? '本次版本复核暂未完成' : '本周计划暂时无法读取',
+      detail: hasSnapshot
+        ? '上次计划快照仍可阅读，但所有写入与模型调用保持冻结。'
+        : '服务暂时没有返回计划证据；页面不会把这次失败解释成没有计划。',
+    }
+  }
+  return {
+    eyebrow: 'READ UNKNOWN / 结果未知',
+    title: hasSnapshot ? '无法确认当前计划版本' : '无法确认本周计划状态',
+    detail: hasSnapshot
+      ? '旧折页继续只读保留；重新读取前不会提交计划、关联或模型请求。'
+      : '页面尚未取得可信计划快照，也不会显示可生成状态。',
+  }
+}
 
 const decisionOperation = (decision: PlanDecisionKind): WorkbenchOperation =>
   decision === 'accepted' ? 'plan_accept' : decision === 'modified' ? 'plan_modify' : 'plan_skip'
@@ -260,6 +308,8 @@ const PlansPage = () => {
   const [saving, setSaving] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [feedback, setFeedback] = useState('')
+  const [hasReadSnapshot, setHasReadSnapshot] = useState(false)
+  const [readFailure, setReadFailure] = useState<PlanReadFailureKind>()
   const [planRecovery, setPlanRecovery] = useState<WorkbenchRecovery>()
   const [aiRecovery, setAiRecovery] = useState<WorkbenchRecovery>()
   const pendingKey = useRef('')
@@ -273,6 +323,7 @@ const PlansPage = () => {
   const freshnessRef = useRef<PlanFreshness>()
   const historyGenerationRef = useRef(0)
   const refreshInFlight = useRef(false)
+  const projectionAcceptedRef = useRef(false)
   const lastProjectionCheck = useRef(0)
   const projectionRefreshRef = useRef<(announce?: boolean, force?: boolean) => Promise<void>>(
     async () => undefined,
@@ -290,6 +341,9 @@ const PlansPage = () => {
     setFreshness(nextFreshness)
     setSessionLinks(nextSessionLinks)
     setAiConsent(false)
+    projectionAcceptedRef.current = true
+    setHasReadSnapshot(true)
+    setReadFailure(undefined)
     setSelectedDate(
       plan.days.find((day) => day.session)?.date ??
         plan.days.find((day) => day.available)?.date ??
@@ -320,22 +374,37 @@ const PlansPage = () => {
     setCurrentPlan(plan, nextFreshness, nextSessionLinks)
     try {
       await refreshPlanHistory(plan)
+      setReadFailure(undefined)
       setFeedback(message)
-    } catch {
+    } catch (error) {
+      setReadFailure(classifyPlanReadFailure(error))
       setFeedback(`${message} 版本历史暂未刷新，可稍后使用“检查版本”重读。`)
     }
   }
 
-  const refreshPlanHistory = async (plan: WeeklyPlan) => {
-    const generation = ++historyGenerationRef.current
+  const readPlanHistorySnapshot = async (plan: WeeklyPlan): Promise<PlanHistorySnapshot> => {
     const [planHistory, explanationHistory] = await Promise.all([
       getWeeklyPlanHistory(plan.id, { limit: 10 }),
       getAiExplanationHistory(plan.id),
     ])
+    return {
+      items: planHistory.items,
+      nextCursor: planHistory.nextCursor,
+      explanations: explanationHistory,
+    }
+  }
+
+  const applyPlanHistorySnapshot = (snapshot: PlanHistorySnapshot) => {
+    setHistory(snapshot.items)
+    setHistoryNextCursor(snapshot.nextCursor)
+    setAiHistory(snapshot.explanations)
+  }
+
+  const refreshPlanHistory = async (plan: WeeklyPlan) => {
+    const generation = ++historyGenerationRef.current
+    const snapshot = await readPlanHistorySnapshot(plan)
     if (generation !== historyGenerationRef.current) return
-    setHistory(planHistory.items)
-    setHistoryNextCursor(planHistory.nextCursor)
-    setAiHistory(explanationHistory)
+    applyPlanHistorySnapshot(snapshot)
   }
 
   const loadOlderPlanHistory = async () => {
@@ -359,29 +428,46 @@ const PlansPage = () => {
 
   const refreshPlanProjection = async (announce = false, force = false) => {
     const current = savedPlanRef.current
-    if (!current || refreshInFlight.current) return
+    if ((!current && !projectionAcceptedRef.current) || refreshInFlight.current) return
     if (!force && Date.now() - lastProjectionCheck.current < 1_500) return
     refreshInFlight.current = true
     setRefreshing(true)
+    setReadFailure(undefined)
     try {
       const [plans, workoutList] = await Promise.all([listWeeklyPlans(), listWorkouts()])
-      setWorkouts(workoutList.items)
       lastProjectionCheck.current = Date.now()
-      const projected = plans.items.find((item) => item.id === current.id) ?? plans.items[0]
-      if (!projected) return
+      const projected =
+        (current ? plans.items.find((item) => item.id === current.id) : undefined) ?? plans.items[0]
+      if (!projected) {
+        if (current) throw { reason: 'current-plan-missing' }
+        setWorkouts(workoutList.items)
+        projectionAcceptedRef.current = true
+        setHasReadSnapshot(true)
+        if (announce) setFeedback('已向服务端复核：当前账户仍没有本周计划。')
+        return
+      }
       const { freshness: nextFreshness, sessionLinks: nextSessionLinks, ...plan } = projected
       const previousFreshness = freshnessRef.current
-      const planChanged = plan.id !== current.id || plan.revision !== current.revision
+      const planChanged = !current || plan.id !== current.id || plan.revision !== current.revision
       const freshnessChanged =
         planFreshnessProjectionKey(previousFreshness) !== planFreshnessProjectionKey(nextFreshness)
 
       if (planChanged || freshnessChanged) {
+        const historySnapshot = planChanged ? await readPlanHistorySnapshot(plan) : undefined
+        setWorkouts(workoutList.items)
         setCurrentPlan(plan, nextFreshness, nextSessionLinks)
-        if (planChanged) await refreshPlanHistory(plan)
+        if (historySnapshot) {
+          ++historyGenerationRef.current
+          applyPlanHistorySnapshot(historySnapshot)
+        }
       } else {
+        setWorkouts(workoutList.items)
         freshnessRef.current = nextFreshness
         setFreshness(nextFreshness)
         setSessionLinks(nextSessionLinks)
+        projectionAcceptedRef.current = true
+        setHasReadSnapshot(true)
+        setReadFailure(undefined)
       }
 
       if (previousFreshness?.state === 'current' && nextFreshness.state !== 'current') {
@@ -394,7 +480,8 @@ const PlansPage = () => {
         )
       }
     } catch (error) {
-      if (announce) setFeedback(messageOf(error))
+      setReadFailure(classifyPlanReadFailure(error))
+      if (announce || !projectionAcceptedRef.current) deferH5Focus('plan-read-retry', 80)
     } finally {
       refreshInFlight.current = false
       setRefreshing(false)
@@ -407,24 +494,38 @@ const PlansPage = () => {
     void projectionRefreshRef.current()
   })
 
-  useEffect(() => {
-    void (async () => {
-      try {
-        const [plans, workoutList] = await Promise.all([listWeeklyPlans(), listWorkouts()])
-        setWorkouts(workoutList.items)
-        const latest = plans.items[0]
-        if (latest) {
-          const { freshness: initialFreshness, sessionLinks: initialLinks, ...plan } = latest
-          lastProjectionCheck.current = Date.now()
-          setCurrentPlan(plan, initialFreshness, initialLinks)
-          await refreshPlanHistory(plan)
-        }
-      } catch (error) {
-        setFeedback(messageOf(error))
-      } finally {
-        setLoading(false)
+  const loadInitialPlanSnapshot = async () => {
+    if (refreshInFlight.current) return
+    refreshInFlight.current = true
+    setLoading(true)
+    setReadFailure(undefined)
+    try {
+      const [plans, workoutList] = await Promise.all([listWeeklyPlans(), listWorkouts()])
+      const latest = plans.items[0]
+      const historySnapshot = latest ? await readPlanHistorySnapshot(latest) : undefined
+      setWorkouts(workoutList.items)
+      lastProjectionCheck.current = Date.now()
+      if (latest && historySnapshot) {
+        const { freshness: initialFreshness, sessionLinks: initialLinks, ...plan } = latest
+        ++historyGenerationRef.current
+        setCurrentPlan(plan, initialFreshness, initialLinks)
+        applyPlanHistorySnapshot(historySnapshot)
+      } else {
+        projectionAcceptedRef.current = true
+        setHasReadSnapshot(true)
+        setReadFailure(undefined)
       }
-    })()
+    } catch (error) {
+      setReadFailure(classifyPlanReadFailure(error))
+      deferH5Focus('plan-read-retry', 80)
+    } finally {
+      refreshInFlight.current = false
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    void loadInitialPlanSnapshot()
   }, [])
 
   useEffect(() => {
@@ -455,9 +556,18 @@ const PlansPage = () => {
     [savedPlan, draftPlan],
   )
   const dirty = selections.length > 0
-  const planActionable = freshness?.canAcceptOrModify ?? false
-  const aiActionable = freshness?.canExplainWithAi ?? false
-  const planWriteBlocked = saving || Boolean(planRecovery)
+  const readPhase = planReadPhase({
+    hasSnapshot: hasReadSnapshot,
+    busy: loading || refreshing,
+    hasFailure: Boolean(readFailure),
+  })
+  const readAuthorityReady = readPhase === 'ready'
+  const readFailurePresentation = readFailure
+    ? planReadFailureCopy(readFailure, hasReadSnapshot)
+    : undefined
+  const planActionable = (freshness?.canAcceptOrModify ?? false) && readAuthorityReady
+  const aiActionable = (freshness?.canExplainWithAi ?? false) && readAuthorityReady && !saving
+  const planWriteBlocked = saving || Boolean(planRecovery) || !readAuthorityReady
   const freshnessNotice = freshness ? planFreshnessNotice(freshness) : null
   const toggleAiConsent = () => {
     if (aiActionable && !aiRecovery) setAiConsent((value) => !value)
@@ -470,6 +580,7 @@ const PlansPage = () => {
   }
 
   const generate = async () => {
+    if (planWriteBlocked) return
     setSaving(true)
     setFeedback('')
     const weekStart = defaultPlanWeekStart()
@@ -495,7 +606,7 @@ const PlansPage = () => {
   }
 
   const decide = async (decision: PlanDecisionKind) => {
-    if (!savedPlan) return
+    if (!savedPlan || planWriteBlocked) return
     setSaving(true)
     setFeedback('')
     const submittedSelections = decision === 'modified' ? selections : []
@@ -759,7 +870,7 @@ const PlansPage = () => {
   }
 
   const linkWorkout = async (workout: Workout) => {
-    if (!savedPlan || !selectedDay?.session || planRecovery) return
+    if (!savedPlan || !selectedDay?.session || planWriteBlocked) return
     setSaving(true)
     setFeedback('')
     pendingSessionLink.current = {
@@ -789,7 +900,7 @@ const PlansPage = () => {
   }
 
   const unlinkWorkout = async (link: PlanWorkoutLink) => {
-    if (!savedPlan || planRecovery) return
+    if (!savedPlan || planWriteBlocked) return
     setSaving(true)
     setFeedback('')
     pendingSessionLink.current = {
@@ -989,6 +1100,45 @@ const PlansPage = () => {
             </View>
           ) : null}
 
+          {readPhase === 'refreshing' && hasReadSnapshot ? (
+            <View className="plan-read-state plan-read-state--refreshing" role="status">
+              <View>
+                <Text className="plan-read-state__eyebrow">CHECKING AUTHORITY / 保留上次折页</Text>
+                <Text className="plan-read-state__title">正在复核计划版本与历史</Text>
+                <Text className="plan-read-state__copy">
+                  复核完成前，下面的计划只读保留；替换、采用、跳过、关联与 AI 调用均已冻结。
+                </Text>
+              </View>
+            </View>
+          ) : readFailurePresentation ? (
+            <View className={`plan-read-state plan-read-state--${readPhase}`} role="status">
+              <View>
+                <Text className="plan-read-state__eyebrow">{readFailurePresentation.eyebrow}</Text>
+                <Text className="plan-read-state__title">{readFailurePresentation.title}</Text>
+                <Text className="plan-read-state__copy">{readFailurePresentation.detail}</Text>
+                {hasReadSnapshot && draftPlan ? (
+                  <Text className="plan-read-state__retained metric">
+                    RETAINED PLAN v{draftPlan.revision} · {history.length} HISTORY ROWS
+                  </Text>
+                ) : null}
+              </View>
+              <Button
+                id="plan-read-retry"
+                className="plan-read-state__action"
+                aria-label="重新读取周计划与版本历史"
+                {...buttonActivationProps(
+                  () =>
+                    void (hasReadSnapshot
+                      ? refreshPlanProjection(true, true)
+                      : loadInitialPlanSnapshot()),
+                  loading || refreshing,
+                )}
+              >
+                重新读取
+              </Button>
+            </View>
+          ) : null}
+
           {planRecovery ? (
             <View className="plan-recovery" role="alert">
               <View className="plan-recovery__marker" aria-hidden="true">
@@ -1020,12 +1170,12 @@ const PlansPage = () => {
             </View>
           ) : null}
 
-          {loading ? (
+          {loading && !hasReadSnapshot ? (
             <View className="plan-empty" role="status">
               <Text className="plan-empty__title">正在读取周计划</Text>
               <Text className="plan-empty__body">只读取当前账户已经确认的资料与记录。</Text>
             </View>
-          ) : !draftPlan ? (
+          ) : readPhase === 'initial-error' ? null : !draftPlan ? (
             <View className="plan-empty">
               <Text className="plan-empty__eyebrow">NO WEEK YET</Text>
               <Text className="plan-empty__title">先生成一份可审核的初稿</Text>

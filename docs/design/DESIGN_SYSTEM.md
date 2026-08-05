@@ -1,6 +1,6 @@
 # Design system baseline
 
-Status: implemented and visually validated through iteration-060 exact AI-run recovery evidence
+Status: implemented and visually validated through iteration-063 Week Fold read-authority evidence
 
 Working brand: 衡迹 / MyFitness
 
@@ -624,6 +624,17 @@ On an initial failure the single full-width retry action receives delayed H5 foc
 
 - [390 × 844 initial offline Today](../../output/playwright/iteration-062-today-initial-offline-mobile.png)
 - [1440 × 1000 retained Today snapshot](../../output/playwright/iteration-062-today-stale-wide.png)
+
+## Week Fold read authority — iteration 063
+
+Week Fold now separates a plan that has not been read from a successful empty week. The mobile initial-error state keeps the established fold masthead but replaces `NO WEEK YET` with one amber ruled card: `OFFLINE / 连接未完成`, a plain statement that the week is still unknown and one full-width retry. No plan generation control appears until a complete response succeeds.
+
+A later failed version check retains the fold itself beneath a wider amber rail. `RETAINED PLAN v1 · 1 HISTORY ROWS` makes the exact local evidence visible without implying a persistent cache or current server confirmation. The chosen day, planned activity, reasons, food focus, AI card and version history remain readable, while substitutions, decisions, workout association, AI consent/provider calls and ordinary version check all carry disabled semantics. The single retry receives focus only after an explicit failed check; automatic return-to-page reads do not move the user's focus.
+
+Visual review also caught an evidence-timing error: the first mobile screenshot was taken while Taro's horizontal page transition was still moving and looked clipped despite a non-overflowing final layout. The browser capture now waits for the actual plan-page boundary to reach the viewport origin, preserving trustworthy visual evidence without adding a layout workaround.
+
+- [390 × 844 initial offline Week Fold](../../output/playwright/iteration-063-plan-initial-offline-mobile.png)
+- [1440 × 1000 retained Week Fold revision](../../output/playwright/iteration-063-plan-stale-wide.png)
 
 ## Screenshot review checklist
 
