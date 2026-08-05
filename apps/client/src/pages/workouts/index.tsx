@@ -35,6 +35,7 @@ import {
 import { appendOlderRecords, includeExactRecord } from '../../lib/record-pages'
 import { describeSaveFailure, type SaveRecovery } from '../../lib/save-recovery'
 import { useAggregateHistory } from '../../lib/use-aggregate-history'
+import { useDialogFocusBoundary } from '../../lib/use-dialog-focus-boundary'
 import { useRecoverableDraft } from '../../lib/use-local-draft'
 import {
   buildWorkoutRequest,
@@ -170,6 +171,7 @@ const WorkoutsPage = () => {
       fallbackFocusId: 'workout-read-refresh',
     },
   )
+  const deleteDialogFocus = useDialogFocusBoundary('workout-delete-cancel', 'workout-read-refresh')
 
   const invalidatePendingSave = (nextFeedback = '') => {
     pendingKey.current = ''
@@ -189,6 +191,7 @@ const WorkoutsPage = () => {
     readInFlight.current = true
     setLoading(true)
     setReadFailure(undefined)
+    deleteDialogFocus.reset()
     setDeleting(undefined)
     historyRead.close()
     try {
@@ -478,6 +481,18 @@ const WorkoutsPage = () => {
     Taro.pageScrollTo({ scrollTop: 0, duration: 220 })
   }
 
+  const requestDelete = (workout: Workout) => {
+    const triggerId = `workout-delete-trigger-${workout.id}`
+    setDeleting(workout)
+    deleteDialogFocus.enter(triggerId)
+  }
+
+  const cancelDelete = () => {
+    if (saving) return
+    setDeleting(undefined)
+    deleteDialogFocus.restore()
+  }
+
   const remove = async () => {
     if (!deleting || !readAuthorityReady) return
     setSaving(true)
@@ -489,9 +504,11 @@ const WorkoutsPage = () => {
         setDraft(initialWorkoutDraft())
       }
       setDeleting(undefined)
+      deleteDialogFocus.complete()
       setFeedback('训练已从记录簿移除，版本历史仍保留。')
     } catch (error) {
       setFeedback(messageOf(error))
+      deferH5Focus('workout-delete-cancel', 40)
     } finally {
       setSaving(false)
     }
@@ -1200,13 +1217,13 @@ const WorkoutsPage = () => {
                           历史
                         </Button>
                         <Button
-                          {...buttonA11yProps}
+                          id={`workout-delete-trigger-${workout.id}`}
                           className="entry-action entry-action--danger"
                           disabled={!readAuthorityReady}
-                          aria-disabled={!readAuthorityReady}
-                          onClick={() => {
-                            if (readAuthorityReady) setDeleting(workout)
-                          }}
+                          {...buttonActivationProps(
+                            () => requestDelete(workout),
+                            !readAuthorityReady,
+                          )}
                         >
                           删除
                         </Button>
@@ -1244,25 +1261,30 @@ const WorkoutsPage = () => {
       </ScrollView>
 
       {deleting ? (
-        <View className="workout-modal" role="dialog" aria-modal="true" aria-label="确认删除训练">
+        <View
+          className="workout-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-label="确认删除训练"
+          {...escapeDismissProps(cancelDelete, saving)}
+        >
           <View className="workout-modal__card">
             <Text className="workouts-eyebrow">REMOVE SESSION</Text>
             <Text className="workout-modal__title">删除“{deleting.title}”？</Text>
             <Text className="workout-modal__body">它会离开日常记录簿，但版本审计仍会保留。</Text>
             <View className="workout-modal__actions">
               <Button
-                {...buttonA11yProps}
+                id="workout-delete-cancel"
                 className="modal-action"
-                onClick={() => setDeleting(undefined)}
+                disabled={saving}
+                {...buttonActivationProps(cancelDelete, saving)}
               >
                 取消
               </Button>
               <Button
-                {...buttonA11yProps}
                 className="modal-action modal-action--danger"
                 disabled={saving || !readAuthorityReady}
-                aria-disabled={saving || !readAuthorityReady}
-                onClick={() => void remove()}
+                {...buttonActivationProps(() => void remove(), saving || !readAuthorityReady)}
               >
                 确认删除
               </Button>

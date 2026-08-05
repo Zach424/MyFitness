@@ -786,6 +786,17 @@ The treatment adds no animation, persistence or data copy. It does not claim foc
 - [390 × 844 safe focus entry in the health-history bottom sheet](../../output/playwright/iteration-076-history-focus-mobile.png)
 - [1440 × 1000 safe focus entry in the health-history side rail](../../output/playwright/iteration-076-history-focus-wide.png)
 
+## Destructive record-dialog focus boundary — iteration 077
+
+The body/recovery, workout and meal delete confirmations now open as one cancel-first keyboard pattern. Enter or Space on a row's guarded delete control moves focus to the non-destructive `取消` action, not the irreversible action. Escape and explicit cancel close through the same boundary and restore the exact row trigger. Once confirmation has been submitted, cancel and Escape become unavailable until the request settles; this prevents a committed operation from looking locally cancelled.
+
+The 390 × 844 record artifact keeps the ledger visibly blurred behind a compact paper dialog, with a double mineral focus ring around cancel and a lower-emphasis brick-red confirmation beside it. The 1440 × 1000 meal artifact preserves the same hierarchy inside the wide ledger/editor composition. Successful deletion removes the trigger and moves focus to the stable ledger-refresh control; a failure leaves the dialog open and returns focus to cancel.
+
+Visual QA found that Taro emits `disabled="false"` on its H5 custom element. The component-library disabled selector therefore overrode the original class color and made cancel nearly invisible even while enabled. The three page styles now use the explicit `aria-disabled="false"` contract to restore dark text, and browser assertions verify the computed color as well as focus. The boundary changes no revision, deletion, audit or health interpretation semantics and remains an automated H5 claim, not real assistive-technology/device proof.
+
+- [390 × 844 cancel-first body-record deletion](../../output/playwright/iteration-077-delete-cancel-mobile.png)
+- [1440 × 1000 cancel-first meal deletion](../../output/playwright/iteration-077-delete-cancel-wide.png)
+
 ## Screenshot review checklist
 
 - The Rhythm Rail remains understandable without color.

@@ -313,18 +313,69 @@ test('body record completes create, update, history and delete lifecycle', async
     fullPage: true,
   })
   await page.locator('.history-close').click()
+  await expect(page.getByRole('button', { name: '历史' })).toBeFocused()
 
-  await page.getByRole('button', { name: '删除' }).click()
-  await expect(page.getByRole('dialog', { name: '确认删除记录' })).toBeVisible()
+  const deleteTrigger = page.getByRole('button', { name: '删除' })
+  await deleteTrigger.focus()
+  await page.keyboard.press('Enter')
+  const deleteDialog = page.getByRole('dialog', { name: '确认删除记录' })
+  await expect(deleteDialog).toBeVisible()
+  const cancelDelete = deleteDialog.locator('#health-delete-cancel')
+  await expect(cancelDelete).toBeFocused()
+  await expect(cancelDelete).toHaveCSS('color', 'rgb(20, 36, 38)')
+  await page.screenshot({
+    path: 'output/playwright/iteration-077-delete-cancel-mobile.png',
+    fullPage: false,
+  })
+  await page.keyboard.press('Escape')
+  await expect(deleteDialog).toHaveCount(0)
+  await expect(deleteTrigger).toBeFocused()
+  await page.keyboard.press('Enter')
+  await expect(cancelDelete).toBeFocused()
+  let releaseDelete = () => {}
+  let deleteAttempts = 0
+  const deleteGate = new Promise<void>((resolve) => {
+    releaseDelete = resolve
+  })
+  await page.route(/\/v1\/health-records\/[0-9a-f-]{36}$/, async (route) => {
+    if (route.request().method() !== 'DELETE') {
+      await route.continue()
+      return
+    }
+    deleteAttempts += 1
+    if (deleteAttempts === 1) {
+      await route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'temporary delete refusal' }),
+      })
+      return
+    }
+    await deleteGate
+    await route.continue()
+  })
+  await deleteDialog.getByRole('button', { name: '确认删除' }).click()
+  await expect(deleteDialog).toBeVisible()
+  await expect(cancelDelete).toBeFocused()
+  expect(browserErrors).toContain(
+    'Failed to load resource: the server responded with a status of 503 (Service Unavailable)',
+  )
+  browserErrors.length = 0
   const deleteResponsePromise = page.waitForResponse(
     (response) =>
       /\/v1\/health-records\/[0-9a-f-]{36}$/.test(response.url()) &&
-      response.request().method() === 'DELETE',
+      response.request().method() === 'DELETE' &&
+      response.status() === 204,
   )
-  await page.getByRole('button', { name: '确认删除' }).click()
+  await deleteDialog.getByRole('button', { name: '确认删除' }).click()
+  await expect(cancelDelete).toBeDisabled()
+  await page.keyboard.press('Escape')
+  await expect(deleteDialog).toBeVisible()
+  releaseDelete()
   expect((await deleteResponsePromise).status()).toBe(204)
   await expect(page.getByText('还没有身体记录')).toBeVisible()
   await expect(page.getByText('记录已从列表移除，审计历史仍安全保留。')).toBeVisible()
+  await expect(page.locator('#record-read-refresh')).toBeFocused()
   expect(browserErrors).toEqual([])
 })
 

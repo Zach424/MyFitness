@@ -98,6 +98,8 @@
 .nutrition-feedback:focus-visible,
 .history-close:focus,
 .entry-action:focus,
+.modal-action:focus,
+.nutrition-read-refresh:focus,
 button:focus-visible,
 input:focus-visible,
 textarea:focus-visible {
@@ -871,9 +873,14 @@ textarea:focus-visible {
   margin: 0;
   border: 1px solid rgba(36, 76, 102, 0.16);
   border-radius: 10px;
+  color: var(--color-ink);
   background: var(--color-paper);
   font-size: 12px;
   line-height: 44px;
+}
+
+.modal-action[aria-disabled='false'] {
+  color: var(--color-ink);
 }
 
 .modal-action--danger {

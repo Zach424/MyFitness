@@ -41,6 +41,7 @@ import {
 import { appendOlderRecords, includeExactRecord } from '../../lib/record-pages'
 import { describeSaveFailure, type SaveRecovery } from '../../lib/save-recovery'
 import { useAggregateHistory } from '../../lib/use-aggregate-history'
+import { useDialogFocusBoundary } from '../../lib/use-dialog-focus-boundary'
 import { useRecoverableDraft } from '../../lib/use-local-draft'
 import {
   buildMealRequest,
@@ -191,6 +192,7 @@ const NutritionPage = () => {
       fallbackFocusId: 'nutrition-read-refresh',
     },
   )
+  const deleteDialogFocus = useDialogFocusBoundary('meal-delete-cancel', 'nutrition-read-refresh')
 
   const invalidatePendingSave = (nextFeedback = '') => {
     pendingKey.current = ''
@@ -210,6 +212,7 @@ const NutritionPage = () => {
     readInFlight.current = true
     setLoading(true)
     setReadFailure(undefined)
+    deleteDialogFocus.reset()
     setDeleting(undefined)
     historyRead.close()
     try {
@@ -498,15 +501,32 @@ const NutritionPage = () => {
     Taro.pageScrollTo({ scrollTop: 0, duration: 180 })
   }
 
+  const requestDelete = (meal: Meal) => {
+    const triggerId = `meal-delete-trigger-${meal.id}`
+    setDeleting(meal)
+    deleteDialogFocus.enter(triggerId)
+  }
+
+  const cancelDelete = () => {
+    if (saving) return
+    setDeleting(undefined)
+    deleteDialogFocus.restore()
+  }
+
   const remove = async () => {
     if (!deleting || !readAuthorityReady) return
+    setSaving(true)
     try {
       await deleteMeal(deleting.id, deleting.revision)
       setMeals((current) => current.filter((meal) => meal.id !== deleting.id))
       setDeleting(undefined)
+      deleteDialogFocus.complete()
       setFeedback('餐次已从日常记录移除，版本历史仍保留。')
     } catch (error) {
       setFeedback(messageOf(error))
+      deferH5Focus('meal-delete-cancel', 40)
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -1050,13 +1070,10 @@ const NutritionPage = () => {
                           历史
                         </Button>
                         <Button
-                          {...buttonA11yProps}
+                          id={`meal-delete-trigger-${meal.id}`}
                           className="entry-action entry-action--danger"
                           disabled={!readAuthorityReady}
-                          aria-disabled={!readAuthorityReady}
-                          onClick={() => {
-                            if (readAuthorityReady) setDeleting(meal)
-                          }}
+                          {...buttonActivationProps(() => requestDelete(meal), !readAuthorityReady)}
                         >
                           删除
                         </Button>
@@ -1094,25 +1111,30 @@ const NutritionPage = () => {
       </ScrollView>
 
       {deleting ? (
-        <View className="meal-modal" role="dialog" aria-modal="true" aria-label="确认删除餐次">
+        <View
+          className="meal-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-label="确认删除餐次"
+          {...escapeDismissProps(cancelDelete, saving)}
+        >
           <View className="meal-modal__card">
             <Text className="nutrition-eyebrow">REMOVE MEAL</Text>
             <Text className="meal-modal__title">删除“{deleting.title}”？</Text>
             <Text className="meal-modal__body">它会离开日常记录簿，但版本审计仍会保留。</Text>
             <View className="meal-modal__actions">
               <Button
-                {...buttonA11yProps}
+                id="meal-delete-cancel"
                 className="modal-action"
-                onClick={() => setDeleting(undefined)}
+                disabled={saving}
+                {...buttonActivationProps(cancelDelete, saving)}
               >
                 取消
               </Button>
               <Button
-                {...buttonA11yProps}
                 className="modal-action modal-action--danger"
                 disabled={saving || !readAuthorityReady}
-                aria-disabled={saving || !readAuthorityReady}
-                onClick={() => void remove()}
+                {...buttonActivationProps(() => void remove(), saving || !readAuthorityReady)}
               >
                 确认删除
               </Button>

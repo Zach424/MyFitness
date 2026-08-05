@@ -1004,6 +1004,10 @@
   line-height: 46px;
 }
 
+.modal-action[aria-disabled='false'] {
+  color: var(--color-ink);
+}
+
 .modal-action--danger {
   border-color: #9a574e;
   color: var(--color-paper);
@@ -1096,6 +1100,8 @@
 
 .history-close-button:focus,
 .entry-action:focus,
+.modal-action:focus,
+.workout-read-refresh:focus,
 button:focus-visible,
 input:focus-visible,
 textarea:focus-visible {

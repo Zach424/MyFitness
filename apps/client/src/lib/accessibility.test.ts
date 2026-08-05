@@ -124,4 +124,15 @@ describe('dialog dismissal accessibility', () => {
     expect(event.stopPropagation).not.toHaveBeenCalled()
     expect(dismiss).not.toHaveBeenCalled()
   })
+
+  it('does not dismiss a committed operation while disabled', () => {
+    const dismiss = vi.fn()
+    const event = { ...keyboardEvent('Escape'), stopPropagation: vi.fn() }
+
+    escapeDismissProps(dismiss, true).onKeyDown(event)
+
+    expect(event.preventDefault).not.toHaveBeenCalled()
+    expect(event.stopPropagation).not.toHaveBeenCalled()
+    expect(dismiss).not.toHaveBeenCalled()
+  })
 })

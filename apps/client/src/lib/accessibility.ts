@@ -69,9 +69,9 @@ export const buttonActivationProps = (activate: () => void, disabled = false) =>
   },
 })
 
-export const escapeDismissProps = (dismiss: () => void) => ({
+export const escapeDismissProps = (dismiss: () => void, disabled = false) => ({
   onKeyDown: (event: EscapeDismissEvent) => {
-    if (event.repeat || event.key !== 'Escape') return
+    if (disabled || event.repeat || event.key !== 'Escape') return
     event.preventDefault()
     event.stopPropagation?.()
     dismiss()

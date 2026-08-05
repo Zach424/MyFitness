@@ -809,6 +809,10 @@
   line-height: 46px;
 }
 
+.modal-button[aria-disabled='false'] {
+  color: var(--color-ink);
+}
+
 .modal-button--danger {
   border-color: #a14d43;
   color: var(--color-paper);
@@ -904,6 +908,8 @@
 
 .history-close:focus,
 .log-action:focus,
+.modal-button:focus,
+.record-read-refresh:focus,
 button:focus-visible,
 input:focus-visible {
   outline: 3px solid rgba(36, 76, 102, 0.3);

@@ -465,17 +465,26 @@ test('meal completes favorite, create, repeat, update, history and delete lifecy
   await expect(mealHistoryDialog).toHaveCount(0)
   await expect(mealHistoryTrigger).toBeFocused()
 
-  await page.locator('.meal-entry').first().getByRole('button', { name: '删除' }).click()
-  await expect(page.getByRole('dialog', { name: '确认删除餐次' })).toBeVisible()
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const deleteTrigger = page.locator('.meal-entry').first().getByRole('button', { name: '删除' })
+  await deleteTrigger.focus()
+  await page.keyboard.press('Enter')
+  const deleteDialog = page.getByRole('dialog', { name: '确认删除餐次' })
+  await expect(deleteDialog).toBeVisible()
+  const cancelDelete = deleteDialog.locator('#meal-delete-cancel')
+  await expect(cancelDelete).toBeFocused()
+  await expect(cancelDelete).toHaveCSS('color', 'rgb(20, 36, 38)')
+  await page.screenshot({ path: 'output/playwright/iteration-077-delete-cancel-wide.png' })
   const deletePromise = page.waitForResponse(
     (response) =>
       /\/v1\/nutrition\/meals\/[0-9a-f-]{36}$/.test(response.url()) &&
       response.request().method() === 'DELETE',
   )
-  await page.getByRole('button', { name: '确认删除' }).click()
+  await deleteDialog.getByRole('button', { name: '确认删除' }).click()
   expect((await deletePromise).status()).toBe(204)
   await expect(page.locator('.meal-entry')).toHaveCount(1)
   await expect(page.getByText('餐次已从日常记录移除，版本历史仍保留。')).toBeVisible()
+  await expect(page.locator('#nutrition-read-refresh')).toBeFocused()
   expect(browserErrors).toEqual([])
 })
 

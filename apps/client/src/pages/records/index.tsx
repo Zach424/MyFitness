@@ -34,6 +34,7 @@ import {
 import { appendOlderRecords, includeExactRecord } from '../../lib/record-pages'
 import { describeSaveFailure, type SaveRecovery } from '../../lib/save-recovery'
 import { useAggregateHistory } from '../../lib/use-aggregate-history'
+import { useDialogFocusBoundary } from '../../lib/use-dialog-focus-boundary'
 import { useRecoverableDraft } from '../../lib/use-local-draft'
 import {
   buildRecordRequest,
@@ -147,12 +148,14 @@ const RecordsPage = () => {
       fallbackFocusId: 'record-read-refresh',
     },
   )
+  const deleteDialogFocus = useDialogFocusBoundary('health-delete-cancel', 'record-read-refresh')
 
   const loadRecords = async (isActive: () => boolean = () => true) => {
     if (readInFlight.current) return
     readInFlight.current = true
     setLoading(true)
     setReadFailure(undefined)
+    deleteDialogFocus.reset()
     setDeleting(undefined)
     historyRead.close()
     try {
@@ -361,6 +364,18 @@ const RecordsPage = () => {
     Taro.pageScrollTo({ scrollTop: 0, duration: 240 })
   }
 
+  const requestDelete = (record: HealthRecord) => {
+    const triggerId = `health-delete-trigger-${record.id}`
+    setDeleting(record)
+    deleteDialogFocus.enter(triggerId)
+  }
+
+  const cancelDelete = () => {
+    if (saving) return
+    setDeleting(undefined)
+    deleteDialogFocus.restore()
+  }
+
   const confirmDelete = async () => {
     if (!deleting || !readAuthorityReady) return
     setSaving(true)
@@ -372,9 +387,11 @@ const RecordsPage = () => {
         setDraft(createDraft(deleting.metric))
       }
       setDeleting(undefined)
+      deleteDialogFocus.complete()
       setFeedback('记录已从列表移除，审计历史仍安全保留。')
     } catch (error) {
       setFeedback(errorMessage(error))
+      deferH5Focus('health-delete-cancel', 40)
     } finally {
       setSaving(false)
     }
@@ -818,13 +835,13 @@ const RecordsPage = () => {
                             历史
                           </Button>
                           <Button
-                            {...buttonA11yProps}
+                            id={`health-delete-trigger-${record.id}`}
                             className="log-action log-action--danger"
                             disabled={!readAuthorityReady}
-                            aria-disabled={!readAuthorityReady}
-                            onClick={() => {
-                              if (readAuthorityReady) setDeleting(record)
-                            }}
+                            {...buttonActivationProps(
+                              () => requestDelete(record),
+                              !readAuthorityReady,
+                            )}
                           >
                             删除
                           </Button>
@@ -865,7 +882,13 @@ const RecordsPage = () => {
       </ScrollView>
 
       {deleting ? (
-        <View className="modal-layer" role="dialog" aria-modal="true" aria-label="确认删除记录">
+        <View
+          className="modal-layer"
+          role="dialog"
+          aria-modal="true"
+          aria-label="确认删除记录"
+          {...escapeDismissProps(cancelDelete, saving)}
+        >
           <View className="modal-card">
             <Text className="panel-eyebrow">REMOVE ENTRY</Text>
             <Text className="modal-card__title">
@@ -876,18 +899,20 @@ const RecordsPage = () => {
             </Text>
             <View className="modal-card__actions">
               <Button
-                {...buttonA11yProps}
+                id="health-delete-cancel"
                 className="modal-button"
-                onClick={() => setDeleting(undefined)}
+                disabled={saving}
+                {...buttonActivationProps(cancelDelete, saving)}
               >
                 取消
               </Button>
               <Button
-                {...buttonA11yProps}
                 className="modal-button modal-button--danger"
                 disabled={saving || !readAuthorityReady}
-                aria-disabled={saving || !readAuthorityReady}
-                onClick={() => void confirmDelete()}
+                {...buttonActivationProps(
+                  () => void confirmDelete(),
+                  saving || !readAuthorityReady,
+                )}
               >
                 确认删除
               </Button>

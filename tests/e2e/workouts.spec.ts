@@ -408,18 +408,33 @@ test('workout completes create, repeat, update, history and delete lifecycle', a
     fullPage: true,
   })
   await page.getByRole('button', { name: '关闭训练历史' }).first().click()
+  await expect(
+    page.locator('.workout-entry').first().getByRole('button', { name: '历史' }),
+  ).toBeFocused()
 
-  await page.locator('.workout-entry').first().getByRole('button', { name: '删除' }).click()
-  await expect(page.getByRole('dialog', { name: '确认删除训练' })).toBeVisible()
+  const deleteTrigger = page.locator('.workout-entry').first().getByRole('button', { name: '删除' })
+  await deleteTrigger.focus()
+  await page.keyboard.press('Enter')
+  const deleteDialog = page.getByRole('dialog', { name: '确认删除训练' })
+  await expect(deleteDialog).toBeVisible()
+  const cancelDelete = deleteDialog.locator('#workout-delete-cancel')
+  await expect(cancelDelete).toBeFocused()
+  await expect(cancelDelete).toHaveCSS('color', 'rgb(20, 36, 38)')
+  await cancelDelete.click()
+  await expect(deleteDialog).toHaveCount(0)
+  await expect(deleteTrigger).toBeFocused()
+  await page.keyboard.press('Enter')
+  await expect(deleteDialog.locator('#workout-delete-cancel')).toBeFocused()
   const deletePromise = page.waitForResponse(
     (response) =>
       /\/v1\/workouts\/[0-9a-f-]{36}$/.test(response.url()) &&
       response.request().method() === 'DELETE',
   )
-  await page.getByRole('button', { name: '确认删除' }).click()
+  await deleteDialog.getByRole('button', { name: '确认删除' }).click()
   expect((await deletePromise).status()).toBe(204)
   await expect(page.locator('.workout-entry')).toHaveCount(1)
   await expect(page.getByText('训练已从记录簿移除，版本历史仍保留。')).toBeVisible()
+  await expect(page.locator('#workout-read-refresh')).toBeFocused()
   expect(browserErrors).toEqual([])
 })
 
