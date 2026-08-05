@@ -27,6 +27,12 @@ import {
   validateExerciseCatalogDraft,
 } from './exercise-catalog.model'
 import { describeWorkbenchFailure, type WorkbenchRecovery } from '../../lib/workbench-recovery'
+import {
+  classifyRegisterReadFailure,
+  registerReadFailureCopy,
+  registerReadPhase,
+  type RegisterReadFailureKind,
+} from '../../lib/register-read'
 import './index.scss'
 
 const categoryLabels = { strength: '力量', cardio: '有氧', mobility: '灵活性' } as const
@@ -87,9 +93,13 @@ const ExerciseCatalogPage = () => {
   const [draft, setDraft] = useState<ExerciseCatalogDraft>(initialExerciseCatalogDraft)
   const [editorOpen, setEditorOpen] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [hasReadSnapshot, setHasReadSnapshot] = useState(false)
+  const [readFailure, setReadFailure] = useState<RegisterReadFailureKind>()
   const [busy, setBusy] = useState(false)
   const [feedback, setFeedback] = useState('')
   const [recovery, setRecovery] = useState<WorkbenchRecovery>()
+  const readInFlight = useRef(false)
+  const pageActive = useRef(true)
 
   const patchDraft = (patch: Partial<ExerciseCatalogDraft>) => {
     setDraft((current) => ({ ...current, ...patch }))
@@ -98,7 +108,8 @@ const ExerciseCatalogPage = () => {
     setFeedback('')
   }
 
-  const openEditor = async (entry?: CustomExerciseCatalogEntry) => {
+  const openEditor = async (entry?: CustomExerciseCatalogEntry, acceptedInitialRead = false) => {
+    if (!acceptedInitialRead && !readAuthorityReady) return
     editorReturnFocusId.current = entry ? `exercise-edit-${entry.id}` : 'exercise-new-action'
     setEditing(entry)
     setDraft(entry ? exerciseCatalogDraftFromItem(entry) : initialExerciseCatalogDraft())
@@ -121,7 +132,7 @@ const ExerciseCatalogPage = () => {
   }
 
   const loadOlderHistory = async () => {
-    if (!editing || !historyNextCursor || historyLoadingMore) return
+    if (!readAuthorityReady || !editing || !historyNextCursor || historyLoadingMore) return
     setHistoryLoadingMore(true)
     try {
       const result = await getExerciseCatalogEntryHistory(editing.id, {
@@ -137,27 +148,49 @@ const ExerciseCatalogPage = () => {
     }
   }
 
+  const loadRegisterAuthority = async () => {
+    if (readInFlight.current) return
+    const hadSnapshot = hasReadSnapshot
+    readInFlight.current = true
+    setLoading(true)
+    setReadFailure(undefined)
+    try {
+      const result = await listExerciseCatalog()
+      if (!pageActive.current) return
+      const custom = customEntriesFrom(result.items)
+      setEntries(custom)
+      setHasReadSnapshot(true)
+      const requested = custom.find((entry) => entry.id === requestedEntryId.current)
+      requestedEntryId.current = ''
+      if (requested) void openEditor(requested, true)
+      if (!hadSnapshot) deferH5Focus('exercise-catalog-back', 350)
+    } catch (error) {
+      if (!pageActive.current) return
+      setReadFailure(classifyRegisterReadFailure(error))
+      deferH5Focus('exercise-register-read-retry', hadSnapshot ? 80 : 500)
+    } finally {
+      readInFlight.current = false
+      if (pageActive.current) setLoading(false)
+    }
+  }
+
   useEffect(() => {
-    deferH5Focus('exercise-catalog-back', 350)
-    let active = true
-    void listExerciseCatalog()
-      .then((result) => {
-        if (!active) return
-        const custom = customEntriesFrom(result.items)
-        setEntries(custom)
-        const requested = custom.find((entry) => entry.id === requestedEntryId.current)
-        if (requested) void openEditor(requested)
-      })
-      .catch((error: unknown) => {
-        if (active) setFeedback(messageOf(error))
-      })
-      .finally(() => {
-        if (active) setLoading(false)
-      })
+    pageActive.current = true
+    void loadRegisterAuthority()
     return () => {
-      active = false
+      pageActive.current = false
     }
   }, [])
+
+  const readPhase = registerReadPhase({
+    hasSnapshot: hasReadSnapshot,
+    busy: loading,
+    hasFailure: Boolean(readFailure),
+  })
+  const readAuthorityReady = readPhase === 'ready'
+  const readFailurePresentation = readFailure
+    ? registerReadFailureCopy(readFailure, 'action', hasReadSnapshot)
+    : undefined
 
   useEffect(() => {
     if (archiving) deferH5Focus('exercise-archive-cancel')
@@ -184,6 +217,7 @@ const ExerciseCatalogPage = () => {
   }
 
   const save = async () => {
+    if (!readAuthorityReady) return
     const validation = validateExerciseCatalogDraft(draft)
     if (validation) {
       setFeedback(validation)
@@ -310,7 +344,7 @@ const ExerciseCatalogPage = () => {
   }
 
   const archive = async () => {
-    if (!archiving) return
+    if (!archiving || !readAuthorityReady) return
     setBusy(true)
     try {
       await archiveExerciseCatalogEntry(archiving.id, archiving.revision)
@@ -359,7 +393,9 @@ const ExerciseCatalogPage = () => {
               <Text className="food-catalog-wordmark">衡迹</Text>
               <Text className="food-catalog-eyebrow">OWNED MOVEMENT REGISTER</Text>
             </View>
-            <Text className="food-catalog-count metric">{entries.length}</Text>
+            <Text className="food-catalog-count metric">
+              {hasReadSnapshot ? entries.length : '—'}
+            </Text>
           </View>
 
           <View className="food-catalog-hero">
@@ -374,14 +410,57 @@ const ExerciseCatalogPage = () => {
 
           <View className="food-catalog-actions">
             <Button
-              {...buttonActivationProps(() => void openEditor())}
+              {...buttonActivationProps(() => void openEditor(), !readAuthorityReady || busy)}
               id="exercise-new-action"
               className="food-catalog-new"
             >
               ＋ 新建动作
             </Button>
+            <Button
+              {...buttonActivationProps(
+                () => void loadRegisterAuthority(),
+                !hasReadSnapshot || loading || busy || editorOpen,
+              )}
+              id="exercise-register-refresh"
+              className="register-read-refresh"
+              aria-label="更新我的动作定义目录"
+            >
+              {loading ? '核对中…' : '更新目录'}
+            </Button>
             <Text>动作定义用于记录一致性，不代表动作适合性、技术质量或训练建议。</Text>
           </View>
+
+          {readPhase === 'refreshing' && hasReadSnapshot ? (
+            <View className="register-read-state register-read-state--refreshing" role="status">
+              <Text className="register-read-state__eyebrow">CHECKING REGISTER / 保留上次目录</Text>
+              <Text className="register-read-state__title">正在复核动作定义目录</Text>
+              <Text className="register-read-state__copy">
+                复核完成前，旧目录只读保留；新建、纠正、历史与停用均已冻结。
+              </Text>
+            </View>
+          ) : readFailurePresentation ? (
+            <View className="register-read-state" role="status">
+              <Text className="register-read-state__eyebrow">
+                {readFailurePresentation.eyebrow}
+              </Text>
+              <Text className="register-read-state__title">{readFailurePresentation.title}</Text>
+              <Text className="register-read-state__copy">{readFailurePresentation.detail}</Text>
+              <Text className="register-read-state__retained metric">
+                OWNED MOVEMENTS {hasReadSnapshot ? entries.length : '—'}
+              </Text>
+              <Button
+                {...buttonActivationProps(
+                  () => void loadRegisterAuthority(),
+                  loading || busy || editorOpen,
+                )}
+                id="exercise-register-read-retry"
+                className="register-read-state__action"
+                aria-label="重新核对我的动作定义目录"
+              >
+                重新核对
+              </Button>
+            </View>
+          ) : null}
 
           {feedback ? (
             <View
@@ -526,11 +605,14 @@ const ExerciseCatalogPage = () => {
               <View className="food-editor__actions">
                 {editing ? (
                   <Button
-                    {...buttonActivationProps(() => requestArchive(editing), busy)}
+                    {...buttonActivationProps(
+                      () => requestArchive(editing),
+                      busy || !readAuthorityReady,
+                    )}
                     id={`exercise-archive-${editing.id}`}
                     className="food-editor__archive"
                     style={{ color: 'var(--color-pulse)' }}
-                    disabled={busy}
+                    disabled={busy || !readAuthorityReady}
                   >
                     停用
                   </Button>
@@ -545,9 +627,12 @@ const ExerciseCatalogPage = () => {
                   取消
                 </Button>
                 <Button
-                  {...buttonActivationProps(() => void save(), busy || Boolean(recovery))}
+                  {...buttonActivationProps(
+                    () => void save(),
+                    busy || Boolean(recovery) || !readAuthorityReady,
+                  )}
                   className="food-editor__save"
-                  disabled={busy || Boolean(recovery)}
+                  disabled={busy || Boolean(recovery) || !readAuthorityReady}
                 >
                   {busy ? '保存中…' : editing ? '保存纠正' : '保存定义'}
                 </Button>
@@ -561,10 +646,12 @@ const ExerciseCatalogPage = () => {
                 <Text className="food-catalog-eyebrow">ACTIVE DEFINITIONS</Text>
                 <Text className="food-register__title">当前目录</Text>
               </View>
-              <Text className="metric">{entries.length}</Text>
+              <Text className="metric">{hasReadSnapshot ? entries.length : '—'}</Text>
             </View>
-            {loading ? (
+            {loading && !hasReadSnapshot ? (
               <View className="food-register__empty">正在读取目录…</View>
+            ) : !hasReadSnapshot ? (
+              <View className="food-register__empty">动作定义数量尚未核对。</View>
             ) : entries.length ? (
               entries.map((entry) => (
                 <View className="food-register__item" key={entry.id}>
@@ -579,7 +666,7 @@ const ExerciseCatalogPage = () => {
                     </Text>
                   </View>
                   <Button
-                    {...buttonActivationProps(() => void openEditor(entry))}
+                    {...buttonActivationProps(() => void openEditor(entry), !readAuthorityReady)}
                     id={`exercise-edit-${entry.id}`}
                     className="food-register__edit"
                     aria-label={`编辑自定义动作${entry.name}`}
@@ -642,10 +729,13 @@ const ExerciseCatalogPage = () => {
                 取消
               </Button>
               <Button
-                {...buttonActivationProps(() => void archive(), busy || Boolean(recovery))}
+                {...buttonActivationProps(
+                  () => void archive(),
+                  busy || Boolean(recovery) || !readAuthorityReady,
+                )}
                 className="food-modal__danger"
                 style={{ color: 'var(--color-pulse)' }}
-                disabled={busy || Boolean(recovery)}
+                disabled={busy || Boolean(recovery) || !readAuthorityReady}
               >
                 {busy ? '停用中…' : '确认停用'}
               </Button>

@@ -75,8 +75,9 @@ Progress snapshot (2026-08-05): iterations 0–67 are complete locally. The nutr
 | 66        | Workout-ledger read authority and recovery          | Unknown training log cannot enable workout mutation; explicit retry restores authority            |
 | 67        | Nutrition-ledger read authority and recovery        | Unknown meal log cannot enable nutrition mutation; explicit retry restores authority              |
 | 68        | Owner-definition register read authority            | Unknown catalog cannot enable correction/archive; explicit retry restores both register variants  |
-| 69        | Managed shared deployment, beta hardening/release   | Real identity/custody/telemetry, rollback, security/a11y/filing review and staged rollout         |
-| 70        | Native App feasibility and device sync              | Retention gate reviewed; HealthKit/Health Connect/Huawei proof of concept                         |
+| 69        | Long-term observation read authority                | Unknown projection cannot become empty evidence; explicit retry restores all observation variants |
+| 70        | Managed shared deployment, beta hardening/release   | Real identity/custody/telemetry, rollback, security/a11y/filing review and staged rollout         |
+| 71        | Native App feasibility and device sync              | Retention gate reviewed; HealthKit/Health Connect/Huawei proof of concept                         |
 
 ## Release gates
 

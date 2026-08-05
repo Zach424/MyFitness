@@ -184,6 +184,48 @@ test('workout authority retains and freezes both ledgers when catalog refresh is
   expect(catalogReads).toBe(2)
 })
 
+test('owned action register does not turn an initial offline read into an empty directory', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  let reads = 0
+  await page.route(/\/v1\/exercise-catalog$/, async (route) => {
+    if (route.request().method() !== 'GET') return route.continue()
+    reads += 1
+    if (reads === 2) return route.abort('failed')
+    await route.continue()
+  })
+  await openWorkouts(page)
+  await page.getByRole('button', { name: '管理我的动作' }).click()
+  const state = page.locator('.register-read-state')
+  await expect(state.getByText('OFFLINE / 连接未完成')).toBeVisible()
+  await expect(state).toContainText('动作定义目录还没有读取')
+  await expect(state).toContainText('OWNED MOVEMENTS —')
+  await expect(page.getByText(/还没有自定义动作/)).toHaveCount(0)
+  await expect(page.getByText('动作定义数量尚未核对。')).toBeVisible()
+  await expect(page.getByRole('button', { name: '新建动作' })).toBeDisabled()
+  await expect
+    .poll(() =>
+      page.evaluate(() => ({
+        shellLeft: Math.round(
+          document.querySelector('.food-catalog-shell')?.getBoundingClientRect().left ?? -1,
+        ),
+        viewportWidth: window.innerWidth,
+        documentWidth: document.documentElement.scrollWidth,
+      })),
+    )
+    .toEqual({ shellLeft: 0, viewportWidth: 390, documentWidth: 390 })
+  const retry = page.getByRole('button', { name: '重新核对我的动作定义目录' })
+  await expect(retry).toBeFocused()
+  await page.screenshot({
+    path: 'output/playwright/iteration-068-action-register-offline-mobile.png',
+  })
+  await page.keyboard.press('Enter')
+  await expect(state).toHaveCount(0)
+  await expect(page.getByRole('button', { name: '新建动作' })).toBeEnabled()
+  expect(reads).toBe(3)
+})
+
 const collectBrowserErrors = (page: Page) => {
   const browserErrors: string[] = []
   page.on('console', (message) => {

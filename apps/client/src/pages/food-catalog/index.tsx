@@ -7,7 +7,7 @@ import type {
   FoodSnapshot,
 } from '@myfitness/contracts'
 
-import { buttonActivationProps } from '../../lib/accessibility'
+import { buttonActivationProps, deferH5Focus } from '../../lib/accessibility'
 import { DefinitionRevisionLedger } from '../../components/definition-revision-ledger'
 import {
   ApiError,
@@ -18,6 +18,12 @@ import {
   updateFoodCatalogEntry,
 } from '../../lib/api'
 import { describeWorkbenchFailure, type WorkbenchRecovery } from '../../lib/workbench-recovery'
+import {
+  classifyRegisterReadFailure,
+  registerReadFailureCopy,
+  registerReadPhase,
+  type RegisterReadFailureKind,
+} from '../../lib/register-read'
 import ExerciseCatalogPage from '../exercise-catalog'
 import './index.scss'
 
@@ -141,9 +147,13 @@ const FoodCatalogPage = () => {
   const [form, setForm] = useState(emptyForm)
   const [editorOpen, setEditorOpen] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [hasReadSnapshot, setHasReadSnapshot] = useState(false)
+  const [readFailure, setReadFailure] = useState<RegisterReadFailureKind>()
   const [busy, setBusy] = useState(false)
   const [feedback, setFeedback] = useState('')
   const [recovery, setRecovery] = useState<WorkbenchRecovery>()
+  const readInFlight = useRef(false)
+  const pageActive = useRef(true)
 
   const patchForm = (patch: Partial<FoodForm>) => {
     setForm((current) => ({ ...current, ...patch }))
@@ -152,7 +162,8 @@ const FoodCatalogPage = () => {
     setFeedback('')
   }
 
-  const openEditor = async (entry?: CustomFoodCatalogEntry) => {
+  const openEditor = async (entry?: CustomFoodCatalogEntry, acceptedInitialRead = false) => {
+    if (!acceptedInitialRead && !readAuthorityReady) return
     setEditing(entry)
     setForm(entry ? formFromEntry(entry) : emptyForm())
     setHistory(entry ? undefined : [])
@@ -174,7 +185,7 @@ const FoodCatalogPage = () => {
   }
 
   const loadOlderHistory = async () => {
-    if (!editing || !historyNextCursor || historyLoadingMore) return
+    if (!readAuthorityReady || !editing || !historyNextCursor || historyLoadingMore) return
     setHistoryLoadingMore(true)
     try {
       const result = await getFoodCatalogEntryHistory(editing.id, {
@@ -190,26 +201,49 @@ const FoodCatalogPage = () => {
     }
   }
 
+  const loadRegisterAuthority = async () => {
+    if (readInFlight.current) return
+    const hadSnapshot = hasReadSnapshot
+    readInFlight.current = true
+    setLoading(true)
+    setReadFailure(undefined)
+    try {
+      const result = await listFoodCatalog()
+      if (!pageActive.current) return
+      const custom = customEntriesFrom(result.items)
+      setEntries(custom)
+      setHasReadSnapshot(true)
+      const requested = custom.find((entry) => entry.id === requestedEntryId.current)
+      requestedEntryId.current = ''
+      if (requested) void openEditor(requested, true)
+      if (!hadSnapshot) deferH5Focus('food-catalog-back', 350)
+    } catch (error) {
+      if (!pageActive.current) return
+      setReadFailure(classifyRegisterReadFailure(error))
+      deferH5Focus('food-register-read-retry', hadSnapshot ? 80 : 500)
+    } finally {
+      readInFlight.current = false
+      if (pageActive.current) setLoading(false)
+    }
+  }
+
   useEffect(() => {
-    let active = true
-    void listFoodCatalog()
-      .then((result) => {
-        if (!active) return
-        const custom = customEntriesFrom(result.items)
-        setEntries(custom)
-        const requested = custom.find((entry) => entry.id === requestedEntryId.current)
-        if (requested) void openEditor(requested)
-      })
-      .catch((error: unknown) => {
-        if (active) setFeedback(messageOf(error))
-      })
-      .finally(() => {
-        if (active) setLoading(false)
-      })
+    pageActive.current = true
+    void loadRegisterAuthority()
     return () => {
-      active = false
+      pageActive.current = false
     }
   }, [])
+
+  const readPhase = registerReadPhase({
+    hasSnapshot: hasReadSnapshot,
+    busy: loading,
+    hasFailure: Boolean(readFailure),
+  })
+  const readAuthorityReady = readPhase === 'ready'
+  const readFailurePresentation = readFailure
+    ? registerReadFailureCopy(readFailure, 'food', hasReadSnapshot)
+    : undefined
 
   const closeEditor = () => {
     setEditorOpen(false)
@@ -222,6 +256,7 @@ const FoodCatalogPage = () => {
   }
 
   const save = async () => {
+    if (!readAuthorityReady) return
     const error = validationError(form)
     if (error) {
       setFeedback(error)
@@ -343,7 +378,7 @@ const FoodCatalogPage = () => {
   }
 
   const archive = async () => {
-    if (!archiving) return
+    if (!archiving || !readAuthorityReady) return
     setBusy(true)
     try {
       await archiveFoodCatalogEntry(archiving.id, archiving.revision)
@@ -376,7 +411,9 @@ const FoodCatalogPage = () => {
               <Text className="food-catalog-wordmark">衡迹</Text>
               <Text className="food-catalog-eyebrow">OWNED FOOD REGISTER</Text>
             </View>
-            <Text className="food-catalog-count metric">{entries.length}</Text>
+            <Text className="food-catalog-count metric">
+              {hasReadSnapshot ? entries.length : '—'}
+            </Text>
           </View>
 
           <View className="food-catalog-hero">
@@ -390,14 +427,57 @@ const FoodCatalogPage = () => {
 
           <View className="food-catalog-actions">
             <Button
-              {...buttonActivationProps(() => void openEditor())}
+              {...buttonActivationProps(() => void openEditor(), !readAuthorityReady || busy)}
               id="food-new-definition"
               className="food-catalog-new"
             >
               ＋ 新建食物
             </Button>
+            <Button
+              {...buttonActivationProps(
+                () => void loadRegisterAuthority(),
+                !hasReadSnapshot || loading || busy || editorOpen,
+              )}
+              id="food-register-refresh"
+              className="register-read-refresh"
+              aria-label="更新我的食物定义目录"
+            >
+              {loading ? '核对中…' : '更新目录'}
+            </Button>
             <Text>照片候选仍只使用受控的演示目录，不会自动信任自建条目。</Text>
           </View>
+
+          {readPhase === 'refreshing' && hasReadSnapshot ? (
+            <View className="register-read-state register-read-state--refreshing" role="status">
+              <Text className="register-read-state__eyebrow">CHECKING REGISTER / 保留上次目录</Text>
+              <Text className="register-read-state__title">正在复核食物定义目录</Text>
+              <Text className="register-read-state__copy">
+                复核完成前，旧目录只读保留；新建、纠正、历史与归档均已冻结。
+              </Text>
+            </View>
+          ) : readFailurePresentation ? (
+            <View className="register-read-state" role="status">
+              <Text className="register-read-state__eyebrow">
+                {readFailurePresentation.eyebrow}
+              </Text>
+              <Text className="register-read-state__title">{readFailurePresentation.title}</Text>
+              <Text className="register-read-state__copy">{readFailurePresentation.detail}</Text>
+              <Text className="register-read-state__retained metric">
+                OWNED FOODS {hasReadSnapshot ? entries.length : '—'}
+              </Text>
+              <Button
+                {...buttonActivationProps(
+                  () => void loadRegisterAuthority(),
+                  loading || busy || editorOpen,
+                )}
+                id="food-register-read-retry"
+                className="register-read-state__action"
+                aria-label="重新核对我的食物定义目录"
+              >
+                重新核对
+              </Button>
+            </View>
+          ) : null}
 
           {feedback ? (
             <View
@@ -494,11 +574,11 @@ const FoodCatalogPage = () => {
                   <Button
                     {...buttonActivationProps(
                       () => setArchiving(editing),
-                      busy || Boolean(recovery),
+                      busy || Boolean(recovery) || !readAuthorityReady,
                     )}
                     className="food-editor__archive"
                     style={{ color: 'var(--color-pulse)' }}
-                    disabled={busy || Boolean(recovery)}
+                    disabled={busy || Boolean(recovery) || !readAuthorityReady}
                   >
                     归档
                   </Button>
@@ -512,10 +592,13 @@ const FoodCatalogPage = () => {
                   取消
                 </Button>
                 <Button
-                  {...buttonActivationProps(() => void save(), busy || Boolean(recovery))}
+                  {...buttonActivationProps(
+                    () => void save(),
+                    busy || Boolean(recovery) || !readAuthorityReady,
+                  )}
                   className="food-editor__save"
                   style={{ color: 'var(--color-paper)' }}
-                  disabled={busy || Boolean(recovery)}
+                  disabled={busy || Boolean(recovery) || !readAuthorityReady}
                 >
                   {busy ? '保存中…' : editing ? '保存纠正' : '保存定义'}
                 </Button>
@@ -529,10 +612,12 @@ const FoodCatalogPage = () => {
                 <Text className="food-catalog-eyebrow">ACTIVE DEFINITIONS</Text>
                 <Text className="food-register__title">当前目录</Text>
               </View>
-              <Text className="metric">{entries.length}</Text>
+              <Text className="metric">{hasReadSnapshot ? entries.length : '—'}</Text>
             </View>
-            {loading ? (
+            {loading && !hasReadSnapshot ? (
               <View className="food-register__empty">正在读取目录…</View>
+            ) : !hasReadSnapshot ? (
+              <View className="food-register__empty">食物定义数量尚未核对。</View>
             ) : entries.length ? (
               entries.map((entry) => (
                 <View className="food-register__item" key={entry.id}>
@@ -545,7 +630,7 @@ const FoodCatalogPage = () => {
                     <Text className="food-register__reference">依据：{entry.reference}</Text>
                   </View>
                   <Button
-                    {...buttonActivationProps(() => void openEditor(entry))}
+                    {...buttonActivationProps(() => void openEditor(entry), !readAuthorityReady)}
                     className="food-register__edit"
                     aria-label={`编辑${entry.name}`}
                   >
@@ -598,10 +683,13 @@ const FoodCatalogPage = () => {
                 取消
               </Button>
               <Button
-                {...buttonActivationProps(() => void archive(), busy || Boolean(recovery))}
+                {...buttonActivationProps(
+                  () => void archive(),
+                  busy || Boolean(recovery) || !readAuthorityReady,
+                )}
                 className="food-modal__danger"
                 style={{ color: 'var(--color-pulse)' }}
-                disabled={busy || Boolean(recovery)}
+                disabled={busy || Boolean(recovery) || !readAuthorityReady}
               >
                 {busy ? '归档中…' : '确认归档'}
               </Button>

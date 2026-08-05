@@ -289,6 +289,47 @@ test('nutrition authority retains and freezes meals, favorites and foods after r
   expect(favoriteReads).toBe(2)
 })
 
+test('owned food register retains one definition but freezes it after a refused refresh', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await openNutrition(page)
+  await page.getByRole('button', { name: '管理我的食物' }).click()
+  await page.getByRole('button', { name: '＋ 新建食物' }).click()
+  await page.locator('[aria-label="自定义食物名称"] input').fill('核对燕麦碗')
+  await page.locator('[aria-label="自定义热量 kcal"] input').fill('128')
+  await page.locator('[aria-label="自定义蛋白质 g"] input').fill('6')
+  await page.locator('[aria-label="自定义碳水 g"] input').fill('20')
+  await page.locator('[aria-label="自定义脂肪 g"] input').fill('3')
+  await page.locator('[aria-label="自定义数据依据（必填）"] input').fill('家庭配方估算')
+  await page.getByRole('button', { name: '保存定义' }).click()
+  const retained = page.locator('.food-register__item').filter({ hasText: '核对燕麦碗' })
+  await expect(retained).toBeVisible()
+
+  let reads = 0
+  await page.route(/\/v1\/food-catalog$/, async (route) => {
+    if (route.request().method() !== 'GET') return route.continue()
+    reads += 1
+    if (reads === 1)
+      return route.fulfill({ status: 429, body: JSON.stringify({ message: 'raw hidden' }) })
+    await route.continue()
+  })
+  await page.getByRole('button', { name: '更新我的食物定义目录' }).click()
+  const state = page.locator('.register-read-state')
+  await expect(state.getByText('READ REFUSED / 读取被拒绝')).toBeVisible()
+  await expect(state).toContainText('OWNED FOODS 1')
+  await expect(state).not.toContainText('raw hidden')
+  await expect(retained.getByRole('button', { name: '编辑核对燕麦碗' })).toBeDisabled()
+  await expect(page.getByRole('button', { name: '＋ 新建食物' })).toBeDisabled()
+  const retry = page.getByRole('button', { name: '重新核对我的食物定义目录' })
+  await expect(retry).toBeFocused()
+  await page.screenshot({ path: 'output/playwright/iteration-068-food-register-stale-wide.png' })
+  await page.keyboard.press('Enter')
+  await expect(state).toHaveCount(0)
+  await expect(retained.getByRole('button', { name: '编辑核对燕麦碗' })).toBeEnabled()
+  expect(reads).toBe(2)
+})
+
 test('meal completes favorite, create, repeat, update, history and delete lifecycle', async ({
   page,
 }) => {
