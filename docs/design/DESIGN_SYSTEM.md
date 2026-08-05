@@ -728,6 +728,17 @@ Visual review corrected the receipt's flex sizing after the first wide capture s
 - [390 × 844 unread profile/goal register](../../output/playwright/iteration-071-profile-register-offline-mobile.png)
 - [1440 × 1000 retained profile v1 and local edit](../../output/playwright/iteration-071-profile-register-stale-wide.png)
 
+## History-calendar read authority — iteration 072
+
+The `HISTORY LEDGER / 28D` sheet now starts with a narrow accepted-range toolbar and an authority receipt before the evidence map. On a 390 × 844 initial transport failure, the toolbar states that range, timezone and counts still require a successful response; the amber receipt contains the only recovery action. The calendar card remains recognizable but says its range is unverified, while the four summary cells use em dashes and the selected-day card says `日期待核对`. No blank cells or zero values impersonate account evidence.
+
+On 1440 × 1000 H5, a 503 refresh retains the exact accepted local range, `Asia/Shanghai`, its 28 cells, one recorded body mark and `1 / 28` summary. The amber receipt names the retained range above the two-column sheet. Day cells and all three backfill actions keep their content but use visibly muted disabled styling plus guarded callbacks, so the evidence stays readable without looking current or actionable.
+
+The focused retry uses the same mineral outline on mobile and wide H5. Visual review also compared a shared authority-component variant; it increased H5 route duplication, so the calendar keeps a page-local rendering while preserving the established mineral-toolbar/amber-receipt/paper-evidence grammar.
+
+- [390 × 844 unread history calendar](../../output/playwright/iteration-072-history-calendar-offline-mobile.png)
+- [1440 × 1000 retained history range and recorded day](../../output/playwright/iteration-072-history-calendar-stale-wide.png)
+
 ## Screenshot review checklist
 
 - The Rhythm Rail remains understandable without color.

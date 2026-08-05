@@ -1,17 +1,21 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Button, ScrollView, Text, View } from '@tarojs/components'
 import Taro, { useDidShow } from '@tarojs/taro'
 import type { HistoryCalendar } from '@myfitness/contracts'
 
-import { buttonA11yProps } from '../../lib/accessibility'
+import { buttonA11yProps, buttonActivationProps, deferH5Focus } from '../../lib/accessibility'
 import { backfillNavigationUrl } from '../../lib/backfill-intent'
 import { getHistoryCalendar } from '../../lib/api'
 import { detectedTimeZone } from '../../lib/occurrence-time'
+import { registerReadPhase } from '../../lib/register-read'
 import {
+  classifyHistoryCalendarReadFailure,
+  historyCalendarReadFailureCopy,
   historyCalendarTotals,
   historyDateLabel,
   historyDayLabel,
   historyWeekday,
+  type HistoryCalendarReadFailureKind,
 } from './history.model'
 import './index.scss'
 
@@ -20,42 +24,65 @@ const dayNumber = (localDate: string) => String(Number(localDate.slice(-2)))
 const HistoryPage = () => {
   const [calendar, setCalendar] = useState<HistoryCalendar>()
   const [selectedDate, setSelectedDate] = useState('')
-  const [loading, setLoading] = useState(true)
-  const [feedback, setFeedback] = useState('')
+  const [reading, setReading] = useState(true)
+  const [readFailure, setReadFailure] = useState<HistoryCalendarReadFailureKind>()
+  const calendarRef = useRef<HistoryCalendar>()
+  const readInFlight = useRef(false)
+  const pageActive = useRef(true)
 
   const load = async () => {
-    setLoading(true)
-    setFeedback('')
+    if (readInFlight.current) return
+    const hadSnapshot = Boolean(calendarRef.current)
+    readInFlight.current = true
+    setReading(true)
+    setReadFailure(undefined)
     try {
       const result = await getHistoryCalendar(detectedTimeZone())
+      if (!pageActive.current) return
+      calendarRef.current = result
       setCalendar(result)
       setSelectedDate((current) =>
         result.series.some((day) => day.localDate === current) ? current : result.endDate,
       )
+      if (!hadSnapshot) deferH5Focus('history-back', 350)
     } catch (error) {
-      setFeedback(error instanceof Error ? error.message : '历史日历暂时无法读取，请稍后重试。')
+      if (!pageActive.current) return
+      setReadFailure(classifyHistoryCalendarReadFailure(error))
+      deferH5Focus('history-calendar-read-retry', hadSnapshot ? 80 : 500)
     } finally {
-      setLoading(false)
+      readInFlight.current = false
+      if (pageActive.current) setReading(false)
     }
   }
 
+  useEffect(
+    () => () => {
+      pageActive.current = false
+    },
+    [],
+  )
+
   useDidShow(() => {
+    pageActive.current = true
     void load()
   })
 
-  const totals = useMemo(
-    () =>
-      calendar
-        ? historyCalendarTotals(calendar)
-        : { recordedDays: 0, healthRecordCount: 0, workoutCount: 0, mealCount: 0 },
-    [calendar],
-  )
+  const totals = useMemo(() => (calendar ? historyCalendarTotals(calendar) : undefined), [calendar])
+  const readPhase = registerReadPhase({
+    hasSnapshot: Boolean(calendar),
+    busy: reading,
+    hasFailure: Boolean(readFailure),
+  })
+  const readAuthorityReady = readPhase === 'ready'
+  const readFailurePresentation = readFailure
+    ? historyCalendarReadFailureCopy(readFailure, Boolean(calendar))
+    : undefined
   const selected =
     calendar?.series.find((day) => day.localDate === selectedDate) ?? calendar?.series.at(-1)
   const weekdayHeadings = calendar?.series.slice(0, 7).map((day) => historyWeekday(day.localDate))
 
   const openBackfill = (page: 'records' | 'workouts' | 'nutrition') => {
-    if (!selected || !calendar) return
+    if (!readAuthorityReady || !selected || !calendar) return
     void Taro.navigateTo({
       url: backfillNavigationUrl(page, {
         localDate: selected.localDate,
@@ -71,6 +98,7 @@ const HistoryPage = () => {
           <View className="history-topbar">
             <Button
               {...buttonA11yProps}
+              id="history-back"
               className="history-back"
               aria-label="返回今天"
               onClick={() => void Taro.navigateBack()}
@@ -92,11 +120,74 @@ const HistoryPage = () => {
             </Text>
           </View>
 
-          {feedback ? (
-            <View className="history-feedback" role="status">
-              <Text>{feedback}</Text>
-              <Button {...buttonA11yProps} className="history-retry" onClick={() => void load()}>
-                重试
+          <View className="history-authority-toolbar">
+            <Text>
+              {calendar
+                ? `已接受 ${calendar.startDate} — ${calendar.endDate} · ${calendar.timezone}`
+                : '日期范围、时区与记录数量必须由服务成功返回后才能使用。'}
+            </Text>
+            <Button
+              {...buttonActivationProps(() => void load(), !calendar || !readAuthorityReady)}
+              id="history-calendar-refresh"
+              className="history-authority-refresh"
+              aria-label="更新 28 天历史日历"
+            >
+              {reading ? '核对中…' : '更新日历'}
+            </Button>
+          </View>
+
+          {readPhase === 'initial-loading' ? (
+            <View
+              className="history-authority-state history-authority-state--checking"
+              role="status"
+            >
+              <Text className="history-authority-state__eyebrow">
+                CHECKING RANGE / 尚未建立结论
+              </Text>
+              <Text className="history-authority-state__title">正在核对 28 天历史日历</Text>
+              <Text className="history-authority-state__copy">
+                成功响应前，日期范围、空白日与记录数量都保持未知。
+              </Text>
+            </View>
+          ) : readPhase === 'refreshing' ? (
+            <View
+              className="history-authority-state history-authority-state--checking"
+              role="status"
+            >
+              <Text className="history-authority-state__eyebrow">
+                CHECKING CURRENT / 保留上次日历
+              </Text>
+              <Text className="history-authority-state__title">正在复核当前历史日历</Text>
+              <Text className="history-authority-state__copy">
+                下方继续显示上次成功读取的证据；完成前，日期选择和三类回填入口保持冻结。
+              </Text>
+              <Text className="history-authority-state__retained">
+                {calendar?.startDate} — {calendar?.endDate} · {calendar?.timezone}
+              </Text>
+            </View>
+          ) : readFailurePresentation ? (
+            <View className="history-authority-state" role="status">
+              <Text className="history-authority-state__eyebrow">
+                {readFailurePresentation.eyebrow}
+              </Text>
+              <Text className="history-authority-state__title">
+                {readFailurePresentation.title}
+              </Text>
+              <Text className="history-authority-state__copy">
+                {readFailurePresentation.detail}
+              </Text>
+              {calendar ? (
+                <Text className="history-authority-state__retained">
+                  保留 {calendar.startDate} — {calendar.endDate} · {calendar.timezone}
+                </Text>
+              ) : null}
+              <Button
+                {...buttonActivationProps(() => void load())}
+                id="history-calendar-read-retry"
+                className="history-authority-retry"
+                aria-label="重新核对 28 天历史日历"
+              >
+                重新核对
               </Button>
             </View>
           ) : null}
@@ -108,14 +199,10 @@ const HistoryPage = () => {
                   <Text className="history-eyebrow">28-DAY EVIDENCE MAP</Text>
                   <Text className="history-panel-title">近 28 天记录地图</Text>
                 </View>
-                <Text className="history-zone">{calendar?.timezone ?? detectedTimeZone()}</Text>
+                <Text className="history-zone">{calendar?.timezone ?? '时区待核对'}</Text>
               </View>
 
-              {loading && !calendar ? (
-                <View className="history-loading" role="status">
-                  正在按本地日期整理记录…
-                </View>
-              ) : calendar ? (
+              {calendar ? (
                 <>
                   <View className="history-weekdays" aria-hidden="true">
                     {weekdayHeadings?.map((label, index) => (
@@ -125,14 +212,17 @@ const HistoryPage = () => {
                   <View className="history-grid" aria-label="近 28 天记录日历">
                     {calendar.series.map((day) => (
                       <Button
-                        {...buttonA11yProps}
+                        {...buttonActivationProps(
+                          () => setSelectedDate(day.localDate),
+                          !readAuthorityReady,
+                        )}
+                        disabled={!readAuthorityReady}
                         className={`history-day ${day.hasRecords ? 'history-day--recorded' : ''} ${
                           selected?.localDate === day.localDate ? 'history-day--selected' : ''
                         }`}
                         key={day.localDate}
                         aria-label={historyDayLabel(day)}
                         aria-pressed={selected?.localDate === day.localDate}
-                        onClick={() => setSelectedDate(day.localDate)}
                       >
                         <Text className="history-day__number">{dayNumber(day.localDate)}</Text>
                         <View className="history-day__marks" aria-hidden="true">
@@ -157,7 +247,13 @@ const HistoryPage = () => {
                   </View>
                 </>
               ) : (
-                <View className="history-loading">暂无可显示的日历。</View>
+                <View className="history-unverified">
+                  <Text className="history-eyebrow">UNVERIFIED CALENDAR</Text>
+                  <Text className="history-unverified__title">日历范围尚未核对</Text>
+                  <Text className="history-unverified__copy">
+                    这里不会把读取失败解释成 28 个空白日。核对成功后才会显示日期与证据标记。
+                  </Text>
+                </View>
               )}
             </View>
 
@@ -167,10 +263,10 @@ const HistoryPage = () => {
                 <Text className="history-panel-title">这 28 天留下的证据</Text>
                 <View className="history-totals">
                   {[
-                    ['有记录日', `${totals.recordedDays} / 28`],
-                    ['身体/恢复', `${totals.healthRecordCount} 条`],
-                    ['训练', `${totals.workoutCount} 次`],
-                    ['饮食', `${totals.mealCount} 餐`],
+                    ['有记录日', totals ? `${totals.recordedDays} / 28` : '—'],
+                    ['身体/恢复', totals ? `${totals.healthRecordCount} 条` : '—'],
+                    ['训练', totals ? `${totals.workoutCount} 次` : '—'],
+                    ['饮食', totals ? `${totals.mealCount} 餐` : '—'],
                   ].map(([label, value]) => (
                     <View className="history-total" key={label}>
                       <Text>{label}</Text>
@@ -196,29 +292,43 @@ const HistoryPage = () => {
                   </Text>
                   <View className="history-actions">
                     <Button
-                      {...buttonA11yProps}
+                      {...buttonActivationProps(() => openBackfill('records'), !readAuthorityReady)}
+                      disabled={!readAuthorityReady}
                       className="history-action history-action--primary"
-                      onClick={() => openBackfill('records')}
                     >
                       补记身体/恢复
                     </Button>
                     <Button
-                      {...buttonA11yProps}
+                      {...buttonActivationProps(
+                        () => openBackfill('workouts'),
+                        !readAuthorityReady,
+                      )}
+                      disabled={!readAuthorityReady}
                       className="history-action"
-                      onClick={() => openBackfill('workouts')}
                     >
                       补记训练
                     </Button>
                     <Button
-                      {...buttonA11yProps}
+                      {...buttonActivationProps(
+                        () => openBackfill('nutrition'),
+                        !readAuthorityReady,
+                      )}
+                      disabled={!readAuthorityReady}
                       className="history-action"
-                      onClick={() => openBackfill('nutrition')}
                     >
                       补记饮食
                     </Button>
                   </View>
                 </View>
-              ) : null}
+              ) : (
+                <View className="history-selected history-selected--unknown">
+                  <Text className="history-eyebrow">SELECTED LOCAL DAY</Text>
+                  <Text className="history-selected__date">日期待核对</Text>
+                  <Text className="history-selected__body">
+                    服务返回可信的 28 天范围后，才能选择一天并带入回填入口。
+                  </Text>
+                </View>
+              )}
             </View>
           </View>
 

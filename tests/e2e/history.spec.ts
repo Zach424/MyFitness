@@ -67,6 +67,126 @@ const apiHeaders = (accessToken: string, scope: string) => ({
   'x-idempotency-key': `history-${scope}-${Date.now()}`,
 })
 
+test('history calendar keeps an initial offline read unknown until retry succeeds', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  const browserErrors: string[] = []
+  page.on('console', (message) => {
+    if (message.type() === 'error') browserErrors.push(message.text())
+  })
+  page.on('pageerror', (error) => browserErrors.push(error.message))
+
+  let calendarReads = 0
+  await page.route('**/v1/insights/history-calendar?**', async (route) => {
+    calendarReads += 1
+    if (calendarReads === 1) await route.abort('internetdisconnected')
+    else await route.continue()
+  })
+
+  await page.goto('/')
+  await page.getByRole('button', { name: '打开 28 天历史日历' }).click()
+  await expect(page.getByText('OFFLINE / 连接未完成')).toBeVisible()
+  await expect(page.getByText('历史日历还没有读取')).toBeVisible()
+  await expect(page.getByText('日历范围尚未核对')).toBeVisible()
+  await expect(page.getByText('0 / 28', { exact: true })).toHaveCount(0)
+  await expect(page.getByText('暂无可显示的日历。')).toHaveCount(0)
+  await expect(page.locator('.history-day')).toHaveCount(0)
+  await expect(page.locator('.history-total__value').filter({ hasText: '—' })).toHaveCount(4)
+
+  const retry = page.getByRole('button', { name: '重新核对 28 天历史日历' })
+  await expect(retry).toBeFocused()
+  await page.screenshot({
+    path: 'output/playwright/iteration-072-history-calendar-offline-mobile.png',
+    fullPage: true,
+  })
+
+  await page.keyboard.press('Enter')
+  await expect(page.locator('.history-day')).toHaveCount(28)
+  await expect(page.getByText('OFFLINE / 连接未完成')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: '更新 28 天历史日历' })).toBeEnabled()
+  expect(calendarReads).toBe(2)
+  expect(
+    browserErrors.filter((error) => !error.includes('net::ERR_INTERNET_DISCONNECTED')),
+  ).toEqual([])
+})
+
+test('history calendar retains one accepted map as read-only after a failed refresh', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const browserErrors: string[] = []
+  page.on('console', (message) => {
+    if (message.type() === 'error') browserErrors.push(message.text())
+  })
+  page.on('pageerror', (error) => browserErrors.push(error.message))
+
+  const sessionPromise = page.waitForResponse((response) =>
+    response.url().endsWith('/v1/auth/dev/session'),
+  )
+  await page.goto('/')
+  const { accessToken } = (await (await sessionPromise).json()) as { accessToken: string }
+  const recordedDate = localDate(new Date(Date.now() - 86_400_000))
+  const healthResponse = await page.request.post(`${apiUrl}/health-records`, {
+    headers: apiHeaders(accessToken, 'retained-health'),
+    data: {
+      metric: 'body.weight',
+      value: 71.6,
+      unit: 'kg',
+      source: { kind: 'manual' },
+      status: 'confirmed',
+      occurredAt: `${recordedDate}T00:00:00.000Z`,
+      timezone: 'Asia/Shanghai',
+    },
+  })
+  expect(healthResponse.status()).toBe(201)
+
+  await page.getByRole('button', { name: '打开 28 天历史日历' }).click()
+  const recordedDay = page.getByRole('button', {
+    name: `${recordedDate}，身体或恢复 1 条，训练 0 次，饮食 0 餐`,
+  })
+  await expect(recordedDay).toBeVisible()
+  await recordedDay.click()
+  await expect(page.getByText('身体/恢复 1 条、训练 0 次、饮食 0 餐。')).toBeVisible()
+
+  let refreshReads = 0
+  await page.route('**/v1/insights/history-calendar?**', async (route) => {
+    refreshReads += 1
+    if (refreshReads === 1) {
+      await route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'raw history projection outage' }),
+      })
+    } else await route.continue()
+  })
+  await page.getByRole('button', { name: '更新 28 天历史日历' }).click()
+
+  const readState = page.locator('.history-authority-state')
+  await expect(readState.getByText('SERVICE PAUSED / 服务暂不可用')).toBeVisible()
+  await expect(readState).toContainText('保留')
+  await expect(readState).not.toContainText('raw history projection outage')
+  await expect(recordedDay).toBeVisible()
+  await expect(recordedDay).toBeDisabled()
+  await expect(page.getByText('身体/恢复 1 条、训练 0 次、饮食 0 餐。')).toBeVisible()
+  await expect(page.getByRole('button', { name: '补记身体/恢复' })).toBeDisabled()
+  await expect(page.getByRole('button', { name: '补记训练' })).toBeDisabled()
+  await expect(page.getByRole('button', { name: '补记饮食' })).toBeDisabled()
+  const retry = page.getByRole('button', { name: '重新核对 28 天历史日历' })
+  await expect(retry).toBeFocused()
+  await page.screenshot({
+    path: 'output/playwright/iteration-072-history-calendar-stale-wide.png',
+    fullPage: true,
+  })
+
+  await page.keyboard.press('Enter')
+  await expect(readState).toHaveCount(0)
+  await expect(recordedDay).toBeEnabled()
+  await expect(page.getByRole('button', { name: '补记身体/恢复' })).toBeEnabled()
+  expect(refreshReads).toBe(2)
+  expect(browserErrors.filter((error) => !error.includes('503 (Service Unavailable)'))).toEqual([])
+})
+
 test('history calendar crosses domains and requires a real time for backfill', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   const browserErrors: string[] = []

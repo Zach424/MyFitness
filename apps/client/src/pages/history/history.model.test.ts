@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
-import { historyCalendarTotals, historyDateLabel, historyDayLabel } from './history.model'
+import {
+  classifyHistoryCalendarReadFailure,
+  historyCalendarReadFailureCopy,
+  historyCalendarTotals,
+  historyDateLabel,
+  historyDayLabel,
+} from './history.model'
 
 const calendar = {
   generatedAt: '2026-08-05T12:00:00.000Z',
@@ -30,5 +36,17 @@ describe('history calendar client model', () => {
 
   it('formats a local calendar label independently from the host timezone', () => {
     expect(historyDateLabel('2026-08-05')).toContain('8月5日')
+  })
+
+  it('classifies read failures without exposing transport messages', () => {
+    expect(classifyHistoryCalendarReadFailure(new Error('Failed to fetch'))).toBe('offline')
+    expect(classifyHistoryCalendarReadFailure({ statusCode: 401 })).toBe('refused')
+    expect(classifyHistoryCalendarReadFailure({ statusCode: 503 })).toBe('service')
+    expect(classifyHistoryCalendarReadFailure(undefined)).toBe('unknown')
+
+    expect(historyCalendarReadFailureCopy('offline', false).detail).toContain(
+      '不会用空白日或零计数',
+    )
+    expect(historyCalendarReadFailureCopy('service', true).detail).toContain('回填入口保持冻结')
   })
 })
