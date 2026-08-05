@@ -138,6 +138,85 @@
   line-height: 44px;
 }
 
+.plan-recovery {
+  overflow: hidden;
+  margin-bottom: 18px;
+  border: 1px solid rgba(169, 104, 33, 0.3);
+  border-radius: var(--radius-card);
+  background:
+    repeating-linear-gradient(
+      -12deg,
+      rgba(169, 104, 33, 0.04) 0,
+      rgba(169, 104, 33, 0.04) 1px,
+      transparent 1px,
+      transparent 12px
+    ),
+    rgba(255, 250, 241, 0.98);
+}
+
+.plan-recovery__marker {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 9px 17px;
+  border-bottom: 1px dashed rgba(169, 104, 33, 0.34);
+  color: var(--color-warning);
+  font-size: 9px;
+  font-weight: 730;
+  letter-spacing: 0.08em;
+}
+
+.plan-recovery__body {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px;
+}
+
+.plan-recovery__title,
+.plan-recovery__copy,
+.plan-recovery__preserved {
+  display: block;
+}
+
+.plan-recovery__title {
+  margin-top: 6px;
+  color: var(--color-ink);
+  font-size: 18px;
+  font-weight: 770;
+  letter-spacing: -0.035em;
+}
+
+.plan-recovery__copy,
+.plan-recovery__preserved {
+  max-width: 720px;
+  margin-top: 7px;
+  color: var(--color-muted);
+  font-size: 10px;
+  line-height: 1.7;
+}
+
+.plan-recovery__preserved {
+  color: var(--color-warning);
+  font-weight: 680;
+}
+
+.plan-recovery__action {
+  width: auto;
+  min-width: max-content;
+  min-height: 42px;
+  margin: 0;
+  padding: 0 14px;
+  border: 1px solid var(--color-warning);
+  border-radius: var(--radius-control);
+  color: var(--color-paper);
+  background: var(--color-warning);
+  font-size: 10px;
+  font-weight: 730;
+  line-height: 40px;
+}
+
 .plan-empty {
   max-width: 760px;
   padding: 38px 24px;
@@ -189,8 +268,8 @@
   background: var(--color-mineral);
 }
 
-.plan-primary[disabled],
-.plan-secondary[disabled] {
+.plan-primary[aria-disabled='true'],
+.plan-secondary[aria-disabled='true'] {
   opacity: 0.52;
 }
 
@@ -1176,12 +1255,14 @@ button:focus-visible,
 }
 
 @media (max-width: 560px) {
-  .plan-freshness__body {
+  .plan-freshness__body,
+  .plan-recovery__body {
     align-items: stretch;
     flex-direction: column;
   }
 
-  .plan-freshness__action {
+  .plan-freshness__action,
+  .plan-recovery__action {
     width: 100%;
   }
 }

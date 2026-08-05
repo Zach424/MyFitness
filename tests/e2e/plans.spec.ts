@@ -172,6 +172,121 @@ test('weekly plan supports substitution, modification and acceptance history', a
   expect(errors).toEqual([])
 })
 
+test('lost generation response reconciles the current week without a second write', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  const errors = collectBrowserErrors(page)
+  await seedProfileAndOpenPlans(page)
+  let generationWrites = 0
+  page.on('request', (request) => {
+    if (request.url().endsWith('/v1/plans/weekly') && request.method() === 'POST') {
+      generationWrites += 1
+    }
+  })
+  await page.route(
+    '**/v1/plans/weekly',
+    async (route) => {
+      if (route.request().method() !== 'POST') {
+        await route.continue()
+        return
+      }
+      const response = await route.fetch()
+      expect(response.status()).toBe(201)
+      await route.abort('failed')
+    },
+    { times: 1 },
+  )
+
+  await page.getByRole('button', { name: /生成 .* 初稿/ }).click()
+  const recovery = page.getByRole('alert')
+  await expect(recovery).toContainText('RECONCILE FIRST')
+  await expect(recovery).toContainText('核对前不会重放操作')
+  await expect(page.getByRole('button', { name: /生成 .* 初稿/ })).toHaveAttribute(
+    'aria-disabled',
+    'true',
+  )
+  await page.locator('.plans-scroll').evaluate((element) => element.scrollTo({ top: 0 }))
+  await page.screenshot({
+    path: 'output/playwright/iteration-058-plan-generate-reconciliation-mobile.png',
+  })
+
+  await page.getByRole('button', { name: '核对服务端状态' }).click()
+  await expect(page.getByText('本周折页')).toBeVisible()
+  await expect(page.getByText(/核对完成：服务端已有 v1 周计划/)).toBeVisible()
+  await expect(page.getByText('v1', { exact: true }).first()).toBeVisible()
+  expect(generationWrites).toBe(1)
+  expect(errors.filter((error) => !error.includes('net::ERR_FAILED'))).toEqual([])
+})
+
+test('lost plan decisions preserve substitutions and reconcile exact next revisions', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  const errors = collectBrowserErrors(page)
+  await seedProfileAndOpenPlans(page)
+  await page.getByRole('button', { name: /生成 .* 初稿/ }).click()
+  await expect(page.getByText('本周折页')).toBeVisible()
+  let decisionWrites = 0
+  page.on('request', (request) => {
+    if (request.url().endsWith('/decision') && request.method() === 'PUT') decisionWrites += 1
+  })
+  await page.getByRole('button', { name: '高脚杯深蹲' }).click()
+  await page.route(
+    '**/v1/plans/weekly/*/decision',
+    async (route) => {
+      const response = await route.fetch()
+      expect(response.status()).toBe(200)
+      await route.abort('failed')
+    },
+    { times: 1 },
+  )
+
+  await page.getByRole('button', { name: '保存替代动作' }).click()
+  let recovery = page.getByRole('alert')
+  await expect(recovery).toContainText('RECONCILE FIRST')
+  await expect(recovery).toContainText('当前替代动作选择仍留在本页')
+  await expect(page.getByText('1 项替代动作尚未保存')).toBeVisible()
+  await page.locator('.plans-scroll').evaluate((element) => element.scrollTo({ top: 0 }))
+  await page.screenshot({
+    path: 'output/playwright/iteration-058-plan-modify-reconciliation-mobile.png',
+  })
+
+  await page.getByRole('button', { name: '核对服务端状态' }).click()
+  await expect(page.getByText(/服务端 v2 已记录替代动作/)).toBeVisible()
+  await expect(page.getByText('已调整', { exact: true })).toBeVisible()
+  await expect(page.getByText('v2', { exact: true }).first()).toBeVisible()
+  expect(decisionWrites).toBe(1)
+
+  await page.route(
+    '**/v1/plans/weekly/*/decision',
+    async (route) => {
+      const response = await route.fetch()
+      expect(response.status()).toBe(200)
+      await route.abort('failed')
+    },
+    { times: 1 },
+  )
+  await page.getByRole('button', { name: '本周暂不采用' }).click()
+  recovery = page.getByRole('alert')
+  await expect(recovery).toContainText('RECONCILE FIRST')
+  await expect(page.getByRole('button', { name: '本周暂不采用' })).toHaveAttribute(
+    'aria-disabled',
+    'true',
+  )
+  await page.locator('.plans-scroll').evaluate((element) => element.scrollTo({ top: 0 }))
+  await page.screenshot({
+    path: 'output/playwright/iteration-058-plan-skip-reconciliation-mobile.png',
+  })
+
+  await page.getByRole('button', { name: '核对服务端状态' }).click()
+  await expect(page.getByText(/服务端 v3 已记录本周跳过决定/)).toBeVisible()
+  await expect(page.getByText('本周跳过', { exact: true })).toBeVisible()
+  await expect(page.getByText('v3', { exact: true }).first()).toBeVisible()
+  expect(decisionWrites).toBe(2)
+  expect(errors.filter((error) => !error.includes('net::ERR_FAILED'))).toEqual([])
+})
+
 test('weekly fold keeps plan evidence and nutrition focus legible at wide viewport', async ({
   page,
 }) => {

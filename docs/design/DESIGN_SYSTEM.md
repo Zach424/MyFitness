@@ -566,6 +566,20 @@ Visual review found that Taro preserved the consent toggle's accessible name but
 - [390 × 844 progress upload reconciliation](../../output/playwright/iteration-057-progress-upload-reconciliation-mobile.png)
 - [390 × 844 progress deletion reconciliation](../../output/playwright/iteration-057-progress-delete-reconciliation-mobile.png)
 
+## Weekly-plan write reconciliation — iteration 058
+
+Week Fold now uses the established amber authority strip for uncertain generation and decisions, but adapts its top rail to the plan model: `WRITE ? → READ` names the transition from an unread write response to an owner-visible projection. The ordinary Week Fold remains fully visible beneath it, including version, status and selected day, so the warning does not replace the evidence the user must compare.
+
+The recovery heading is intentionally factual—`先确认权威状态`—rather than a generic failure or offline badge. `RECONCILE FIRST / 禁止直接重放` names the safety boundary, while the action always reads `核对服务端状态`. During substitution recovery, a second amber line says the current choices remain on the page and will not be submitted again before the read. All normal generate, refresh, substitution, accept and skip controls stay visible but inert; this makes the paused decision legible without implying that the page is frozen or syncing in the background.
+
+Three 390 × 844 artifacts follow the same top-of-scroll composition. Generation keeps the empty draft card visible with its disabled primary action. Modification retains v1, the pending status and the Week Fold below the strip; skipping retains v2 and the adjusted state. After reconciliation the browser asserts v1/v2/v3 and exact result copy, so screenshots document uncertainty rather than serving as success proof.
+
+Visual review confirmed that the amber card remains readable at mobile width, the action occupies a full-width thumb target, and the disabled ordinary action no longer relies on Taro's bare `[disabled]` attribute for opacity. The shared activation adapter publishes `aria-disabled` and blocks pointer, Enter and Space callbacks; real screen-reader and WeChat-device behavior remains a release gate.
+
+- [390 × 844 generation response-loss reconciliation](../../output/playwright/iteration-058-plan-generate-reconciliation-mobile.png)
+- [390 × 844 substitution response-loss reconciliation](../../output/playwright/iteration-058-plan-modify-reconciliation-mobile.png)
+- [390 × 844 skip response-loss reconciliation](../../output/playwright/iteration-058-plan-skip-reconciliation-mobile.png)
+
 ## Screenshot review checklist
 
 - The Rhythm Rail remains understandable without color.

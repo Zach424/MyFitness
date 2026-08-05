@@ -31,6 +31,10 @@ describe('authority-aware workbench recovery contract', () => {
     'photo_delete',
     'progress_upload',
     'progress_delete',
+    'plan_generate',
+    'plan_accept',
+    'plan_modify',
+    'plan_skip',
   ] as const)('requires read-side reconciliation before repeating %s', (operation) => {
     const recovery = describeWorkbenchFailure(operation, serverError(503, 'unavailable'))
 
@@ -68,5 +72,9 @@ describe('authority-aware workbench recovery contract', () => {
     expect(workbenchOperationPolicies.progress_reserve.preserves).toBe('capture_intent')
     expect(workbenchOperationPolicies.progress_upload.preserves).toBe('capture_intent')
     expect(workbenchOperationPolicies.progress_delete.preserves).toBe('none')
+    expect(workbenchOperationPolicies.plan_generate.preserves).toBe('none')
+    expect(workbenchOperationPolicies.plan_accept.preserves).toBe('none')
+    expect(workbenchOperationPolicies.plan_modify.preserves).toBe('decision_input')
+    expect(workbenchOperationPolicies.plan_skip.preserves).toBe('none')
   })
 })

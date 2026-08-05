@@ -12,6 +12,10 @@ export type WorkbenchOperation =
   | 'progress_reserve'
   | 'progress_upload'
   | 'progress_delete'
+  | 'plan_generate'
+  | 'plan_accept'
+  | 'plan_modify'
+  | 'plan_skip'
 
 export type WorkbenchRecoveryAuthority = 'retry_same_request' | 'reconcile_required' | 'terminal'
 
@@ -25,7 +29,7 @@ export type WorkbenchRecovery = {
   eyebrow: string
   message: string
   actionLabel: string
-  preserves: 'definition_input' | 'review_input' | 'capture_intent' | 'none'
+  preserves: 'definition_input' | 'review_input' | 'capture_intent' | 'decision_input' | 'none'
 }
 
 type OperationPolicy = {
@@ -97,6 +101,26 @@ export const workbenchOperationPolicies: Record<WorkbenchOperation, OperationPol
   },
   progress_delete: {
     label: '进度照删除',
+    uncertainAuthority: 'reconcile_required',
+    preserves: 'none',
+  },
+  plan_generate: {
+    label: '周计划生成或刷新',
+    uncertainAuthority: 'reconcile_required',
+    preserves: 'none',
+  },
+  plan_accept: {
+    label: '周计划采用',
+    uncertainAuthority: 'reconcile_required',
+    preserves: 'none',
+  },
+  plan_modify: {
+    label: '周计划替代动作保存',
+    uncertainAuthority: 'reconcile_required',
+    preserves: 'decision_input',
+  },
+  plan_skip: {
+    label: '周计划跳过',
     uncertainAuthority: 'reconcile_required',
     preserves: 'none',
   },

@@ -3,15 +3,18 @@ import { Button, Checkbox, ScrollView, Text, View } from '@tarojs/components'
 import Taro, { useDidShow } from '@tarojs/taro'
 import type {
   AiExplanation,
+  PlanDecision,
   PlanFreshness,
   PlanWorkoutLink,
   WeeklyPlan,
   WeeklyPlanHistoryItem,
+  WeeklyPlanListItem,
   Workout,
 } from '@myfitness/contracts'
 import { aiPlanConsentVersion } from '@myfitness/contracts/ai.constants'
 
 import {
+  buttonActivationProps,
   buttonA11yProps,
   checkboxA11yProps,
   keyboardActivationProps,
@@ -29,6 +32,11 @@ import {
   unlinkPlanWorkout,
 } from '../../lib/api'
 import {
+  describeWorkbenchFailure,
+  type WorkbenchOperation,
+  type WorkbenchRecovery,
+} from '../../lib/workbench-recovery'
+import {
   changedPlanSelections,
   currentPlanFreshness,
   defaultPlanWeekStart,
@@ -39,6 +47,19 @@ import {
 import './index.scss'
 
 type PlanActivity = NonNullable<WeeklyPlan['days'][number]['session']>['activities'][number]
+type PlanDecisionKind = PlanDecision['decision']
+type PlanSelections = PlanDecision['selections']
+
+type PendingPlanGeneration = {
+  weekStart: string
+  basePlan?: Pick<WeeklyPlan, 'id' | 'revision'>
+}
+
+type PendingPlanDecision = {
+  decision: PlanDecisionKind
+  basePlan: WeeklyPlan
+  selections: PlanSelections
+}
 
 const weekdayLabels: Record<WeeklyPlan['days'][number]['weekday'], string> = {
   mon: '一',
@@ -99,6 +120,34 @@ const aiRequestKey = () =>
 
 const messageOf = (error: unknown) =>
   error instanceof ApiError || error instanceof Error ? error.message : '操作失败，请稍后重试'
+
+const decisionOperation = (decision: PlanDecisionKind): WorkbenchOperation =>
+  decision === 'accepted' ? 'plan_accept' : decision === 'modified' ? 'plan_modify' : 'plan_skip'
+
+const planContainsSelections = (plan: WeeklyPlan, selections: PlanSelections) =>
+  selections.every((selection) =>
+    plan.days.some((day) =>
+      day.session?.activities.some(
+        (activity) =>
+          activity.id === selection.activityId && activity.selectedOptionId === selection.optionId,
+      ),
+    ),
+  )
+
+const terminalPlanRecovery = (
+  operation: WorkbenchOperation,
+  message: string,
+  actionLabel: string,
+  preserves: WorkbenchRecovery['preserves'] = 'none',
+): WorkbenchRecovery => ({
+  operation,
+  authority: 'terminal',
+  failureKind: 'unexpected',
+  eyebrow: 'AUTHORITATIVE STATE / 以服务端为准',
+  message,
+  actionLabel,
+  preserves,
+})
 
 const shortDate = (value: string) => `${Number(value.slice(5, 7))}/${Number(value.slice(8, 10))}`
 
@@ -187,8 +236,12 @@ const PlansPage = () => {
   const [saving, setSaving] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [feedback, setFeedback] = useState('')
+  const [planRecovery, setPlanRecovery] = useState<WorkbenchRecovery>()
   const pendingKey = useRef('')
   const pendingAiKey = useRef('')
+  const pendingGeneration = useRef<PendingPlanGeneration>()
+  const pendingDecision = useRef<PendingPlanDecision>()
+  const divergentProjection = useRef<WeeklyPlanListItem>()
   const savedPlanRef = useRef<WeeklyPlan>()
   const freshnessRef = useRef<PlanFreshness>()
   const historyGenerationRef = useRef(0)
@@ -215,6 +268,34 @@ const PlansPage = () => {
         plan.days.find((day) => day.available)?.date ??
         plan.days[0]!.date,
     )
+  }
+
+  const applyProjectedPlan = (projected: WeeklyPlanListItem) => {
+    const { freshness: nextFreshness, sessionLinks: nextSessionLinks, ...plan } = projected
+    setCurrentPlan(plan, nextFreshness, nextSessionLinks)
+    return plan
+  }
+
+  const resetPlanRecovery = () => {
+    setPlanRecovery(undefined)
+    pendingGeneration.current = undefined
+    pendingDecision.current = undefined
+    divergentProjection.current = undefined
+  }
+
+  const confirmPlan = async (
+    plan: WeeklyPlan,
+    message: string,
+    nextFreshness: PlanFreshness = currentPlanFreshness(plan),
+    nextSessionLinks: PlanWorkoutLink[] = [],
+  ) => {
+    setCurrentPlan(plan, nextFreshness, nextSessionLinks)
+    try {
+      await refreshPlanHistory(plan)
+      setFeedback(message)
+    } catch {
+      setFeedback(`${message} 版本历史暂未刷新，可稍后使用“检查版本”重读。`)
+    }
   }
 
   const refreshPlanHistory = async (plan: WeeklyPlan) => {
@@ -348,6 +429,7 @@ const PlansPage = () => {
   const dirty = selections.length > 0
   const planActionable = freshness?.canAcceptOrModify ?? false
   const aiActionable = freshness?.canExplainWithAi ?? false
+  const planWriteBlocked = saving || Boolean(planRecovery)
   const freshnessNotice = freshness ? planFreshnessNotice(freshness) : null
   const toggleAiConsent = () => {
     if (aiActionable) setAiConsent((value) => !value)
@@ -356,32 +438,43 @@ const PlansPage = () => {
   const generate = async () => {
     setSaving(true)
     setFeedback('')
+    const weekStart = defaultPlanWeekStart()
+    if (!pendingGeneration.current) {
+      pendingGeneration.current = {
+        weekStart,
+        ...(savedPlan?.weekStart === weekStart
+          ? { basePlan: { id: savedPlan.id, revision: savedPlan.revision } }
+          : {}),
+      }
+    }
     if (!pendingKey.current) pendingKey.current = requestKey()
     try {
-      const plan = await generateWeeklyPlan(
-        { weekStart: defaultPlanWeekStart() },
-        pendingKey.current,
-      )
+      const plan = await generateWeeklyPlan({ weekStart }, pendingKey.current)
       pendingKey.current = ''
-      setCurrentPlan(plan, currentPlanFreshness(plan))
-      await refreshPlanHistory(plan)
-      setFeedback('周计划初稿已生成。先看依据和替代动作，再决定是否采用。')
+      resetPlanRecovery()
+      await confirmPlan(plan, '周计划初稿已生成。先看依据和替代动作，再决定是否采用。')
     } catch (error) {
-      setFeedback(messageOf(error))
+      setPlanRecovery(describeWorkbenchFailure('plan_generate', error))
     } finally {
       setSaving(false)
     }
   }
 
-  const decide = async (decision: 'accepted' | 'modified' | 'skipped') => {
+  const decide = async (decision: PlanDecisionKind) => {
     if (!savedPlan) return
     setSaving(true)
     setFeedback('')
+    const submittedSelections = decision === 'modified' ? selections : []
+    pendingDecision.current = {
+      decision,
+      basePlan: savedPlan,
+      selections: submittedSelections,
+    }
     try {
       const plan = await decideWeeklyPlan(savedPlan.id, {
         decision,
         expectedRevision: savedPlan.revision,
-        selections: decision === 'modified' ? selections : [],
+        selections: submittedSelections,
         note:
           decision === 'modified'
             ? '用户在计划页选择替代动作'
@@ -389,28 +482,154 @@ const PlansPage = () => {
               ? '用户选择本周暂不采用'
               : '用户确认采用当前计划',
       })
-      setCurrentPlan(
+      resetPlanRecovery()
+      await confirmPlan(
         plan,
-        decision === 'skipped' && freshness ? freshness : currentPlanFreshness(plan),
-        sessionLinks,
-      )
-      await refreshPlanHistory(plan)
-      setFeedback(
         decision === 'modified'
           ? '替代动作已保存，新版本已进入历史。'
           : decision === 'accepted'
             ? '计划已采用。训练记录仍以实际完成情况为准。'
             : '本周已标记为暂不采用，记录功能不受影响。',
+        decision === 'skipped' && freshness ? freshness : currentPlanFreshness(plan),
+        sessionLinks,
       )
     } catch (error) {
-      setFeedback(messageOf(error))
+      setPlanRecovery(describeWorkbenchFailure(decisionOperation(decision), error))
     } finally {
       setSaving(false)
     }
   }
 
+  const reconcilePlanWrite = async () => {
+    const generation = pendingGeneration.current
+    const decision = pendingDecision.current
+    if (!generation && !decision) return
+    const operation = generation ? 'plan_generate' : decisionOperation(decision!.decision)
+    setSaving(true)
+    setFeedback('')
+    try {
+      const plans = await listWeeklyPlans()
+      if (generation) {
+        const projected = plans.items.find((item) => item.weekStart === generation.weekStart)
+        if (!projected) {
+          pendingKey.current = ''
+          pendingGeneration.current = undefined
+          setPlanRecovery(
+            terminalPlanRecovery(
+              operation,
+              '服务端没有这一周的新计划，因此没有成功证据。原请求不会自动重放；请返回后重新发起生成。',
+              '返回重新生成',
+            ),
+          )
+          return
+        }
+        const base = generation.basePlan
+        if (base && projected.id !== base.id) {
+          divergentProjection.current = projected
+          setPlanRecovery(
+            terminalPlanRecovery(
+              operation,
+              '服务端当前周计划已经由另一份权威版本占用。页面不会覆盖它，请先载入当前版本再决定下一步。',
+              '载入服务端当前计划',
+            ),
+          )
+          return
+        }
+        const plan = applyProjectedPlan(projected)
+        pendingKey.current = ''
+        resetPlanRecovery()
+        await confirmPlan(
+          plan,
+          base && projected.revision === base.revision
+            ? `核对完成：服务端仍是 v${projected.revision}，本次生成没有产生重复版本。`
+            : `核对完成：服务端已有 v${projected.revision} 周计划，页面未重复生成。`,
+          projected.freshness,
+          projected.sessionLinks,
+        )
+        return
+      }
+
+      const pending = decision!
+      const projected = plans.items.find((item) => item.id === pending.basePlan.id)
+      if (!projected) {
+        setPlanRecovery(
+          terminalPlanRecovery(
+            operation,
+            '服务端已找不到原计划，无法确认这次决定。页面保留可见草稿，但不会自动重放。',
+            '结束本次核对',
+            pending.decision === 'modified' ? 'decision_input' : 'none',
+          ),
+        )
+        return
+      }
+      const exactNextRevision = projected.revision === pending.basePlan.revision + 1
+      const exactDecision = projected.status === pending.decision
+      const exactSelections =
+        pending.decision !== 'modified' || planContainsSelections(projected, pending.selections)
+      if (exactNextRevision && exactDecision && exactSelections) {
+        const plan = applyProjectedPlan(projected)
+        resetPlanRecovery()
+        await confirmPlan(
+          plan,
+          `核对完成：服务端 v${projected.revision} 已记录${
+            pending.decision === 'accepted'
+              ? '采用决定'
+              : pending.decision === 'modified'
+                ? '替代动作'
+                : '本周跳过决定'
+          }，页面未重复提交。`,
+          projected.freshness,
+          projected.sessionLinks,
+        )
+        return
+      }
+      if (projected.revision === pending.basePlan.revision) {
+        resetPlanRecovery()
+        setFeedback(
+          `核对完成：服务端仍是 v${projected.revision}，没有本次决定的成功证据。页面未自动重放；请重新明确确认。`,
+        )
+        return
+      }
+      divergentProjection.current = projected
+      setPlanRecovery(
+        terminalPlanRecovery(
+          operation,
+          `服务端当前是 v${projected.revision}（${statusLabels[projected.status]}），与本次预期的 v${pending.basePlan.revision + 1} 不一致。页面不会覆盖并发更新。`,
+          '载入服务端当前计划',
+          pending.decision === 'modified' ? 'decision_input' : 'none',
+        ),
+      )
+    } catch (error) {
+      setPlanRecovery(describeWorkbenchFailure(operation, error))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handlePlanRecoveryAction = async () => {
+    if (!planRecovery) return
+    if (planRecovery.authority !== 'terminal') {
+      await reconcilePlanWrite()
+      return
+    }
+    const projected = divergentProjection.current
+    pendingKey.current = ''
+    resetPlanRecovery()
+    if (projected) {
+      const plan = applyProjectedPlan(projected)
+      await confirmPlan(
+        plan,
+        `已载入服务端当前 v${projected.revision}；请重新检查后再作决定。`,
+        projected.freshness,
+        projected.sessionLinks,
+      )
+      return
+    }
+    setFeedback('本次未确认操作已经结束；如仍需要，请重新发起。')
+  }
+
   const selectOption = (activityId: string, optionId: string) => {
-    if (!planActionable) return
+    if (!planActionable || planRecovery) return
     setDraftPlan((current) =>
       current ? updatePlanSelection(current, activityId, optionId) : current,
     )
@@ -537,6 +756,35 @@ const PlansPage = () => {
             </View>
           ) : null}
 
+          {planRecovery ? (
+            <View className="plan-recovery" role="alert">
+              <View className="plan-recovery__marker" aria-hidden="true">
+                <Text className="metric">WRITE ?</Text>
+                <Text>→</Text>
+                <Text className="metric">READ</Text>
+              </View>
+              <View className="plan-recovery__body">
+                <View>
+                  <Text className="plans-eyebrow">{planRecovery.eyebrow}</Text>
+                  <Text className="plan-recovery__title">先确认权威状态</Text>
+                  <Text className="plan-recovery__copy">{planRecovery.message}</Text>
+                  {planRecovery.preserves === 'decision_input' ? (
+                    <Text className="plan-recovery__preserved">
+                      当前替代动作选择仍留在本页；核对完成前不会再次提交。
+                    </Text>
+                  ) : null}
+                </View>
+                <Button
+                  className="plan-recovery__action"
+                  disabled={saving}
+                  {...buttonActivationProps(() => void handlePlanRecoveryAction(), saving)}
+                >
+                  {saving ? '核对中…' : planRecovery.actionLabel}
+                </Button>
+              </View>
+            </View>
+          ) : null}
+
           {loading ? (
             <View className="plan-empty" role="status">
               <Text className="plan-empty__title">正在读取周计划</Text>
@@ -552,10 +800,9 @@ const PlansPage = () => {
               </Text>
               <View className="plan-empty__actions">
                 <Button
-                  {...buttonA11yProps}
                   className="plan-primary"
-                  disabled={saving}
-                  onClick={() => void generate()}
+                  disabled={planWriteBlocked}
+                  {...buttonActivationProps(() => void generate(), planWriteBlocked)}
                 >
                   {saving ? '正在生成…' : `生成 ${weekLabel(defaultPlanWeekStart())} 初稿`}
                 </Button>
@@ -580,10 +827,12 @@ const PlansPage = () => {
                     {statusLabels[draftPlan.status]}
                   </Text>
                   <Button
-                    {...buttonA11yProps}
                     className="plan-refresh"
-                    disabled={refreshing}
-                    onClick={() => void refreshPlanProjection(true, true)}
+                    disabled={refreshing || planWriteBlocked}
+                    {...buttonActivationProps(
+                      () => void refreshPlanProjection(true, true),
+                      refreshing || planWriteBlocked,
+                    )}
                   >
                     {refreshing ? '复核中…' : '检查版本'}
                   </Button>
@@ -619,14 +868,12 @@ const PlansPage = () => {
                       <Text className="plan-freshness__copy">{freshnessNotice.body}</Text>
                     </View>
                     <Button
-                      {...buttonA11yProps}
                       className="plan-freshness__action"
-                      disabled={saving}
-                      onClick={() =>
-                        freshness.recommendedAction === 'regenerate'
-                          ? void generate()
-                          : void Taro.navigateTo({ url: '/pages/onboarding/index' })
-                      }
+                      disabled={planWriteBlocked}
+                      {...buttonActivationProps(() => {
+                        if (freshness.recommendedAction === 'regenerate') void generate()
+                        else void Taro.navigateTo({ url: '/pages/onboarding/index' })
+                      }, planWriteBlocked)}
                     >
                       {saving ? '处理中…' : freshnessNotice.actionLabel}
                     </Button>
@@ -681,7 +928,7 @@ const PlansPage = () => {
                           {selectedDay.session.activities.map((activity) => (
                             <ActivityCard
                               activity={activity}
-                              disabled={!planActionable}
+                              disabled={!planActionable || Boolean(planRecovery)}
                               key={activity.id}
                               onSelect={(optionId) => selectOption(activity.id, optionId)}
                             />
@@ -818,12 +1065,18 @@ const PlansPage = () => {
                     </View>
                     <View className="decision-bar__actions">
                       <Button
-                        {...buttonA11yProps}
                         className="plan-primary"
                         disabled={
-                          saving || !planActionable || (!dirty && savedPlan?.status === 'accepted')
+                          planWriteBlocked ||
+                          !planActionable ||
+                          (!dirty && savedPlan?.status === 'accepted')
                         }
-                        onClick={() => void decide(dirty ? 'modified' : 'accepted')}
+                        {...buttonActivationProps(
+                          () => void decide(dirty ? 'modified' : 'accepted'),
+                          planWriteBlocked ||
+                            !planActionable ||
+                            (!dirty && savedPlan?.status === 'accepted'),
+                        )}
                       >
                         {saving
                           ? '正在保存…'
@@ -836,10 +1089,12 @@ const PlansPage = () => {
                                 : '采用这份计划'}
                       </Button>
                       <Button
-                        {...buttonA11yProps}
                         className="plan-secondary"
-                        disabled={saving || savedPlan?.status === 'skipped'}
-                        onClick={() => void decide('skipped')}
+                        disabled={planWriteBlocked || savedPlan?.status === 'skipped'}
+                        {...buttonActivationProps(
+                          () => void decide('skipped'),
+                          planWriteBlocked || savedPlan?.status === 'skipped',
+                        )}
                       >
                         {savedPlan?.status === 'skipped' ? '本周已跳过' : '本周暂不采用'}
                       </Button>

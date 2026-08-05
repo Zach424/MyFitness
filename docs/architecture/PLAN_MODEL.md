@@ -1,6 +1,6 @@
 # Weekly plan model
 
-Status: implemented as `deterministic-v1` in iteration 008; bounded record-evidence freshness added in iteration 035; explicit plan-to-workout links added in iteration 036; stable revision-history pagination added in iteration 049
+Status: implemented as `deterministic-v1` in iteration 008; bounded record-evidence freshness added in iteration 035; explicit plan-to-workout links added in iteration 036; stable revision-history pagination added in iteration 049; authority-aware plan-write recovery added in iteration 058
 
 ## Purpose and boundary
 
@@ -56,6 +56,18 @@ Client decisions use optimistic `expectedRevision` checks:
 - `accepted` preserves the reviewed content as a new immutable revision.
 - `skipped` records the decision and optional note without implying failure.
 - A stale decision returns `409`; a missing/blocked profile returns `422`.
+
+### Ambiguous plan-write recovery
+
+The client does not treat a transport exception as proof that generation or a decision failed. It also does not blindly reuse the generation key: the service request hash contains the current onboarding revision and complete evidence-derived payload, so a later retry with changed evidence can correctly conflict even when the visible week-start input is unchanged.
+
+- Before generation, Week Fold retains only the requested Monday and the visible base plan ID/revision when that same week already exists. After an ambiguous response it reads `GET /plans/weekly`, finds the exact week and adopts that projection without another `POST`. The same revision is a valid no-op outcome when planning-impact evidence did not change; a newer revision is loaded as authority, not described as proof that a particular lost response caused it.
+- Before `accept`, `modify` or `skip`, the page retains the exact base plan snapshot, decision and page-owned substitution selections in memory. It never persists the request or queues a replay.
+- A decision is recovered as successful only when the owner-visible plan has the same ID, exactly `base revision + 1`, the requested status and, for `modified`, every submitted activity/option selection. The page then reloads freshness, links and immutable history.
+- If the server remains at the base revision, the page reports that there is no success evidence, ends the unknown attempt and requires a fresh explicit decision. If the server has another revision/status, the page keeps the draft visible until the user chooses to load the current projection; it never overwrites the concurrent version.
+- While authority is unresolved, generation, freshness refresh, substitution, adoption and skip callbacks are blocked for pointer, Enter and Space and publish `aria-disabled`. The only live action is the foreground server-state read or terminal dismissal.
+
+Real local API/browser fault injection commits generation, modification and skipping before aborting the corresponding browser response. Reconciliation recovers v1, v2 and v3 respectively and request counters prove one write per intent. This proves the local HTTP/PostgreSQL behavior, not real radio loss or WeChat-device behavior.
 
 ## Explicit plan-to-actual reconciliation
 
