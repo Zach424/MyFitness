@@ -2,7 +2,7 @@
 
 面向普通健身人群的多端记录与 AI 规划产品。产品把身体、训练、饮食和恢复数据整理为可解释、可调整、可持续执行的个人计划。
 
-> 当前阶段：首个服务候选 `v0.1.0-rc.1` 已发布验证；本地产品已完成身体/训练/饮食观察、用户自建动作与食物目录、隐私优先进度照、计划到实际训练的显式关联，以及三类记录编辑器的 24 小时账号隔离草稿恢复。Today 可打开按 IANA 时区生成的 28 天跨域历史日历；空白只表示没有记录，选择过去日期可进入任一编辑器，但必须补充真实时分才能保存。新建与修改草稿均可恢复；修改草稿绑定聚合 ID 和基础修订号，只在服务器仍是同一版本时恢复，旧版本或已删除目标会被安全拒绝。无效、夏令时缺口、未选择的重复时刻和未来时间会被拒绝，未改动的历史时间保留原始秒/毫秒。H5 的首页快捷入口、主导航、动作注册页与餐食照片校样台已通过键盘完成、焦点返回、状态播报和减弱动画自动化验收；这不替代真实读屏器、微信设备和物理键盘测试。H5 OIDC 已完成本地/provider-double 验收，H5 与 WeApp 均有来源绑定、实际字节校验的 `candidate` 确定性 TAR 契约。现有 `v0.1.0-rc.1` 仍是“仅服务”历史记录；托管账号、真实微信/OIDC 凭据、精确回调域名/TLS/CORS、集中遥测、数据托管和责任人仍是上线门槛，当前没有声称已经承载公网流量。
+> 当前阶段：首个服务候选 `v0.1.0-rc.1` 已发布验证；本地产品已完成身体/训练/饮食观察、用户自建动作与食物目录、隐私优先进度照、计划到实际训练的显式关联，以及三类记录编辑器的 24 小时账号隔离草稿恢复。Today 可打开按 IANA 时区生成的 28 天跨域历史日历；空白只表示没有记录，选择过去日期可进入任一编辑器，但必须补充真实时分才能保存。新建与修改草稿均可恢复；修改草稿绑定聚合 ID 和基础修订号，只在服务器仍是同一版本时恢复，旧版本或已删除目标会被安全拒绝。身体记录新建现可区分网络响应丢失、服务暂不可用和服务端拒绝：如果服务已写入但响应丢失，页面保留输入并沿用同一幂等请求号显式重试，最终只产生一笔；这不是后台离线队列。无效、夏令时缺口、未选择的重复时刻和未来时间会被拒绝，未改动的历史时间保留原始秒/毫秒。H5 的首页快捷入口、主导航、动作注册页与餐食照片校样台已通过键盘完成、焦点返回、状态播报和减弱动画自动化验收；这不替代真实读屏器、微信设备和物理键盘测试。H5 OIDC 已完成本地/provider-double 验收，H5 与 WeApp 均有来源绑定、实际字节校验的 `candidate` 确定性 TAR 契约。现有 `v0.1.0-rc.1` 仍是“仅服务”历史记录；托管账号、真实微信/OIDC 凭据、精确回调域名/TLS/CORS、集中遥测、数据托管和责任人仍是上线门槛，当前没有声称已经承载公网流量。
 
 ## 产品边界
 
@@ -180,6 +180,7 @@ Playwright 会复用或启动 API、H5 与管理员预览服务。`pnpm db:down`
 - [架构决策 0048](docs/architecture/decisions/0048-lazy-owner-action-register.md)
 - [架构决策 0049](docs/architecture/decisions/0049-lazy-food-photo-proof-workbench.md)
 - [架构决策 0050](docs/architecture/decisions/0050-taro-keyboard-focus-contract.md)
+- [架构决策 0051](docs/architecture/decisions/0051-ambiguous-create-response-recovery.md)
 - [健康记录数据模型](docs/architecture/HEALTH_RECORD_MODEL.md)
 - [训练记录数据模型](docs/architecture/WORKOUT_MODEL.md)
 - [饮食记录数据模型](docs/architecture/NUTRITION_MODEL.md)
@@ -250,6 +251,7 @@ Playwright 会复用或启动 API、H5 与管理员预览服务。`pnpm db:down`
 - [第 50 轮档案](docs/iterations/050-lazy-owner-action-register.md)
 - [第 51 轮档案](docs/iterations/051-lazy-food-photo-proof-workbench.md)
 - [第 52 轮档案](docs/iterations/052-accessibility-state-matrix.md)
+- [第 53 轮档案](docs/iterations/053-ambiguous-health-record-save-recovery.md)
 - [移动端视觉证据](output/playwright/iteration-001-mobile.png)
 - [宽屏视觉证据](output/playwright/iteration-001-wide.png)
 - [建档移动端证据](output/playwright/iteration-003-onboarding-mobile.png)
@@ -284,6 +286,7 @@ Playwright 会复用或启动 API、H5 与管理员预览服务。`pnpm db:down`
 - [动作停用弹窗焦点移动端证据](output/playwright/iteration-052-action-archive-focus-mobile.png)
 - [键盘动作注册页移动端证据](output/playwright/iteration-052-keyboard-action-workbench-mobile.png)
 - [键盘餐食照片校样台移动端证据](output/playwright/iteration-052-keyboard-food-photo-mobile.png)
+- [身体记录响应丢失恢复移动端证据](output/playwright/iteration-053-ambiguous-save-recovery-mobile.png)
 - [周计划宽屏证据](output/playwright/iteration-008-plans-wide.png)
 - [AI 边注移动端证据](output/playwright/iteration-009-ai-mobile.png)
 - [AI 边注宽屏证据](output/playwright/iteration-009-ai-wide.png)

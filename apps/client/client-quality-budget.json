@@ -1,13 +1,13 @@
 {
   "schemaVersion": "myfitness-client-quality-budget/v1",
   "h5": {
-    "maxTotalBytes": 2421000,
+    "maxTotalBytes": 2424000,
     "maxEntrypointBytes": 320000,
     "maxAsyncJavaScriptBytes": 187000,
     "forbiddenJavaScriptMarkers": ["Invalid input: expected", "localeError"]
   },
   "weapp": {
-    "maxTotalBytes": 823000,
+    "maxTotalBytes": 827000,
     "maxVendorBytes": 25000,
     "maxPageJavaScriptBytes": 40000,
     "forbiddenJavaScriptMarkers": ["Invalid input: expected", "localeError"]

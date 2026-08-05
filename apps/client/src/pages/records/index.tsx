@@ -23,6 +23,7 @@ import {
   updateHealthRecord,
 } from '../../lib/api'
 import { appendOlderRecords, includeExactRecord } from '../../lib/record-pages'
+import { describeSaveFailure, type SaveRecovery } from '../../lib/save-recovery'
 import { useRecoverableDraft } from '../../lib/use-local-draft'
 import {
   buildRecordRequest,
@@ -83,6 +84,7 @@ const RecordsPage = () => {
   const [nextCursor, setNextCursor] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [feedback, setFeedback] = useState('')
+  const [saveRecovery, setSaveRecovery] = useState<SaveRecovery>()
   const requestKey = useRef('')
 
   const loadRecords = async () => {
@@ -137,6 +139,7 @@ const RecordsPage = () => {
       setGroup(metricUiDefinitions[restored.metric].group)
       setDraft(restored)
       requestKey.current = ''
+      setSaveRecovery(undefined)
       setFeedback('本地记录草稿已恢复；保存前请重新核对数值、单位与发生时间。')
       return
     }
@@ -155,6 +158,7 @@ const RecordsPage = () => {
       setEditing(target)
       setDraft(restored)
       requestKey.current = ''
+      setSaveRecovery(undefined)
       setFeedback(`已恢复基于 R${correction.baseRevision} 的修改；保存仍会校验当前版本。`)
     } catch (error) {
       if (error instanceof ApiError && error.statusCode === 404) {
@@ -188,6 +192,7 @@ const RecordsPage = () => {
     setEditing(undefined)
     setDraft(newDraft(groupMetrics[nextGroup][0]!))
     setFeedback('')
+    setSaveRecovery(undefined)
     requestKey.current = ''
   }
 
@@ -195,16 +200,19 @@ const RecordsPage = () => {
     setEditing(undefined)
     setDraft(newDraft(metric))
     setFeedback('')
+    setSaveRecovery(undefined)
     requestKey.current = ''
   }
 
   const save = async () => {
     const validationError = validateRecordDraft(draft)
     if (validationError) {
+      setSaveRecovery(undefined)
       setFeedback(validationError)
       return
     }
     setSaving(true)
+    setSaveRecovery(undefined)
     setFeedback('')
     try {
       if (editing) {
@@ -218,6 +226,7 @@ const RecordsPage = () => {
         )
         setEditing(undefined)
         setDraft(createDraft(updated.metric))
+        setSaveRecovery(undefined)
         setFeedback('修改已保存，原版本仍保留在历史中。')
       } else {
         if (!requestKey.current) requestKey.current = createRequestKey()
@@ -227,10 +236,16 @@ const RecordsPage = () => {
         setRecords((current) => [created, ...current])
         setDraft(createDraft(created.metric))
         requestKey.current = ''
+        setSaveRecovery(undefined)
         setFeedback('记录已保存。持续记录比单次数字更有价值。')
       }
     } catch (error) {
-      setFeedback(errorMessage(error))
+      const recovery = describeSaveFailure(error, {
+        subject: editing ? '这次修改' : '这笔身体记录',
+        create: !editing,
+      })
+      setSaveRecovery(recovery)
+      setFeedback(recovery.message)
     } finally {
       setSaving(false)
     }
@@ -248,6 +263,7 @@ const RecordsPage = () => {
     setDraft(draftFromRecord(record))
     setEditing(record)
     setFeedback('正在修改这条记录；保存后会新增一个历史版本。')
+    setSaveRecovery(undefined)
     requestKey.current = ''
     Taro.pageScrollTo({ scrollTop: 0, duration: 240 })
   }
@@ -347,6 +363,7 @@ const RecordsPage = () => {
                 backfill.current = null
                 setDraft(createDraft(draft.metric))
                 requestKey.current = ''
+                setSaveRecovery(undefined)
                 setFeedback('本地身体记录草稿已清除。')
               }}
             />
@@ -361,6 +378,7 @@ const RecordsPage = () => {
                 setEditing(undefined)
                 setDraft(createDraft(draft.metric))
                 requestKey.current = ''
+                setSaveRecovery(undefined)
                 setFeedback('本地身体记录草稿已清除。')
               }}
             />
@@ -414,6 +432,7 @@ const RecordsPage = () => {
                         recoverableDraft.clear()
                         setEditing(undefined)
                         setDraft(createDraft(draft.metric))
+                        setSaveRecovery(undefined)
                         setFeedback('')
                       }}
                     >
@@ -452,6 +471,8 @@ const RecordsPage = () => {
                           onClick={() => {
                             setDraft((current) => ({ ...current, value: String(score) }))
                             requestKey.current = ''
+                            setSaveRecovery(undefined)
+                            setFeedback('')
                           }}
                         >
                           {score}
@@ -469,6 +490,8 @@ const RecordsPage = () => {
                         onInput={(event) => {
                           setDraft((current) => ({ ...current, value: event.detail.value }))
                           requestKey.current = ''
+                          setSaveRecovery(undefined)
+                          setFeedback('')
                         }}
                       />
                       <Text className="number-field__unit">{unitLabels[draft.unit]}</Text>
@@ -487,6 +510,8 @@ const RecordsPage = () => {
                         onClick={() => {
                           setDraft((current) => ({ ...current, unit: unit as UnitCode }))
                           requestKey.current = ''
+                          setSaveRecovery(undefined)
+                          setFeedback('')
                         }}
                       >
                         {unitLabels[unit]}
@@ -507,11 +532,13 @@ const RecordsPage = () => {
                       originalOccurredAt: undefined,
                     }))
                     requestKey.current = ''
+                    setSaveRecovery(undefined)
                     setFeedback('')
                   }}
                   onTimeZoneChange={(timezone) => {
                     setDraft((current) => ({ ...current, timezone, originalOccurredAt: undefined }))
                     requestKey.current = ''
+                    setSaveRecovery(undefined)
                     setFeedback('')
                   }}
                   onOffsetChange={(occurrenceOffsetMinutes) => {
@@ -521,6 +548,7 @@ const RecordsPage = () => {
                       originalOccurredAt: undefined,
                     }))
                     requestKey.current = ''
+                    setSaveRecovery(undefined)
                     setFeedback('')
                   }}
                 />
@@ -531,8 +559,16 @@ const RecordsPage = () => {
                 </View>
 
                 {feedback ? (
-                  <View className="record-feedback" role="status">
-                    {feedback}
+                  <View
+                    className={`record-feedback ${saveRecovery ? `record-feedback--${saveRecovery.kind}` : ''}`}
+                    role="status"
+                    aria-live="polite"
+                    aria-atomic="true"
+                  >
+                    {saveRecovery ? (
+                      <Text className="record-feedback__eyebrow">{saveRecovery.eyebrow}</Text>
+                    ) : null}
+                    <Text>{feedback}</Text>
                   </View>
                 ) : null}
 
@@ -542,7 +578,9 @@ const RecordsPage = () => {
                   disabled={saving}
                   onClick={() => void save()}
                 >
-                  {saving ? '正在保存…' : editing ? '保存新版本' : '保存记录'}
+                  {saving
+                    ? '正在保存…'
+                    : (saveRecovery?.actionLabel ?? (editing ? '保存新版本' : '保存记录'))}
                 </Button>
               </View>
 

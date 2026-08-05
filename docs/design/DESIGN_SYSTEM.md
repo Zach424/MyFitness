@@ -500,6 +500,16 @@ The 390 × 844 production-browser matrix completes both lazy workbenches with a 
 - [390 × 844 keyboard action workbench](../../output/playwright/iteration-052-keyboard-action-workbench-mobile.png)
 - [390 × 844 keyboard food-photo workbench](../../output/playwright/iteration-052-keyboard-food-photo-mobile.png)
 
+## Ambiguous save recovery review — iteration 053
+
+The body-record editor now treats a lost response as an unresolved transaction, not a red generic error and not a success. A warm warning strip keeps the ordinary paper layout intact while the compact `CONNECTION UNCERTAIN / 输入仍保留` eyebrow names both the technical state and the user-relevant guarantee. The body copy says that the record may already have reached the service, that visible input remains unchanged and that retry reuses one request number. This language avoids the false certainty of “保存失败” when the service may already have committed.
+
+The retry control remains the editor's single primary action and changes its label to `重试保存（防重复）`. It stays visibly enabled in mineral blue. Visual review exposed a Taro custom-element detail: `disabled="false"` still matched `.save-button[disabled]`, making a usable retry look disabled at 58% opacity. The selector now requires `disabled="true"`, and browser evidence asserts both enabled semantics and full opacity.
+
+Server refusal, retryable service outage, ambiguous network interruption and an unclassified outcome have different semantic/state labels. Editing any field clears the stale recovery presentation and invalidates the attempted key. There is deliberately no offline queue, background replay badge or promise that corrections have create-level idempotency. The 390 × 844 browser review sends the create request to the real API, lets PostgreSQL commit, aborts only the browser response and then proves that one explicit retry produces one visible record with the same idempotency key.
+
+- [390 × 844 ambiguous save recovery](../../output/playwright/iteration-053-ambiguous-save-recovery-mobile.png)
+
 ## Screenshot review checklist
 
 - The Rhythm Rail remains understandable without color.

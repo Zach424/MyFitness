@@ -402,6 +402,30 @@
   line-height: 1.55;
 }
 
+.record-feedback__eyebrow {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--color-ink);
+  font-family: var(--font-metric);
+  font-size: 9px;
+  font-weight: 760;
+  letter-spacing: 0.08em;
+}
+
+.record-feedback--network_uncertain,
+.record-feedback--service_unavailable,
+.record-feedback--unexpected {
+  border-left-color: var(--color-warning);
+  color: var(--color-ink);
+  background: var(--color-warning-soft);
+}
+
+.record-feedback--server_rejected {
+  border-left-color: var(--color-pulse);
+  color: var(--color-ink);
+  background: rgba(233, 106, 91, 0.09);
+}
+
 .save-button {
   min-height: 52px;
   margin: 18px 0 0;
@@ -415,7 +439,7 @@
   box-shadow: 0 9px 22px rgba(36, 76, 102, 0.17);
 }
 
-.save-button[disabled] {
+.save-button[disabled='true'] {
   opacity: 0.58;
 }
 

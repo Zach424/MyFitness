@@ -144,6 +144,65 @@ test('body record completes create, update, history and delete lifecycle', async
   expect(browserErrors).toEqual([])
 })
 
+test('ambiguous body-record response keeps input and retries with one idempotency key', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await openRecords(page)
+
+  const input = page.locator('[aria-label="体重数值"] input')
+  await input.fill('74.2')
+  await page.locator('[aria-label="发生时间，年-月-日 时:分"] input').fill('2026-07-18 16:00')
+
+  const idempotencyKeys: string[] = []
+  let createAttempts = 0
+  await page.route('**/v1/health-records', async (route) => {
+    if (route.request().method() !== 'POST') {
+      await route.continue()
+      return
+    }
+
+    createAttempts += 1
+    idempotencyKeys.push(route.request().headers()['x-idempotency-key'] ?? '')
+    if (createAttempts === 1) {
+      const committedResponse = await route.fetch()
+      expect(committedResponse.status()).toBe(201)
+      await route.abort('failed')
+      return
+    }
+    await route.continue()
+  })
+
+  await page.getByRole('button', { name: '保存记录' }).click()
+  const uncertainStatus = page.getByRole('status')
+  await expect(uncertainStatus.getByText('CONNECTION UNCERTAIN / 输入仍保留')).toBeVisible()
+  await expect(uncertainStatus).toContainText('无法确认这笔身体记录是否已经到达服务端')
+  await expect(uncertainStatus).toContainText('沿用同一请求编号')
+  await expect(input).toHaveValue('74.2')
+  const retryButton = page.getByRole('button', { name: '重试保存（防重复）' })
+  await expect(retryButton).toBeVisible()
+  await expect(retryButton).toBeEnabled()
+  await expect(retryButton).toHaveCSS('opacity', '1')
+  expect(createAttempts).toBe(1)
+
+  await page.screenshot({
+    path: 'output/playwright/iteration-053-ambiguous-save-recovery-mobile.png',
+    fullPage: true,
+  })
+
+  const retryResponse = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/v1/health-records') && response.request().method() === 'POST',
+  )
+  await retryButton.click()
+  expect((await retryResponse).status()).toBe(201)
+  await expect(page.getByRole('status')).toContainText('记录已保存')
+  await expect(page.locator('.log-entry').filter({ hasText: '74.2 kg' })).toHaveCount(1)
+  expect(createAttempts).toBe(2)
+  expect(idempotencyKeys[0]).not.toBe('')
+  expect(idempotencyKeys[1]).toBe(idempotencyKeys[0])
+})
+
 test('record log keeps its hierarchy at wide viewport', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 })
   const browserErrors: string[] = []
