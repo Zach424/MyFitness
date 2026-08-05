@@ -343,39 +343,35 @@ test('body record completes create, update, history and delete lifecycle', async
       return
     }
     deleteAttempts += 1
-    if (deleteAttempts === 1) {
-      await route.fulfill({
-        status: 503,
-        contentType: 'application/json',
-        body: JSON.stringify({ message: 'temporary delete refusal' }),
-      })
-      return
-    }
     await deleteGate
-    await route.continue()
+    const committedResponse = await route.fetch()
+    expect(committedResponse.status()).toBe(204)
+    await route.abort('failed')
   })
-  await deleteDialog.getByRole('button', { name: '确认删除' }).click()
-  await expect(deleteDialog).toBeVisible()
-  await expect(cancelDelete).toBeFocused()
-  expect(browserErrors).toContain(
-    'Failed to load resource: the server responded with a status of 503 (Service Unavailable)',
-  )
-  browserErrors.length = 0
-  const deleteResponsePromise = page.waitForResponse(
-    (response) =>
-      /\/v1\/health-records\/[0-9a-f-]{36}$/.test(response.url()) &&
-      response.request().method() === 'DELETE' &&
-      response.status() === 204,
-  )
   await deleteDialog.getByRole('button', { name: '确认删除' }).click()
   await expect(cancelDelete).toBeDisabled()
   await page.keyboard.press('Escape')
   await expect(deleteDialog).toBeVisible()
   releaseDelete()
-  expect((await deleteResponsePromise).status()).toBe(204)
+  const deleteRecovery = page.locator('.aggregate-delete-recovery')
+  await expect(deleteRecovery.getByText('RESULT UNKNOWN / 先核对再决定')).toBeVisible()
+  await expect(deleteDialog).toHaveCount(0)
+  await expect(page.locator('#health-delete-reconcile')).toBeFocused()
+  await expect(deleteTrigger).toBeDisabled()
+  await page.screenshot({
+    path: 'output/playwright/iteration-078-delete-reconciliation-mobile.png',
+    fullPage: false,
+  })
+  browserErrors.length = 0
+  await page.locator('#health-delete-reconcile').click()
   await expect(page.getByText('还没有身体记录')).toBeVisible()
-  await expect(page.getByText('记录已从列表移除，审计历史仍安全保留。')).toBeVisible()
+  await expect(page.getByText(/这条记录已不在当前服务端清单中/)).toBeVisible()
   await expect(page.locator('#record-read-refresh')).toBeFocused()
+  expect(deleteAttempts).toBe(1)
+  expect(browserErrors).toContain(
+    'Failed to load resource: the server responded with a status of 404 (Not Found)',
+  )
+  browserErrors.length = 0
   expect(browserErrors).toEqual([])
 })
 

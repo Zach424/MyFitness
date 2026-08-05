@@ -8,12 +8,19 @@ import type {
   UnitCode,
 } from '@myfitness/contracts'
 
+import { AggregateDeleteRecovery } from '../../components/aggregate-delete-recovery'
 import {
   buttonActivationProps,
   buttonA11yProps,
   deferH5Focus,
   escapeDismissProps,
 } from '../../lib/accessibility'
+import {
+  classifyAggregateDeleteEvidence,
+  describeAggregateDeleteFailure,
+  describeAggregateDeleteReconciliationFailure,
+  type AggregateDeleteRecovery as DeleteRecovery,
+} from '../../lib/aggregate-delete-recovery'
 import { parseBackfillIntent } from '../../lib/backfill-intent'
 import {
   AggregateHistoryEmptyState,
@@ -138,6 +145,10 @@ const RecordsPage = () => {
   const [saving, setSaving] = useState(false)
   const [feedback, setFeedback] = useState('')
   const [saveRecovery, setSaveRecovery] = useState<SaveRecovery>()
+  const [deleteRecovery, setDeleteRecovery] = useState<{
+    target: HealthRecord
+    receipt: DeleteRecovery
+  }>()
   const requestKey = useRef('')
   const readInFlight = useRef(false)
   const historyRead = useAggregateHistory<HealthRecord, HealthRecordHistoryItem>(
@@ -163,6 +174,7 @@ const RecordsPage = () => {
       if (!isActive()) return
       setRecords(result.items)
       setNextCursor(result.nextCursor)
+      setDeleteRecovery(undefined)
       setHasReadSnapshot(true)
     } catch (error) {
       if (!isActive()) return
@@ -365,6 +377,7 @@ const RecordsPage = () => {
   }
 
   const requestDelete = (record: HealthRecord) => {
+    if (deleteRecovery) return
     const triggerId = `health-delete-trigger-${record.id}`
     setDeleting(record)
     deleteDialogFocus.enter(triggerId)
@@ -376,22 +389,72 @@ const RecordsPage = () => {
     deleteDialogFocus.restore()
   }
 
+  const finishDelete = (target: HealthRecord, message: string) => {
+    setRecords((current) => current.filter((record) => record.id !== target.id))
+    if (editing?.id === target.id) {
+      setEditing(undefined)
+      setDraft(createDraft(target.metric))
+    }
+    setDeleting(undefined)
+    setDeleteRecovery(undefined)
+    deleteDialogFocus.complete()
+    setFeedback(message)
+  }
+
   const confirmDelete = async () => {
     if (!deleting || !readAuthorityReady) return
     setSaving(true)
     try {
       await deleteHealthRecord(deleting.id, deleting.revision)
-      setRecords((current) => current.filter((record) => record.id !== deleting.id))
-      if (editing?.id === deleting.id) {
-        setEditing(undefined)
-        setDraft(createDraft(deleting.metric))
-      }
-      setDeleting(undefined)
-      deleteDialogFocus.complete()
-      setFeedback('记录已从列表移除，审计历史仍安全保留。')
+      finishDelete(deleting, '记录已从列表移除，审计历史仍安全保留。')
     } catch (error) {
-      setFeedback(errorMessage(error))
-      deferH5Focus('health-delete-cancel', 40)
+      const receipt = describeAggregateDeleteFailure(error, '这条身体记录')
+      setDeleteRecovery({ target: deleting, receipt })
+      setDeleting(undefined)
+      deleteDialogFocus.reset()
+      setFeedback('')
+      deferH5Focus('health-delete-reconcile', 40)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleDeleteRecovery = async () => {
+    if (!deleteRecovery) return
+    const { target, receipt } = deleteRecovery
+    if (receipt.authority === 'terminal') {
+      setDeleteRecovery(undefined)
+      setFeedback('本次删除请求已终止；请重新检查当前记录后再决定。')
+      deferH5Focus(`health-delete-trigger-${target.id}`, 40)
+      return
+    }
+
+    setSaving(true)
+    try {
+      const exact = await getHealthRecord(target.id)
+      const evidence = classifyAggregateDeleteEvidence(target.revision, exact.revision)
+      setGroup(metricUiDefinitions[exact.metric].group)
+      setRecords((current) => includeExactRecord(current, exact))
+      setDeleteRecovery(undefined)
+      setFeedback(
+        evidence === 'unchanged'
+          ? `核对完成：服务端仍为 R${exact.revision}，没有删除成功的证据；如仍需删除，请再次明确确认。`
+          : `核对完成：服务端已变为 R${exact.revision}；旧删除意图已终止，请检查新版本后再决定。`,
+      )
+      deferH5Focus(`health-delete-trigger-${exact.id}`, 40)
+    } catch (error) {
+      if (error instanceof ApiError && error.statusCode === 404) {
+        finishDelete(
+          target,
+          '核对完成：这条记录已不在当前服务端清单中；本地已同步移除，审计历史仍保留。',
+        )
+        return
+      }
+      setDeleteRecovery({
+        target,
+        receipt: describeAggregateDeleteReconciliationFailure(error, '这条身体记录'),
+      })
+      deferH5Focus('health-delete-reconcile', 40)
     } finally {
       setSaving(false)
     }
@@ -786,6 +849,15 @@ const RecordsPage = () => {
                 </View>
               </View>
 
+              {deleteRecovery ? (
+                <AggregateDeleteRecovery
+                  recovery={deleteRecovery.receipt}
+                  actionId="health-delete-reconcile"
+                  busy={saving}
+                  onAction={() => void handleDeleteRecovery()}
+                />
+              ) : null}
+
               {loading && !hasReadSnapshot ? (
                 <View className="log-state">正在整理记录…</View>
               ) : !hasReadSnapshot ? (
@@ -837,10 +909,10 @@ const RecordsPage = () => {
                           <Button
                             id={`health-delete-trigger-${record.id}`}
                             className="log-action log-action--danger"
-                            disabled={!readAuthorityReady}
+                            disabled={!readAuthorityReady || Boolean(deleteRecovery)}
                             {...buttonActivationProps(
                               () => requestDelete(record),
-                              !readAuthorityReady,
+                              !readAuthorityReady || Boolean(deleteRecovery),
                             )}
                           >
                             删除

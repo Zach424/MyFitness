@@ -8,12 +8,19 @@ import type {
   WorkoutHistoryItem,
 } from '@myfitness/contracts'
 
+import { AggregateDeleteRecovery } from '../../components/aggregate-delete-recovery'
 import {
   buttonA11yProps,
   buttonActivationProps,
   deferH5Focus,
   escapeDismissProps,
 } from '../../lib/accessibility'
+import {
+  classifyAggregateDeleteEvidence,
+  describeAggregateDeleteFailure,
+  describeAggregateDeleteReconciliationFailure,
+  type AggregateDeleteRecovery as DeleteRecovery,
+} from '../../lib/aggregate-delete-recovery'
 import { parseBackfillIntent } from '../../lib/backfill-intent'
 import {
   AggregateHistoryEmptyState,
@@ -159,6 +166,10 @@ const WorkoutsPage = () => {
   const [saving, setSaving] = useState(false)
   const [feedback, setFeedback] = useState('')
   const [saveRecovery, setSaveRecovery] = useState<SaveRecovery>()
+  const [deleteRecovery, setDeleteRecovery] = useState<{
+    target: Workout
+    receipt: DeleteRecovery
+  }>()
   const pendingKey = useRef('')
   const catalogReturnFocusId = useRef('')
   const readInFlight = useRef(false)
@@ -203,6 +214,7 @@ const WorkoutsPage = () => {
       setWorkouts(workoutResult.items)
       setNextCursor(workoutResult.nextCursor)
       setCatalogItems(catalogResult.items)
+      setDeleteRecovery(undefined)
       setHasReadSnapshot(true)
 
       const returnTarget = catalogReturnFocusId.current
@@ -482,6 +494,7 @@ const WorkoutsPage = () => {
   }
 
   const requestDelete = (workout: Workout) => {
+    if (deleteRecovery) return
     const triggerId = `workout-delete-trigger-${workout.id}`
     setDeleting(workout)
     deleteDialogFocus.enter(triggerId)
@@ -493,22 +506,71 @@ const WorkoutsPage = () => {
     deleteDialogFocus.restore()
   }
 
+  const finishDelete = (target: Workout, message: string) => {
+    setWorkouts((current) => current.filter((workout) => workout.id !== target.id))
+    if (editing?.id === target.id) {
+      setEditing(undefined)
+      setDraft(initialWorkoutDraft())
+    }
+    setDeleting(undefined)
+    setDeleteRecovery(undefined)
+    deleteDialogFocus.complete()
+    setFeedback(message)
+  }
+
   const remove = async () => {
     if (!deleting || !readAuthorityReady) return
     setSaving(true)
     try {
       await deleteWorkout(deleting.id, deleting.revision)
-      setWorkouts((current) => current.filter((workout) => workout.id !== deleting.id))
-      if (editing?.id === deleting.id) {
-        setEditing(undefined)
-        setDraft(initialWorkoutDraft())
-      }
-      setDeleting(undefined)
-      deleteDialogFocus.complete()
-      setFeedback('训练已从记录簿移除，版本历史仍保留。')
+      finishDelete(deleting, '训练已从记录簿移除，版本历史仍保留。')
     } catch (error) {
-      setFeedback(messageOf(error))
-      deferH5Focus('workout-delete-cancel', 40)
+      const receipt = describeAggregateDeleteFailure(error, '这次训练')
+      setDeleteRecovery({ target: deleting, receipt })
+      setDeleting(undefined)
+      deleteDialogFocus.reset()
+      setFeedback('')
+      deferH5Focus('workout-delete-reconcile', 40)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleDeleteRecovery = async () => {
+    if (!deleteRecovery) return
+    const { target, receipt } = deleteRecovery
+    if (receipt.authority === 'terminal') {
+      setDeleteRecovery(undefined)
+      setFeedback('本次删除请求已终止；请重新检查当前训练后再决定。')
+      deferH5Focus(`workout-delete-trigger-${target.id}`, 40)
+      return
+    }
+
+    setSaving(true)
+    try {
+      const exact = await getWorkout(target.id)
+      const evidence = classifyAggregateDeleteEvidence(target.revision, exact.revision)
+      setWorkouts((current) => includeExactRecord(current, exact))
+      setDeleteRecovery(undefined)
+      setFeedback(
+        evidence === 'unchanged'
+          ? `核对完成：服务端仍为 R${exact.revision}，没有删除成功的证据；如仍需删除，请再次明确确认。`
+          : `核对完成：服务端已变为 R${exact.revision}；旧删除意图已终止，请检查新版本后再决定。`,
+      )
+      deferH5Focus(`workout-delete-trigger-${exact.id}`, 40)
+    } catch (error) {
+      if (error instanceof ApiError && error.statusCode === 404) {
+        finishDelete(
+          target,
+          '核对完成：这次训练已不在当前服务端清单中；本地已同步移除，版本历史仍保留。',
+        )
+        return
+      }
+      setDeleteRecovery({
+        target,
+        receipt: describeAggregateDeleteReconciliationFailure(error, '这次训练'),
+      })
+      deferH5Focus('workout-delete-reconcile', 40)
     } finally {
       setSaving(false)
     }
@@ -1124,6 +1186,14 @@ const WorkoutsPage = () => {
                   ) : null}
                 </View>
               </View>
+              {deleteRecovery ? (
+                <AggregateDeleteRecovery
+                  recovery={deleteRecovery.receipt}
+                  actionId="workout-delete-reconcile"
+                  busy={saving}
+                  onAction={() => void handleDeleteRecovery()}
+                />
+              ) : null}
               {loading && !hasReadSnapshot ? (
                 <View className="workout-empty">正在整理训练…</View>
               ) : !hasReadSnapshot ? (
@@ -1219,10 +1289,10 @@ const WorkoutsPage = () => {
                         <Button
                           id={`workout-delete-trigger-${workout.id}`}
                           className="entry-action entry-action--danger"
-                          disabled={!readAuthorityReady}
+                          disabled={!readAuthorityReady || Boolean(deleteRecovery)}
                           {...buttonActivationProps(
                             () => requestDelete(workout),
-                            !readAuthorityReady,
+                            !readAuthorityReady || Boolean(deleteRecovery),
                           )}
                         >
                           删除

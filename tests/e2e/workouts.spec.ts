@@ -425,16 +425,40 @@ test('workout completes create, repeat, update, history and delete lifecycle', a
   await expect(deleteTrigger).toBeFocused()
   await page.keyboard.press('Enter')
   await expect(deleteDialog.locator('#workout-delete-cancel')).toBeFocused()
+  let deleteAttempts = 0
+  await page.route(/\/v1\/workouts\/[0-9a-f-]{36}$/, async (route) => {
+    if (route.request().method() !== 'DELETE') {
+      await route.continue()
+      return
+    }
+    deleteAttempts += 1
+    if (deleteAttempts === 1) {
+      await route.abort('failed')
+      return
+    }
+    await route.continue()
+  })
+  await deleteDialog.getByRole('button', { name: '确认删除' }).click()
+  const deleteRecovery = page.locator('.aggregate-delete-recovery')
+  await expect(deleteRecovery.getByText('RESULT UNKNOWN / 先核对再决定')).toBeVisible()
+  await expect(page.locator('#workout-delete-reconcile')).toBeFocused()
+  browserErrors.length = 0
+  await page.locator('#workout-delete-reconcile').click()
+  await expect(page.getByText(/服务端仍为 R2，没有删除成功的证据/)).toBeVisible()
+  await expect(deleteTrigger).toBeFocused()
+  await page.keyboard.press('Enter')
   const deletePromise = page.waitForResponse(
     (response) =>
       /\/v1\/workouts\/[0-9a-f-]{36}$/.test(response.url()) &&
-      response.request().method() === 'DELETE',
+      response.request().method() === 'DELETE' &&
+      response.status() === 204,
   )
   await deleteDialog.getByRole('button', { name: '确认删除' }).click()
   expect((await deletePromise).status()).toBe(204)
   await expect(page.locator('.workout-entry')).toHaveCount(1)
   await expect(page.getByText('训练已从记录簿移除，版本历史仍保留。')).toBeVisible()
   await expect(page.locator('#workout-read-refresh')).toBeFocused()
+  expect(deleteAttempts).toBe(2)
   expect(browserErrors).toEqual([])
 })
 

@@ -475,16 +475,32 @@ test('meal completes favorite, create, repeat, update, history and delete lifecy
   await expect(cancelDelete).toBeFocused()
   await expect(cancelDelete).toHaveCSS('color', 'rgb(20, 36, 38)')
   await page.screenshot({ path: 'output/playwright/iteration-077-delete-cancel-wide.png' })
-  const deletePromise = page.waitForResponse(
-    (response) =>
-      /\/v1\/nutrition\/meals\/[0-9a-f-]{36}$/.test(response.url()) &&
-      response.request().method() === 'DELETE',
-  )
+  let deleteAttempts = 0
+  await page.route(/\/v1\/nutrition\/meals\/[0-9a-f-]{36}$/, async (route) => {
+    if (route.request().method() !== 'DELETE') {
+      await route.continue()
+      return
+    }
+    deleteAttempts += 1
+    const committedResponse = await route.fetch()
+    expect(committedResponse.status()).toBe(204)
+    await route.abort('failed')
+  })
   await deleteDialog.getByRole('button', { name: '确认删除' }).click()
-  expect((await deletePromise).status()).toBe(204)
+  const deleteRecovery = page.locator('.aggregate-delete-recovery')
+  await expect(deleteRecovery.getByText('RESULT UNKNOWN / 先核对再决定')).toBeVisible()
+  await expect(page.locator('#meal-delete-reconcile')).toBeFocused()
+  await page.screenshot({ path: 'output/playwright/iteration-078-delete-reconciliation-wide.png' })
+  browserErrors.length = 0
+  await page.locator('#meal-delete-reconcile').click()
   await expect(page.locator('.meal-entry')).toHaveCount(1)
-  await expect(page.getByText('餐次已从日常记录移除，版本历史仍保留。')).toBeVisible()
+  await expect(page.getByText(/这次餐次已不在当前服务端清单中/)).toBeVisible()
   await expect(page.locator('#nutrition-read-refresh')).toBeFocused()
+  expect(deleteAttempts).toBe(1)
+  expect(browserErrors).toContain(
+    'Failed to load resource: the server responded with a status of 404 (Not Found)',
+  )
+  browserErrors.length = 0
   expect(browserErrors).toEqual([])
 })
 

@@ -797,6 +797,17 @@ Visual QA found that Taro emits `disabled="false"` on its H5 custom element. The
 - [390 × 844 cancel-first body-record deletion](../../output/playwright/iteration-077-delete-cancel-mobile.png)
 - [1440 × 1000 cancel-first meal deletion](../../output/playwright/iteration-077-delete-cancel-wide.png)
 
+## Aggregate-delete response-loss recovery — iteration 078
+
+The three recording ledgers now move an interrupted DELETE out of the modal and into one amber ruled receipt directly above the affected list. `RESULT UNKNOWN / 先核对再决定` names uncertainty without claiming failure or success. The copy states that the current aggregate must be read before another deletion; the single outlined `核对当前记录` action receives focus, while every row's delete control is visibly unavailable until resolution. Other reading, correction and history controls retain their existing parent-ledger authority.
+
+On 390 × 844 H5, the body receipt remains in the recent-log card immediately before the still-visible R2 row, keeping both the unresolved target and its evidence in one reading column. On 1440 × 1000 H5, the same compact receipt sits at the top of the meal ledger rail without widening or covering the editor. The mineral double focus ring and ochre rule provide shape as well as color, and the action uses explicit `aria-disabled` styling for Taro's custom element.
+
+An owner-visible 404 removes the row and moves focus to ledger refresh without sending another DELETE. If the exact read returns the same revision, the receipt closes, the row regains focus and only a later fresh confirmation can delete. A different revision replaces the row and terminates the old intent. Explicit refusal uses a terminal receipt instead of a read or replay. These are authority labels, not claims about physical media deletion, offline synchronization or global truth outside the authenticated ledger.
+
+- [390 × 844 unresolved body deletion and exact-read action](../../output/playwright/iteration-078-delete-reconciliation-mobile.png)
+- [1440 × 1000 unresolved meal deletion in the ledger rail](../../output/playwright/iteration-078-delete-reconciliation-wide.png)
+
 ## Screenshot review checklist
 
 - The Rhythm Rail remains understandable without color.

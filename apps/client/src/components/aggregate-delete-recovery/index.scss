@@ -1,0 +1,53 @@
+.aggregate-delete-recovery {
+  margin-top: 16px;
+  padding: 12px 13px;
+  border-left: 3px solid var(--color-warning);
+  border-radius: 10px;
+  color: var(--color-ink);
+  background: var(--color-warning-soft);
+}
+
+.aggregate-delete-recovery--server_rejected {
+  border-left-color: var(--color-pulse);
+  background: rgba(233, 106, 91, 0.09);
+}
+
+.aggregate-delete-recovery__eyebrow,
+.aggregate-delete-recovery__message {
+  display: block;
+}
+
+.aggregate-delete-recovery__eyebrow {
+  font-family: var(--font-metric);
+  font-size: 9px;
+  font-weight: 780;
+  letter-spacing: 0.08em;
+}
+
+.aggregate-delete-recovery__message {
+  margin-top: 6px;
+  color: var(--color-muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.aggregate-delete-recovery__action {
+  width: 100%;
+  min-height: 42px;
+  margin: 11px 0 0;
+  border: 1px solid rgba(169, 104, 33, 0.28);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.7);
+  font-size: 11px;
+  font-weight: 740;
+  line-height: 40px;
+}
+
+.aggregate-delete-recovery__action[aria-disabled='false'] {
+  color: var(--color-warning);
+}
+
+.aggregate-delete-recovery__action:focus {
+  outline: 3px solid rgba(36, 76, 102, 0.3);
+  outline-offset: 2px;
+}

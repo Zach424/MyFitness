@@ -11,12 +11,19 @@ import type {
   MealHistoryItem,
 } from '@myfitness/contracts'
 
+import { AggregateDeleteRecovery } from '../../components/aggregate-delete-recovery'
 import {
   buttonA11yProps,
   buttonActivationProps,
   deferH5Focus,
   escapeDismissProps,
 } from '../../lib/accessibility'
+import {
+  classifyAggregateDeleteEvidence,
+  describeAggregateDeleteFailure,
+  describeAggregateDeleteReconciliationFailure,
+  type AggregateDeleteRecovery as DeleteRecovery,
+} from '../../lib/aggregate-delete-recovery'
 import { parseBackfillIntent } from '../../lib/backfill-intent'
 import {
   AggregateHistoryEmptyState,
@@ -180,6 +187,10 @@ const NutritionPage = () => {
   const [saving, setSaving] = useState(false)
   const [feedback, setFeedback] = useState('')
   const [saveRecovery, setSaveRecovery] = useState<SaveRecovery>()
+  const [deleteRecovery, setDeleteRecovery] = useState<{
+    target: Meal
+    receipt: DeleteRecovery
+  }>()
   const pendingKey = useRef('')
   const photoReturnFocus = useRef(false)
   const readInFlight = useRef(false)
@@ -226,6 +237,7 @@ const NutritionPage = () => {
       setNextCursor(mealResult.nextCursor)
       setFavorites(favoriteResult.items)
       setFoodCatalog(catalogResult.items)
+      setDeleteRecovery(undefined)
       setHasReadSnapshot(true)
       if (photoReturnFocus.current) {
         photoReturnFocus.current = false
@@ -502,6 +514,7 @@ const NutritionPage = () => {
   }
 
   const requestDelete = (meal: Meal) => {
+    if (deleteRecovery) return
     const triggerId = `meal-delete-trigger-${meal.id}`
     setDeleting(meal)
     deleteDialogFocus.enter(triggerId)
@@ -513,18 +526,67 @@ const NutritionPage = () => {
     deleteDialogFocus.restore()
   }
 
+  const finishDelete = (target: Meal, message: string) => {
+    setMeals((current) => current.filter((meal) => meal.id !== target.id))
+    setDeleting(undefined)
+    setDeleteRecovery(undefined)
+    deleteDialogFocus.complete()
+    setFeedback(message)
+  }
+
   const remove = async () => {
     if (!deleting || !readAuthorityReady) return
     setSaving(true)
     try {
       await deleteMeal(deleting.id, deleting.revision)
-      setMeals((current) => current.filter((meal) => meal.id !== deleting.id))
-      setDeleting(undefined)
-      deleteDialogFocus.complete()
-      setFeedback('餐次已从日常记录移除，版本历史仍保留。')
+      finishDelete(deleting, '餐次已从日常记录移除，版本历史仍保留。')
     } catch (error) {
-      setFeedback(messageOf(error))
-      deferH5Focus('meal-delete-cancel', 40)
+      const receipt = describeAggregateDeleteFailure(error, '这次餐次')
+      setDeleteRecovery({ target: deleting, receipt })
+      setDeleting(undefined)
+      deleteDialogFocus.reset()
+      setFeedback('')
+      deferH5Focus('meal-delete-reconcile', 40)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleDeleteRecovery = async () => {
+    if (!deleteRecovery) return
+    const { target, receipt } = deleteRecovery
+    if (receipt.authority === 'terminal') {
+      setDeleteRecovery(undefined)
+      setFeedback('本次删除请求已终止；请重新检查当前餐次后再决定。')
+      deferH5Focus(`meal-delete-trigger-${target.id}`, 40)
+      return
+    }
+
+    setSaving(true)
+    try {
+      const exact = await getMeal(target.id)
+      const evidence = classifyAggregateDeleteEvidence(target.revision, exact.revision)
+      setMeals((current) => includeExactRecord(current, exact))
+      setDeleteRecovery(undefined)
+      setFeedback(
+        evidence === 'unchanged'
+          ? `核对完成：服务端仍为 R${exact.revision}，没有删除成功的证据；如仍需删除，请再次明确确认。`
+          : `核对完成：服务端已变为 R${exact.revision}；旧删除意图已终止，请检查新版本后再决定。`,
+      )
+      deferH5Focus(`meal-delete-trigger-${exact.id}`, 40)
+    } catch (error) {
+      if (error instanceof ApiError && error.statusCode === 404) {
+        finishDelete(
+          target,
+          '核对完成：这次餐次已不在当前服务端清单中；本地已同步移除，版本历史仍保留。',
+        )
+        return
+      }
+      setDeleteRecovery({
+        target,
+        receipt: describeAggregateDeleteReconciliationFailure(error, '这次餐次'),
+      })
+      deferH5Focus('meal-delete-reconcile', 40)
     } finally {
       setSaving(false)
     }
@@ -999,6 +1061,14 @@ const NutritionPage = () => {
                   ) : null}
                 </View>
               </View>
+              {deleteRecovery ? (
+                <AggregateDeleteRecovery
+                  recovery={deleteRecovery.receipt}
+                  actionId="meal-delete-reconcile"
+                  busy={saving}
+                  onAction={() => void handleDeleteRecovery()}
+                />
+              ) : null}
               {loading && !hasReadSnapshot ? (
                 <View className="meal-empty">正在整理餐次…</View>
               ) : !hasReadSnapshot ? (
@@ -1072,8 +1142,11 @@ const NutritionPage = () => {
                         <Button
                           id={`meal-delete-trigger-${meal.id}`}
                           className="entry-action entry-action--danger"
-                          disabled={!readAuthorityReady}
-                          {...buttonActivationProps(() => requestDelete(meal), !readAuthorityReady)}
+                          disabled={!readAuthorityReady || Boolean(deleteRecovery)}
+                          {...buttonActivationProps(
+                            () => requestDelete(meal),
+                            !readAuthorityReady || Boolean(deleteRecovery),
+                          )}
                         >
                           删除
                         </Button>
