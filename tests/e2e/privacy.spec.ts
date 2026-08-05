@@ -286,6 +286,99 @@ test('wide privacy controls revoke optional processing and permanently erase the
   trackedSubject = undefined
 })
 
+test('privacy revocation reconciles committed and uncommitted response loss without replay', async ({
+  page,
+  request,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  const browserErrors = collectBrowserErrors(page)
+  await seedAccount(page, request)
+  let revokeRequests = 0
+  let overviewReads = 0
+  page.on('request', (outgoing) => {
+    if (outgoing.method() === 'POST' && outgoing.url().includes('/v1/me/privacy/consents/')) {
+      revokeRequests += 1
+    }
+    if (outgoing.method() === 'GET' && outgoing.url().endsWith('/v1/me/privacy')) {
+      overviewReads += 1
+    }
+  })
+
+  const foodConsent = page.locator('.consent-row').filter({ hasText: '餐食照片分析' })
+  await page.route(
+    '**/v1/me/privacy/consents/food_photo_analysis/revoke',
+    async (route) => {
+      const committed = await route.fetch()
+      expect(committed.status()).toBe(200)
+      await route.abort('failed')
+    },
+    { times: 1 },
+  )
+  await foodConsent.getByRole('button', { name: '撤回这项授权' }).click()
+  await foodConsent.getByRole('button', { name: '确认撤回' }).click()
+
+  await expect(page.getByText('REVOCATION UNKNOWN / 禁止重复撤回')).toBeVisible()
+  await expect(page.getByText(/清理条数未知/)).toBeVisible()
+  await expect(page.getByRole('button', { name: '下载我的数据' })).toHaveAttribute(
+    'aria-disabled',
+    'true',
+  )
+  await page.locator('.privacy-scroll').evaluate((element) => {
+    element.scrollTop = 0
+  })
+  await page.screenshot({
+    path: 'output/playwright/iteration-082-privacy-revocation-recovery-mobile.png',
+    fullPage: true,
+  })
+  const committedRecheck = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/v1/me/privacy') &&
+      response.request().method() === 'GET' &&
+      response.status() === 200,
+  )
+  await page.getByRole('button', { name: '核对撤回结果' }).click()
+  await committedRecheck
+  await expect(foodConsent.getByText('已撤回', { exact: true })).toBeVisible()
+  await expect(page.getByText(/原始响应已丢失，因此不显示本次敏感数据清理条数/)).toBeVisible()
+  expect(revokeRequests).toBe(1)
+  expect(overviewReads).toBe(1)
+
+  const aiConsent = page.locator('.consent-row').filter({ hasText: 'AI 计划解释' })
+  await page.route(
+    '**/v1/me/privacy/consents/ai_plan_explanation/revoke',
+    async (route) => {
+      await route.abort('failed')
+    },
+    { times: 1 },
+  )
+  await aiConsent.getByRole('button', { name: '撤回这项授权' }).click()
+  await aiConsent.getByRole('button', { name: '确认撤回' }).click()
+  await page.getByRole('button', { name: '核对撤回结果' }).click()
+
+  await expect(aiConsent.getByText('有效', { exact: true })).toBeVisible()
+  await expect(page.getByText(/仍然有效；系统没有自动重放撤回/)).toBeVisible()
+  await expect(aiConsent.getByRole('button', { name: '撤回这项授权' })).toBeEnabled()
+  expect(revokeRequests).toBe(2)
+  expect(overviewReads).toBe(2)
+
+  await aiConsent.getByRole('button', { name: '撤回这项授权' }).click()
+  await aiConsent.getByRole('button', { name: '确认撤回' }).click()
+  await expect(aiConsent.getByText('已撤回', { exact: true })).toBeVisible()
+  expect(revokeRequests).toBe(3)
+  expect(overviewReads).toBe(3)
+  expect(
+    browserErrors.filter(
+      (error) =>
+        error !== 'Failed to load resource: net::ERR_FAILED' &&
+        !(
+          error.includes('Request failed: POST') &&
+          error.includes('/v1/me/privacy/consents/') &&
+          error.includes('/revoke')
+        ),
+    ),
+  ).toEqual([])
+})
+
 test('privacy page recovers a committed deletion receipt after the response and page state are lost', async ({
   page,
   request,

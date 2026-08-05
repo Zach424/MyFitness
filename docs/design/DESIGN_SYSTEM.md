@@ -1,6 +1,6 @@
 # Design system baseline
 
-Status: implemented and visually validated through iteration-071 profile/goal register read-authority evidence
+Status: implemented and visually validated through iteration-082 optional-consent revocation response-loss evidence
 
 Working brand: 衡迹 / MyFitness
 
@@ -838,6 +838,16 @@ On 390 × 844 H5, all six risk choices retain readable disabled text, the four c
 Only an advanced/current-first revision with complete profile, goal, constraint, risk-flag and consent-version equality becomes green success. Same-revision or confirmed-absence evidence restores a fresh explicit save; divergent evidence preserves the frozen local input and enters the established discard/load-current choice. Revision alone never implies a safety or consent fact, and the page adds no autosave, background replay or persistent profile draft.
 
 - [390 × 844 unresolved profile save below frozen risk and consent input](../../output/playwright/iteration-081-profile-save-reconciliation-mobile.png)
+
+## Optional-consent revocation response-loss recovery — iteration 082
+
+The privacy desk now distinguishes a failed request from an unknown revocation result. On 390 × 844 H5, the amber ruled receipt appears directly beneath the custody thesis and above the retained nine-item ownership ledger. `REVOCATION UNKNOWN / 禁止重复撤回` names the exact safety boundary, while the plain copy identifies the target authorization, says cleanup counts are unknown and promises one current-ledger read rather than another POST.
+
+The old inventory remains fully readable because it is the last accepted evidence, but download, every consent revocation and all erasure-preparation controls are inert until the single full-width `核对撤回结果` action resolves. Back, profile editing and logout retain their existing authority. The receipt uses the established retained-inventory metric so it cannot be mistaken for a global outage or a background synchronization state.
+
+Only current `已撤回` evidence permits green completion copy, and that copy explicitly withholds cleanup counts lost with the POST response. Current `有效` evidence restores a later fresh confirmation without replay; missing or never-granted state becomes divergent rather than an inferred success. The visual state adds no optimistic check mark, hidden retry, persisted purpose or medical/privacy claim beyond current authorization evidence.
+
+- [390 × 844 unresolved optional-consent revocation above retained custody inventory](../../output/playwright/iteration-082-privacy-revocation-recovery-mobile.png)
 
 ## Screenshot review checklist
 

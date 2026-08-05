@@ -37,9 +37,19 @@ import {
   privacyCategoryCopy,
   type PrivacyReadFailureKind,
 } from './privacy.model'
+import {
+  classifyRevocationEvidence,
+  describeRevocationFailure,
+  describeRevocationReconciliationFailure,
+  type RevocationRecoveryReceipt,
+} from './privacy-revoke-recovery'
 import './index.scss'
 
 type ExportChoice = 'downloaded' | 'skip' | null
+type RevocationRecovery = {
+  purpose: RevocableConsentPurpose
+  receipt: RevocationRecoveryReceipt
+}
 
 const privacyReadFailureCopy = (
   kind: PrivacyReadFailureKind,
@@ -104,6 +114,8 @@ const PrivacyPage = () => {
   const [exportChoice, setExportChoice] = useState<ExportChoice>(null)
   const [revokeTarget, setRevokeTarget] = useState<RevocableConsentPurpose | null>(null)
   const [revoking, setRevoking] = useState(false)
+  const [revocationRecovery, setRevocationRecovery] = useState<RevocationRecovery | null>(null)
+  const [reconcilingRevocation, setReconcilingRevocation] = useState(false)
   const [phrase, setPhrase] = useState('')
   const [understandsPermanent, setUnderstandsPermanent] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -184,17 +196,18 @@ const PrivacyPage = () => {
     hasFailure: Boolean(readFailure),
   })
   const readAuthorityReady = readPhase === 'ready'
+  const custodyAuthorityReady = readAuthorityReady && !revocationRecovery
   const readFailurePresentation = readFailure
     ? privacyReadFailureCopy(readFailure, hasReadSnapshot)
     : undefined
 
   const readyToDelete = useMemo(
-    () => readAuthorityReady && deletionReady({ phrase, exportChoice, understandsPermanent }),
-    [exportChoice, phrase, readAuthorityReady, understandsPermanent],
+    () => custodyAuthorityReady && deletionReady({ phrase, exportChoice, understandsPermanent }),
+    [custodyAuthorityReady, exportChoice, phrase, understandsPermanent],
   )
 
   const handleExport = async () => {
-    if (exporting || !readAuthorityReady) return
+    if (exporting || !custodyAuthorityReady) return
     setExporting(true)
     setError('')
     try {
@@ -213,7 +226,7 @@ const PrivacyPage = () => {
   }
 
   const handleRevoke = async (purpose: RevocableConsentPurpose) => {
-    if (revoking || !readAuthorityReady) return
+    if (revoking || !custodyAuthorityReady) return
     setRevoking(true)
     setError('')
     try {
@@ -230,14 +243,54 @@ const PrivacyPage = () => {
       setRevokeTarget(null)
       await loadOverview(true)
     } catch (revokeError) {
-      setError(revokeError instanceof Error ? revokeError.message : '授权撤回失败')
+      const receipt = describeRevocationFailure(revokeError, consentCopy[purpose].label)
+      setRevokeTarget(null)
+      if (receipt.authority === 'reconcile_required') {
+        setRevocationRecovery({ purpose, receipt })
+      } else {
+        setError(receipt.message)
+      }
     } finally {
       setRevoking(false)
     }
   }
 
+  const reconcileRevocation = async () => {
+    if (!revocationRecovery || reconcilingRevocation) return
+    setReconcilingRevocation(true)
+    setError('')
+    const { purpose } = revocationRecovery
+    const label = consentCopy[purpose].label
+    try {
+      const current = await getPrivacyOverview()
+      acceptOverview(current)
+      const evidence = classifyRevocationEvidence(current, purpose)
+      setRevocationRecovery(null)
+      if (evidence === 'applied') {
+        setFeedback(
+          `当前授权清单确认“${label}”已撤回。原始响应已丢失，因此不显示本次敏感数据清理条数。`,
+        )
+      } else if (evidence === 'not_applied') {
+        setFeedback(
+          `当前授权清单显示“${label}”仍然有效；系统没有自动重放撤回。如仍需撤回，请再次明确操作。`,
+        )
+      } else {
+        setError(
+          `当前授权清单无法找到“${label}”的预期有效或已撤回凭据。已保留本次读取结果，请检查后重新决定。`,
+        )
+      }
+    } catch {
+      setRevocationRecovery({
+        purpose,
+        receipt: describeRevocationReconciliationFailure(label),
+      })
+    } finally {
+      setReconcilingRevocation(false)
+    }
+  }
+
   const handleDelete = async () => {
-    if (!readyToDelete || deleting || !readAuthorityReady) return
+    if (!readyToDelete || deleting || !custodyAuthorityReady) return
     setDeleting(true)
     setError('')
     try {
@@ -368,6 +421,34 @@ const PrivacyPage = () => {
             </View>
           ) : null}
 
+          {revocationRecovery ? (
+            <View className="privacy-read-state privacy-read-state--stale" role="status">
+              <View>
+                <Text className="privacy-read-state__eyebrow">
+                  {revocationRecovery.receipt.eyebrow}
+                </Text>
+                <Text className="privacy-read-state__title">撤回结果需要当前授权凭据</Text>
+                <Text className="privacy-read-state__copy">
+                  {revocationRecovery.receipt.message}
+                </Text>
+                {overview ? (
+                  <Text className="privacy-read-state__retained metric">
+                    RETAINED INVENTORY · {overview.totalRecordCount} ITEMS ·{' '}
+                    {formatDate(overview.generatedAt)}
+                  </Text>
+                ) : null}
+              </View>
+              <Button
+                id="privacy-revocation-reconcile"
+                className="privacy-read-state__action"
+                aria-label={revocationRecovery.receipt.actionLabel}
+                {...buttonActivationProps(() => void reconcileRevocation(), reconcilingRevocation)}
+              >
+                {reconcilingRevocation ? '正在核对…' : revocationRecovery.receipt.actionLabel}
+              </Button>
+            </View>
+          ) : null}
+
           {readPhase === 'refreshing' && hasReadSnapshot ? (
             <View className="privacy-read-state privacy-read-state--refreshing" role="status">
               <View>
@@ -481,8 +562,8 @@ const PrivacyPage = () => {
                   <Button
                     {...buttonA11yProps}
                     className="primary-action"
-                    disabled={exporting || !readAuthorityReady}
-                    aria-disabled={exporting || !readAuthorityReady}
+                    disabled={exporting || !custodyAuthorityReady}
+                    aria-disabled={exporting || !custodyAuthorityReady}
                     onClick={() => void handleExport()}
                   >
                     {exporting ? '正在生成…' : '下载我的数据'}
@@ -539,8 +620,8 @@ const PrivacyPage = () => {
                                   <Button
                                     {...buttonA11yProps}
                                     className="revoke-action"
-                                    disabled={revoking || !readAuthorityReady}
-                                    aria-disabled={revoking || !readAuthorityReady}
+                                    disabled={revoking || !custodyAuthorityReady}
+                                    aria-disabled={revoking || !custodyAuthorityReady}
                                     onClick={() => void handleRevoke(optionalPurpose)}
                                   >
                                     {revoking ? '正在撤回…' : '确认撤回'}
@@ -551,10 +632,10 @@ const PrivacyPage = () => {
                               <Button
                                 {...buttonA11yProps}
                                 className="text-action"
-                                disabled={!readAuthorityReady}
-                                aria-disabled={!readAuthorityReady}
+                                disabled={!custodyAuthorityReady}
+                                aria-disabled={!custodyAuthorityReady}
                                 onClick={() => {
-                                  if (readAuthorityReady) setRevokeTarget(optionalPurpose)
+                                  if (custodyAuthorityReady) setRevokeTarget(optionalPurpose)
                                 }}
                               >
                                 撤回这项授权
@@ -606,10 +687,10 @@ const PrivacyPage = () => {
                         <Button
                           {...buttonA11yProps}
                           className="step-action"
-                          disabled={!readAuthorityReady}
-                          aria-disabled={!readAuthorityReady}
+                          disabled={!custodyAuthorityReady}
+                          aria-disabled={!custodyAuthorityReady}
                           onClick={() => {
-                            if (readAuthorityReady)
+                            if (custodyAuthorityReady)
                               setExportChoice(exportChoice === 'skip' ? null : 'skip')
                           }}
                         >
@@ -621,11 +702,11 @@ const PrivacyPage = () => {
                     <Button
                       {...checkboxA11yProps}
                       className={`deletion-check ${understandsPermanent ? 'deletion-check--checked' : ''}`}
-                      disabled={!readAuthorityReady}
+                      disabled={!custodyAuthorityReady}
                       aria-checked={understandsPermanent}
-                      aria-disabled={!readAuthorityReady}
+                      aria-disabled={!custodyAuthorityReady}
                       onClick={() => {
-                        if (readAuthorityReady) setUnderstandsPermanent((value) => !value)
+                        if (custodyAuthorityReady) setUnderstandsPermanent((value) => !value)
                       }}
                     >
                       <Text className="deletion-check__box" aria-hidden="true">
@@ -644,7 +725,7 @@ const PrivacyPage = () => {
                         value={phrase}
                         maxlength={accountDeletionConfirmationPhrase.length}
                         placeholder={accountDeletionConfirmationPhrase}
-                        disabled={!readAuthorityReady}
+                        disabled={!custodyAuthorityReady}
                         onInput={(event) => setPhrase(event.detail.value)}
                       />
                     </View>
@@ -653,7 +734,7 @@ const PrivacyPage = () => {
                   <Button
                     {...buttonA11yProps}
                     className={`delete-action ${readyToDelete ? 'delete-action--ready' : ''}`}
-                    disabled={!readyToDelete || deleting || !readAuthorityReady}
+                    disabled={!readyToDelete || deleting || !custodyAuthorityReady}
                     aria-disabled={!readyToDelete || deleting}
                     onClick={() => void handleDelete()}
                   >

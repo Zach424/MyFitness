@@ -1,6 +1,6 @@
 # Privacy ownership model
 
-Status: durable local ownership/erasure boundary with lost-response recovery, purpose-separated photo custody, catalog history, conflict-safe expiring record drafts and non-persistent profile/goal draft authority implemented through iteration 071
+Status: durable local ownership/erasure boundary with lost-response recovery, purpose-separated photo custody, catalog history, conflict-safe expiring record drafts and evidence-first optional-consent revocation implemented through iteration 082
 
 ## User-owned surface
 
@@ -42,6 +42,8 @@ revoked + new explicit request → new accepted event → active
 `terms`, `privacy` and `health_data` are required to operate the current account. They cannot be withdrawn independently in the UI; account erasure stops that processing. `ai_plan_explanation`, `food_photo_analysis`, `progress_photo_analysis` and `progress_photo_retention` are optional and independently revocable.
 
 Consent rows remain append-oriented: dropping the old purpose/version uniqueness allows a new event after withdrawal instead of erasing the prior acceptance/revocation interval. AI and photo idempotency locks ensure one consent receipt is created for one unique request. Food-photo withdrawal removes every food analysis and only the `food` object scope. Progress-analysis withdrawal deletes temporary images but preserves separately retained images after clearing their machine checks; progress-retention withdrawal deletes every progress record and only the `progress` scope. AI withdrawal removes pending work while completed user-visible explanations remain exportable until account erasure. Media deletion can remain `pending` during a storage outage without being misreported as completed.
+
+If a revocation POST loses its response, the client does not repeat it. It retains only the exact purpose in page memory, keeps the accepted inventory visible and freezes every custody action until one explicit current-overview read resolves the purpose. `revoked` proves current inactive authorization, while `active` requires a fresh later confirmation and missing/`never_granted` evidence is divergent. The overview cannot reconstruct the POST's removed-photo/analysis counts, so reconciled completion never displays them; only the original successful response may provide that narrower cleanup result. No revocation purpose, request or recovery instruction enters application storage.
 
 ## Expiring local editor drafts
 
