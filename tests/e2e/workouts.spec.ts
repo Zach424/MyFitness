@@ -282,6 +282,61 @@ test('workout history keeps its requested aggregate visible after an initial off
   expect(historyReads).toBe(2)
 })
 
+test('action definition editor keeps an initial offline revision ledger unknown', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await openWorkouts(page)
+  await page.getByRole('button', { name: '管理我的动作' }).click()
+  await page.getByRole('button', { name: '新建动作' }).click()
+  const editor = page.locator('.food-editor')
+  await editor.locator('[aria-label="自定义动作名称"] input').fill('离线修订壶铃摆动')
+  await editor.getByRole('button', { name: '自重' }).click()
+  await editor.getByRole('button', { name: '壶铃' }).click()
+  await editor.getByRole('button', { name: '保存定义' }).click()
+  await expect(editor).toHaveCount(0)
+
+  let historyReads = 0
+  await page.route(/\/v1\/exercise-catalog\/[0-9a-f-]{36}\/history\?limit=10$/, async (route) => {
+    if (route.request().method() !== 'GET') {
+      await route.continue()
+      return
+    }
+    historyReads += 1
+    if (historyReads === 1) {
+      await route.abort('internetdisconnected')
+      return
+    }
+    await route.continue()
+  })
+
+  await page.getByRole('button', { name: '编辑自定义动作离线修订壶铃摆动' }).click()
+  await expect(editor).toBeVisible()
+  await expect(editor.locator('[aria-label="自定义动作名称"] input')).toHaveValue(
+    '离线修订壶铃摆动',
+  )
+  const history = editor.getByLabel('定义修订历史')
+  const readState = history.locator('.aggregate-history-read-state')
+  await expect(readState.getByText('OFFLINE / 连接未完成')).toBeVisible()
+  await expect(readState).toContainText('动作定义版本历史还没有读取')
+  await expect(readState).toContainText('REVISIONS — · AUDIT BOUNDARY UNKNOWN')
+  await expect(history.locator('.definition-revision-ledger__item')).toHaveCount(0)
+  await expect(editor.getByRole('button', { name: '保存纠正' })).toBeEnabled()
+  await expect(editor.getByRole('button', { name: '停用' })).toBeEnabled()
+  const retry = history.getByRole('button', { name: '重新核对动作定义版本历史' })
+  await expect(retry).toBeFocused()
+
+  await page.screenshot({
+    path: 'output/playwright/iteration-074-action-definition-history-offline-mobile.png',
+  })
+
+  await page.keyboard.press('Enter')
+  await expect(readState).toHaveCount(0)
+  await expect(history.getByText(/R1 · 创建/)).toBeVisible()
+  await expect(history.getByText('已载入全部版本')).toBeVisible()
+  expect(historyReads).toBe(2)
+})
+
 test('workout completes create, repeat, update, history and delete lifecycle', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   const browserErrors = collectBrowserErrors(page)

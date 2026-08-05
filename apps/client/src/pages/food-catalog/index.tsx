@@ -24,6 +24,7 @@ import {
   registerReadPhase,
   type RegisterReadFailureKind,
 } from '../../lib/register-read'
+import { useAggregateHistory } from '../../lib/use-aggregate-history'
 import ExerciseCatalogPage from '../exercise-catalog'
 import './index.scss'
 
@@ -141,9 +142,6 @@ const FoodCatalogPage = () => {
   const [entries, setEntries] = useState<CustomFoodCatalogEntry[]>([])
   const [editing, setEditing] = useState<CustomFoodCatalogEntry>()
   const [archiving, setArchiving] = useState<CustomFoodCatalogEntry>()
-  const [history, setHistory] = useState<FoodCatalogEntryHistoryItem[]>()
-  const [historyNextCursor, setHistoryNextCursor] = useState<string | null>(null)
-  const [historyLoadingMore, setHistoryLoadingMore] = useState(false)
   const [form, setForm] = useState(emptyForm)
   const [editorOpen, setEditorOpen] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -154,6 +152,10 @@ const FoodCatalogPage = () => {
   const [recovery, setRecovery] = useState<WorkbenchRecovery>()
   const readInFlight = useRef(false)
   const pageActive = useRef(true)
+  const historyRead = useAggregateHistory<CustomFoodCatalogEntry, FoodCatalogEntryHistoryItem>(
+    getFoodCatalogEntryHistory,
+    'food-definition-history-read-retry',
+  )
 
   const patchForm = (patch: Partial<FoodForm>) => {
     setForm((current) => ({ ...current, ...patch }))
@@ -162,43 +164,16 @@ const FoodCatalogPage = () => {
     setFeedback('')
   }
 
-  const openEditor = async (entry?: CustomFoodCatalogEntry, acceptedInitialRead = false) => {
+  const openEditor = (entry?: CustomFoodCatalogEntry, acceptedInitialRead = false) => {
     if (!acceptedInitialRead && !readAuthorityReady) return
     setEditing(entry)
     setForm(entry ? formFromEntry(entry) : emptyForm())
-    setHistory(entry ? undefined : [])
-    setHistoryNextCursor(null)
-    setHistoryLoadingMore(false)
     setEditorOpen(true)
     setFeedback('')
     setRecovery(undefined)
     pendingCreateKey.current = ''
-    if (!entry) return
-    try {
-      const result = await getFoodCatalogEntryHistory(entry.id, { limit: 10 })
-      setHistory(result.items)
-      setHistoryNextCursor(result.nextCursor)
-    } catch (error) {
-      setHistory([])
-      setFeedback(messageOf(error))
-    }
-  }
-
-  const loadOlderHistory = async () => {
-    if (!readAuthorityReady || !editing || !historyNextCursor || historyLoadingMore) return
-    setHistoryLoadingMore(true)
-    try {
-      const result = await getFoodCatalogEntryHistory(editing.id, {
-        limit: 10,
-        cursor: historyNextCursor,
-      })
-      setHistory((current) => [...(current ?? []), ...result.items])
-      setHistoryNextCursor(result.nextCursor)
-    } catch (error) {
-      setFeedback(messageOf(error))
-    } finally {
-      setHistoryLoadingMore(false)
-    }
+    if (entry) historyRead.open(entry)
+    else historyRead.close()
   }
 
   const loadRegisterAuthority = async () => {
@@ -248,8 +223,7 @@ const FoodCatalogPage = () => {
   const closeEditor = () => {
     setEditorOpen(false)
     setEditing(undefined)
-    setHistory(undefined)
-    setHistoryNextCursor(null)
+    historyRead.close()
     setForm(emptyForm())
     pendingCreateKey.current = ''
     setRecovery(undefined)
@@ -563,10 +537,15 @@ const FoodCatalogPage = () => {
               </View>
               {editing ? (
                 <DefinitionRevisionLedger
-                  items={history}
-                  nextCursor={historyNextCursor}
-                  loadingMore={historyLoadingMore}
-                  onLoadOlder={loadOlderHistory}
+                  items={historyRead.items}
+                  nextCursor={historyRead.nextCursor}
+                  busy={historyRead.busy}
+                  phase={historyRead.phase}
+                  failure={historyRead.failure}
+                  subject="食物定义"
+                  retryId="food-definition-history-read-retry"
+                  onLoadOlder={historyRead.loadOlder}
+                  onRetry={historyRead.retry}
                 />
               ) : null}
               <View className="food-editor__actions">

@@ -33,6 +33,7 @@ import {
   registerReadPhase,
   type RegisterReadFailureKind,
 } from '../../lib/register-read'
+import { useAggregateHistory } from '../../lib/use-aggregate-history'
 import './index.scss'
 
 const categoryLabels = { strength: '力量', cardio: '有氧', mobility: '灵活性' } as const
@@ -87,9 +88,6 @@ const ExerciseCatalogPage = () => {
   const [entries, setEntries] = useState<CustomExerciseCatalogEntry[]>([])
   const [editing, setEditing] = useState<CustomExerciseCatalogEntry>()
   const [archiving, setArchiving] = useState<CustomExerciseCatalogEntry>()
-  const [history, setHistory] = useState<ExerciseCatalogEntryHistoryItem[]>()
-  const [historyNextCursor, setHistoryNextCursor] = useState<string | null>(null)
-  const [historyLoadingMore, setHistoryLoadingMore] = useState(false)
   const [draft, setDraft] = useState<ExerciseCatalogDraft>(initialExerciseCatalogDraft)
   const [editorOpen, setEditorOpen] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -100,6 +98,10 @@ const ExerciseCatalogPage = () => {
   const [recovery, setRecovery] = useState<WorkbenchRecovery>()
   const readInFlight = useRef(false)
   const pageActive = useRef(true)
+  const historyRead = useAggregateHistory<
+    CustomExerciseCatalogEntry,
+    ExerciseCatalogEntryHistoryItem
+  >(getExerciseCatalogEntryHistory, 'exercise-definition-history-read-retry')
 
   const patchDraft = (patch: Partial<ExerciseCatalogDraft>) => {
     setDraft((current) => ({ ...current, ...patch }))
@@ -108,44 +110,17 @@ const ExerciseCatalogPage = () => {
     setFeedback('')
   }
 
-  const openEditor = async (entry?: CustomExerciseCatalogEntry, acceptedInitialRead = false) => {
+  const openEditor = (entry?: CustomExerciseCatalogEntry, acceptedInitialRead = false) => {
     if (!acceptedInitialRead && !readAuthorityReady) return
     editorReturnFocusId.current = entry ? `exercise-edit-${entry.id}` : 'exercise-new-action'
     setEditing(entry)
     setDraft(entry ? exerciseCatalogDraftFromItem(entry) : initialExerciseCatalogDraft())
-    setHistory(entry ? undefined : [])
-    setHistoryNextCursor(null)
-    setHistoryLoadingMore(false)
     setEditorOpen(true)
     setFeedback('')
     setRecovery(undefined)
     pendingCreateKey.current = ''
-    if (!entry) return
-    try {
-      const result = await getExerciseCatalogEntryHistory(entry.id, { limit: 10 })
-      setHistory(result.items)
-      setHistoryNextCursor(result.nextCursor)
-    } catch (error) {
-      setHistory([])
-      setFeedback(messageOf(error))
-    }
-  }
-
-  const loadOlderHistory = async () => {
-    if (!readAuthorityReady || !editing || !historyNextCursor || historyLoadingMore) return
-    setHistoryLoadingMore(true)
-    try {
-      const result = await getExerciseCatalogEntryHistory(editing.id, {
-        limit: 10,
-        cursor: historyNextCursor,
-      })
-      setHistory((current) => [...(current ?? []), ...result.items])
-      setHistoryNextCursor(result.nextCursor)
-    } catch (error) {
-      setFeedback(messageOf(error))
-    } finally {
-      setHistoryLoadingMore(false)
-    }
+    if (entry) historyRead.open(entry)
+    else historyRead.close()
   }
 
   const loadRegisterAuthority = async () => {
@@ -200,8 +175,7 @@ const ExerciseCatalogPage = () => {
     const returnTarget = editorReturnFocusId.current
     setEditorOpen(false)
     setEditing(undefined)
-    setHistory(undefined)
-    setHistoryNextCursor(null)
+    historyRead.close()
     setDraft(initialExerciseCatalogDraft())
     pendingCreateKey.current = ''
     setRecovery(undefined)
@@ -595,10 +569,15 @@ const ExerciseCatalogPage = () => {
 
               {editing ? (
                 <DefinitionRevisionLedger
-                  items={history}
-                  nextCursor={historyNextCursor}
-                  loadingMore={historyLoadingMore}
-                  onLoadOlder={loadOlderHistory}
+                  items={historyRead.items}
+                  nextCursor={historyRead.nextCursor}
+                  busy={historyRead.busy}
+                  phase={historyRead.phase}
+                  failure={historyRead.failure}
+                  subject="动作定义"
+                  retryId="exercise-definition-history-read-retry"
+                  onLoadOlder={historyRead.loadOlder}
+                  onRetry={historyRead.retry}
                 />
               ) : null}
 

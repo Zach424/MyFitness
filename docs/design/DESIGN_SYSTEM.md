@@ -752,6 +752,19 @@ Successful empty history has a separate quiet-green confirmation instead of shar
 - [390 × 844 unread workout revision sheet](../../output/playwright/iteration-073-workout-history-offline-mobile.png)
 - [1440 × 1000 retained health revisions](../../output/playwright/iteration-073-health-history-stale-wide.png)
 
+## Owner-definition revision-ledger read authority — iteration 074
+
+The embedded action and food correction editors now extend the aggregate-history receipt inside their existing `REVISION LEDGER` rail. The rail keeps the definition-specific R-number vocabulary, thin juniper rule and compact metric rows; only its read authority uses the shared mineral checking, amber failure and accepted-empty grammar. This makes an audit outage legible without turning a user-authored definition into unsafe or invalid content.
+
+On 390 × 844 action H5, an initial transport loss keeps the selected strength/repetition/equipment fields, `停用 / 取消 / 保存纠正` actions and current-directory card in view around the amber receipt. `REVISIONS — · AUDIT BOUNDARY UNKNOWN` replaces the former false “temporarily unable” empty row, and the single focused retry restores R1 without closing or resetting the editor.
+
+On 1440 × 1000 food H5, a 503 suffix response keeps R12 through R3 and the unsaved correction form in one wide sheet. The focused `重试载入更早版本` control sits above the retained rows, while the disabled old continuation stays at the bottom and the correction/archive actions remain visually active. This is deliberate: history continuation lost authority, but the current definition came from the separately accepted owner register.
+
+The same successful-empty card, request-generation guard and focus scroll margin now cover all five aggregate/definition history consumers. No view scores nutrient accuracy, movement safety or the meaning of a revision.
+
+- [390 × 844 unread action-definition ledger](../../output/playwright/iteration-074-action-definition-history-offline-mobile.png)
+- [1440 × 1000 retained food-definition revisions and correction](../../output/playwright/iteration-074-food-definition-history-stale-wide.png)
+
 ## Screenshot review checklist
 
 - The Rhythm Rail remains understandable without color.

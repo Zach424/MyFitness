@@ -96,6 +96,56 @@ const openNutrition = async (page: Page) => {
   await expect(page.getByText('把一餐拆清楚，不必把数字吃成压力。')).toBeVisible()
 }
 
+const seedFoodDefinitionRevisions = (page: Page, idempotencyKey: string) =>
+  page.evaluate(
+    async ({ apiUrl, idempotencyKey }) => {
+      const rawToken = localStorage.getItem('myfitness.auth.accessToken')
+      if (!rawToken) throw new Error('development access token is missing')
+      let decoded: { data?: unknown } = {}
+      try {
+        decoded = JSON.parse(rawToken) as { data?: unknown }
+      } catch {
+        // Legacy H5 storage kept the access token as a plain string.
+      }
+      const token = typeof decoded.data === 'string' ? decoded.data : rawToken
+      const headers = {
+        authorization: `Bearer ${token}`,
+        'content-type': 'application/json',
+      }
+      const payload = (revision: number) => ({
+        name: '分页配方食物',
+        aliases: ['历史分页样本'],
+        category: 'custom',
+        nutrientsPer100g: {
+          energyKcal: 120 + revision,
+          proteinG: 8,
+          carbohydrateG: 12,
+          fatG: 4,
+        },
+        reference: `配方称量修订 R${revision}`,
+        defaultServing: { amount: 100, unit: 'g', grams: 100 },
+      })
+      const createdResponse = await fetch(`${apiUrl}/food-catalog`, {
+        method: 'POST',
+        headers: { ...headers, 'x-idempotency-key': idempotencyKey },
+        body: JSON.stringify(payload(1)),
+      })
+      let current = (await createdResponse.json()) as { id: string; revision: number }
+      const statuses = [createdResponse.status]
+      for (let revision = 2; revision <= 12; revision += 1) {
+        const response = await fetch(`${apiUrl}/food-catalog/${current.id}`, {
+          method: 'PUT',
+          headers,
+          body: JSON.stringify({ ...payload(revision), expectedRevision: current.revision }),
+        })
+        statuses.push(response.status)
+        current = (await response.json()) as { id: string; revision: number }
+      }
+      return { statuses, revision: current.revision }
+    },
+    { apiUrl, idempotencyKey },
+  )
+
 const collectBrowserErrors = (page: Page) => {
   const browserErrors: string[] = []
   page.on('console', (message) => {
@@ -836,51 +886,7 @@ test('owned food definition history progressively loads immutable older revision
   await openNutrition(page)
   await page.getByRole('button', { name: '管理我的食物' }).click()
 
-  const seed = await page.evaluate(async (apiUrl) => {
-    const rawToken = localStorage.getItem('myfitness.auth.accessToken')
-    if (!rawToken) throw new Error('development access token is missing')
-    let decoded: { data?: unknown } = {}
-    try {
-      decoded = JSON.parse(rawToken) as { data?: unknown }
-    } catch {
-      // Legacy H5 storage kept the access token as a plain string.
-    }
-    const token = typeof decoded.data === 'string' ? decoded.data : rawToken
-    const headers = {
-      authorization: `Bearer ${token}`,
-      'content-type': 'application/json',
-    }
-    const payload = (revision: number) => ({
-      name: '分页配方食物',
-      aliases: ['历史分页样本'],
-      category: 'custom',
-      nutrientsPer100g: {
-        energyKcal: 120 + revision,
-        proteinG: 8,
-        carbohydrateG: 12,
-        fatG: 4,
-      },
-      reference: `配方称量修订 R${revision}`,
-      defaultServing: { amount: 100, unit: 'g', grams: 100 },
-    })
-    const createdResponse = await fetch(`${apiUrl}/food-catalog`, {
-      method: 'POST',
-      headers: { ...headers, 'x-idempotency-key': 'progressive-food-definition-history' },
-      body: JSON.stringify(payload(1)),
-    })
-    let current = (await createdResponse.json()) as { id: string; revision: number }
-    const statuses = [createdResponse.status]
-    for (let revision = 2; revision <= 12; revision += 1) {
-      const response = await fetch(`${apiUrl}/food-catalog/${current.id}`, {
-        method: 'PUT',
-        headers,
-        body: JSON.stringify({ ...payload(revision), expectedRevision: current.revision }),
-      })
-      statuses.push(response.status)
-      current = (await response.json()) as { id: string; revision: number }
-    }
-    return { statuses, revision: current.revision }
-  }, apiUrl)
+  const seed = await seedFoodDefinitionRevisions(page, 'progressive-food-definition-history')
   expect(seed.statuses).toEqual([201, ...Array.from({ length: 11 }, () => 200)])
   expect(seed.revision).toBe(12)
 
@@ -908,6 +914,69 @@ test('owned food definition history progressively loads immutable older revision
     path: 'output/playwright/iteration-048-progressive-definition-revisions-mobile.png',
   })
   expect(browserErrors).toEqual([])
+})
+
+test('food definition history freezes an accepted prefix without freezing correction', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await openNutrition(page)
+  await page.getByRole('button', { name: '管理我的食物' }).click()
+  const seed = await seedFoodDefinitionRevisions(page, 'stale-food-definition-history')
+  expect(seed.statuses).toEqual([201, ...Array.from({ length: 11 }, () => 200)])
+
+  await page.reload()
+  await page.getByRole('button', { name: '编辑分页配方食物' }).click()
+  const editor = page.locator('.food-editor')
+  const history = editor.getByLabel('定义修订历史')
+  await expect(history.locator('.definition-revision-ledger__item')).toHaveCount(10)
+  await editor.locator('[aria-label="自定义食物名称"] input').fill('保留中的分页配方食物')
+
+  let olderReads = 0
+  await page.route(/\/history\?limit=10&cursor=/, async (route) => {
+    if (route.request().method() !== 'GET') {
+      await route.continue()
+      return
+    }
+    olderReads += 1
+    if (olderReads === 1) {
+      await route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'raw definition history outage must stay hidden' }),
+      })
+      return
+    }
+    await route.continue()
+  })
+
+  await history.getByRole('button', { name: '继续载入更早版本' }).click()
+  const readState = history.locator('.aggregate-history-read-state')
+  await expect(readState.getByText('SERVICE PAUSED / 服务暂不可用')).toBeVisible()
+  await expect(readState).toContainText('RETAINED 10 REVISIONS · CURSOR FROZEN')
+  await expect(readState).not.toContainText('raw definition history outage')
+  await expect(history.locator('.definition-revision-ledger__item')).toHaveCount(10)
+  await expect(history.getByRole('button', { name: '继续载入更早版本' })).toBeDisabled()
+  await expect(editor.locator('[aria-label="自定义食物名称"] input')).toHaveValue(
+    '保留中的分页配方食物',
+  )
+  await expect(editor.getByRole('button', { name: '保存纠正' })).toBeEnabled()
+  await expect(editor.getByRole('button', { name: '归档', exact: true })).toBeEnabled()
+  const retry = history.getByRole('button', { name: '重试载入食物定义更早版本' })
+  await expect(retry).toBeFocused()
+
+  await page.screenshot({
+    path: 'output/playwright/iteration-074-food-definition-history-stale-wide.png',
+  })
+
+  await retry.click()
+  await expect(readState).toHaveCount(0)
+  await expect(history.locator('.definition-revision-ledger__item')).toHaveCount(12)
+  await expect(history.getByText('已载入全部版本')).toBeVisible()
+  await expect(editor.locator('[aria-label="自定义食物名称"] input')).toHaveValue(
+    '保留中的分页配方食物',
+  )
+  expect(olderReads).toBe(2)
 })
 
 test('food-photo inventory keeps an initial transport outage unknown', async ({ page }) => {
