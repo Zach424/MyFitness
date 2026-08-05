@@ -2,12 +2,36 @@ import { describe, expect, it } from 'vitest'
 
 import {
   buildRecordRequest,
+  classifyRecordReadFailure,
   createDraft,
   draftFromRecord,
+  recordReadPhase,
   validateRecordDraft,
 } from './record.model'
 
 describe('record page model', () => {
+  it('keeps an unread ledger distinct from an accepted empty page', () => {
+    expect(recordReadPhase({ hasSnapshot: false, busy: true, hasFailure: false })).toBe(
+      'initial-loading',
+    )
+    expect(recordReadPhase({ hasSnapshot: false, busy: false, hasFailure: true })).toBe(
+      'initial-error',
+    )
+    expect(recordReadPhase({ hasSnapshot: true, busy: false, hasFailure: false })).toBe('ready')
+  })
+
+  it('marks a retained ledger as refreshing or stale', () => {
+    expect(recordReadPhase({ hasSnapshot: true, busy: true, hasFailure: false })).toBe('refreshing')
+    expect(recordReadPhase({ hasSnapshot: true, busy: false, hasFailure: true })).toBe('stale')
+  })
+
+  it('classifies record-list failures without exposing server copy', () => {
+    expect(classifyRecordReadFailure(new Error('Failed to fetch'))).toBe('offline')
+    expect(classifyRecordReadFailure({ statusCode: 429 })).toBe('refused')
+    expect(classifyRecordReadFailure({ statusCode: 503 })).toBe('service')
+    expect(classifyRecordReadFailure(null)).toBe('unknown')
+  })
+
   it('creates a metric-specific draft', () => {
     expect(createDraft('recovery.sleep_duration')).toMatchObject({
       value: '7.5',

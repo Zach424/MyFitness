@@ -1,6 +1,6 @@
 # Design system baseline
 
-Status: implemented and visually validated through iteration-064 privacy custody read-authority evidence
+Status: implemented and visually validated through iteration-065 health-record ledger read-authority evidence
 
 Working brand: 衡迹 / MyFitness
 
@@ -646,6 +646,17 @@ The wide evidence keeps the custody rail adjacent to the retained ledger instead
 
 - [390 × 844 initial offline privacy desk](../../output/playwright/iteration-064-privacy-initial-offline-mobile.png)
 - [1440 × 1000 retained privacy inventory](../../output/playwright/iteration-064-privacy-stale-wide.png)
+
+## Health-record ledger read authority — iteration 065
+
+The body log now keeps its training-notebook identity while admitting when the recent ledger has not been read. On mobile, the amber ruled authority card sits directly beneath the page thesis and ahead of the optional progress-photo contact sheet. `身体记录还没有读取` names the missing evidence without turning it into an empty-state invitation; the one full-width `重新核对` action is the strongest available action, while the editor remains visible below so typed input is not treated as lost.
+
+The unknown boundary continues inside the layout: the seven-entry counter becomes `—/7`, the recent-log count says `尚未核对`, and the log panel uses a question mark rather than the established plus-sign empty state. Only a successful empty page restores “还没有身体记录” and the invitation to save a first fact. The 390 px capture waits for Taro's page transition to settle and verifies the page itself has no horizontal overflow.
+
+On wide H5, a rejected refresh leaves the accepted 71.8 kg card in its sticky ledger column while the amber rail spans above both editor and log. `RETAINED PAGE · 1 ITEMS` identifies the in-memory page without inventing a timestamp or persistent-cache claim. Save, modify, history and delete are muted and inoperable; back, progress photos, draft fields and the separately read long-term observation route keep their normal hierarchy.
+
+- [390 × 844 unread health-record ledger](../../output/playwright/iteration-065-record-initial-offline-mobile.png)
+- [1440 × 1000 retained health-record page](../../output/playwright/iteration-065-record-stale-wide.png)
 
 ## Screenshot review checklist
 

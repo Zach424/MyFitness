@@ -56,6 +56,121 @@ const openRecords = async (page: Page) => {
   await expect(page.getByText('记录身体，也记录恢复。')).toBeVisible()
 }
 
+test('record ledger does not turn an initial offline read into an empty logbook', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  let listAttempts = 0
+  await page.route(/\/v1\/health-records\?limit=20$/, async (route) => {
+    if (route.request().method() !== 'GET') {
+      await route.continue()
+      return
+    }
+    listAttempts += 1
+    if (listAttempts === 1) {
+      await route.abort('failed')
+      return
+    }
+    await route.continue()
+  })
+
+  await openRecords(page)
+  const readState = page.locator('.record-read-state')
+  await expect(readState.getByText('OFFLINE / 连接未完成')).toBeVisible()
+  await expect(readState).toContainText('身体记录还没有读取')
+  await expect(page.getByText('还没有身体记录')).toHaveCount(0)
+  await expect(page.getByText('记录尚未核对；读取成功后才会显示最近趋势。')).toBeVisible()
+  await expect(page.locator('.log-heading__count')).toHaveText('尚未核对')
+  await expect(page.getByRole('button', { name: '保存记录' })).toBeDisabled()
+  const retry = page.getByRole('button', { name: '重新核对身体记录清单' })
+  await expect(retry).toBeFocused()
+  await expect
+    .poll(() =>
+      page.locator('.records-page').evaluate((element) => element.getBoundingClientRect().left),
+    )
+    .toBe(0)
+  expect(
+    await page.locator('.records-page').evaluate((element) => {
+      const bounds = element.getBoundingClientRect()
+      return bounds.width <= window.innerWidth && element.scrollWidth <= window.innerWidth
+    }),
+  ).toBe(true)
+
+  await page.screenshot({
+    path: 'output/playwright/iteration-065-record-initial-offline-mobile.png',
+  })
+
+  const retryResponse = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/v1/health-records?limit=20') &&
+      response.request().method() === 'GET',
+  )
+  await page.keyboard.press('Enter')
+  expect((await retryResponse).status()).toBe(200)
+  await expect(page.getByText('还没有身体记录')).toBeVisible()
+  await expect(page.getByRole('button', { name: '保存记录' })).toBeEnabled()
+  expect(listAttempts).toBe(2)
+})
+
+test('record ledger retains but freezes a page after a refused refresh', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await openRecords(page)
+  await page.locator('[aria-label="体重数值"] input').fill('71.8')
+  await page.locator('[aria-label="发生时间，年-月-日 时:分"] input').fill('2026-07-18 16:00')
+  await page.getByRole('button', { name: '保存记录' }).click()
+  const retainedEntry = page.locator('.log-entry').filter({ hasText: '71.8 kg' })
+  await expect(retainedEntry).toBeVisible()
+
+  let refreshAttempts = 0
+  await page.route(/\/v1\/health-records\?limit=20$/, async (route) => {
+    if (route.request().method() !== 'GET') {
+      await route.continue()
+      return
+    }
+    refreshAttempts += 1
+    if (refreshAttempts === 1) {
+      await route.fulfill({
+        status: 429,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'raw backend refusal must stay hidden' }),
+      })
+      return
+    }
+    await route.continue()
+  })
+
+  await page.getByRole('button', { name: '更新身体记录清单' }).click()
+  const readState = page.locator('.record-read-state')
+  await expect(readState.getByText('READ REFUSED / 读取被拒绝')).toBeVisible()
+  await expect(readState).toContainText('RETAINED PAGE · 1 ITEMS')
+  await expect(readState).not.toContainText('raw backend refusal')
+  await expect(retainedEntry).toBeVisible()
+  await expect(page.locator('.log-heading__count')).toHaveText('保留 1')
+  await expect(page.getByRole('button', { name: '保存记录' })).toBeDisabled()
+  await expect(retainedEntry.getByRole('button', { name: '修改' })).toBeDisabled()
+  await expect(retainedEntry.getByRole('button', { name: '历史' })).toBeDisabled()
+  await expect(retainedEntry.getByRole('button', { name: '删除' })).toBeDisabled()
+  const retry = page.getByRole('button', { name: '重新核对身体记录清单' })
+  await expect(retry).toBeFocused()
+
+  await page.screenshot({
+    path: 'output/playwright/iteration-065-record-stale-wide.png',
+    fullPage: true,
+  })
+
+  const retryResponse = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/v1/health-records?limit=20') &&
+      response.request().method() === 'GET',
+  )
+  await page.keyboard.press('Enter')
+  expect((await retryResponse).status()).toBe(200)
+  await expect(readState).toHaveCount(0)
+  await expect(retainedEntry.getByRole('button', { name: '修改' })).toBeEnabled()
+  await expect(page.getByRole('button', { name: '保存记录' })).toBeEnabled()
+  expect(refreshAttempts).toBe(2)
+})
+
 const validDemoProgressPng = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAIAAAACUFjqAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAAFUlEQVQYlWO4cWQWHsQwKn0ES7AAAP7B3Rk90PKpAAAAAElFTkSuQmCC',
   'base64',

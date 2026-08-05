@@ -8,7 +8,7 @@ import type {
   UnitCode,
 } from '@myfitness/contracts'
 
-import { buttonA11yProps } from '../../lib/accessibility'
+import { buttonActivationProps, buttonA11yProps, deferH5Focus } from '../../lib/accessibility'
 import { parseBackfillIntent } from '../../lib/backfill-intent'
 import { LocalDraftNotice } from '../../components/local-draft-notice'
 import { OccurrenceField } from '../../components/occurrence-field'
@@ -27,14 +27,17 @@ import { describeSaveFailure, type SaveRecovery } from '../../lib/save-recovery'
 import { useRecoverableDraft } from '../../lib/use-local-draft'
 import {
   buildRecordRequest,
+  classifyRecordReadFailure,
   createDraft,
   draftFromRecord,
   formatRecordValue,
   groupMetrics,
   isRecordDraft,
   metricUiDefinitions,
+  recordReadPhase,
   type RecordDraft,
   type RecordGroup,
+  type RecordReadFailureKind,
   unitLabels,
   validateRecordDraft,
 } from './record.model'
@@ -61,6 +64,46 @@ const createRequestKey = () =>
 const errorMessage = (error: unknown) =>
   error instanceof ApiError || error instanceof Error ? error.message : '操作失败，请稍后重试'
 
+const recordReadFailureCopy = (
+  kind: RecordReadFailureKind,
+  hasSnapshot: boolean,
+): { eyebrow: string; title: string; detail: string } => {
+  if (kind === 'offline') {
+    return {
+      eyebrow: 'OFFLINE / 连接未完成',
+      title: hasSnapshot ? '记录清单复核没有完成' : '身体记录还没有读取',
+      detail: hasSnapshot
+        ? '上次成功读取的记录仍在下方，但保存、修改、历史与删除均已冻结。'
+        : '当前无法确认账户里是否已有记录；页面不会用空记录册代替，也不会提交新的改动。',
+    }
+  }
+  if (kind === 'refused') {
+    return {
+      eyebrow: 'READ REFUSED / 读取被拒绝',
+      title: hasSnapshot ? '服务拒绝了本次清单复核' : '服务没有接受本次记录读取',
+      detail: hasSnapshot
+        ? '旧清单继续只读保留；重新核对前不会保存、修改、读取历史或删除记录。'
+        : '记录数量与内容仍是未知状态；重新核对成功前，记录操作保持冻结。',
+    }
+  }
+  if (kind === 'service') {
+    return {
+      eyebrow: 'SERVICE PAUSED / 服务暂不可用',
+      title: hasSnapshot ? '本次记录复核暂未完成' : '身体记录暂时无法读取',
+      detail: hasSnapshot
+        ? '下方保留上次清单用于查看，所有记录操作保持冻结。'
+        : '服务暂时没有返回记录证据；这里不会显示“还没有记录”。',
+    }
+  }
+  return {
+    eyebrow: 'READ UNKNOWN / 结果未知',
+    title: hasSnapshot ? '无法确认当前记录清单' : '无法确认身体记录状态',
+    detail: hasSnapshot
+      ? '旧清单继续只读保留；重新核对前不会提交任何记录操作。'
+      : '页面尚未取得可信的记录快照，也不会推断账户没有记录。',
+  }
+}
+
 const RecordsPage = () => {
   const backfill = useRef(parseBackfillIntent(Taro.getCurrentInstance().router?.params))
   const newDraft = (metric: MetricCode) => {
@@ -80,33 +123,59 @@ const RecordsPage = () => {
   const [historyRecord, setHistoryRecord] = useState<HealthRecord>()
   const [historyNextCursor, setHistoryNextCursor] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [hasReadSnapshot, setHasReadSnapshot] = useState(false)
+  const [readFailure, setReadFailure] = useState<RecordReadFailureKind>()
   const [loadingMore, setLoadingMore] = useState(false)
   const [nextCursor, setNextCursor] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [feedback, setFeedback] = useState('')
   const [saveRecovery, setSaveRecovery] = useState<SaveRecovery>()
   const requestKey = useRef('')
+  const readInFlight = useRef(false)
 
-  const loadRecords = async () => {
+  const loadRecords = async (isActive: () => boolean = () => true) => {
+    if (readInFlight.current) return
+    readInFlight.current = true
     setLoading(true)
-    setFeedback('')
+    setReadFailure(undefined)
+    setDeleting(undefined)
+    setHistoryRecord(undefined)
     try {
       const result = await listHealthRecords({ limit: 20 })
+      if (!isActive()) return
       setRecords(result.items)
       setNextCursor(result.nextCursor)
+      setHasReadSnapshot(true)
     } catch (error) {
-      setFeedback(errorMessage(error))
+      if (!isActive()) return
+      setReadFailure(classifyRecordReadFailure(error))
+      deferH5Focus('record-read-retry', 80)
     } finally {
-      setLoading(false)
+      readInFlight.current = false
+      if (isActive()) setLoading(false)
     }
   }
 
   useEffect(() => {
-    void loadRecords()
+    let active = true
+    void loadRecords(() => active)
+    return () => {
+      active = false
+    }
   }, [])
 
+  const readPhase = recordReadPhase({
+    hasSnapshot: hasReadSnapshot,
+    busy: loading,
+    hasFailure: Boolean(readFailure),
+  })
+  const readAuthorityReady = readPhase === 'ready'
+  const readFailurePresentation = readFailure
+    ? recordReadFailureCopy(readFailure, hasReadSnapshot)
+    : undefined
+
   const loadOlderRecords = async () => {
-    if (!nextCursor || loadingMore) return
+    if (!readAuthorityReady || !nextCursor || loadingMore) return
     setLoadingMore(true)
     try {
       const result = await listHealthRecords({ limit: 20, cursor: nextCursor })
@@ -141,6 +210,10 @@ const RecordsPage = () => {
       requestKey.current = ''
       setSaveRecovery(undefined)
       setFeedback('本地记录草稿已恢复；保存前请重新核对数值、单位与发生时间。')
+      return
+    }
+    if (!readAuthorityReady) {
+      setFeedback('请先重新核对记录清单，再恢复这份修改草稿。草稿仍安全保留。')
       return
     }
     try {
@@ -205,6 +278,10 @@ const RecordsPage = () => {
   }
 
   const save = async () => {
+    if (!readAuthorityReady) {
+      setFeedback('请先重新核对记录清单，再保存这笔记录。当前输入仍保留。')
+      return
+    }
     const validationError = validateRecordDraft(draft)
     if (validationError) {
       setSaveRecovery(undefined)
@@ -252,6 +329,7 @@ const RecordsPage = () => {
   }
 
   const startEdit = (record: HealthRecord) => {
+    if (!readAuthorityReady) return
     if (recoverableDraft.pending) {
       setFeedback('请先恢复或放弃页面顶部的本地草稿，再开始另一项修改。')
       Taro.pageScrollTo({ scrollTop: 0, duration: 240 })
@@ -269,7 +347,7 @@ const RecordsPage = () => {
   }
 
   const confirmDelete = async () => {
-    if (!deleting) return
+    if (!deleting || !readAuthorityReady) return
     setSaving(true)
     try {
       await deleteHealthRecord(deleting.id, deleting.revision)
@@ -288,6 +366,7 @@ const RecordsPage = () => {
   }
 
   const openHistory = async (record: HealthRecord) => {
+    if (!readAuthorityReady) return
     setHistoryRecord(record)
     setHistory(undefined)
     setHistoryNextCursor(null)
@@ -302,7 +381,7 @@ const RecordsPage = () => {
   }
 
   const loadOlderHistory = async () => {
-    if (!historyRecord || !historyNextCursor || loadingMore) return
+    if (!readAuthorityReady || !historyRecord || !historyNextCursor || loadingMore) return
     setLoadingMore(true)
     try {
       const result = await getHealthRecordHistory(historyRecord.id, {
@@ -382,6 +461,44 @@ const RecordsPage = () => {
                 setFeedback('本地身体记录草稿已清除。')
               }}
             />
+          ) : null}
+
+          {readPhase === 'refreshing' && hasReadSnapshot ? (
+            <View className="record-read-state record-read-state--refreshing" role="status">
+              <View>
+                <Text className="record-read-state__eyebrow">CHECKING LEDGER / 保留上次清单</Text>
+                <Text className="record-read-state__title">正在复核身体记录</Text>
+                <Text className="record-read-state__copy">
+                  复核完成前，下方记录只读保留；保存、修改、历史与删除均已冻结。
+                </Text>
+              </View>
+            </View>
+          ) : readFailurePresentation ? (
+            <View className={`record-read-state record-read-state--${readPhase}`} role="status">
+              <View>
+                <Text className="record-read-state__eyebrow">
+                  {readFailurePresentation.eyebrow}
+                </Text>
+                <Text className="record-read-state__title">{readFailurePresentation.title}</Text>
+                <Text className="record-read-state__copy">{readFailurePresentation.detail}</Text>
+                {hasReadSnapshot ? (
+                  <Text className="record-read-state__retained metric">
+                    RETAINED PAGE · {records.length} ITEMS
+                  </Text>
+                ) : null}
+              </View>
+              <Button
+                id="record-read-retry"
+                className="record-read-state__action"
+                aria-label="重新核对身体记录清单"
+                {...buttonActivationProps(
+                  () => void loadRecords(),
+                  loading || loadingMore || saving,
+                )}
+              >
+                重新核对
+              </Button>
+            </View>
           ) : null}
 
           <View className="progress-photo-entry">
@@ -575,7 +692,8 @@ const RecordsPage = () => {
                 <Button
                   {...buttonA11yProps}
                   className="save-button"
-                  disabled={saving}
+                  disabled={saving || !readAuthorityReady}
+                  aria-disabled={saving || !readAuthorityReady}
                   onClick={() => void save()}
                 >
                   {saving
@@ -590,9 +708,13 @@ const RecordsPage = () => {
                     <Text className="panel-eyebrow">LAST 7 ENTRIES</Text>
                     <Text className="panel-title">{activeDefinition.label}趋势</Text>
                   </View>
-                  <Text className="trend-panel__count metric">{trendRecords.length}/7</Text>
+                  <Text className="trend-panel__count metric">
+                    {hasReadSnapshot ? `${trendRecords.length}/7` : '—/7'}
+                  </Text>
                 </View>
-                {trendRecords.length ? (
+                {!hasReadSnapshot ? (
+                  <View className="trend-empty">记录尚未核对；读取成功后才会显示最近趋势。</View>
+                ) : trendRecords.length ? (
                   <View className="trend-bars" aria-label={`${activeDefinition.label}最近趋势`}>
                     {trendRecords.map((record) => {
                       const range = trendRange.max - trendRange.min
@@ -640,11 +762,40 @@ const RecordsPage = () => {
                   <Text className="panel-eyebrow">RECENT LOG</Text>
                   <Text className="panel-title">最近记录</Text>
                 </View>
-                <Text className="log-heading__count metric">已载入 {groupRecords.length}</Text>
+                <View className="log-heading__tools">
+                  <Text className="log-heading__count metric">
+                    {readAuthorityReady
+                      ? `已载入 ${groupRecords.length}`
+                      : hasReadSnapshot
+                        ? `保留 ${groupRecords.length}`
+                        : '尚未核对'}
+                  </Text>
+                  {readPhase === 'ready' || readPhase === 'refreshing' ? (
+                    <Button
+                      id="record-read-refresh"
+                      className="record-read-refresh"
+                      aria-label="更新身体记录清单"
+                      {...buttonActivationProps(
+                        () => void loadRecords(),
+                        loading || loadingMore || saving,
+                      )}
+                    >
+                      {loading ? '核对中…' : '更新记录'}
+                    </Button>
+                  ) : null}
+                </View>
               </View>
 
-              {loading ? (
+              {loading && !hasReadSnapshot ? (
                 <View className="log-state">正在整理记录…</View>
+              ) : !hasReadSnapshot ? (
+                <View className="log-state">
+                  <Text className="log-state__mark">?</Text>
+                  <Text className="log-state__title">记录数量尚未核对</Text>
+                  <Text className="log-state__body">
+                    重新核对成功后，才会显示当前记录或空状态。
+                  </Text>
+                </View>
               ) : groupRecords.length ? (
                 <View className="log-list">
                   {groupRecords.map((record) => (
@@ -666,6 +817,8 @@ const RecordsPage = () => {
                           <Button
                             {...buttonA11yProps}
                             className="log-action"
+                            disabled={!readAuthorityReady}
+                            aria-disabled={!readAuthorityReady}
                             onClick={() => startEdit(record)}
                           >
                             修改
@@ -673,6 +826,8 @@ const RecordsPage = () => {
                           <Button
                             {...buttonA11yProps}
                             className="log-action"
+                            disabled={!readAuthorityReady}
+                            aria-disabled={!readAuthorityReady}
                             onClick={() => void openHistory(record)}
                           >
                             历史
@@ -680,7 +835,11 @@ const RecordsPage = () => {
                           <Button
                             {...buttonA11yProps}
                             className="log-action log-action--danger"
-                            onClick={() => setDeleting(record)}
+                            disabled={!readAuthorityReady}
+                            aria-disabled={!readAuthorityReady}
+                            onClick={() => {
+                              if (readAuthorityReady) setDeleting(record)
+                            }}
                           >
                             删除
                           </Button>
@@ -702,7 +861,8 @@ const RecordsPage = () => {
                 <Button
                   {...buttonA11yProps}
                   className="record-page-more"
-                  disabled={loadingMore}
+                  disabled={loadingMore || !readAuthorityReady}
+                  aria-disabled={loadingMore || !readAuthorityReady}
                   onClick={() => void loadOlderRecords()}
                 >
                   {loadingMore ? '正在载入…' : '继续载入更早记录'}
@@ -740,7 +900,8 @@ const RecordsPage = () => {
               <Button
                 {...buttonA11yProps}
                 className="modal-button modal-button--danger"
-                disabled={saving}
+                disabled={saving || !readAuthorityReady}
+                aria-disabled={saving || !readAuthorityReady}
                 onClick={() => void confirmDelete()}
               >
                 确认删除
@@ -793,7 +954,8 @@ const RecordsPage = () => {
                   <Button
                     {...buttonA11yProps}
                     className="record-page-more"
-                    disabled={loadingMore}
+                    disabled={loadingMore || !readAuthorityReady}
+                    aria-disabled={loadingMore || !readAuthorityReady}
                     onClick={() => void loadOlderHistory()}
                   >
                     {loadingMore ? '正在载入…' : '继续载入更早版本'}
