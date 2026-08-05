@@ -389,6 +389,51 @@ test('lost AI explanation response reads the exact durable run without a second 
   expect(errors.filter((error) => !error.includes('net::ERR_FAILED'))).toEqual([])
 })
 
+test('AI explanation ledger keeps current and historical plan revisions distinct', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  const errors = collectBrowserErrors(page)
+  await seedProfileAndOpenPlans(page)
+  await page.getByRole('button', { name: /生成 .* 初稿/ }).click()
+
+  await page.getByRole('checkbox', { name: '同意本次 AI 计划解释数据处理' }).click()
+  await page.getByRole('button', { name: '生成解释边注' }).click()
+  await expect(page.getByText('本地演示解释')).toBeVisible()
+
+  await page.getByRole('button', { name: '高脚杯深蹲' }).click()
+  await page.getByRole('button', { name: '保存替代动作' }).click()
+  await expect(page.getByText('v2', { exact: true }).first()).toBeVisible()
+  await page.getByRole('checkbox', { name: '同意本次 AI 计划解释数据处理' }).click()
+  await page.getByRole('button', { name: '生成解释边注' }).click()
+  await expect(page.getByRole('button', { name: /查看解释运行档案，共 2 条/ })).toBeVisible()
+
+  await page.getByRole('button', { name: /查看解释运行档案，共 2 条/ }).click()
+  await expect(page).toHaveURL(/#\/pages\/ai-explanations\/index\?planId=/)
+  const ledger = page.getByRole('list', { name: 'AI 解释运行档案' })
+  await expect(ledger.getByRole('listitem')).toHaveCount(2)
+  await expect(ledger.getByText('CURRENT / 当前可用')).toBeVisible()
+  await expect(ledger.getByText('HISTORY / 历史版本')).toBeVisible()
+  await expect(ledger.getByText('PLAN V2')).toBeVisible()
+  await expect(ledger.getByText('PLAN V1')).toBeVisible()
+  await expect(ledger.getByText('本地演示解释')).toHaveCount(2)
+  await expect(ledger.getByText('plan-explanation-v1')).toHaveCount(2)
+  await expect(ledger.getByText('plan-explanation-safety-v2')).toHaveCount(2)
+  await expect(ledger.getByText('运行完成，未记录失败或安全回退代码')).toHaveCount(2)
+
+  const historicalToggle = page.getByRole('button', { name: '查看计划 v1 历史边注' })
+  await historicalToggle.focus()
+  await page.keyboard.press('Enter')
+  await expect(page.getByRole('button', { name: '收起计划 v1 历史边注' })).toBeVisible()
+  await expect(page.getByText(/这条边注属于计划 v1，不会作为当前 v2 的解释/)).toBeVisible()
+  await expect(page.getByText(/没有被 AI 自动修改/).last()).toBeVisible()
+  await page.screenshot({
+    path: 'output/playwright/iteration-061-ai-ledger-mobile.png',
+    fullPage: true,
+  })
+  expect(errors).toEqual([])
+})
+
 test('AI margin note remains a secondary evidence layer at wide viewport', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1100 })
   const errors = collectBrowserErrors(page)
@@ -399,6 +444,13 @@ test('AI margin note remains a secondary evidence layer at wide viewport', async
   await expect(page.getByText('本地演示解释')).toBeVisible()
   await page.locator('.ai-margin-card').scrollIntoViewIfNeeded()
   await page.screenshot({ path: 'output/playwright/iteration-009-ai-wide.png' })
+  await page.getByRole('button', { name: /查看解释运行档案，共 1 条/ }).click()
+  await expect(page.getByText('CURRENT / 当前可用')).toBeVisible()
+  await expect(page.getByText('plan-explanation-safety-v2')).toBeVisible()
+  await page.screenshot({
+    path: 'output/playwright/iteration-061-ai-ledger-wide.png',
+    fullPage: true,
+  })
   expect(errors).toEqual([])
 })
 

@@ -603,6 +603,17 @@ The single amber action reads the exact durable run by its original in-memory ke
 
 - [390 × 844 exact AI-run reconciliation](../../output/playwright/iteration-060-ai-explanation-reconciliation-mobile.png)
 
+## AI explanation run ledger — iteration 061
+
+Completed explanations leave the crowded Week Fold and open in a dedicated ruled-paper ledger. The entry control is secondary to the current margin note, and the new route starts with a compact back rail, `RUN LEDGER` wordmark and retained-run count. It reloads the current plan before assigning authority, so `CURRENT`, `FROZEN` and `HISTORY` describe live product state rather than trusting the explanation row by itself.
+
+Each run leads with the authority label, plan revision and headline, then exposes a four-cell provenance grid for source, completion time, prompt version and validator version. Model/fixture/fallback source and any deterministic fallback reason are human-readable, while internal provider/model identifiers remain absent. Historical and frozen cards add a plain boundary sentence explaining why they cannot be the current interpretation. The review-only safety note remains inside the expandable content rather than becoming a global product claim.
+
+Only five runs are initially expanded into the list; one full-width outline action reveals five more from the already bounded response. This is progressive disclosure, not pagination or regeneration. Taro pointer/Enter/Space activation shares the established adapter, the back control receives delayed H5 focus, and opening an old revision with Enter is part of browser proof. The 390 × 844 composition preserves two revision cards in one scan; the 1440 × 1100 composition caps reading width instead of stretching provenance cells across the viewport.
+
+- [390 × 844 two-revision AI ledger](../../output/playwright/iteration-061-ai-ledger-mobile.png)
+- [1440 × 1100 wide AI ledger](../../output/playwright/iteration-061-ai-ledger-wide.png)
+
 ## Screenshot review checklist
 
 - The Rhythm Rail remains understandable without color.

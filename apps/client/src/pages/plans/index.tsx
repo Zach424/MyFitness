@@ -462,6 +462,12 @@ const PlansPage = () => {
   const toggleAiConsent = () => {
     if (aiActionable && !aiRecovery) setAiConsent((value) => !value)
   }
+  const openAiExplanationHistory = () => {
+    if (!savedPlan) return
+    void Taro.navigateTo({
+      url: `/pages/ai-explanations/index?planId=${encodeURIComponent(savedPlan.id)}`,
+    })
+  }
 
   const generate = async () => {
     setSaving(true)
@@ -1529,6 +1535,16 @@ const PlansPage = () => {
                         )}
                       </View>
                     )}
+                    {aiHistory.length ? (
+                      <Button
+                        className="ai-history-link"
+                        {...buttonActivationProps(openAiExplanationHistory)}
+                        aria-label={`查看解释运行档案，共 ${aiHistory.length} 条已载入记录`}
+                      >
+                        <Text>查看解释运行档案</Text>
+                        <Text className="metric">{aiHistory.length}</Text>
+                      </Button>
+                    ) : null}
                   </View>
 
                   <View className="plan-aside-card history-card">

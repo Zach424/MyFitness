@@ -1142,6 +1142,22 @@
   line-height: 1.55;
 }
 
+.ai-history-link {
+  display: flex;
+  min-height: 44px;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  margin: 14px 0 0;
+  padding: 0 12px;
+  border: 1px solid rgba(36, 76, 102, 0.2);
+  border-radius: 9px;
+  color: var(--color-mineral);
+  background: rgba(235, 242, 245, 0.72);
+  font-size: 10px;
+  font-weight: 730;
+}
+
 .ai-note-empty__recovery-hint {
   display: block;
   margin-top: 12px;

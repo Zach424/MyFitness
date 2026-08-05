@@ -113,6 +113,7 @@ export class AiController {
   @Get(':planId/explanations')
   @ApiOperation({ summary: 'List immutable explanation runs for one owned weekly plan' })
   @ApiParam({ name: 'planId', schema: { type: 'string', format: 'uuid' } })
+  @Header('Cache-Control', 'private, no-store, max-age=0')
   @ApiOkResponse({ schema: openApiSchema(aiExplanationHistorySchema) })
   @ApiNotFoundResponse({ description: 'Plan does not exist for this user.' })
   async history(@CurrentUser() principal: AuthPrincipal, @Param('planId') rawId: string) {

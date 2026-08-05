@@ -152,6 +152,7 @@ describe('AI plan explanations with PostgreSQL and fixture worker', () => {
       .set('Authorization', `Bearer ${token}`)
       .expect(200)
     expect(history.body.items).toHaveLength(1)
+    expect(history.headers['cache-control']).toContain('no-store')
 
     await request(app.getHttpServer())
       .get(`/v1/plans/weekly/${planId}/explanations`)
