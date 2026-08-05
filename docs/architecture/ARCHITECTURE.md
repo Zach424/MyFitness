@@ -1,6 +1,6 @@
 # Architecture baseline
 
-Status: accepted and implemented through the iteration-049 stable weekly-plan history pagination boundary; changes require an ADR.
+Status: accepted and implemented through iteration-085 consent-history read authority; changes require an ADR.
 
 ## System shape
 
@@ -124,7 +124,7 @@ The private media lifecycle, candidate contract, vision provider boundary and no
 
 The purpose-separated progress-photo lifecycle, bounded capture-quality method, two-consent withdrawal semantics and user-controlled same-view overlay are documented in [PROGRESS_PHOTO_MODEL.md](PROGRESS_PHOTO_MODEL.md). ADR-0029 records why this boundary excludes posture diagnosis, body-composition inference and external datasets.
 
-The inventory/export/consent/erasure boundary is documented in [PRIVACY_OWNERSHIP_MODEL.md](PRIVACY_OWNERSHIP_MODEL.md). ADR-0011 records the user-scoped media, renewed consent and unlinkable primary-store receipt decisions; ADR-0077 requires exact current-purpose evidence before another optional-consent mutation can follow an ambiguous response; ADR-0078 requires local artifact evidence before H5 download or WeApp persistent save; ADR-0079 keeps bounded historical consent evidence separate from current mutation authority.
+The inventory/export/consent/erasure boundary is documented in [PRIVACY_OWNERSHIP_MODEL.md](PRIVACY_OWNERSHIP_MODEL.md). ADR-0011 records the user-scoped media, renewed consent and unlinkable primary-store receipt decisions; ADR-0077 requires exact current-purpose evidence before another optional-consent mutation can follow an ambiguous response; ADR-0078 requires local artifact evidence before H5 download or WeApp persistent save; ADR-0079 keeps bounded historical consent evidence separate from current mutation authority; ADR-0080 keeps failed first/history-suffix reads distinct from empty history and freezes accepted cursors until one explicit retry succeeds.
 
 The request-correlation, shared-rate-limit, health and metric boundary is documented in [OPERATIONS_PERIMETER.md](OPERATIONS_PERIMETER.md). ADR-0012 records why ingress protection precedes authentication and administrator access.
 

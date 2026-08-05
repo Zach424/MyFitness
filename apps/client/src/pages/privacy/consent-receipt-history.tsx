@@ -10,15 +10,15 @@ import {
   consentCopy,
   type PrivacyReadFailureKind,
 } from './privacy.model'
+import {
+  consentReceiptHistoryFailurePresentation,
+  consentReceiptHistoryReadPhase,
+  type ConsentReceiptHistoryOperation,
+} from './consent-receipt-history.model'
 
-type HistoryOperation = 'initial' | 'refresh' | 'continuation'
-type HistoryFailure = { kind: PrivacyReadFailureKind; operation: HistoryOperation }
-
-const historyFailureCopy: Record<PrivacyReadFailureKind, string> = {
-  offline: '连接尚未完成，无法核对授权凭证历史。',
-  refused: '服务拒绝了本次授权凭证历史读取。',
-  service: '授权凭证历史服务暂时不可用。',
-  unknown: '暂时无法确认授权凭证历史。',
+type HistoryFailure = {
+  kind: PrivacyReadFailureKind
+  operation: ConsentReceiptHistoryOperation
 }
 
 const formatHistoryDate = (value: string) =>
@@ -36,17 +36,19 @@ export const ConsentReceiptHistory = ({ disabled }: { disabled: boolean }) => {
   const [items, setItems] = useState<ConsentReceipt[] | null>(null)
   const [nextCursor, setNextCursor] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [operation, setOperation] = useState<ConsentReceiptHistoryOperation>('initial')
   const [failure, setFailure] = useState<HistoryFailure>()
   const inFlight = useRef(false)
 
-  const load = async (operation: HistoryOperation, cursor?: string) => {
+  const load = async (nextOperation: ConsentReceiptHistoryOperation, cursor?: string) => {
     if (inFlight.current || disabled) return
     inFlight.current = true
     setBusy(true)
+    setOperation(nextOperation)
     setFailure(undefined)
     try {
       const page = await getConsentReceiptHistory({ limit: 10, cursor })
-      if (operation === 'continuation') {
+      if (nextOperation === 'continuation') {
         setItems((current) => {
           const accepted = current ?? []
           const known = new Set(accepted.map((item) => item.receiptId))
@@ -57,7 +59,7 @@ export const ConsentReceiptHistory = ({ disabled }: { disabled: boolean }) => {
       }
       setNextCursor(page.nextCursor)
     } catch (error) {
-      setFailure({ kind: classifyPrivacyReadFailure(error), operation })
+      setFailure({ kind: classifyPrivacyReadFailure(error), operation: nextOperation })
       deferH5Focus('consent-history-retry', 80)
     } finally {
       inFlight.current = false
@@ -84,6 +86,20 @@ export const ConsentReceiptHistory = ({ disabled }: { disabled: boolean }) => {
     void load(items === null ? 'initial' : 'refresh')
   }
 
+  const phase = consentReceiptHistoryReadPhase({
+    opened,
+    hasSnapshot: items !== null,
+    busy,
+    operation,
+    hasFailure: Boolean(failure),
+  })
+  const failurePresentation = failure
+    ? consentReceiptHistoryFailurePresentation({
+        ...failure,
+        acceptedCount: items?.length ?? null,
+      })
+    : undefined
+
   return (
     <View className="consent-history">
       <View className="consent-history__intro">
@@ -103,31 +119,24 @@ export const ConsentReceiptHistory = ({ disabled }: { disabled: boolean }) => {
       </View>
 
       {opened ? (
-        <View className="consent-history__panel">
-          {busy && items === null ? (
+        <View className="consent-history__panel" aria-busy={busy}>
+          {phase === 'initial-loading' ? (
             <View className="consent-history__loading" role="status">
               <Text>正在核对历史凭证…</Text>
             </View>
           ) : null}
 
-          {failure ? (
+          {failurePresentation ? (
             <View
               className={`consent-history__failure ${items !== null ? 'consent-history__failure--retained' : ''}`}
               role="status"
             >
               <View>
-                <Text className="consent-history__failure-title">
-                  {historyFailureCopy[failure.kind]}
+                <Text className="consent-history__failure-eyebrow">
+                  {failurePresentation.eyebrow}
                 </Text>
-                {items !== null ? (
-                  <Text className="consent-history__failure-note">
-                    已读取的 {items.length} 份历史凭证仍保留；游标没有前进。
-                  </Text>
-                ) : (
-                  <Text className="consent-history__failure-note">
-                    未完成读取不会显示为空历史。
-                  </Text>
-                )}
+                <Text className="consent-history__failure-title">{failurePresentation.title}</Text>
+                <Text className="consent-history__failure-note">{failurePresentation.detail}</Text>
               </View>
               <Button
                 id="consent-history-retry"
@@ -179,22 +188,40 @@ export const ConsentReceiptHistory = ({ disabled }: { disabled: boolean }) => {
             </View>
           ) : null}
 
-          {items !== null && items.length > 0 && !failure ? (
+          {phase === 'refreshing' || phase === 'continuing' ? (
+            <View className="consent-history__progress" role="status">
+              <Text>
+                {phase === 'continuing'
+                  ? `正在续读更早凭证；已核对的 ${items?.length ?? 0} 份保持可见。`
+                  : `正在核对最新凭证；已核对的 ${items?.length ?? 0} 份保持可见。`}
+              </Text>
+            </View>
+          ) : null}
+
+          {items !== null && items.length > 0 && !failurePresentation ? (
             <View className="consent-history__footer">
               <Text>{items.length} 份已核对历史凭证</Text>
-              {nextCursor ? (
+              <View className="consent-history__footer-actions">
                 <Button
-                  className="consent-history__more"
-                  {...buttonActivationProps(
-                    () => void load('continuation', nextCursor),
-                    busy || disabled,
-                  )}
+                  className="consent-history__refresh"
+                  {...buttonActivationProps(() => void load('refresh'), busy || disabled)}
                 >
-                  {busy ? '正在读取…' : '加载更早凭证'}
+                  {busy && operation === 'refresh' ? '正在核对…' : '核对最新凭证'}
                 </Button>
-              ) : (
-                <Text>已到最早凭证</Text>
-              )}
+                {nextCursor ? (
+                  <Button
+                    className="consent-history__more"
+                    {...buttonActivationProps(
+                      () => void load('continuation', nextCursor),
+                      busy || disabled,
+                    )}
+                  >
+                    {busy && operation === 'continuation' ? '正在读取…' : '加载更早凭证'}
+                  </Button>
+                ) : (
+                  <Text>已到最早凭证</Text>
+                )}
+              </View>
             </View>
           ) : null}
         </View>

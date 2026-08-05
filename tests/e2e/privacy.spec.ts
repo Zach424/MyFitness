@@ -325,6 +325,125 @@ test('consent receipt history keeps empty, current and continuation evidence dis
   expect(browserErrors).toEqual([])
 })
 
+test('consent receipt history retains authority across initial, refresh and continuation failure', async ({
+  page,
+  request,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  const browserErrors = collectBrowserErrors(page)
+  const session = await seedAccount(page, request)
+
+  await database.query('DELETE FROM nutrition_photo_candidates WHERE user_id = $1', [
+    session.userId,
+  ])
+  await database.query('DELETE FROM consent_events WHERE user_id = $1', [session.userId])
+  await database.query(
+    `INSERT INTO consent_events (id, user_id, purpose, version, accepted_at, revoked_at)
+     SELECT gen_random_uuid(),
+            $1,
+            (ARRAY[
+              'ai_plan_explanation',
+              'food_photo_analysis',
+              'progress_photo_analysis',
+              'progress_photo_retention'
+            ])[1 + ((series - 1) % 4)],
+            'authority-v' || LPAD(series::text, 2, '0'),
+            NOW() - make_interval(mins => series),
+            CASE WHEN series % 4 = 0
+                 THEN NOW() - make_interval(mins => series) + INTERVAL '30 seconds'
+                 ELSE NULL
+            END
+     FROM generate_series(1, 12) AS series`,
+    [session.userId],
+  )
+  await page.reload()
+
+  await page.route(
+    '**/v1/me/privacy/consents/history?limit=10',
+    (route) =>
+      route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'raw-backend-message-initial' }),
+      }),
+    { times: 1 },
+  )
+  await page.getByRole('button', { name: '查看全部凭证' }).click()
+  await expect(page.getByText('授权凭证历史服务暂时不可用。')).toBeVisible()
+  await expect(page.getByText(/不会显示为空历史/)).toBeVisible()
+  await expect(page.locator('.consent-history__empty')).toHaveCount(0)
+  await expect(page.locator('.consent-history__item')).toHaveCount(0)
+  await expect(page.locator('#consent-history-retry')).toBeFocused()
+  await expect(page.locator('body')).not.toContainText('raw-backend-message-initial')
+  const revokeAction = page.getByRole('button', { name: '撤回这项授权' }).first()
+  await expect(revokeAction).toHaveAttribute('aria-disabled', 'false')
+
+  await page.locator('#consent-history-retry').click()
+  await expect(page.locator('.consent-history__item')).toHaveCount(10)
+
+  await page.route(
+    '**/v1/me/privacy/consents/history?limit=10',
+    (route) =>
+      route.fulfill({
+        status: 403,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'raw-backend-message-refresh' }),
+      }),
+    { times: 1 },
+  )
+  await page.getByRole('button', { name: '核对最新凭证' }).click()
+  await expect(page.getByText('服务拒绝了本次授权凭证历史读取。')).toBeVisible()
+  await expect(page.locator('.consent-history__item')).toHaveCount(10)
+  await expect(page.getByText(/10 份凭证与续读位置仍保留/)).toBeVisible()
+  await expect(page.locator('#consent-history-retry')).toBeFocused()
+  await expect(revokeAction).toHaveAttribute('aria-disabled', 'false')
+  await expect(page.locator('body')).not.toContainText('raw-backend-message-refresh')
+  await page.locator('#consent-history-retry').click()
+  await expect(page.getByRole('button', { name: '加载更早凭证' })).toBeVisible()
+
+  const continuationUrls: string[] = []
+  await page.route('**/v1/me/privacy/consents/history?limit=10&cursor=*', async (route) => {
+    continuationUrls.push(route.request().url())
+    if (continuationUrls.length === 1) {
+      await route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'raw-backend-message-continuation' }),
+      })
+      return
+    }
+    await route.continue()
+  })
+  await page.getByRole('button', { name: '加载更早凭证' }).click()
+  await expect(page.locator('.consent-history__item')).toHaveCount(10)
+  await expect(page.getByText(/10 份凭证仍按原顺序保留/)).toBeVisible()
+  await expect(page.getByText(/游标没有前进/)).toBeVisible()
+  await expect(page.locator('#consent-history-retry')).toBeFocused()
+  await expect(revokeAction).toHaveAttribute('aria-disabled', 'false')
+  await expect(page.locator('body')).not.toContainText('raw-backend-message-continuation')
+  await page.locator('.privacy-scroll').evaluate((scroll) => {
+    const history = scroll.querySelector('.consent-history')
+    if (!(history instanceof HTMLElement)) return
+    scroll.scrollTop +=
+      history.getBoundingClientRect().top - scroll.getBoundingClientRect().top - 16
+  })
+  await page.screenshot({
+    path: 'output/playwright/iteration-085-consent-history-read-authority-mobile.png',
+    fullPage: true,
+  })
+
+  await page.locator('#consent-history-retry').click()
+  await expect(page.locator('.consent-history__item')).toHaveCount(12)
+  expect(continuationUrls).toHaveLength(2)
+  expect(continuationUrls[1]).toBe(continuationUrls[0])
+  await expect(page.getByText('12 份已核对历史凭证')).toBeVisible()
+  const injectedHttpFailures = browserErrors.filter((message) =>
+    /Failed to load resource: the server responded with a status of (403|503)/.test(message),
+  )
+  expect(injectedHttpFailures).toHaveLength(3)
+  expect(browserErrors.filter((message) => !injectedHttpFailures.includes(message))).toEqual([])
+})
+
 test('logout removes every local editor draft before starting a new session', async ({
   page,
   request,

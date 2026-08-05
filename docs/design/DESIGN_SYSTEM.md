@@ -1,6 +1,6 @@
 # Design system baseline
 
-Status: implemented and visually validated through iteration-084 bounded consent-receipt history
+Status: implemented and visually validated through iteration-085 consent-history read authority
 
 Working brand: 衡迹 / MyFitness
 
@@ -868,6 +868,16 @@ Each ruled item uses a compact chronological index, purpose label, bounded versi
 The 390 × 844 evidence shows the open ledger after a real API continuation from ten to twelve receipts. Visual review caught Taro rendering `disabled="false"` as a disabled-looking white label on the open/close control. All four history actions now use the shared `aria-disabled` plus pointer/Enter/Space guard, and the browser asserts the mineral text color before accepting the screenshot. Empty/populated/continuation behavior is functional evidence; the screenshot documents hierarchy and legibility only.
 
 - [390 × 844 paged accepted/revoked consent-receipt history](../../output/playwright/iteration-084-consent-receipt-history-mobile.png)
+
+## Consent-history read authority — iteration 085
+
+The historical ledger now treats its transport state as evidence instead of replacing a failed read with generic empty copy. An unread first page shows one amber service-owned receipt and one full-width retry; no zero-history message or hidden receipt row appears. A failed latest-page refresh or older-page continuation keeps the accepted rows directly below the receipt, including their order and factual timestamp labels.
+
+The retained state names the failure family in a compact bilingual eyebrow, says exactly how many receipts remain accepted and distinguishes a frozen continuation cursor from a failed latest-page check. Raw backend messages never enter the surface. Retry receives focus after each failure, while the current consent rows and their revocation controls above remain visually and behaviorally independent.
+
+The reviewed 390 × 844 evidence captures a failed continuation with ten accepted receipts still visible. The footer's explicit `核对最新凭证` action is validated functionally in the same browser flow; 320 px, large-text and full keyboard wrapping for every new state are the next bounded matrix rather than an unproven screenshot claim.
+
+- [390 × 844 retained consent-receipt prefix after continuation outage](../../output/playwright/iteration-085-consent-history-read-authority-mobile.png)
 
 ## Screenshot review checklist
 
