@@ -24,6 +24,6 @@ The 24-hour local draft vault protects page-owned inputs across interruption, bu
 
 A response-loss window is now represented honestly: the user sees an unresolved save, keeps their input and can reconcile through an explicit duplicate-safe retry. The existing API idempotency constraint remains the authority; no new server code, migration, dependency or storage format is needed.
 
-The implementation covers all three core manual record creates. Each has real lost-response evidence against its unchanged API idempotency path. Corrections, deletes, action-definition mutations and sensitive photo operations still require operation-specific reconciliation rather than a blanket retry policy.
+The implementation covers all three core manual record creates. Each has real lost-response evidence against its unchanged API idempotency path. Action-definition mutations and sensitive photo operations now follow the separate authority-aware matrix in [ADR-0052](0052-authority-aware-sensitive-workbench-recovery.md); that decision does not broaden this aggregate-create retry contract to corrections or deletes.
 
 The shared recovery module and three editor states increase measured production totals to 2,429,088 H5 bytes and 828,519 WeApp bytes. Total ceilings move narrowly to 2,430,000 and 829,000; the largest WeApp page moves to 40,229 with a 40,500-byte ceiling. H5 entry/async and WeApp vendor ceilings remain unchanged.

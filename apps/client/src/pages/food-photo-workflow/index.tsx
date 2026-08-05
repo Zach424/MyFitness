@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Button, Image, Input, ScrollView, Text, View } from '@tarojs/components'
 import Taro from '@tarojs/taro'
 import type { ConfirmFoodPhotoCandidate, FoodPhotoAnalysis } from '@myfitness/contracts'
 
-import { buttonA11yProps, buttonActivationProps, deferH5Focus } from '../../lib/accessibility'
+import { buttonActivationProps, deferH5Focus } from '../../lib/accessibility'
 import {
   ApiError,
   confirmFoodPhotoCandidate,
@@ -18,6 +18,11 @@ import {
   reviewDraftFromAnalysis,
   type FoodPhotoReviewDraft,
 } from './food-photo-workflow.model'
+import {
+  describeWorkbenchFailure,
+  type WorkbenchOperation,
+  type WorkbenchRecovery,
+} from '../../lib/workbench-recovery'
 import './index.scss'
 
 const confidenceLabels = { low: '低置信', medium: '中置信', high: '高置信' } as const
@@ -36,16 +41,21 @@ const openerEventChannel = () =>
   Taro.getCurrentInstance().page?.getOpenerEventChannel?.() as FoodPhotoEventChannel | undefined
 
 const FoodPhotoWorkflowPage = () => {
+  const pendingReservationKey = useRef('')
   const [analysis, setAnalysis] = useState<FoodPhotoAnalysis>()
   const [review, setReview] = useState<FoodPhotoReviewDraft>({ selected: [], grams: {} })
   const [consent, setConsent] = useState(false)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [feedback, setFeedback] = useState('')
+  const [recovery, setRecovery] = useState<WorkbenchRecovery>()
+  const [recoveryTargetId, setRecoveryTargetId] = useState('')
 
   const showAnalysis = (next: FoodPhotoAnalysis) => {
     setAnalysis(next)
     setReview(reviewDraftFromAnalysis(next))
+    setRecovery(undefined)
+    setRecoveryTargetId('')
   }
 
   const clearAnalysis = () => {
@@ -79,7 +89,11 @@ const FoodPhotoWorkflowPage = () => {
       return
     }
     setBusy(true)
+    setFeedback('')
+    setRecovery(undefined)
+    setRecoveryTargetId('')
     let reservedId = ''
+    let operation: WorkbenchOperation = 'photo_reserve'
     try {
       const selected = await Taro.chooseImage({
         count: 1,
@@ -88,8 +102,10 @@ const FoodPhotoWorkflowPage = () => {
       })
       const filePath = selected.tempFilePaths[0]
       if (!filePath) throw new Error('没有读取到所选照片')
-      const ticket = await reserveFoodPhoto(photoRequestKey())
+      const ticket = await reserveFoodPhoto((pendingReservationKey.current ||= photoRequestKey()))
       reservedId = ticket.id
+      pendingReservationKey.current = ''
+      operation = 'photo_upload'
       const next = await uploadFoodPhoto(ticket.upload.path, filePath)
       showAnalysis(next)
       setConsent(false)
@@ -99,15 +115,20 @@ const FoodPhotoWorkflowPage = () => {
           : '没有生成可用候选，媒体删除已开始；你仍可返回手动记录。',
       )
     } catch (error) {
-      if (reservedId) await deleteFoodPhotoCandidate(reservedId).catch(() => undefined)
       const message = messageOf(error)
-      if (!message.toLowerCase().includes('cancel')) setFeedback(message)
+      if (message.toLowerCase().includes('cancel')) {
+        if (!reservedId) pendingReservationKey.current = ''
+      } else {
+        setRecovery(describeWorkbenchFailure(operation, error))
+        setRecoveryTargetId(reservedId)
+      }
     } finally {
       setBusy(false)
     }
   }
 
   const toggleCandidate = (catalogKey: string) => {
+    if (recovery) return
     setReview((current) => ({
       ...current,
       selected: current.selected.includes(catalogKey)
@@ -119,12 +140,16 @@ const FoodPhotoWorkflowPage = () => {
   const discardPhoto = async () => {
     if (!analysis) return
     setBusy(true)
+    setFeedback('')
+    setRecovery(undefined)
+    setRecoveryTargetId('')
     try {
       await deleteFoodPhotoCandidate(analysis.id)
       clearAnalysis()
       setFeedback('照片和衍生候选已删除。你可以返回餐食草稿或重新开始。')
     } catch (error) {
-      setFeedback(messageOf(error))
+      setRecovery(describeWorkbenchFailure('photo_delete', error))
+      setRecoveryTargetId(analysis.id)
     } finally {
       setBusy(false)
     }
@@ -147,14 +172,91 @@ const FoodPhotoWorkflowPage = () => {
     }
 
     setBusy(true)
+    setFeedback('')
+    setRecovery(undefined)
+    setRecoveryTargetId('')
     try {
       const confirmed = await confirmFoodPhotoCandidate(analysis.id, request)
       channel.emit('foodPhotoConfirmed', confirmed.items)
       await Taro.navigateBack()
     } catch (error) {
-      setFeedback(messageOf(error))
+      setRecovery(describeWorkbenchFailure('photo_confirm', error))
+      setRecoveryTargetId(analysis.id)
       setBusy(false)
     }
+  }
+
+  const reconcilePhotoState = async () => {
+    if (!recovery || !recoveryTargetId) return
+    setBusy(true)
+    try {
+      const result = await listFoodPhotoCandidates()
+      const current = result.items.find((item) => item.id === recoveryTargetId)
+      if (current) {
+        showAnalysis(current)
+        setFeedback(
+          recovery.operation === 'photo_upload'
+            ? '核对完成：服务端已有可审阅结果；没有重复上传，也没有写入餐食草稿。'
+            : recovery.operation === 'photo_confirm'
+              ? '核对完成：服务端仍显示未确认校样；没有候选被带回餐食，可重新核对后明确确认。'
+              : '核对完成：服务端仍显示此校样可审阅，删除没有成功证据；如仍需删除，请再次明确操作。',
+        )
+        return
+      }
+
+      clearAnalysis()
+      if (recovery.operation === 'photo_upload') {
+        setRecovery({
+          ...recovery,
+          eyebrow: 'NOT REVIEWABLE / 禁止重复上传',
+          message:
+            '服务端当前没有返回可审阅校样；它可能仍在处理，或已进入失败/到期清理。页面没有保存照片，也不会重复上传；可稍后再次只读核对。',
+          actionLabel: '再次核对服务端状态',
+        })
+        return
+      }
+
+      setRecovery({
+        ...recovery,
+        authority: 'terminal',
+        eyebrow:
+          recovery.operation === 'photo_confirm'
+            ? 'NO CONFIRMED HANDOFF / 未写入餐食'
+            : 'NO REVIEWABLE PROOF / 清理状态受控',
+        message:
+          recovery.operation === 'photo_confirm'
+            ? '服务端已不再返回这份可审阅校样，页面无法证明或恢复确认结果，因此没有向餐食草稿写入任何候选。请返回餐食后重新开始。'
+            : '服务端已不再返回这份可审阅校样；页面仅据此移除校样，不声称私有媒体已经物理删除，最终状态仍由持久化清理证据负责。',
+        actionLabel: recovery.operation === 'photo_confirm' ? '返回餐食重新开始' : '关闭这条状态',
+      })
+    } catch (error) {
+      setRecovery(describeWorkbenchFailure(recovery.operation, error))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleRecoveryAction = () => {
+    if (!recovery) return
+    if (recovery.authority === 'retry_same_request' && recovery.operation === 'photo_reserve') {
+      void choosePhoto()
+      return
+    }
+    if (recovery.authority === 'reconcile_required') {
+      void reconcilePhotoState()
+      return
+    }
+    const operation = recovery.operation
+    setRecovery(undefined)
+    setRecoveryTargetId('')
+    if (operation === 'photo_reserve') pendingReservationKey.current = ''
+    if (operation === 'photo_confirm') {
+      setFeedback('没有候选写入餐食草稿；请返回餐食后重新进入校样台。')
+      void Taro.navigateBack()
+      return
+    }
+    setFeedback('当前尝试已终止；服务端没有可审阅校样，可重新授权开始。')
+    setConsent(false)
   }
 
   return (
@@ -201,6 +303,26 @@ const FoodPhotoWorkflowPage = () => {
             </View>
           ) : null}
 
+          {recovery ? (
+            <View
+              className="food-photo-recovery"
+              role="status"
+              aria-live="polite"
+              aria-atomic="true"
+            >
+              <Text className="food-photo-recovery__eyebrow">{recovery.eyebrow}</Text>
+              <Text className="food-photo-recovery__message">{recovery.message}</Text>
+              <Button
+                {...buttonActivationProps(handleRecoveryAction, busy)}
+                className="food-photo-recovery__action"
+                style={{ color: 'var(--color-warning)' }}
+                disabled={busy}
+              >
+                {busy ? '核对中…' : recovery.actionLabel}
+              </Button>
+            </View>
+          ) : null}
+
           <View className="food-photo-card">
             {loading ? (
               <View className="food-photo-loading">
@@ -224,10 +346,13 @@ const FoodPhotoWorkflowPage = () => {
                   <Text>我同意本次上传与上述处理</Text>
                 </Button>
                 <Button
-                  {...buttonActivationProps(() => void choosePhoto(), !consent || busy)}
+                  {...buttonActivationProps(
+                    () => void choosePhoto(),
+                    !consent || busy || Boolean(recovery),
+                  )}
                   className="photo-choose"
-                  disabled={!consent || busy}
-                  aria-disabled={!consent || busy}
+                  disabled={!consent || busy || Boolean(recovery)}
+                  aria-disabled={!consent || busy || Boolean(recovery)}
                 >
                   {busy ? '正在制作校样…' : '选择一张餐食照片'}
                 </Button>
@@ -261,8 +386,12 @@ const FoodPhotoWorkflowPage = () => {
                     return (
                       <View className="photo-candidate" key={candidate.catalogKey}>
                         <Button
-                          {...buttonActivationProps(() => toggleCandidate(candidate.catalogKey))}
+                          {...buttonActivationProps(
+                            () => toggleCandidate(candidate.catalogKey),
+                            Boolean(recovery),
+                          )}
                           className={`photo-candidate__select ${active ? 'photo-candidate__select--active' : ''}`}
+                          disabled={Boolean(recovery)}
                           aria-pressed={active}
                           aria-label={`${active ? '取消选择' : '选择'}${candidate.label}`}
                         >
@@ -288,7 +417,7 @@ const FoodPhotoWorkflowPage = () => {
                             <Input
                               className="photo-candidate__input metric"
                               type="number"
-                              disabled={!active}
+                              disabled={!active || Boolean(recovery)}
                               value={review.grams[candidate.catalogKey] ?? ''}
                               aria-label={`${candidate.label}确认克重`}
                               onInput={(event) =>
@@ -316,18 +445,18 @@ const FoodPhotoWorkflowPage = () => {
 
                 <View className="photo-review__actions">
                   <Button
-                    {...buttonActivationProps(() => void discardPhoto(), busy)}
+                    {...buttonActivationProps(() => void discardPhoto(), busy || Boolean(recovery))}
                     className="photo-review__discard"
                     style={{ color: 'var(--color-pulse)' }}
-                    disabled={busy}
+                    disabled={busy || Boolean(recovery)}
                   >
                     删除校样
                   </Button>
                   <Button
-                    {...buttonActivationProps(() => void confirmPhoto(), busy)}
+                    {...buttonActivationProps(() => void confirmPhoto(), busy || Boolean(recovery))}
                     className="photo-review__confirm"
                     style={{ color: 'var(--color-paper)' }}
-                    disabled={busy}
+                    disabled={busy || Boolean(recovery)}
                   >
                     {busy ? '正在确认…' : `确认 ${review.selected.length} 项并返回草稿`}
                   </Button>
@@ -346,11 +475,10 @@ const FoodPhotoWorkflowPage = () => {
                   照片删除已开始，不会生成猜测记录。删除本条衍生结果后，可以返回手动添加或重新尝试。
                 </Text>
                 <Button
-                  {...buttonA11yProps}
+                  {...buttonActivationProps(() => void discardPhoto(), busy || Boolean(recovery))}
                   className="photo-review__discard photo-review__discard--full"
                   style={{ color: 'var(--color-pulse)' }}
-                  disabled={busy}
-                  onClick={() => void discardPhoto()}
+                  disabled={busy || Boolean(recovery)}
                 >
                   删除衍生结果
                 </Button>

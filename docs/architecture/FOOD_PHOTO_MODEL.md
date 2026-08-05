@@ -1,6 +1,6 @@
 # Food-photo candidate model
 
-Status: durable private-media lifecycle implemented through iteration 015; adversarial prompt/output boundary v2 implemented in iteration 024; confirmed-only lazy client workbench implemented in iteration 051; production storage/provider approval remains gated
+Status: durable private-media lifecycle implemented through iteration 015; adversarial prompt/output boundary v2 implemented in iteration 024; confirmed-only lazy client workbench implemented in iteration 051; authority-aware client recovery implemented in iteration 055; production storage/provider approval remains gated
 
 ## Authority boundary
 
@@ -58,6 +58,10 @@ The nutrition page contains only an explanation and launcher. It does not list p
 The still-open nutrition page registers one Taro opener event. The workbench validates the displayed selection, confirms it through the API and emits only the successful response's catalog keys and integer grams before navigating back. The channel is in-memory and single-hop: photos, preview URLs, consent state and unconfirmed candidates never enter URL parameters, application storage or the recoverable meal-draft envelope. After return, confirmed inputs become normal unsaved food drafts and may be protected by the meal-draft vault; they still require an explicit Save Meal action.
 
 A direct visit without an opener is allowed to inspect or delete owner-visible proof, but confirmation is blocked before its destructive API request because there is no safe draft destination. Refreshing the workbench recovers reviewable server state rather than a local candidate copy. This UI boundary is recorded in ADR-0049 and does not change server expiry, durable deletion or privacy-revocation authority.
+
+Reservation is the only photo stage with an owner-scoped idempotency key. If its response is lost, the page may ask the user to choose again and reuse the same in-memory key; it does not retain the file path or write media into the meal-draft vault. Once an upload ticket is known, upload, candidate confirmation and deletion are reconcile-first operations. The page performs only `GET /photo-candidates` before offering another explicit user operation and never automatically replays media bytes, confirmation or deletion.
+
+Reconciliation claims only what the read model proves. A matching reviewable candidate after upload/confirmation/delete ambiguity remains a proposal and can be reviewed again. If a committed confirmation disappears from the reviewable list before its response reaches the browser, the client cannot reconstruct the cleared selection: it emits no opener event, clears no meal fact and explicitly requires a new proof flow. If a deletion target disappears, the page may remove the proof sheet but does not claim the durable object job has physically deleted bytes. Review selections may remain in page memory while visible; photos, paths, consent and replay commands remain non-persistent. See [ADR-0052](decisions/0052-authority-aware-sensitive-workbench-recovery.md).
 
 ## Provider contract and data controls
 

@@ -198,6 +198,69 @@ test('ambiguous workout response retains the draft and retries one aggregate', a
   expect(idempotencyKeys[1]).toBe(idempotencyKeys[0])
 })
 
+test('ambiguous action-definition create retries the same key and creates one definition', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await openWorkouts(page)
+  await page.getByRole('button', { name: '管理我的动作' }).click()
+  await page.getByRole('button', { name: '新建动作' }).click()
+
+  const editor = page.locator('.food-editor')
+  const name = editor.locator('[aria-label="自定义动作名称"] input')
+  await name.fill('响应丢失农夫行走')
+  await editor.getByRole('button', { name: '自重' }).click()
+  await editor.getByRole('button', { name: '哑铃' }).click()
+
+  const idempotencyKeys: string[] = []
+  let createAttempts = 0
+  await page.route('**/v1/exercise-catalog', async (route) => {
+    if (route.request().method() !== 'POST') {
+      await route.continue()
+      return
+    }
+    createAttempts += 1
+    idempotencyKeys.push(route.request().headers()['x-idempotency-key'] ?? '')
+    if (createAttempts === 1) {
+      const committedResponse = await route.fetch()
+      expect(committedResponse.status()).toBe(201)
+      await route.abort('failed')
+      return
+    }
+    await route.continue()
+  })
+
+  await editor.getByRole('button', { name: '保存定义' }).click()
+  const recovery = page.locator('.workbench-recovery')
+  await expect(recovery.getByText('SAME REQUEST / 仅同一请求可重试')).toBeVisible()
+  await expect(recovery).toContainText('无法确认这次动作定义新建是否已提交')
+  await expect(name).toHaveValue('响应丢失农夫行走')
+  const primarySave = editor.getByRole('button', { name: '保存定义' })
+  await expect(primarySave).toBeDisabled()
+  await expect(primarySave).toHaveCSS('opacity', '0.45')
+  const retry = recovery.getByRole('button', { name: '重试保存定义（防重复）' })
+  await expect(retry).toBeEnabled()
+  await expect(retry).toHaveCSS('opacity', '1')
+
+  await page.screenshot({
+    path: 'output/playwright/iteration-055-action-create-recovery-mobile.png',
+    fullPage: true,
+  })
+
+  const retryResponse = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/v1/exercise-catalog') && response.request().method() === 'POST',
+  )
+  await retry.click()
+  expect((await retryResponse).status()).toBe(201)
+  await expect(
+    page.locator('.food-register__name').filter({ hasText: '响应丢失农夫行走' }),
+  ).toHaveCount(1)
+  expect(createAttempts).toBe(2)
+  expect(idempotencyKeys[0]).not.toBe('')
+  expect(idempotencyKeys[1]).toBe(idempotencyKeys[0])
+})
+
 test('workout log remains useful at wide viewport', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 })
   const browserErrors = collectBrowserErrors(page)
@@ -426,15 +489,28 @@ test('user creates, searches, corrects and archives an owned exercise snapshot',
   await page.keyboard.press('Tab')
   const confirmArchive = archiveDialog.getByRole('button', { name: '确认停用' })
   await expectVisibleFocus(confirmArchive)
-  const archiveDefinition = page.waitForResponse(
-    (response) =>
-      /\/v1\/exercise-catalog\/[0-9a-f-]{36}$/.test(response.url()) &&
-      response.request().method() === 'DELETE',
-  )
+  await page.route('**/v1/exercise-catalog/*', async (route) => {
+    if (route.request().method() !== 'DELETE') {
+      await route.continue()
+      return
+    }
+    const committedResponse = await route.fetch()
+    expect(committedResponse.status()).toBe(200)
+    await route.abort('failed')
+  })
   await page.keyboard.press('Enter')
-  expect((await archiveDefinition).status()).toBe(200)
+  const archiveRecovery = archiveDialog.locator('.workbench-recovery')
+  await expect(archiveRecovery.getByText('RECONCILE FIRST / 禁止直接重放')).toBeVisible()
   await expect(
     page.getByText('动作已从未来选择中停用；训练草稿、历史训练与修订证据未被改写。'),
+  ).toHaveCount(0)
+  await page.screenshot({
+    path: 'output/playwright/iteration-055-action-archive-reconciliation-mobile.png',
+    fullPage: true,
+  })
+  await archiveRecovery.getByRole('button', { name: '核对服务端状态' }).click()
+  await expect(
+    page.getByText('核对完成：服务端当前目录已不再包含此动作；仅据此确认它不会用于未来选择。'),
   ).toBeVisible()
   await expectVisibleFocus(page.getByRole('button', { name: '新建动作' }))
 
@@ -447,5 +523,7 @@ test('user creates, searches, corrects and archives an owned exercise snapshot',
   await expectVisibleFocus(page.getByRole('button', { name: '管理我的动作' }))
   await expect(page.getByRole('button', { name: '添加双手壶铃摆动' })).not.toBeVisible()
   await expect(recorded.getByText(/高脚杯深蹲 · 壶铃摆动/)).toBeVisible()
-  expect(browserErrors).toEqual([])
+  expect(
+    browserErrors.filter((error) => error !== 'Failed to load resource: net::ERR_FAILED'),
+  ).toEqual([])
 })

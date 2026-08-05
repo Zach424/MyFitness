@@ -26,6 +26,7 @@ import {
   type ExerciseCatalogDraft,
   validateExerciseCatalogDraft,
 } from './exercise-catalog.model'
+import { describeWorkbenchFailure, type WorkbenchRecovery } from '../../lib/workbench-recovery'
 import './index.scss'
 
 const categoryLabels = { strength: '力量', cardio: '有氧', mobility: '灵活性' } as const
@@ -57,6 +58,21 @@ const messageOf = (error: unknown) =>
 const requestKey = () =>
   `exercise-${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`}`
 
+const customEntriesFrom = (items: Awaited<ReturnType<typeof listExerciseCatalog>>['items']) =>
+  items.filter((entry): entry is CustomExerciseCatalogEntry => entry.source === 'custom')
+
+const entryMatchesDraft = (entry: CustomExerciseCatalogEntry, draft: ExerciseCatalogDraft) => {
+  const request = buildExerciseCatalogRequest(draft)
+  return (
+    entry.name === request.name &&
+    JSON.stringify(entry.aliases) === JSON.stringify(request.aliases ?? []) &&
+    entry.category === request.category &&
+    entry.trackingMode === request.trackingMode &&
+    JSON.stringify(entry.equipment) === JSON.stringify(request.equipment) &&
+    (entry.equipmentNotes ?? '') === (request.equipmentNotes ?? '')
+  )
+}
+
 const ExerciseCatalogPage = () => {
   const requestedEntryId = useRef(Taro.getCurrentInstance().router?.params.entryId ?? '')
   const pendingCreateKey = useRef('')
@@ -73,10 +89,13 @@ const ExerciseCatalogPage = () => {
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [feedback, setFeedback] = useState('')
+  const [recovery, setRecovery] = useState<WorkbenchRecovery>()
 
   const patchDraft = (patch: Partial<ExerciseCatalogDraft>) => {
     setDraft((current) => ({ ...current, ...patch }))
     if (!editing) pendingCreateKey.current = ''
+    setRecovery(undefined)
+    setFeedback('')
   }
 
   const openEditor = async (entry?: CustomExerciseCatalogEntry) => {
@@ -88,6 +107,7 @@ const ExerciseCatalogPage = () => {
     setHistoryLoadingMore(false)
     setEditorOpen(true)
     setFeedback('')
+    setRecovery(undefined)
     pendingCreateKey.current = ''
     if (!entry) return
     try {
@@ -123,9 +143,7 @@ const ExerciseCatalogPage = () => {
     void listExerciseCatalog()
       .then((result) => {
         if (!active) return
-        const custom = result.items.filter(
-          (entry): entry is CustomExerciseCatalogEntry => entry.source === 'custom',
-        )
+        const custom = customEntriesFrom(result.items)
         setEntries(custom)
         const requested = custom.find((entry) => entry.id === requestedEntryId.current)
         if (requested) void openEditor(requested)
@@ -153,6 +171,7 @@ const ExerciseCatalogPage = () => {
     setHistoryNextCursor(null)
     setDraft(initialExerciseCatalogDraft())
     pendingCreateKey.current = ''
+    setRecovery(undefined)
     if (restoreFocus) deferH5Focus(returnTarget)
   }
 
@@ -182,6 +201,7 @@ const ExerciseCatalogPage = () => {
           })
         : await createExerciseCatalogEntry(request, (pendingCreateKey.current ||= requestKey()))
       setEntries((current) => [saved, ...current.filter((entry) => entry.id !== saved.id)])
+      setRecovery(undefined)
       closeEditor()
       setFeedback(
         wasCorrection
@@ -189,9 +209,103 @@ const ExerciseCatalogPage = () => {
           : '自定义动作已保存；返回训练页后可搜索并加入当前草稿。',
       )
     } catch (error) {
-      setFeedback(messageOf(error))
+      setRecovery(describeWorkbenchFailure(editing ? 'action_update' : 'action_create', error))
     } finally {
       setBusy(false)
+    }
+  }
+
+  const reconcileDefinition = async () => {
+    if (!recovery || recovery.operation !== 'action_update' || !editing) return
+    setBusy(true)
+    try {
+      const result = await listExerciseCatalog()
+      const custom = customEntriesFrom(result.items)
+      const current = custom.find((entry) => entry.id === editing.id)
+      setEntries(custom)
+      if (!current) {
+        setRecovery({
+          ...recovery,
+          authority: 'terminal',
+          eyebrow: 'CURRENT STATE / 定义已不可编辑',
+          message:
+            '核对后，服务端当前目录已没有这条可编辑定义。页面仍保留输入，但不会把上次纠正报告为成功；请取消并重新检查目录。',
+          actionLabel: '返回检查目录',
+        })
+        return
+      }
+      if (current.revision > editing.revision && entryMatchesDraft(current, draft)) {
+        closeEditor()
+        setFeedback(`核对完成：服务端 R${current.revision} 与保留输入一致，上次纠正已经提交。`)
+        return
+      }
+      setEditing(current)
+      setRecovery(undefined)
+      setFeedback(
+        current.revision === editing.revision
+          ? `核对完成：服务端仍为 R${current.revision}，没有纠正成功的证据；输入已保留，可重新明确保存。`
+          : `核对完成：服务端已到 R${current.revision} 且内容不同；输入已保留，请重新检查后再保存。`,
+      )
+    } catch (error) {
+      setRecovery(describeWorkbenchFailure('action_update', error))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const reconcileArchive = async () => {
+    if (!recovery || recovery.operation !== 'action_archive' || !archiving) return
+    setBusy(true)
+    try {
+      const result = await listExerciseCatalog()
+      const custom = customEntriesFrom(result.items)
+      const current = custom.find((entry) => entry.id === archiving.id)
+      setEntries(custom)
+      setRecovery(undefined)
+      setArchiving(undefined)
+      if (!current) {
+        closeEditor(false)
+        setFeedback('核对完成：服务端当前目录已不再包含此动作；仅据此确认它不会用于未来选择。')
+        archiveReturnFocusId.current = ''
+        deferH5Focus('exercise-new-action')
+        return
+      }
+      setEditing(current)
+      setFeedback(
+        '核对完成：服务端仍显示此动作可用，本次停用没有成功证据；如仍需停用，请再次明确确认。',
+      )
+      deferH5Focus(`exercise-archive-${current.id}`)
+    } catch (error) {
+      setRecovery(describeWorkbenchFailure('action_archive', error))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleRecoveryAction = () => {
+    if (!recovery) return
+    if (recovery.authority === 'terminal') {
+      const operation = recovery.operation
+      setRecovery(undefined)
+      setFeedback('当前尝试已终止；输入仍保留，请检查后重新开始。')
+      if (operation === 'action_archive') {
+        cancelArchive()
+        return
+      }
+      deferH5Focus('exercise-action-name')
+      return
+    }
+    if (recovery.authority === 'retry_same_request' && recovery.operation === 'action_create') {
+      void save()
+      return
+    }
+    if (recovery.operation === 'action_update') {
+      void reconcileDefinition()
+      return
+    }
+    if (recovery.operation === 'action_archive') {
+      void reconcileArchive()
+      return
     }
   }
 
@@ -202,12 +316,13 @@ const ExerciseCatalogPage = () => {
       await archiveExerciseCatalogEntry(archiving.id, archiving.revision)
       setEntries((current) => current.filter((entry) => entry.id !== archiving.id))
       setArchiving(undefined)
+      setRecovery(undefined)
       closeEditor(false)
       setFeedback('动作已从未来选择中停用；训练草稿、历史训练与修订证据未被改写。')
       archiveReturnFocusId.current = ''
       deferH5Focus('exercise-new-action')
     } catch (error) {
-      setFeedback(messageOf(error))
+      setRecovery(describeWorkbenchFailure('action_archive', error))
     } finally {
       setBusy(false)
     }
@@ -216,12 +331,14 @@ const ExerciseCatalogPage = () => {
   const requestArchive = (entry: CustomExerciseCatalogEntry) => {
     archiveReturnFocusId.current = `exercise-archive-${entry.id}`
     setArchiving(entry)
+    setRecovery(undefined)
   }
 
   const cancelArchive = () => {
     const returnTarget = archiveReturnFocusId.current
     archiveReturnFocusId.current = ''
     setArchiving(undefined)
+    if (recovery?.operation === 'action_archive') setRecovery(undefined)
     if (returnTarget) deferH5Focus(returnTarget)
   }
 
@@ -277,6 +394,26 @@ const ExerciseCatalogPage = () => {
             </View>
           ) : null}
 
+          {recovery && recovery.operation !== 'action_archive' ? (
+            <View
+              className="workbench-recovery"
+              role="status"
+              aria-live="polite"
+              aria-atomic="true"
+            >
+              <Text className="workbench-recovery__eyebrow">{recovery.eyebrow}</Text>
+              <Text className="workbench-recovery__message">{recovery.message}</Text>
+              <Button
+                {...buttonActivationProps(handleRecoveryAction, busy)}
+                className="workbench-recovery__action"
+                style={{ color: 'var(--color-warning)' }}
+                disabled={busy}
+              >
+                {busy ? '处理中…' : recovery.actionLabel}
+              </Button>
+            </View>
+          ) : null}
+
           {editorOpen ? (
             <View className="food-editor" aria-label="自定义动作编辑器">
               <Text className="food-catalog-eyebrow">
@@ -293,6 +430,7 @@ const ExerciseCatalogPage = () => {
                 <View className="food-editor__field">
                   <Text>动作名称</Text>
                   <Input
+                    id="exercise-action-name"
                     className="food-editor__input"
                     value={draft.name}
                     maxlength={80}
@@ -407,10 +545,9 @@ const ExerciseCatalogPage = () => {
                   取消
                 </Button>
                 <Button
-                  {...buttonA11yProps}
+                  {...buttonActivationProps(() => void save(), busy || Boolean(recovery))}
                   className="food-editor__save"
-                  disabled={busy}
-                  onClick={() => void save()}
+                  disabled={busy || Boolean(recovery)}
                 >
                   {busy ? '保存中…' : editing ? '保存纠正' : '保存定义'}
                 </Button>
@@ -476,6 +613,25 @@ const ExerciseCatalogPage = () => {
             <Text id="exercise-archive-description" className="food-modal__body">
               它会离开未来可选目录；当前训练草稿、历史训练和版本审计都保持原样。
             </Text>
+            {recovery?.operation === 'action_archive' ? (
+              <View
+                className="workbench-recovery workbench-recovery--modal"
+                role="status"
+                aria-live="polite"
+                aria-atomic="true"
+              >
+                <Text className="workbench-recovery__eyebrow">{recovery.eyebrow}</Text>
+                <Text className="workbench-recovery__message">{recovery.message}</Text>
+                <Button
+                  {...buttonActivationProps(handleRecoveryAction, busy)}
+                  className="workbench-recovery__action"
+                  style={{ color: 'var(--color-warning)' }}
+                  disabled={busy}
+                >
+                  {busy ? '核对中…' : recovery.actionLabel}
+                </Button>
+              </View>
+            ) : null}
             <View className="food-modal__actions">
               <Button
                 {...buttonActivationProps(cancelArchive, busy)}
@@ -486,10 +642,10 @@ const ExerciseCatalogPage = () => {
                 取消
               </Button>
               <Button
-                {...buttonActivationProps(() => void archive(), busy)}
+                {...buttonActivationProps(() => void archive(), busy || Boolean(recovery))}
                 className="food-modal__danger"
                 style={{ color: 'var(--color-pulse)' }}
-                disabled={busy}
+                disabled={busy || Boolean(recovery)}
               >
                 {busy ? '停用中…' : '确认停用'}
               </Button>

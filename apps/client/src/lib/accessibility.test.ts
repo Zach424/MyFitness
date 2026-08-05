@@ -69,5 +69,6 @@ describe('Taro button activation accessibility', () => {
     props.onKeyDown(keyboardEvent(' '))
 
     expect(activate).not.toHaveBeenCalled()
+    expect(props['aria-disabled']).toBe(true)
   })
 })

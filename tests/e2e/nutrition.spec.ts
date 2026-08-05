@@ -647,6 +647,137 @@ test('food photo candidates require review, delete media and only fill an unsave
   expect(browserErrors).toEqual([])
 })
 
+test('ambiguous photo reservation reuses one key without retaining media in the meal draft', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await openNutrition(page)
+  await page.locator('.nutrition-title-input input').fill('预约响应丢失午餐')
+  await openFoodPhotoWorkflow(page)
+  await page.getByRole('button', { name: /我同意本次上传与上述处理/ }).click()
+
+  const idempotencyKeys: string[] = []
+  let reservationAttempts = 0
+  await page.route('**/v1/nutrition/photo-candidates', async (route) => {
+    if (route.request().method() !== 'POST') {
+      await route.continue()
+      return
+    }
+    reservationAttempts += 1
+    idempotencyKeys.push(route.request().headers()['x-idempotency-key'] ?? '')
+    if (reservationAttempts === 1) {
+      const committedResponse = await route.fetch()
+      expect(committedResponse.status()).toBe(201)
+      await route.abort('failed')
+      return
+    }
+    await route.continue()
+  })
+
+  const firstChooserPromise = page.waitForEvent('filechooser')
+  await page.getByRole('button', { name: '选择一张餐食照片' }).click()
+  const firstChooser = await firstChooserPromise
+  await firstChooser.setFiles({
+    name: 'meal.png',
+    mimeType: 'image/png',
+    buffer: validDemoMealPng,
+  })
+
+  const recovery = page.locator('.food-photo-recovery')
+  await expect(recovery.getByText('SAME REQUEST / 仅同一请求可重试')).toBeVisible()
+  await expect(page.getByText('未确认 / PROOF')).toHaveCount(0)
+  const unresolvedDraft = await page.evaluate(
+    () => localStorage.getItem('myfitness.local-draft.meal') ?? '',
+  )
+  expect(unresolvedDraft).toContain('预约响应丢失午餐')
+  expect(unresolvedDraft).not.toContain('meal.png')
+  expect(unresolvedDraft).not.toContain('previewPath')
+
+  await page.screenshot({
+    path: 'output/playwright/iteration-055-photo-reserve-recovery-mobile.png',
+    fullPage: true,
+  })
+
+  const retryChooserPromise = page.waitForEvent('filechooser')
+  await recovery.getByRole('button', { name: '重新选择并重试预约' }).click()
+  const retryChooser = await retryChooserPromise
+  const uploadResponse = page.waitForResponse(
+    (response) =>
+      response.url().includes('/v1/nutrition/photo-candidates/') &&
+      response.url().includes('/upload?token=') &&
+      response.request().method() === 'POST',
+  )
+  await retryChooser.setFiles({
+    name: 'meal.png',
+    mimeType: 'image/png',
+    buffer: validDemoMealPng,
+  })
+  expect((await uploadResponse).status()).toBe(201)
+  await expect(page.getByText('未确认 / PROOF')).toBeVisible()
+  expect(reservationAttempts).toBe(2)
+  expect(idempotencyKeys[0]).not.toBe('')
+  expect(idempotencyKeys[1]).toBe(idempotencyKeys[0])
+  await expect
+    .poll(async () => {
+      if (!trackedSubject) return -1
+      const result = await database.query<{ count: string }>(
+        `SELECT COUNT(*)::text AS count
+         FROM nutrition_photo_candidates AS candidate
+         JOIN auth_identities AS identity ON identity.user_id = candidate.user_id
+         WHERE identity.provider = 'dev' AND identity.provider_subject = $1
+           AND candidate.idempotency_key = $2`,
+        [trackedSubject, idempotencyKeys[0]],
+      )
+      return Number(result.rows[0]?.count ?? -1)
+    })
+    .toBe(1)
+})
+
+test('ambiguous photo confirmation reconciles without writing unknown candidates to the meal', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await openNutrition(page)
+  await page.locator('.nutrition-title-input input').fill('确认响应丢失午餐')
+  await openFoodPhotoWorkflow(page)
+  await uploadDemoMealPhoto(page)
+  await page.locator('[aria-label="熟米饭确认克重"] input').fill('165')
+  await page.locator('[aria-label="熟鸡胸肉确认克重"] input').fill('120')
+
+  await page.route('**/v1/nutrition/photo-candidates/*/confirm', async (route) => {
+    const committedResponse = await route.fetch()
+    expect(committedResponse.status()).toBe(200)
+    await route.abort('failed')
+  })
+
+  await page.getByRole('button', { name: '确认 2 项并返回草稿' }).click()
+  const recovery = page.locator('.food-photo-recovery')
+  await expect(recovery.getByText('RECONCILE FIRST / 禁止直接重放')).toBeVisible()
+  await expect(recovery).toContainText('核对前不会重放操作')
+  await expect(page.getByText('候选已带入当前草稿')).toHaveCount(0)
+  const unresolvedDraft = await page.evaluate(
+    () => localStorage.getItem('myfitness.local-draft.meal') ?? '',
+  )
+  expect(unresolvedDraft).toContain('确认响应丢失午餐')
+  expect(unresolvedDraft).not.toContain('rice_cooked')
+  expect(unresolvedDraft).not.toContain('previewPath')
+
+  await recovery.getByRole('button', { name: '核对服务端状态' }).click()
+  await expect(recovery.getByText('NO CONFIRMED HANDOFF / 未写入餐食')).toBeVisible()
+  await expect(recovery).toContainText('没有向餐食草稿写入任何候选')
+  await expect(page.getByRole('button', { name: '确认 2 项并返回草稿' })).toHaveCount(0)
+
+  await page.screenshot({
+    path: 'output/playwright/iteration-055-photo-confirm-reconciliation-mobile.png',
+    fullPage: true,
+  })
+
+  await recovery.getByRole('button', { name: '返回餐食重新开始' }).click()
+  await expect(page.locator('.nutrition-title-input input')).toHaveValue('确认响应丢失午餐')
+  await expect(page.locator('.meal-item')).toHaveCount(0)
+  await expect(page.getByText('没有候选写入餐食草稿')).toBeVisible()
+})
+
 test('food photo proof sheet is readable at wide viewport and can be revoked', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 })
   const browserErrors = collectBrowserErrors(page)
@@ -659,13 +790,23 @@ test('food photo proof sheet is readable at wide viewport and can be revoked', a
     fullPage: true,
   })
 
-  const deleteResponse = page.waitForResponse(
-    (response) =>
-      /\/v1\/nutrition\/photo-candidates\/[0-9a-f-]{36}$/.test(response.url()) &&
-      response.request().method() === 'DELETE',
-  )
+  await page.route('**/v1/nutrition/photo-candidates/*', async (route) => {
+    if (route.request().method() !== 'DELETE') {
+      await route.continue()
+      return
+    }
+    const committedResponse = await route.fetch()
+    expect(committedResponse.status()).toBe(204)
+    await route.abort('failed')
+  })
   await page.getByRole('button', { name: '删除校样' }).click()
-  expect((await deleteResponse).status()).toBe(204)
-  await expect(page.getByText(/照片和衍生候选已删除/)).toBeVisible()
-  expect(browserErrors).toEqual([])
+  const recovery = page.locator('.food-photo-recovery')
+  await expect(recovery.getByText('RECONCILE FIRST / 禁止直接重放')).toBeVisible()
+  await expect(page.getByText(/照片和衍生候选已删除/)).toHaveCount(0)
+  await recovery.getByRole('button', { name: '核对服务端状态' }).click()
+  await expect(recovery.getByText('NO REVIEWABLE PROOF / 清理状态受控')).toBeVisible()
+  await expect(recovery).toContainText('不声称私有媒体已经物理删除')
+  expect(
+    browserErrors.filter((error) => error !== 'Failed to load resource: net::ERR_FAILED'),
+  ).toEqual([])
 })

@@ -41,6 +41,7 @@ export const keyboardActivationProps = (activate: () => void, disabled = false) 
 
 export const buttonActivationProps = (activate: () => void, disabled = false) => ({
   ...buttonA11yProps,
+  'aria-disabled': disabled,
   ...keyboardActivationProps(activate, disabled),
   onClick: () => {
     if (!disabled) activate()

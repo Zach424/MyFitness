@@ -1,6 +1,6 @@
 # Design system baseline
 
-Status: implemented and visually validated through iteration-045 history-calendar evidence
+Status: implemented and visually validated through iteration-055 authority-aware workbench recovery evidence
 
 Working brand: 衡迹 / MyFitness
 
@@ -520,6 +520,23 @@ Implementation audit treated every payload control as part of the visual state c
 
 - [390 × 844 workout save recovery](../../output/playwright/iteration-054-workout-save-recovery-mobile.png)
 - [390 × 844 meal save recovery](../../output/playwright/iteration-054-meal-save-recovery-mobile.png)
+
+## Authority-aware workbench recovery — iteration 055
+
+Sensitive workbenches now distinguish three actions before asking the user to do anything: `SAME REQUEST`, `RECONCILE FIRST` and a terminal state. The visual grammar stays inside the established paper/warning palette. A narrow amber rail and compact uppercase eyebrow state the authority, while the body names what remains safe and what the page refuses to assume. It does not introduce a generic offline badge or imply background synchronization.
+
+The action-create state keeps the full definition form visible and dims the ordinary save control. Its one outlined action says `重试保存定义（防重复）`; the real browser proves the same request key and one resulting definition. The archive state appears inside the existing modal, ahead of its now-disabled destructive control. It requires `核对服务端状态`, then closes only after the active catalog read no longer includes the action. The screenshot deliberately keeps the old confirmation button visible but inert so the reason for the pause is clear.
+
+Photo reservation uses the same-key state before any upload ticket is known. The page retains consent UI but no selected file name/path, preview or candidate in the meal-draft vault. Photo confirmation and deletion use reconcile-first copy. If a committed confirmation disappears from the reviewable list before the response arrives, the workbench shows `NO CONFIRMED HANDOFF / 未写入餐食`, clears the proof view and returns without emitting candidate items. If a delete target disappears, copy is limited to “no reviewable proof” and explicitly avoids claiming that object bytes are physically deleted.
+
+Visual inspection caught a second Taro custom-element issue: a bare `disabled` attribute was not treated as disabled by the browser accessibility tree, even though the component appeared unavailable. The shared activation adapter now publishes `aria-disabled` and blocks both pointer and keyboard callbacks. Recovery actions use explicit inline token color because Taro otherwise rendered their accessible text visually blank.
+
+Four 390 × 844 artifacts cover the risky states; the wide photo deletion reconciliation remains in automated browser proof without adding another visual motif.
+
+- [390 × 844 action-create same-key recovery](../../output/playwright/iteration-055-action-create-recovery-mobile.png)
+- [390 × 844 action-archive reconciliation](../../output/playwright/iteration-055-action-archive-reconciliation-mobile.png)
+- [390 × 844 photo-reservation same-key recovery](../../output/playwright/iteration-055-photo-reserve-recovery-mobile.png)
+- [390 × 844 photo-confirmation terminal handoff](../../output/playwright/iteration-055-photo-confirm-reconciliation-mobile.png)
 
 ## Screenshot review checklist
 
