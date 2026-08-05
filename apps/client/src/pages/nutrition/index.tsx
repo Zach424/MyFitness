@@ -34,6 +34,7 @@ import { describeSaveFailure, type SaveRecovery } from '../../lib/save-recovery'
 import { useRecoverableDraft } from '../../lib/use-local-draft'
 import {
   buildMealRequest,
+  classifyNutritionReadFailure,
   draftFromFoodCatalogItem,
   draftsFromPhotoConfirmation,
   draftFromMeal,
@@ -42,10 +43,12 @@ import {
   isMealDraft,
   mealDraftSummary,
   mealTypeLabels,
+  nutritionReadPhase,
   recentFoods,
   validateMealDraft,
   type FoodDraft,
   type MealDraft,
+  type NutritionReadFailureKind,
 } from './nutrition.model'
 import './index.scss'
 
@@ -87,6 +90,46 @@ const requestKey = () =>
 const messageOf = (error: unknown) =>
   error instanceof ApiError || error instanceof Error ? error.message : '操作失败，请稍后重试'
 
+const nutritionReadFailureCopy = (
+  kind: NutritionReadFailureKind,
+  hasSnapshot: boolean,
+): { eyebrow: string; title: string; detail: string } => {
+  if (kind === 'offline') {
+    return {
+      eyebrow: 'OFFLINE / 连接未完成',
+      title: hasSnapshot ? '餐次、收藏与食物目录复核没有完成' : '饮食记录还没有读取',
+      detail: hasSnapshot
+        ? '上次成功读取的三份清单仍在下方，但保存、复用、收藏、修改、历史与删除均已冻结。'
+        : '当前无法确认账户里的餐次、收藏和可复用食物；页面不会用空记录簿或零收藏代替。',
+    }
+  }
+  if (kind === 'refused') {
+    return {
+      eyebrow: 'READ REFUSED / 读取被拒绝',
+      title: hasSnapshot ? '服务拒绝了本次饮食复核' : '服务没有接受本次饮食读取',
+      detail: hasSnapshot
+        ? '旧餐次、收藏与食物目录继续只读保留；重新核对前不会生成新的饮食事实。'
+        : '餐次数量、收藏和食物目录仍是未知状态；重新核对成功前，记录操作保持冻结。',
+    }
+  }
+  if (kind === 'service') {
+    return {
+      eyebrow: 'SERVICE PAUSED / 服务暂不可用',
+      title: hasSnapshot ? '本次饮食复核暂未完成' : '饮食记录暂时无法读取',
+      detail: hasSnapshot
+        ? '下方保留上次完整快照用于查看，所有依赖这三份清单的操作保持冻结。'
+        : '服务暂时没有返回餐次、收藏与食物目录证据；这里不会显示“还没有饮食记录”。',
+    }
+  }
+  return {
+    eyebrow: 'READ UNKNOWN / 结果未知',
+    title: hasSnapshot ? '无法确认当前饮食快照' : '无法确认饮食记录状态',
+    detail: hasSnapshot
+      ? '旧餐次、收藏与食物目录继续只读保留；重新核对前不会提交依赖它们的操作。'
+      : '页面尚未取得可信的饮食快照，也不会推断账户没有餐次、收藏或自定义食物。',
+  }
+}
+
 type SavedFood = { food: FoodSnapshot; defaultServing: FoodServing }
 
 type CatalogDisplayEntry = SavedFood & { catalog?: FoodCatalogItem }
@@ -122,6 +165,8 @@ const NutritionPage = () => {
   )
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
+  const [hasReadSnapshot, setHasReadSnapshot] = useState(false)
+  const [readFailure, setReadFailure] = useState<NutritionReadFailureKind>()
   const [loadingMore, setLoadingMore] = useState(false)
   const [nextCursor, setNextCursor] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -129,6 +174,8 @@ const NutritionPage = () => {
   const [saveRecovery, setSaveRecovery] = useState<SaveRecovery>()
   const pendingKey = useRef('')
   const photoReturnFocus = useRef(false)
+  const readInFlight = useRef(false)
+  const pageActive = useRef(true)
 
   const invalidatePendingSave = (nextFeedback = '') => {
     pendingKey.current = ''
@@ -137,35 +184,61 @@ const NutritionPage = () => {
   }
 
   useEffect(() => {
-    void (async () => {
-      try {
-        const [mealResult, favoriteResult] = await Promise.all([
-          listMeals({ limit: 20 }),
-          listFavoriteFoods(),
-        ])
-        setMeals(mealResult.items)
-        setNextCursor(mealResult.nextCursor)
-        setFavorites(favoriteResult.items)
-      } catch (error) {
-        setFeedback(messageOf(error))
-      } finally {
-        setLoading(false)
-      }
-    })()
+    pageActive.current = true
+    return () => {
+      pageActive.current = false
+    }
   }, [])
 
-  useDidShow(() => {
-    void listFoodCatalog()
-      .then((result) => setFoodCatalog(result.items))
-      .catch((error: unknown) => setFeedback(messageOf(error)))
-    if (photoReturnFocus.current) {
-      photoReturnFocus.current = false
-      deferH5Focus('food-photo-launch', 350)
+  const loadNutritionAuthority = async () => {
+    if (readInFlight.current) return
+    readInFlight.current = true
+    setLoading(true)
+    setReadFailure(undefined)
+    setDeleting(undefined)
+    setHistoryMeal(undefined)
+    try {
+      const [mealResult, favoriteResult, catalogResult] = await Promise.all([
+        listMeals({ limit: 20 }),
+        listFavoriteFoods(),
+        listFoodCatalog(),
+      ])
+      if (!pageActive.current) return
+      setMeals(mealResult.items)
+      setNextCursor(mealResult.nextCursor)
+      setFavorites(favoriteResult.items)
+      setFoodCatalog(catalogResult.items)
+      setHasReadSnapshot(true)
+      if (photoReturnFocus.current) {
+        photoReturnFocus.current = false
+        deferH5Focus('food-photo-launch', 350)
+      }
+    } catch (error) {
+      if (!pageActive.current) return
+      setReadFailure(classifyNutritionReadFailure(error))
+      deferH5Focus('nutrition-read-retry', 80)
+    } finally {
+      readInFlight.current = false
+      if (pageActive.current) setLoading(false)
     }
+  }
+
+  useDidShow(() => {
+    void loadNutritionAuthority()
   })
 
+  const readPhase = nutritionReadPhase({
+    hasSnapshot: hasReadSnapshot,
+    busy: loading,
+    hasFailure: Boolean(readFailure),
+  })
+  const readAuthorityReady = readPhase === 'ready'
+  const readFailurePresentation = readFailure
+    ? nutritionReadFailureCopy(readFailure, hasReadSnapshot)
+    : undefined
+
   const loadOlderMeals = async () => {
-    if (!nextCursor || loadingMore) return
+    if (!readAuthorityReady || !nextCursor || loadingMore) return
     setLoadingMore(true)
     try {
       const result = await listMeals({ limit: 20, cursor: nextCursor })
@@ -199,6 +272,10 @@ const NutritionPage = () => {
       pendingKey.current = ''
       setSaveRecovery(undefined)
       setFeedback('本地餐次草稿已恢复；请重新核对食物、份量和参考来源。')
+      return
+    }
+    if (!readAuthorityReady) {
+      setFeedback('请先重新核对餐次、收藏与食物目录，再恢复这份修改草稿。草稿仍安全保留。')
       return
     }
     try {
@@ -249,6 +326,7 @@ const NutritionPage = () => {
   })
 
   const addFood = (entry: CatalogDisplayEntry) => {
+    if (!readAuthorityReady) return
     const item = entry.catalog ? draftFromFoodCatalogItem(entry.catalog) : draftFromSavedFood(entry)
     setDraft((current) => ({ ...current, items: [...current.items, item] }))
     invalidatePendingSave(`${entry.food.name}已加入本餐，请确认实际份量。`)
@@ -300,6 +378,7 @@ const NutritionPage = () => {
     favorites.some((favorite) => favorite.food.foodKey === foodKey)
 
   const toggleFavorite = async (item: FoodDraft) => {
+    if (!readAuthorityReady) return
     try {
       if (isFavorite(item.food.foodKey)) {
         await deleteFavoriteFood(item.food.foodKey)
@@ -337,6 +416,10 @@ const NutritionPage = () => {
   }
 
   const save = async () => {
+    if (!readAuthorityReady) {
+      setFeedback('请先重新核对餐次、收藏与食物目录，再保存本餐。当前输入仍保留。')
+      return
+    }
     const error = validateMealDraft(draft)
     if (error) {
       setSaveRecovery(undefined)
@@ -371,6 +454,7 @@ const NutritionPage = () => {
   }
 
   const edit = (meal: Meal) => {
+    if (!readAuthorityReady) return
     if (recoverableDraft.pending) {
       setFeedback('请先恢复或放弃页面顶部的本地草稿，再开始另一项修改。')
       Taro.pageScrollTo({ scrollTop: 0, duration: 180 })
@@ -385,6 +469,7 @@ const NutritionPage = () => {
   }
 
   const repeat = (meal: Meal) => {
+    if (!readAuthorityReady) return
     if (recoverableDraft.pending) {
       setFeedback('请先恢复或放弃页面顶部的本地草稿，再复制另一餐。')
       Taro.pageScrollTo({ scrollTop: 0, duration: 180 })
@@ -399,7 +484,7 @@ const NutritionPage = () => {
   }
 
   const remove = async () => {
-    if (!deleting) return
+    if (!deleting || !readAuthorityReady) return
     try {
       await deleteMeal(deleting.id, deleting.revision)
       setMeals((current) => current.filter((meal) => meal.id !== deleting.id))
@@ -411,6 +496,7 @@ const NutritionPage = () => {
   }
 
   const openHistory = async (meal: Meal) => {
+    if (!readAuthorityReady) return
     setHistoryMeal(meal)
     setHistory(undefined)
     setHistoryNextCursor(null)
@@ -425,7 +511,7 @@ const NutritionPage = () => {
   }
 
   const loadOlderHistory = async () => {
-    if (!historyMeal || !historyNextCursor || loadingMore) return
+    if (!readAuthorityReady || !historyMeal || !historyNextCursor || loadingMore) return
     setLoadingMore(true)
     try {
       const result = await getMealHistory(historyMeal.id, {
@@ -502,6 +588,49 @@ const NutritionPage = () => {
                 setFeedback('本地餐次草稿已清除。')
               }}
             />
+          ) : null}
+
+          {readPhase === 'refreshing' && hasReadSnapshot ? (
+            <View className="nutrition-read-state nutrition-read-state--refreshing" role="status">
+              <View>
+                <Text className="nutrition-read-state__eyebrow">
+                  CHECKING MEAL DESK / 保留上次快照
+                </Text>
+                <Text className="nutrition-read-state__title">正在复核餐次、收藏与食物目录</Text>
+                <Text className="nutrition-read-state__copy">
+                  复核完成前，下方三份清单只读保留；保存、复用、收藏、修改、历史与删除均已冻结。
+                </Text>
+              </View>
+            </View>
+          ) : readFailurePresentation ? (
+            <View
+              className={`nutrition-read-state nutrition-read-state--${readPhase}`}
+              role="status"
+            >
+              <View>
+                <Text className="nutrition-read-state__eyebrow">
+                  {readFailurePresentation.eyebrow}
+                </Text>
+                <Text className="nutrition-read-state__title">{readFailurePresentation.title}</Text>
+                <Text className="nutrition-read-state__copy">{readFailurePresentation.detail}</Text>
+                <View className="nutrition-read-state__sources" aria-label="保留的饮食快照">
+                  <Text>MEALS {hasReadSnapshot ? meals.length : '—'}</Text>
+                  <Text>FAVORITES {hasReadSnapshot ? favorites.length : '—'}</Text>
+                  <Text>FOODS {hasReadSnapshot ? foodCatalog.length : '—'}</Text>
+                </View>
+              </View>
+              <Button
+                id="nutrition-read-retry"
+                className="nutrition-read-state__action"
+                aria-label="重新核对餐次收藏与食物目录"
+                {...buttonActivationProps(
+                  () => void loadNutritionAuthority(),
+                  loading || loadingMore || saving,
+                )}
+              >
+                重新核对
+              </Button>
+            </View>
           ) : null}
 
           <View className="nutrition-layout">
@@ -617,10 +746,10 @@ const NutritionPage = () => {
                       ['library', '食物库'],
                       [
                         'custom',
-                        `我的 ${foodCatalog.filter((entry) => entry.source === 'custom').length}`,
+                        `我的 ${hasReadSnapshot ? foodCatalog.filter((entry) => entry.source === 'custom').length : '—'}`,
                       ],
-                      ['favorites', `收藏 ${favorites.length}`],
-                      ['recent', `最近 ${recents.length}`],
+                      ['favorites', `收藏 ${hasReadSnapshot ? favorites.length : '—'}`],
+                      ['recent', `最近 ${hasReadSnapshot ? recents.length : '—'}`],
                     ] as const
                   ).map(([key, label]) => (
                     <Button
@@ -642,12 +771,20 @@ const NutritionPage = () => {
                   onInput={(event) => setSearch(event.detail.value)}
                 />
                 <View className="food-catalog">
-                  {visibleEntries.length ? (
+                  {!hasReadSnapshot ? (
+                    <View className="food-picker-empty">
+                      {loading
+                        ? '正在核对食物、收藏与最近餐次…'
+                        : '食物、收藏与最近餐次尚未核对；重新核对成功后才会显示可复用内容。'}
+                    </View>
+                  ) : visibleEntries.length ? (
                     visibleEntries.map((entry) => (
                       <View className="food-option-wrap" key={entry.food.foodKey}>
                         <Button
                           {...buttonA11yProps}
                           className="food-option"
+                          disabled={!readAuthorityReady}
+                          aria-disabled={!readAuthorityReady}
                           aria-label={`添加${entry.food.name}`}
                           onClick={() => addFood(entry)}
                         >
@@ -670,12 +807,15 @@ const NutritionPage = () => {
                           <Button
                             {...buttonA11yProps}
                             className="food-option__edit"
+                            disabled={!readAuthorityReady}
+                            aria-disabled={!readAuthorityReady}
                             aria-label={`编辑${entry.food.name}`}
-                            onClick={() =>
+                            onClick={() => {
+                              if (!readAuthorityReady) return
                               void Taro.navigateTo({
                                 url: `/pages/food-catalog/index?entryId=${entry.catalog?.id}`,
                               })
-                            }
+                            }}
                           >
                             修订 · R{entry.catalog.revision}
                           </Button>
@@ -713,6 +853,8 @@ const NutritionPage = () => {
                             <Button
                               {...buttonA11yProps}
                               className={`favorite-toggle ${isFavorite(item.food.foodKey) ? 'favorite-toggle--active' : ''}`}
+                              disabled={!readAuthorityReady}
+                              aria-disabled={!readAuthorityReady}
                               aria-label={`${isFavorite(item.food.foodKey) ? '取消收藏' : '收藏'}${item.food.name}`}
                               aria-pressed={isFavorite(item.food.foodKey)}
                               onClick={() => void toggleFavorite(item)}
@@ -815,7 +957,8 @@ const NutritionPage = () => {
               <Button
                 {...buttonA11yProps}
                 className="save-meal"
-                disabled={saving}
+                disabled={saving || !readAuthorityReady}
+                aria-disabled={saving || !readAuthorityReady}
                 onClick={() => void save()}
               >
                 {saving
@@ -830,10 +973,39 @@ const NutritionPage = () => {
                   <Text className="nutrition-eyebrow">RECENT MEALS</Text>
                   <Text className="nutrition-panel-title">饮食记录簿</Text>
                 </View>
-                <Text className="meal-ledger__count metric">已载入 {meals.length}</Text>
+                <View className="meal-ledger__tools">
+                  <Text className="meal-ledger__count metric">
+                    {readAuthorityReady
+                      ? `已载入 ${meals.length}`
+                      : hasReadSnapshot
+                        ? `保留 ${meals.length}`
+                        : '尚未核对'}
+                  </Text>
+                  {readPhase === 'ready' || readPhase === 'refreshing' ? (
+                    <Button
+                      id="nutrition-read-refresh"
+                      className="nutrition-read-refresh"
+                      aria-label="更新餐次收藏与食物目录"
+                      {...buttonActivationProps(
+                        () => void loadNutritionAuthority(),
+                        loading || loadingMore || saving,
+                      )}
+                    >
+                      {loading ? '核对中…' : '更新饮食'}
+                    </Button>
+                  ) : null}
+                </View>
               </View>
-              {loading ? (
+              {loading && !hasReadSnapshot ? (
                 <View className="meal-empty">正在整理餐次…</View>
+              ) : !hasReadSnapshot ? (
+                <View className="meal-empty meal-empty--illustrated">
+                  <Text className="meal-empty__mark metric">?</Text>
+                  <Text className="meal-empty__title">餐次数量尚未核对</Text>
+                  <Text className="meal-empty__body">
+                    重新核对成功后，才会显示当前餐次或空记录簿。
+                  </Text>
+                </View>
               ) : meals.length ? (
                 <View className="meal-list">
                   {meals.map((meal) => (
@@ -868,6 +1040,8 @@ const NutritionPage = () => {
                         <Button
                           {...buttonA11yProps}
                           className="entry-action"
+                          disabled={!readAuthorityReady}
+                          aria-disabled={!readAuthorityReady}
                           onClick={() => repeat(meal)}
                         >
                           再记一次
@@ -875,6 +1049,8 @@ const NutritionPage = () => {
                         <Button
                           {...buttonA11yProps}
                           className="entry-action"
+                          disabled={!readAuthorityReady}
+                          aria-disabled={!readAuthorityReady}
                           onClick={() => edit(meal)}
                         >
                           修改
@@ -882,6 +1058,8 @@ const NutritionPage = () => {
                         <Button
                           {...buttonA11yProps}
                           className="entry-action"
+                          disabled={!readAuthorityReady}
+                          aria-disabled={!readAuthorityReady}
                           onClick={() => void openHistory(meal)}
                         >
                           历史
@@ -889,7 +1067,11 @@ const NutritionPage = () => {
                         <Button
                           {...buttonA11yProps}
                           className="entry-action entry-action--danger"
-                          onClick={() => setDeleting(meal)}
+                          disabled={!readAuthorityReady}
+                          aria-disabled={!readAuthorityReady}
+                          onClick={() => {
+                            if (readAuthorityReady) setDeleting(meal)
+                          }}
                         >
                           删除
                         </Button>
@@ -908,7 +1090,8 @@ const NutritionPage = () => {
                 <Button
                   {...buttonA11yProps}
                   className="record-page-more"
-                  disabled={loadingMore}
+                  disabled={loadingMore || !readAuthorityReady}
+                  aria-disabled={loadingMore || !readAuthorityReady}
                   onClick={() => void loadOlderMeals()}
                 >
                   {loadingMore ? '正在载入…' : '继续载入更早餐次'}
@@ -942,6 +1125,8 @@ const NutritionPage = () => {
               <Button
                 {...buttonA11yProps}
                 className="modal-action modal-action--danger"
+                disabled={saving || !readAuthorityReady}
+                aria-disabled={saving || !readAuthorityReady}
                 onClick={() => void remove()}
               >
                 确认删除
@@ -993,7 +1178,8 @@ const NutritionPage = () => {
                   <Button
                     {...buttonA11yProps}
                     className="record-page-more"
-                    disabled={loadingMore}
+                    disabled={loadingMore || !readAuthorityReady}
+                    aria-disabled={loadingMore || !readAuthorityReady}
                     onClick={() => void loadOlderHistory()}
                   >
                     {loadingMore ? '正在载入…' : '继续载入更早版本'}

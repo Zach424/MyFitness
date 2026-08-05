@@ -4,16 +4,42 @@ import { starterFoodCatalog } from '@myfitness/contracts/nutrition.constants'
 
 import {
   buildMealRequest,
+  classifyNutritionReadFailure,
   draftFromCatalog,
   draftFromFoodCatalogItem,
   draftsFromPhotoConfirmation,
   draftFromMeal,
   initialMealDraft,
   mealDraftSummary,
+  nutritionReadPhase,
   validateMealDraft,
 } from './nutrition.model'
 
 describe('nutrition page model', () => {
+  it('keeps an unread meal desk distinct from an accepted empty snapshot', () => {
+    expect(nutritionReadPhase({ hasSnapshot: false, busy: true, hasFailure: false })).toBe(
+      'initial-loading',
+    )
+    expect(nutritionReadPhase({ hasSnapshot: false, busy: false, hasFailure: true })).toBe(
+      'initial-error',
+    )
+    expect(nutritionReadPhase({ hasSnapshot: true, busy: false, hasFailure: false })).toBe('ready')
+  })
+
+  it('marks a retained meal, favorite and food snapshot as refreshing or stale', () => {
+    expect(nutritionReadPhase({ hasSnapshot: true, busy: true, hasFailure: false })).toBe(
+      'refreshing',
+    )
+    expect(nutritionReadPhase({ hasSnapshot: true, busy: false, hasFailure: true })).toBe('stale')
+  })
+
+  it('classifies nutrition authority failures without exposing server copy', () => {
+    expect(classifyNutritionReadFailure(new Error('Failed to fetch'))).toBe('offline')
+    expect(classifyNutritionReadFailure({ statusCode: 403 })).toBe('refused')
+    expect(classifyNutritionReadFailure({ statusCode: 503 })).toBe('service')
+    expect(classifyNutritionReadFailure(undefined)).toBe('unknown')
+  })
+
   it('maps confirmed photo candidates to gram-based unsaved food drafts', () => {
     const items = draftsFromPhotoConfirmation([
       { catalogKey: 'rice_cooked', grams: 165 },

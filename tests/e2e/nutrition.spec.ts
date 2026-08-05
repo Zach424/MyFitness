@@ -142,6 +142,153 @@ const openFoodPhotoWorkflow = async (page: Page) => {
   await expectVisibleFocus(page.getByRole('button', { name: '返回餐食草稿' }))
 }
 
+test('nutrition authority keeps an initial offline meal desk unknown', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  let mealReads = 0
+  await page.route(/\/v1\/nutrition\/meals\?limit=20$/, async (route) => {
+    if (route.request().method() !== 'GET') {
+      await route.continue()
+      return
+    }
+    mealReads += 1
+    if (mealReads === 1) {
+      await route.abort('failed')
+      return
+    }
+    await route.continue()
+  })
+
+  await openNutrition(page)
+  const readState = page.locator('.nutrition-read-state')
+  await expect(readState.getByText('OFFLINE / 连接未完成')).toBeVisible()
+  await expect(readState).toContainText('饮食记录还没有读取')
+  await expect(readState).toContainText('MEALS —')
+  await expect(readState).toContainText('FAVORITES —')
+  await expect(readState).toContainText('FOODS —')
+  await expect(page.getByText('还没有饮食记录')).toHaveCount(0)
+  await expect(page.getByText('餐次数量尚未核对')).toBeVisible()
+  await expect(page.getByText(/食物、收藏与最近餐次尚未核对/)).toBeVisible()
+  await expect(page.getByText('当前列表没有匹配食物')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: '我的 —' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '收藏 —' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '最近 —' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '保存餐次', exact: true })).toBeDisabled()
+  await expect(page.getByRole('button', { name: '管理我的食物' })).toBeEnabled()
+  await expect(page.getByRole('button', { name: '打开照片校样台' })).toBeEnabled()
+  await expect(page.getByRole('button', { name: '查看每日营养趋势' })).toBeEnabled()
+  const retry = page.getByRole('button', { name: '重新核对餐次收藏与食物目录' })
+  await expect(retry).toBeFocused()
+  await expect
+    .poll(() =>
+      page.locator('.nutrition-page').evaluate((element) => element.getBoundingClientRect().left),
+    )
+    .toBe(0)
+  expect(
+    await page.locator('.nutrition-page').evaluate((element) => {
+      const bounds = element.getBoundingClientRect()
+      return bounds.width <= window.innerWidth && element.scrollWidth <= window.innerWidth
+    }),
+  ).toBe(true)
+
+  await page.screenshot({
+    path: 'output/playwright/iteration-067-nutrition-initial-offline-mobile.png',
+  })
+
+  const mealResponse = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/v1/nutrition/meals?limit=20') &&
+      response.request().method() === 'GET',
+  )
+  const favoriteResponse = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/v1/nutrition/favorites') && response.request().method() === 'GET',
+  )
+  const catalogResponse = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/v1/food-catalog') && response.request().method() === 'GET',
+  )
+  await page.keyboard.press('Enter')
+  expect((await mealResponse).status()).toBe(200)
+  expect((await favoriteResponse).status()).toBe(200)
+  expect((await catalogResponse).status()).toBe(200)
+  await expect(page.getByText('还没有饮食记录')).toBeVisible()
+  await expect(page.getByRole('button', { name: '添加熟米饭' })).toBeEnabled()
+  await expect(page.getByRole('button', { name: '保存餐次', exact: true })).toBeEnabled()
+  expect(mealReads).toBe(2)
+})
+
+test('nutrition authority retains and freezes meals, favorites and foods after refusal', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await openNutrition(page)
+  await page.getByRole('button', { name: '添加熟米饭' }).click()
+  await page.getByRole('button', { name: '收藏熟米饭' }).click()
+  await page.getByRole('button', { name: '保存餐次', exact: true }).click()
+  const retainedEntry = page.locator('.meal-entry').first()
+  await expect(retainedEntry).toBeVisible()
+  await retainedEntry.getByRole('button', { name: '再记一次' }).click()
+  await expect(page.getByRole('button', { name: '取消收藏熟米饭' })).toBeVisible()
+
+  let favoriteReads = 0
+  await page.route(/\/v1\/nutrition\/favorites$/, async (route) => {
+    if (route.request().method() !== 'GET') {
+      await route.continue()
+      return
+    }
+    favoriteReads += 1
+    if (favoriteReads === 1) {
+      await route.fulfill({
+        status: 429,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'raw favorite refusal must stay hidden' }),
+      })
+      return
+    }
+    await route.continue()
+  })
+
+  await page.getByRole('button', { name: '更新餐次收藏与食物目录' }).click()
+  const readState = page.locator('.nutrition-read-state')
+  await expect(readState.getByText('READ REFUSED / 读取被拒绝')).toBeVisible()
+  await expect(readState).toContainText('MEALS 1')
+  await expect(readState).toContainText('FAVORITES 1')
+  await expect(readState).toContainText('FOODS 10')
+  await expect(readState).not.toContainText('raw favorite refusal')
+  await expect(retainedEntry).toBeVisible()
+  await expect(page.locator('.meal-ledger__count')).toHaveText('保留 1')
+  await expect(page.getByRole('button', { name: '保存餐次', exact: true })).toBeDisabled()
+  await expect(page.getByRole('button', { name: '添加熟米饭' })).toBeDisabled()
+  await expect(page.getByRole('button', { name: '取消收藏熟米饭' })).toBeDisabled()
+  await expect(retainedEntry.getByRole('button', { name: '再记一次' })).toBeDisabled()
+  await expect(retainedEntry.getByRole('button', { name: '修改' })).toBeDisabled()
+  await expect(retainedEntry.getByRole('button', { name: '历史' })).toBeDisabled()
+  await expect(retainedEntry.getByRole('button', { name: '删除' })).toBeDisabled()
+  await expect(page.getByRole('button', { name: '管理我的食物' })).toBeEnabled()
+  await expect(page.getByRole('button', { name: '打开照片校样台' })).toBeEnabled()
+  await expect(page.getByRole('button', { name: '查看每日营养趋势' })).toBeEnabled()
+  const retry = page.getByRole('button', { name: '重新核对餐次收藏与食物目录' })
+  await expect(retry).toBeFocused()
+
+  await page.screenshot({
+    path: 'output/playwright/iteration-067-nutrition-stale-wide.png',
+    fullPage: true,
+  })
+
+  const favoriteResponse = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/v1/nutrition/favorites') && response.request().method() === 'GET',
+  )
+  await page.keyboard.press('Enter')
+  expect((await favoriteResponse).status()).toBe(200)
+  await expect(readState).toHaveCount(0)
+  await expect(retainedEntry.getByRole('button', { name: '修改' })).toBeEnabled()
+  await expect(page.getByRole('button', { name: '添加熟米饭' })).toBeEnabled()
+  await expect(page.getByRole('button', { name: '取消收藏熟米饭' })).toBeEnabled()
+  await expect(page.getByRole('button', { name: '保存餐次', exact: true })).toBeEnabled()
+  expect(favoriteReads).toBe(2)
+})
+
 test('meal completes favorite, create, repeat, update, history and delete lifecycle', async ({
   page,
 }) => {

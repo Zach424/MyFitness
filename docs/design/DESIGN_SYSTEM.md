@@ -671,6 +671,17 @@ Visual review found that Taro's native disabled color made the quick-repeat titl
 - [390 × 844 unread workout ledger and action directory](../../output/playwright/iteration-066-workout-initial-offline-mobile.png)
 - [1440 × 1000 retained workout/action snapshot](../../output/playwright/iteration-066-workout-stale-wide.png)
 
+## Nutrition meal-desk read authority — iteration 067
+
+The meal note now treats recent meals, favorites and the reusable food directory as one mise-en-place surface. On mobile, an initial offline response places the amber ruled authority receipt immediately after the page thesis. Its three-cell `MEALS / FAVORITES / FOODS` strip shows em dashes, source tabs use em dashes instead of false zeros and both the meal ledger and food picker use explicit unknown copy. Only a successful combined response may restore empty-state language.
+
+The editor remains visible so title, occurrence time, confirmed photo inputs, portions and notes do not look discarded, but save, food selection and favorite mutation are inert. `管理我的食物`, the photo proof workbench and nutrition trends remain active because each route has its own read boundary. The single full-width `重新核对` action receives keyboard focus and the settled 390 px page proves no horizontal overflow.
+
+On wide H5, a rejected favorite refresh retains `MEALS 1 / FAVORITES 1 / FOODS 10` above the two-column meal desk. The accepted meal remains in its sticky ledger and the repeated rice draft remains in the editor; save, add, favorite, repeat, correction, history and deletion stay readable but inactive. The three-source strip makes the authority scope visible without turning the warning into a generic service banner or a nutrition judgment.
+
+- [390 × 844 unread meal desk](../../output/playwright/iteration-067-nutrition-initial-offline-mobile.png)
+- [1440 × 1000 retained meal/favorite/food snapshot](../../output/playwright/iteration-067-nutrition-stale-wide.png)
+
 ## Screenshot review checklist
 
 - The Rhythm Rail remains understandable without color.
