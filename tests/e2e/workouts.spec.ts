@@ -235,6 +235,53 @@ const collectBrowserErrors = (page: Page) => {
   return browserErrors
 }
 
+test('workout history keeps its requested aggregate visible after an initial offline read', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await openWorkouts(page)
+  await page.locator('[aria-label="开始时间，年-月-日 时:分"] input').fill('2026-08-05 18:00')
+  await page.locator('[aria-label="结束时间，年-月-日 时:分"] input').fill('2026-08-05 18:45')
+  await page.getByRole('button', { name: '保存训练', exact: true }).click()
+  const entry = page.locator('.workout-entry').first()
+  await expect(entry).toBeVisible()
+
+  let historyReads = 0
+  await page.route(/\/v1\/workouts\/[0-9a-f-]{36}\/history\?limit=10$/, async (route) => {
+    if (route.request().method() !== 'GET') {
+      await route.continue()
+      return
+    }
+    historyReads += 1
+    if (historyReads === 1) {
+      await route.abort('internetdisconnected')
+      return
+    }
+    await route.continue()
+  })
+
+  await entry.getByRole('button', { name: '历史' }).click()
+  const dialog = page.getByRole('dialog', { name: '训练历史' })
+  await expect(dialog).toBeVisible()
+  const readState = dialog.locator('.aggregate-history-read-state')
+  await expect(readState.getByText('OFFLINE / 连接未完成')).toBeVisible()
+  await expect(readState).toContainText('训练版本历史还没有读取')
+  await expect(readState).toContainText('REVISIONS — · AUDIT BOUNDARY UNKNOWN')
+  await expect(dialog.locator('.workout-history-entry')).toHaveCount(0)
+  const retry = dialog.getByRole('button', { name: '重新核对训练版本历史' })
+  await expect(retry).toBeFocused()
+
+  await page.screenshot({
+    path: 'output/playwright/iteration-073-workout-history-offline-mobile.png',
+  })
+
+  await page.keyboard.press('Enter')
+  await expect(readState).toHaveCount(0)
+  await expect(dialog.locator('.workout-history-entry')).toHaveCount(1)
+  await expect(dialog.getByText('已载入全部版本')).toBeVisible()
+  expect(historyReads).toBe(2)
+})
+
 test('workout completes create, repeat, update, history and delete lifecycle', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   const browserErrors = collectBrowserErrors(page)

@@ -10,6 +10,10 @@ import type {
 
 import { buttonA11yProps, buttonActivationProps, deferH5Focus } from '../../lib/accessibility'
 import { parseBackfillIntent } from '../../lib/backfill-intent'
+import {
+  AggregateHistoryEmptyState,
+  AggregateHistoryReadState,
+} from '../../components/aggregate-history-read-state'
 import { LocalDraftNotice } from '../../components/local-draft-notice'
 import { OccurrenceField } from '../../components/occurrence-field'
 import { currentCorrectionTarget } from '../../lib/correction-draft'
@@ -25,6 +29,7 @@ import {
 } from '../../lib/api'
 import { appendOlderRecords, includeExactRecord } from '../../lib/record-pages'
 import { describeSaveFailure, type SaveRecovery } from '../../lib/save-recovery'
+import { useAggregateHistory } from '../../lib/use-aggregate-history'
 import { useRecoverableDraft } from '../../lib/use-local-draft'
 import {
   buildWorkoutRequest,
@@ -140,9 +145,6 @@ const WorkoutsPage = () => {
   const [catalogQuery, setCatalogQuery] = useState('')
   const [editing, setEditing] = useState<Workout>()
   const [deleting, setDeleting] = useState<Workout>()
-  const [historyWorkout, setHistoryWorkout] = useState<Workout>()
-  const [history, setHistory] = useState<WorkoutHistoryItem[]>()
-  const [historyNextCursor, setHistoryNextCursor] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [hasReadSnapshot, setHasReadSnapshot] = useState(false)
   const [readFailure, setReadFailure] = useState<WorkoutReadFailureKind>()
@@ -155,6 +157,10 @@ const WorkoutsPage = () => {
   const catalogReturnFocusId = useRef('')
   const readInFlight = useRef(false)
   const pageActive = useRef(true)
+  const historyRead = useAggregateHistory<Workout, WorkoutHistoryItem>(
+    getWorkoutHistory,
+    'workout-history-read-retry',
+  )
 
   const invalidatePendingSave = (nextFeedback = '') => {
     pendingKey.current = ''
@@ -175,7 +181,7 @@ const WorkoutsPage = () => {
     setLoading(true)
     setReadFailure(undefined)
     setDeleting(undefined)
-    setHistoryWorkout(undefined)
+    historyRead.close()
     try {
       const [workoutResult, catalogResult] = await Promise.all([
         listWorkouts({ limit: 20 }),
@@ -479,38 +485,6 @@ const WorkoutsPage = () => {
       setFeedback(messageOf(error))
     } finally {
       setSaving(false)
-    }
-  }
-
-  const openHistory = async (workout: Workout) => {
-    if (!readAuthorityReady) return
-    setHistoryWorkout(workout)
-    setHistory(undefined)
-    setHistoryNextCursor(null)
-    try {
-      const result = await getWorkoutHistory(workout.id, { limit: 10 })
-      setHistory(result.items)
-      setHistoryNextCursor(result.nextCursor)
-    } catch (error) {
-      setHistoryWorkout(undefined)
-      setFeedback(messageOf(error))
-    }
-  }
-
-  const loadOlderHistory = async () => {
-    if (!readAuthorityReady || !historyWorkout || !historyNextCursor || loadingMore) return
-    setLoadingMore(true)
-    try {
-      const result = await getWorkoutHistory(historyWorkout.id, {
-        limit: 10,
-        cursor: historyNextCursor,
-      })
-      setHistory((current) => [...(current ?? []), ...result.items])
-      setHistoryNextCursor(result.nextCursor)
-    } catch (error) {
-      setFeedback(messageOf(error))
-    } finally {
-      setLoadingMore(false)
     }
   }
 
@@ -1209,7 +1183,7 @@ const WorkoutsPage = () => {
                           className="entry-action"
                           disabled={!readAuthorityReady}
                           aria-disabled={!readAuthorityReady}
-                          onClick={() => void openHistory(workout)}
+                          onClick={() => historyRead.open(workout)}
                         >
                           历史
                         </Button>
@@ -1285,32 +1259,40 @@ const WorkoutsPage = () => {
         </View>
       ) : null}
 
-      {historyWorkout ? (
+      {historyRead.target ? (
         <View className="workout-history" role="dialog" aria-modal="true" aria-label="训练历史">
           <Button
             {...buttonA11yProps}
             className="workout-history__scrim"
             aria-label="关闭训练历史"
-            onClick={() => setHistoryWorkout(undefined)}
+            onClick={historyRead.close}
           />
           <View className="workout-history__sheet">
             <View className="workout-section-heading">
               <View>
                 <Text className="workouts-eyebrow">AUDIT TRAIL</Text>
-                <Text className="workout-panel-title">{historyWorkout.title}历史</Text>
+                <Text className="workout-panel-title">{historyRead.target.title}历史</Text>
               </View>
               <Button
                 {...buttonA11yProps}
                 className="history-close-button"
                 aria-label="关闭训练历史"
-                onClick={() => setHistoryWorkout(undefined)}
+                onClick={historyRead.close}
               >
                 ×
               </Button>
             </View>
-            {history ? (
+            <AggregateHistoryReadState
+              phase={historyRead.phase}
+              failure={historyRead.failure}
+              subject="训练"
+              itemCount={historyRead.items?.length ?? 0}
+              retryId="workout-history-read-retry"
+              onRetry={historyRead.retry}
+            />
+            {historyRead.items !== undefined ? (
               <View className="workout-history__list">
-                {history.map((item) => (
+                {historyRead.items.map((item) => (
                   <View className="workout-history-entry" key={`${item.id}-${item.revision}`}>
                     <View className={`workout-history-entry__mark mark--${item.action}`} />
                     <View>
@@ -1327,23 +1309,27 @@ const WorkoutsPage = () => {
                     </View>
                   </View>
                 ))}
-                {historyNextCursor ? (
+                {historyRead.items.length === 0 ? (
+                  <AggregateHistoryEmptyState subject="训练" />
+                ) : historyRead.nextCursor ? (
                   <Button
                     {...buttonA11yProps}
                     className="record-page-more"
-                    disabled={loadingMore || !readAuthorityReady}
-                    aria-disabled={loadingMore || !readAuthorityReady}
-                    onClick={() => void loadOlderHistory()}
+                    disabled={
+                      historyRead.busy || historyRead.phase !== 'ready' || !readAuthorityReady
+                    }
+                    aria-disabled={
+                      historyRead.busy || historyRead.phase !== 'ready' || !readAuthorityReady
+                    }
+                    onClick={historyRead.loadOlder}
                   >
-                    {loadingMore ? '正在载入…' : '继续载入更早版本'}
+                    {historyRead.busy ? '正在载入…' : '继续载入更早版本'}
                   </Button>
                 ) : (
                   <Text className="record-page-end">已载入全部版本</Text>
                 )}
               </View>
-            ) : (
-              <View className="workout-empty">正在读取历史…</View>
-            )}
+            ) : null}
           </View>
         </View>
       ) : null}

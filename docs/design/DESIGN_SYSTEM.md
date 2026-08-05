@@ -739,6 +739,19 @@ The focused retry uses the same mineral outline on mobile and wide H5. Visual re
 - [390 × 844 unread history calendar](../../output/playwright/iteration-072-history-calendar-offline-mobile.png)
 - [1440 × 1000 retained history range and recorded day](../../output/playwright/iteration-072-history-calendar-stale-wide.png)
 
+## Aggregate revision-sheet read authority — iteration 073
+
+The body/recovery, workout and meal history sheets now share one compact audit-state grammar without flattening their existing record-specific rows. Opening a sheet immediately preserves its title and requested aggregate. Before the first successful response, a mineral `CHECKING AUDIT` receipt states that revision count and boundary are unknown; transport, refusal, service and unknown failures replace it with an amber product-owned receipt rather than closing the sheet or showing an empty list.
+
+On 390 × 844 workout H5, the initial offline state keeps `全身训练 A历史`, the close control and one full-width focused retry in a single bottom sheet. The receipt says `REVISIONS — · AUDIT BOUNDARY UNKNOWN`; no version row or terminal “all loaded” label appears. A successful retry restores the immutable row without recreating or mutating the workout.
+
+On 1440 × 1000 health H5, a 503 older-page response keeps ten accepted `v12` through `v3` rows visible in the side sheet. `RETAINED 10 REVISIONS · CURSOR FROZEN` names the exact page-memory evidence boundary; the old continuation control remains visible but inactive while the focused retry issues only that suffix read. Scroll margin keeps the complete failure receipt visible when focus returns from the prior continuation position.
+
+Successful empty history has a separate quiet-green confirmation instead of sharing loading or failure copy. The state component uses the established ruled receipt, amber uncertainty and mineral focus language; it adds no health interpretation, revision comparison score or mutation control.
+
+- [390 × 844 unread workout revision sheet](../../output/playwright/iteration-073-workout-history-offline-mobile.png)
+- [1440 × 1000 retained health revisions](../../output/playwright/iteration-073-health-history-stale-wide.png)
+
 ## Screenshot review checklist
 
 - The Rhythm Rail remains understandable without color.

@@ -13,6 +13,10 @@ import type {
 
 import { buttonA11yProps, buttonActivationProps, deferH5Focus } from '../../lib/accessibility'
 import { parseBackfillIntent } from '../../lib/backfill-intent'
+import {
+  AggregateHistoryEmptyState,
+  AggregateHistoryReadState,
+} from '../../components/aggregate-history-read-state'
 import { LocalDraftNotice } from '../../components/local-draft-notice'
 import { OccurrenceField } from '../../components/occurrence-field'
 import { currentCorrectionTarget } from '../../lib/correction-draft'
@@ -31,6 +35,7 @@ import {
 } from '../../lib/api'
 import { appendOlderRecords, includeExactRecord } from '../../lib/record-pages'
 import { describeSaveFailure, type SaveRecovery } from '../../lib/save-recovery'
+import { useAggregateHistory } from '../../lib/use-aggregate-history'
 import { useRecoverableDraft } from '../../lib/use-local-draft'
 import {
   buildMealRequest,
@@ -157,9 +162,6 @@ const NutritionPage = () => {
   const [foodCatalog, setFoodCatalog] = useState<FoodCatalogItem[]>([])
   const [editing, setEditing] = useState<Meal>()
   const [deleting, setDeleting] = useState<Meal>()
-  const [historyMeal, setHistoryMeal] = useState<Meal>()
-  const [history, setHistory] = useState<MealHistoryItem[]>()
-  const [historyNextCursor, setHistoryNextCursor] = useState<string | null>(null)
   const [sourceTab, setSourceTab] = useState<'library' | 'custom' | 'favorites' | 'recent'>(
     'library',
   )
@@ -176,6 +178,10 @@ const NutritionPage = () => {
   const photoReturnFocus = useRef(false)
   const readInFlight = useRef(false)
   const pageActive = useRef(true)
+  const historyRead = useAggregateHistory<Meal, MealHistoryItem>(
+    getMealHistory,
+    'meal-history-read-retry',
+  )
 
   const invalidatePendingSave = (nextFeedback = '') => {
     pendingKey.current = ''
@@ -196,7 +202,7 @@ const NutritionPage = () => {
     setLoading(true)
     setReadFailure(undefined)
     setDeleting(undefined)
-    setHistoryMeal(undefined)
+    historyRead.close()
     try {
       const [mealResult, favoriteResult, catalogResult] = await Promise.all([
         listMeals({ limit: 20 }),
@@ -492,38 +498,6 @@ const NutritionPage = () => {
       setFeedback('餐次已从日常记录移除，版本历史仍保留。')
     } catch (error) {
       setFeedback(messageOf(error))
-    }
-  }
-
-  const openHistory = async (meal: Meal) => {
-    if (!readAuthorityReady) return
-    setHistoryMeal(meal)
-    setHistory(undefined)
-    setHistoryNextCursor(null)
-    try {
-      const result = await getMealHistory(meal.id, { limit: 10 })
-      setHistory(result.items)
-      setHistoryNextCursor(result.nextCursor)
-    } catch (error) {
-      setFeedback(messageOf(error))
-      setHistoryMeal(undefined)
-    }
-  }
-
-  const loadOlderHistory = async () => {
-    if (!readAuthorityReady || !historyMeal || !historyNextCursor || loadingMore) return
-    setLoadingMore(true)
-    try {
-      const result = await getMealHistory(historyMeal.id, {
-        limit: 10,
-        cursor: historyNextCursor,
-      })
-      setHistory((current) => [...(current ?? []), ...result.items])
-      setHistoryNextCursor(result.nextCursor)
-    } catch (error) {
-      setFeedback(messageOf(error))
-    } finally {
-      setLoadingMore(false)
     }
   }
 
@@ -1060,7 +1034,7 @@ const NutritionPage = () => {
                           className="entry-action"
                           disabled={!readAuthorityReady}
                           aria-disabled={!readAuthorityReady}
-                          onClick={() => void openHistory(meal)}
+                          onClick={() => historyRead.open(meal)}
                         >
                           历史
                         </Button>
@@ -1136,32 +1110,40 @@ const NutritionPage = () => {
         </View>
       ) : null}
 
-      {historyMeal ? (
+      {historyRead.target ? (
         <View className="meal-history" role="dialog" aria-modal="true" aria-label="餐次历史">
           <Button
             {...buttonA11yProps}
             className="meal-history__scrim"
             aria-label="关闭餐次历史"
-            onClick={() => setHistoryMeal(undefined)}
+            onClick={historyRead.close}
           />
           <View className="meal-history__sheet">
             <View className="nutrition-section-heading">
               <View>
                 <Text className="nutrition-eyebrow">AUDIT TRAIL</Text>
-                <Text className="nutrition-panel-title">{historyMeal.title}历史</Text>
+                <Text className="nutrition-panel-title">{historyRead.target.title}历史</Text>
               </View>
               <Button
                 {...buttonA11yProps}
                 className="history-close"
                 aria-label="关闭餐次历史"
-                onClick={() => setHistoryMeal(undefined)}
+                onClick={historyRead.close}
               >
                 ×
               </Button>
             </View>
-            {history ? (
+            <AggregateHistoryReadState
+              phase={historyRead.phase}
+              failure={historyRead.failure}
+              subject="餐次"
+              itemCount={historyRead.items?.length ?? 0}
+              retryId="meal-history-read-retry"
+              onRetry={historyRead.retry}
+            />
+            {historyRead.items !== undefined ? (
               <View className="history-list">
-                {history.map((item) => (
+                {historyRead.items.map((item) => (
                   <View className="history-entry" key={`${item.revision}-${item.action}`}>
                     <View className={`history-mark history-mark--${item.action}`} />
                     <View>
@@ -1174,23 +1156,27 @@ const NutritionPage = () => {
                     </View>
                   </View>
                 ))}
-                {historyNextCursor ? (
+                {historyRead.items.length === 0 ? (
+                  <AggregateHistoryEmptyState subject="餐次" />
+                ) : historyRead.nextCursor ? (
                   <Button
                     {...buttonA11yProps}
                     className="record-page-more"
-                    disabled={loadingMore || !readAuthorityReady}
-                    aria-disabled={loadingMore || !readAuthorityReady}
-                    onClick={() => void loadOlderHistory()}
+                    disabled={
+                      historyRead.busy || historyRead.phase !== 'ready' || !readAuthorityReady
+                    }
+                    aria-disabled={
+                      historyRead.busy || historyRead.phase !== 'ready' || !readAuthorityReady
+                    }
+                    onClick={historyRead.loadOlder}
                   >
-                    {loadingMore ? '正在载入…' : '继续载入更早版本'}
+                    {historyRead.busy ? '正在载入…' : '继续载入更早版本'}
                   </Button>
                 ) : (
                   <Text className="record-page-end">已载入全部版本</Text>
                 )}
               </View>
-            ) : (
-              <View className="meal-empty">正在读取历史…</View>
-            )}
+            ) : null}
           </View>
         </View>
       ) : null}

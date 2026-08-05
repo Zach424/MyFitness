@@ -10,6 +10,10 @@ import type {
 
 import { buttonActivationProps, buttonA11yProps, deferH5Focus } from '../../lib/accessibility'
 import { parseBackfillIntent } from '../../lib/backfill-intent'
+import {
+  AggregateHistoryEmptyState,
+  AggregateHistoryReadState,
+} from '../../components/aggregate-history-read-state'
 import { LocalDraftNotice } from '../../components/local-draft-notice'
 import { OccurrenceField } from '../../components/occurrence-field'
 import { currentCorrectionTarget } from '../../lib/correction-draft'
@@ -24,6 +28,7 @@ import {
 } from '../../lib/api'
 import { appendOlderRecords, includeExactRecord } from '../../lib/record-pages'
 import { describeSaveFailure, type SaveRecovery } from '../../lib/save-recovery'
+import { useAggregateHistory } from '../../lib/use-aggregate-history'
 import { useRecoverableDraft } from '../../lib/use-local-draft'
 import {
   buildRecordRequest,
@@ -119,9 +124,6 @@ const RecordsPage = () => {
   const [records, setRecords] = useState<HealthRecord[]>([])
   const [editing, setEditing] = useState<HealthRecord>()
   const [deleting, setDeleting] = useState<HealthRecord>()
-  const [history, setHistory] = useState<HealthRecordHistoryItem[]>()
-  const [historyRecord, setHistoryRecord] = useState<HealthRecord>()
-  const [historyNextCursor, setHistoryNextCursor] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [hasReadSnapshot, setHasReadSnapshot] = useState(false)
   const [readFailure, setReadFailure] = useState<RecordReadFailureKind>()
@@ -132,6 +134,10 @@ const RecordsPage = () => {
   const [saveRecovery, setSaveRecovery] = useState<SaveRecovery>()
   const requestKey = useRef('')
   const readInFlight = useRef(false)
+  const historyRead = useAggregateHistory<HealthRecord, HealthRecordHistoryItem>(
+    getHealthRecordHistory,
+    'health-history-read-retry',
+  )
 
   const loadRecords = async (isActive: () => boolean = () => true) => {
     if (readInFlight.current) return
@@ -139,7 +145,7 @@ const RecordsPage = () => {
     setLoading(true)
     setReadFailure(undefined)
     setDeleting(undefined)
-    setHistoryRecord(undefined)
+    historyRead.close()
     try {
       const result = await listHealthRecords({ limit: 20 })
       if (!isActive()) return
@@ -362,38 +368,6 @@ const RecordsPage = () => {
       setFeedback(errorMessage(error))
     } finally {
       setSaving(false)
-    }
-  }
-
-  const openHistory = async (record: HealthRecord) => {
-    if (!readAuthorityReady) return
-    setHistoryRecord(record)
-    setHistory(undefined)
-    setHistoryNextCursor(null)
-    try {
-      const result = await getHealthRecordHistory(record.id, { limit: 10 })
-      setHistory(result.items)
-      setHistoryNextCursor(result.nextCursor)
-    } catch (error) {
-      setHistoryRecord(undefined)
-      setFeedback(errorMessage(error))
-    }
-  }
-
-  const loadOlderHistory = async () => {
-    if (!readAuthorityReady || !historyRecord || !historyNextCursor || loadingMore) return
-    setLoadingMore(true)
-    try {
-      const result = await getHealthRecordHistory(historyRecord.id, {
-        limit: 10,
-        cursor: historyNextCursor,
-      })
-      setHistory((current) => [...(current ?? []), ...result.items])
-      setHistoryNextCursor(result.nextCursor)
-    } catch (error) {
-      setFeedback(errorMessage(error))
-    } finally {
-      setLoadingMore(false)
     }
   }
 
@@ -828,7 +802,7 @@ const RecordsPage = () => {
                             className="log-action"
                             disabled={!readAuthorityReady}
                             aria-disabled={!readAuthorityReady}
-                            onClick={() => void openHistory(record)}
+                            onClick={() => historyRead.open(record)}
                           >
                             历史
                           </Button>
@@ -911,34 +885,42 @@ const RecordsPage = () => {
         </View>
       ) : null}
 
-      {historyRecord ? (
+      {historyRead.target ? (
         <View className="history-layer" role="dialog" aria-modal="true" aria-label="记录历史">
           <Button
             {...buttonA11yProps}
             className="history-layer__scrim"
             aria-label="关闭历史"
-            onClick={() => setHistoryRecord(undefined)}
+            onClick={historyRead.close}
           />
           <View className="history-sheet">
             <View className="history-sheet__heading">
               <View>
                 <Text className="panel-eyebrow">AUDIT TRAIL</Text>
                 <Text className="panel-title">
-                  {metricUiDefinitions[historyRecord.metric].label}历史
+                  {metricUiDefinitions[historyRead.target.metric].label}历史
                 </Text>
               </View>
               <Button
                 {...buttonA11yProps}
                 className="history-close"
                 aria-label="关闭历史"
-                onClick={() => setHistoryRecord(undefined)}
+                onClick={historyRead.close}
               >
                 ×
               </Button>
             </View>
-            {history ? (
+            <AggregateHistoryReadState
+              phase={historyRead.phase}
+              failure={historyRead.failure}
+              subject="身体记录"
+              itemCount={historyRead.items?.length ?? 0}
+              retryId="health-history-read-retry"
+              onRetry={historyRead.retry}
+            />
+            {historyRead.items !== undefined ? (
               <View className="history-list">
-                {history.map((item) => (
+                {historyRead.items.map((item) => (
                   <View className="history-entry" key={`${item.id}-${item.revision}`}>
                     <View className={`history-entry__dot history-entry__dot--${item.action}`} />
                     <View>
@@ -950,23 +932,27 @@ const RecordsPage = () => {
                     </View>
                   </View>
                 ))}
-                {historyNextCursor ? (
+                {historyRead.items.length === 0 ? (
+                  <AggregateHistoryEmptyState subject="身体记录" />
+                ) : historyRead.nextCursor ? (
                   <Button
                     {...buttonA11yProps}
                     className="record-page-more"
-                    disabled={loadingMore || !readAuthorityReady}
-                    aria-disabled={loadingMore || !readAuthorityReady}
-                    onClick={() => void loadOlderHistory()}
+                    disabled={
+                      historyRead.busy || historyRead.phase !== 'ready' || !readAuthorityReady
+                    }
+                    aria-disabled={
+                      historyRead.busy || historyRead.phase !== 'ready' || !readAuthorityReady
+                    }
+                    onClick={historyRead.loadOlder}
                   >
-                    {loadingMore ? '正在载入…' : '继续载入更早版本'}
+                    {historyRead.busy ? '正在载入…' : '继续载入更早版本'}
                   </Button>
                 ) : (
                   <Text className="record-page-end">已载入全部版本</Text>
                 )}
               </View>
-            ) : (
-              <View className="log-state">正在读取历史…</View>
-            )}
+            ) : null}
           </View>
         </View>
       ) : null}

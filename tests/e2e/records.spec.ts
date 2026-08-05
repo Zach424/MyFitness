@@ -56,6 +56,55 @@ const openRecords = async (page: Page) => {
   await expect(page.getByText('记录身体，也记录恢复。')).toBeVisible()
 }
 
+const seedHealthRecordRevisions = (page: Page, idempotencyKey: string) =>
+  page.evaluate(
+    async ({ apiUrl, idempotencyKey }) => {
+      const rawToken = localStorage.getItem('myfitness.auth.accessToken')
+      if (!rawToken) throw new Error('development access token is missing')
+      let decoded: { data?: unknown } = {}
+      try {
+        decoded = JSON.parse(rawToken) as { data?: unknown }
+      } catch {
+        // Legacy H5 storage kept the access token as a plain string.
+      }
+      const token = typeof decoded.data === 'string' ? decoded.data : rawToken
+      const headers = {
+        authorization: `Bearer ${token}`,
+        'content-type': 'application/json',
+      }
+      const payload = (value: number) => ({
+        metric: 'body.weight',
+        value,
+        unit: 'kg',
+        source: { kind: 'manual' },
+        status: 'confirmed',
+        occurredAt: '2026-02-01T04:00:00.000Z',
+        timezone: 'Asia/Shanghai',
+      })
+      const createdResponse = await fetch(`${apiUrl}/health-records`, {
+        method: 'POST',
+        headers: { ...headers, 'x-idempotency-key': idempotencyKey },
+        body: JSON.stringify(payload(70)),
+      })
+      let current = (await createdResponse.json()) as { id: string; revision: number }
+      const statuses = [createdResponse.status]
+      for (let revision = 2; revision <= 12; revision += 1) {
+        const response = await fetch(`${apiUrl}/health-records/${current.id}`, {
+          method: 'PUT',
+          headers,
+          body: JSON.stringify({
+            ...payload(70 + revision / 10),
+            expectedRevision: current.revision,
+          }),
+        })
+        statuses.push(response.status)
+        current = (await response.json()) as { id: string; revision: number }
+      }
+      return { statuses, revision: current.revision }
+    },
+    { apiUrl, idempotencyKey },
+  )
+
 test('record ledger does not turn an initial offline read into an empty logbook', async ({
   page,
 }) => {
@@ -623,50 +672,7 @@ test('health history sheet progressively loads immutable older revisions', async
   page.on('pageerror', (error) => browserErrors.push(error.message))
 
   await openRecords(page)
-  const seed = await page.evaluate(async (apiUrl) => {
-    const rawToken = localStorage.getItem('myfitness.auth.accessToken')
-    if (!rawToken) throw new Error('development access token is missing')
-    let decoded: { data?: unknown } = {}
-    try {
-      decoded = JSON.parse(rawToken) as { data?: unknown }
-    } catch {
-      // Legacy H5 storage kept the access token as a plain string.
-    }
-    const token = typeof decoded.data === 'string' ? decoded.data : rawToken
-    const headers = {
-      authorization: `Bearer ${token}`,
-      'content-type': 'application/json',
-    }
-    const payload = (value: number) => ({
-      metric: 'body.weight',
-      value,
-      unit: 'kg',
-      source: { kind: 'manual' },
-      status: 'confirmed',
-      occurredAt: '2026-02-01T04:00:00.000Z',
-      timezone: 'Asia/Shanghai',
-    })
-    const createdResponse = await fetch(`${apiUrl}/health-records`, {
-      method: 'POST',
-      headers: { ...headers, 'x-idempotency-key': 'progressive-revision-history' },
-      body: JSON.stringify(payload(70)),
-    })
-    let current = (await createdResponse.json()) as { id: string; revision: number }
-    const statuses = [createdResponse.status]
-    for (let revision = 2; revision <= 12; revision += 1) {
-      const response = await fetch(`${apiUrl}/health-records/${current.id}`, {
-        method: 'PUT',
-        headers,
-        body: JSON.stringify({
-          ...payload(70 + revision / 10),
-          expectedRevision: current.revision,
-        }),
-      })
-      statuses.push(response.status)
-      current = (await response.json()) as { id: string; revision: number }
-    }
-    return { statuses, revision: current.revision }
-  }, apiUrl)
+  const seed = await seedHealthRecordRevisions(page, 'progressive-revision-history')
   expect(seed.statuses).toEqual([201, ...Array.from({ length: 11 }, () => 200)])
   expect(seed.revision).toBe(12)
 
@@ -698,6 +704,60 @@ test('health history sheet progressively loads immutable older revisions', async
     fullPage: false,
   })
   expect(browserErrors).toEqual([])
+})
+
+test('health history freezes its accepted revisions when an older page is unavailable', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await openRecords(page)
+  const seed = await seedHealthRecordRevisions(page, 'stale-revision-history')
+  expect(seed.statuses).toEqual([201, ...Array.from({ length: 11 }, () => 200)])
+
+  await page.reload()
+  const currentEntry = page.locator('.log-entry').first()
+  await expect(currentEntry.getByText('v12')).toBeVisible()
+  await currentEntry.getByRole('button', { name: '历史' }).click()
+  const dialog = page.getByRole('dialog', { name: '记录历史' })
+  await expect(dialog.locator('.history-entry')).toHaveCount(10)
+
+  let olderReads = 0
+  await page.route(/\/history\?limit=10&cursor=/, async (route) => {
+    if (route.request().method() !== 'GET') {
+      await route.continue()
+      return
+    }
+    olderReads += 1
+    if (olderReads === 1) {
+      await route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'raw history outage must stay hidden' }),
+      })
+      return
+    }
+    await route.continue()
+  })
+
+  await dialog.getByRole('button', { name: '继续载入更早版本' }).click()
+  const readState = dialog.locator('.aggregate-history-read-state')
+  await expect(readState.getByText('SERVICE PAUSED / 服务暂不可用')).toBeVisible()
+  await expect(readState).toContainText('RETAINED 10 REVISIONS · CURSOR FROZEN')
+  await expect(readState).not.toContainText('raw history outage')
+  await expect(dialog.locator('.history-entry')).toHaveCount(10)
+  await expect(dialog.getByRole('button', { name: '继续载入更早版本' })).toBeDisabled()
+  const retry = dialog.getByRole('button', { name: '重试载入身体记录更早版本' })
+  await expect(retry).toBeFocused()
+
+  await page.screenshot({
+    path: 'output/playwright/iteration-073-health-history-stale-wide.png',
+  })
+
+  await page.keyboard.press('Enter')
+  await expect(readState).toHaveCount(0)
+  await expect(dialog.locator('.history-entry')).toHaveCount(12)
+  await expect(dialog.getByText('已载入全部版本')).toBeVisible()
+  expect(olderReads).toBe(2)
 })
 
 test('progress-photo inventory retains one private item after a refused refresh', async ({
