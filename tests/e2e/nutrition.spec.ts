@@ -604,6 +604,79 @@ test('committed meal correction reconciles every submitted snapshot without repl
   expect(updateAttempts).toBe(1)
 })
 
+test('favorite mutations reconcile the exact list before any new toggle', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await openNutrition(page)
+
+  const title = page.locator('.nutrition-title-input input')
+  await title.fill('收藏恢复午餐')
+  await page.getByRole('button', { name: '添加熟鸡胸肉' }).click()
+  const serving = page.locator('.portion-input input')
+  const libraryTab = page.getByRole('button', { name: '食物库', exact: true })
+  await expect(libraryTab).toHaveAttribute('aria-pressed', 'true')
+
+  let saveAttempts = 0
+  let removeAttempts = 0
+  await page.route('**/v1/nutrition/favorites/*', async (route) => {
+    if (route.request().method() === 'PUT') {
+      saveAttempts += 1
+      const committedResponse = await route.fetch()
+      expect(committedResponse.status()).toBe(200)
+      await route.abort('failed')
+      return
+    }
+    if (route.request().method() === 'DELETE') {
+      removeAttempts += 1
+      if (removeAttempts === 1) {
+        await route.abort('failed')
+        return
+      }
+      await route.continue()
+      return
+    }
+    await route.continue()
+  })
+
+  const saveFavorite = page.getByRole('button', { name: '收藏熟鸡胸肉' })
+  await saveFavorite.click()
+  const recovery = page.locator('.favorite-recovery')
+  await expect(recovery.getByText('FAVORITE UNKNOWN / 先核对收藏清单')).toBeVisible()
+  await expect(page.locator('#favorite-recovery-action')).toBeFocused()
+  await expect(title).toHaveValue('收藏恢复午餐')
+  await expect(serving).toHaveValue('120')
+  await expect(libraryTab).toHaveAttribute('aria-pressed', 'true')
+  await expect(saveFavorite).toBeDisabled()
+  expect(saveAttempts).toBe(1)
+  await page.screenshot({
+    path: 'output/playwright/iteration-080-favorite-reconciliation-mobile.png',
+    fullPage: true,
+  })
+
+  await recovery.getByRole('button', { name: '核对收藏状态' }).click()
+  const removeFavorite = page.getByRole('button', { name: '取消收藏熟鸡胸肉' })
+  await expect(removeFavorite).toBeEnabled()
+  await expect(page.getByRole('status')).toContainText('完整快照与份量已收藏')
+  await expect(title).toHaveValue('收藏恢复午餐')
+  await expect(serving).toHaveValue('120')
+  expect(saveAttempts).toBe(1)
+
+  await removeFavorite.click()
+  await expect(recovery.getByText('FAVORITE UNKNOWN / 先核对收藏清单')).toBeVisible()
+  expect(removeAttempts).toBe(1)
+  await recovery.getByRole('button', { name: '核对收藏状态' }).click()
+  await expect(page.locator('.nutrition-feedback')).toContainText('没有上次移除已落库的证据')
+  await expect(removeFavorite).toBeEnabled()
+  expect(removeAttempts).toBe(1)
+
+  await removeFavorite.click()
+  await expect(page.getByRole('button', { name: '收藏熟鸡胸肉' })).toBeEnabled()
+  await expect(page.locator('.nutrition-feedback')).toContainText('已从收藏移除')
+  await expect(title).toHaveValue('收藏恢复午餐')
+  await expect(serving).toHaveValue('120')
+  await expect(libraryTab).toHaveAttribute('aria-pressed', 'true')
+  expect(removeAttempts).toBe(2)
+})
+
 test('meal editor and ledger remain balanced at wide viewport', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 })
   const browserErrors = collectBrowserErrors(page)

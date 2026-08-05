@@ -96,6 +96,7 @@
 
 .photo-launch__action:focus,
 .nutrition-feedback:focus-visible,
+.favorite-recovery__action:focus,
 .history-close:focus,
 .entry-action:focus,
 .modal-action:focus,
@@ -471,6 +472,56 @@ textarea:focus-visible {
 .meal-ledger__count {
   color: var(--color-muted);
   font-size: 12px;
+}
+
+.favorite-recovery {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 13px 14px;
+  border-left: 3px solid var(--color-warning);
+  background: var(--color-warning-soft);
+}
+
+.favorite-recovery--server_rejected {
+  border-left-color: var(--color-pulse);
+  background: rgba(233, 106, 91, 0.09);
+}
+
+.favorite-recovery__eyebrow,
+.favorite-recovery__copy {
+  display: block;
+}
+
+.favorite-recovery__eyebrow {
+  color: var(--color-ink);
+  font-family: var(--font-metric);
+  font-size: 9px;
+  font-weight: 760;
+  letter-spacing: 0.08em;
+}
+
+.favorite-recovery__copy {
+  color: var(--color-ink);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.favorite-recovery__action {
+  width: 100%;
+  min-height: 42px;
+  margin: 2px 0 0;
+  border: 1px solid rgba(36, 76, 102, 0.24);
+  border-radius: 9px;
+  color: var(--color-mineral);
+  background: rgba(255, 255, 255, 0.68);
+  font-size: 11px;
+  font-weight: 720;
+  line-height: 42px;
+}
+
+.favorite-recovery__action[aria-disabled='true'] {
+  opacity: 0.48;
 }
 
 .meal-ledger__tools {

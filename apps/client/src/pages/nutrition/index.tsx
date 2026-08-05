@@ -3,6 +3,7 @@ import { Button, Input, ScrollView, Text, Textarea, View } from '@tarojs/compone
 import Taro, { useDidShow } from '@tarojs/taro'
 import type {
   FavoriteFood,
+  FavoriteFoodInput,
   FoodCatalogItem,
   ConfirmFoodPhotoCandidate,
   FoodServing,
@@ -54,6 +55,13 @@ import {
   updateMeal,
 } from '../../lib/api'
 import { appendOlderRecords, includeExactRecord } from '../../lib/record-pages'
+import {
+  classifyFavoriteEvidence,
+  describeFavoriteFailure,
+  describeFavoriteReconciliationFailure,
+  type FavoriteMutation,
+  type FavoriteRecoveryReceipt,
+} from '../../lib/favorite-recovery'
 import { describeSaveFailure, type SaveRecovery } from '../../lib/save-recovery'
 import { useAggregateHistory } from '../../lib/use-aggregate-history'
 import { useDialogFocusBoundary } from '../../lib/use-dialog-focus-boundary'
@@ -112,6 +120,8 @@ const displayTime = (value: string) =>
 
 const requestKey = () =>
   `meal-${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`}`
+
+const favoriteTriggerId = (foodKey: string) => `favorite-toggle-${foodKey.replaceAll(':', '-')}`
 
 const messageOf = (error: unknown) =>
   error instanceof ApiError || error instanceof Error ? error.message : '操作失败，请稍后重试'
@@ -195,6 +205,14 @@ const NutritionPage = () => {
   const [saving, setSaving] = useState(false)
   const [feedback, setFeedback] = useState('')
   const [saveRecovery, setSaveRecovery] = useState<SaveRecovery>()
+  const [favoriteBusy, setFavoriteBusy] = useState(false)
+  const [favoriteRecovery, setFavoriteRecovery] = useState<{
+    operation: FavoriteMutation
+    foodKey: string
+    foodName: string
+    submitted?: FavoriteFoodInput
+    receipt: FavoriteRecoveryReceipt
+  }>()
   const [correctionRecovery, setCorrectionRecovery] = useState<{
     phase: 'reconcile' | 'missing'
     targetId: string
@@ -435,24 +453,30 @@ const NutritionPage = () => {
     favorites.some((favorite) => favorite.food.foodKey === foodKey)
 
   const toggleFavorite = async (item: FoodDraft) => {
-    if (!readAuthorityReady) return
+    if (!readAuthorityReady || favoriteBusy || favoriteRecovery) return
+    const operation: FavoriteMutation = isFavorite(item.food.foodKey) ? 'remove' : 'save'
+    const amount = Number(item.amount) || 1
+    const submitted: FavoriteFoodInput | undefined =
+      operation === 'save'
+        ? {
+            food: item.food,
+            defaultServing: {
+              amount,
+              unit: item.unit,
+              grams: Math.round(amount * item.gramsPerUnit * 1_000) / 1_000,
+            },
+          }
+        : undefined
+    setFavoriteBusy(true)
     try {
-      if (isFavorite(item.food.foodKey)) {
+      if (operation === 'remove') {
         await deleteFavoriteFood(item.food.foodKey)
         setFavorites((current) =>
           current.filter((favorite) => favorite.food.foodKey !== item.food.foodKey),
         )
         setFeedback(`${item.food.name}已从收藏移除。`)
       } else {
-        const amount = Number(item.amount) || 1
-        const saved = await saveFavoriteFood({
-          food: item.food,
-          defaultServing: {
-            amount,
-            unit: item.unit,
-            grams: Math.round(amount * item.gramsPerUnit * 1_000) / 1_000,
-          },
-        })
+        const saved = await saveFavoriteFood(submitted!)
         setFavorites((current) => [
           saved,
           ...current.filter((favorite) => favorite.food.foodKey !== saved.food.foodKey),
@@ -460,7 +484,71 @@ const NutritionPage = () => {
         setFeedback(`${item.food.name}已收藏，之后可快速添加。`)
       }
     } catch (error) {
-      setFeedback(messageOf(error))
+      const receipt = describeFavoriteFailure(operation, error, item.food.name)
+      setFavoriteRecovery({
+        operation,
+        foodKey: item.food.foodKey,
+        foodName: item.food.name,
+        submitted,
+        receipt,
+      })
+      setFeedback('')
+      deferH5Focus('favorite-recovery-action', 80)
+    } finally {
+      setFavoriteBusy(false)
+    }
+  }
+
+  const reconcileFavorite = async () => {
+    if (!favoriteRecovery || favoriteBusy) return
+    if (favoriteRecovery.receipt.authority === 'terminal') {
+      const targetId = favoriteTriggerId(favoriteRecovery.foodKey)
+      setFavoriteRecovery(undefined)
+      deferH5Focus(
+        draft.items.some((item) => item.food.foodKey === favoriteRecovery.foodKey)
+          ? targetId
+          : 'nutrition-read-refresh',
+        80,
+      )
+      return
+    }
+    const pending = favoriteRecovery
+    setFavoriteBusy(true)
+    try {
+      const current = await listFavoriteFoods()
+      const evidence = classifyFavoriteEvidence(
+        pending.operation,
+        pending.foodKey,
+        current.items,
+        pending.submitted,
+      )
+      setFavorites(current.items)
+      setFavoriteRecovery(undefined)
+      setFeedback(
+        evidence === 'applied'
+          ? pending.operation === 'save'
+            ? `已从当前收藏清单确认“${pending.foodName}”的完整快照与份量已收藏。`
+            : `已从当前收藏清单确认“${pending.foodName}”已移除；没有再次发送删除。`
+          : evidence === 'diverged'
+            ? `当前收藏清单含有“${pending.foodName}”，但快照或默认份量与上次提交不同。已采用当前清单；餐次草稿没有改变。`
+            : pending.operation === 'save'
+              ? `当前收藏清单没有“${pending.foodName}”，没有上次收藏已落库的证据。如仍需收藏，请再次明确点击。`
+              : `当前收藏清单仍有“${pending.foodName}”，没有上次移除已落库的证据。如仍需移除，请再次明确点击。`,
+      )
+      deferH5Focus(
+        draft.items.some((item) => item.food.foodKey === pending.foodKey)
+          ? favoriteTriggerId(pending.foodKey)
+          : 'nutrition-read-refresh',
+        80,
+      )
+    } catch {
+      setFavoriteRecovery({
+        ...pending,
+        receipt: describeFavoriteReconciliationFailure(pending.foodName),
+      })
+      deferH5Focus('favorite-recovery-action', 80)
+    } finally {
+      setFavoriteBusy(false)
     }
   }
 
@@ -996,6 +1084,28 @@ const NutritionPage = () => {
                   <Text className="nutrition-field__label">本餐内容</Text>
                   <Text className="meal-items__count metric">{draft.items.length}</Text>
                 </View>
+                {favoriteRecovery ? (
+                  <View
+                    className={`favorite-recovery favorite-recovery--${favoriteRecovery.receipt.kind}`}
+                    role="status"
+                    aria-live="polite"
+                    aria-atomic="true"
+                  >
+                    <Text className="favorite-recovery__eyebrow">
+                      {favoriteRecovery.receipt.eyebrow}
+                    </Text>
+                    <Text className="favorite-recovery__copy">
+                      {favoriteRecovery.receipt.message}
+                    </Text>
+                    <Button
+                      id="favorite-recovery-action"
+                      className="favorite-recovery__action"
+                      {...buttonActivationProps(() => void reconcileFavorite(), favoriteBusy)}
+                    >
+                      {favoriteBusy ? '正在核对…' : favoriteRecovery.receipt.actionLabel}
+                    </Button>
+                  </View>
+                ) : null}
                 {draft.items.length ? (
                   draft.items.map((item, index) => {
                     const grams = Number(item.amount) * item.gramsPerUnit
@@ -1014,10 +1124,15 @@ const NutritionPage = () => {
                           </View>
                           <View className="meal-item__actions">
                             <Button
+                              id={favoriteTriggerId(item.food.foodKey)}
                               {...buttonA11yProps}
                               className={`favorite-toggle ${isFavorite(item.food.foodKey) ? 'favorite-toggle--active' : ''}`}
-                              disabled={!readAuthorityReady}
-                              aria-disabled={!readAuthorityReady}
+                              disabled={
+                                !readAuthorityReady || favoriteBusy || Boolean(favoriteRecovery)
+                              }
+                              aria-disabled={
+                                !readAuthorityReady || favoriteBusy || Boolean(favoriteRecovery)
+                              }
                               aria-label={`${isFavorite(item.food.foodKey) ? '取消收藏' : '收藏'}${item.food.name}`}
                               aria-pressed={isFavorite(item.food.foodKey)}
                               onClick={() => void toggleFavorite(item)}

@@ -819,6 +819,16 @@ The exact read accepts a save only when the current revision advanced and every 
 - [390 × 844 unresolved body correction with retained input](../../output/playwright/iteration-079-correction-reconciliation-mobile.png)
 - [1440 × 1000 unresolved meal correction beside accepted R1](../../output/playwright/iteration-079-correction-reconciliation-wide.png)
 
+## Meal-favorite response-loss recovery — iteration 080
+
+An interrupted favorite toggle now becomes one amber ruled evidence receipt at the top of `本餐内容`, next to the meal snapshot it must not change. `FAVORITE UNKNOWN / 先核对收藏清单` states that neither success nor failure is known. The single `核对收藏状态` action receives the mineral double focus ring, while all favorite toggles freeze; meal editing and save retain their existing nutrition authority.
+
+On 390 × 844 H5, the receipt, retained chicken snapshot, entered 120 g serving and calculated meal preview remain in one reading column. The source tab and title survive both the interrupted request and list read. Copy names the exact current-list authority and explicitly says no PUT/DELETE is replayed, rather than presenting an ordinary network error that invites repeated taps.
+
+A matching food/default-serving snapshot proves PUT completion; absence proves DELETE completion. A present-but-different favorite is labeled divergent, while an unchanged list closes the receipt and requires a fresh explicit toggle. Explicit refusal uses a terminal close action. These states do not claim catalog verification, mutate meal facts, persist commands or provide offline synchronization.
+
+- [390 × 844 unresolved favorite save above the retained meal snapshot](../../output/playwright/iteration-080-favorite-reconciliation-mobile.png)
+
 ## Screenshot review checklist
 
 - The Rhythm Rail remains understandable without color.
