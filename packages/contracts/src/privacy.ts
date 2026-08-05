@@ -9,6 +9,7 @@ import {
   privacyExportSchemaVersion,
   revocableConsentPurposes,
 } from './privacy.constants'
+import { recordPageCursorSchema } from './pagination'
 
 export * from './privacy.constants'
 
@@ -71,6 +72,30 @@ export const consentRevocationResultSchema = z
     revokedAt: z.string().datetime({ offset: true }),
     removedPhotoAnalyses: z.number().int().nonnegative(),
     removedProgressPhotos: z.number().int().nonnegative(),
+  })
+  .strict()
+
+export const consentReceiptHistoryQuerySchema = z
+  .object({
+    limit: z.coerce.number().int().min(1).max(20).default(10),
+    cursor: recordPageCursorSchema.optional(),
+  })
+  .strict()
+
+export const consentReceiptSchema = z
+  .object({
+    receiptId: z.string().uuid(),
+    purpose: consentPurposeSchema,
+    version: z.string().min(1).max(40),
+    acceptedAt: z.string().datetime({ offset: true }),
+    revokedAt: z.string().datetime({ offset: true }).nullable(),
+  })
+  .strict()
+
+export const consentReceiptHistorySchema = z
+  .object({
+    items: z.array(consentReceiptSchema).max(20),
+    nextCursor: recordPageCursorSchema.nullable(),
   })
   .strict()
 
@@ -157,6 +182,9 @@ export type ConsentState = z.infer<typeof consentStateSchema>
 export type RevocableConsentPurpose = z.infer<typeof revocableConsentPurposeSchema>
 export type ConsentRevocationRequest = z.infer<typeof consentRevocationRequestSchema>
 export type ConsentRevocationResult = z.infer<typeof consentRevocationResultSchema>
+export type ConsentReceiptHistoryQuery = z.infer<typeof consentReceiptHistoryQuerySchema>
+export type ConsentReceipt = z.infer<typeof consentReceiptSchema>
+export type ConsentReceiptHistory = z.infer<typeof consentReceiptHistorySchema>
 export type AccountDeletionIntent = z.infer<typeof accountDeletionIntentSchema>
 export type AccountDeletionRequest = z.infer<typeof accountDeletionRequestSchema>
 export type AccountDeletionResult = z.infer<typeof accountDeletionResultSchema>

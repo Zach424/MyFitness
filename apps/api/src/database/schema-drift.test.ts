@@ -131,6 +131,10 @@ const exerciseCatalogMigrationPath = path.resolve(
   __dirname,
   '../../../../infra/postgres/migrations/0023_user_exercise_catalog.sql',
 )
+const consentReceiptHistoryMigrationPath = path.resolve(
+  __dirname,
+  '../../../../infra/postgres/migrations/0027_consent_receipt_history_index.sql',
+)
 
 describe('health-record migration drift', () => {
   it('contains every contract metric, unit and source kind', async () => {
@@ -304,6 +308,11 @@ describe('health-record migration drift', () => {
     expect(migration).toContain('DROP CONSTRAINT consent_events_user_id_purpose_version_key')
     expect(migration).toContain('consent_events_revocation_after_acceptance_check')
     expect(migration).toContain("storage_key ~ '^[0-9a-f-]{36}/[0-9a-f-]{36}\\.jpg$'")
+  })
+
+  it('indexes owner consent receipts in the complete history order', async () => {
+    const migration = await readFile(consentReceiptHistoryMigrationPath, 'utf8')
+    expect(migration).toContain('ON consent_events (user_id, accepted_at DESC, id DESC)')
   })
 
   it('persists only an unlinkable primary-store erasure receipt', async () => {

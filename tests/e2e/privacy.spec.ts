@@ -258,6 +258,73 @@ test('privacy export validates local content and media type before download succ
   expect(browserErrors).toEqual([])
 })
 
+test('consent receipt history keeps empty, current and continuation evidence distinct', async ({
+  page,
+  request,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  const browserErrors = collectBrowserErrors(page)
+  const session = await seedAccount(page, request)
+
+  await database.query('DELETE FROM nutrition_photo_candidates WHERE user_id = $1', [
+    session.userId,
+  ])
+  await database.query('DELETE FROM consent_events WHERE user_id = $1', [session.userId])
+  await page.reload()
+  await page.getByRole('button', { name: '查看全部凭证' }).click()
+  await expect(page.locator('.consent-history__empty')).toContainText(
+    '服务端确认：当前没有授权凭证历史',
+  )
+  await expect(page.locator('.consent-history__item')).toHaveCount(0)
+
+  await database.query(
+    `INSERT INTO consent_events (id, user_id, purpose, version, accepted_at, revoked_at)
+     SELECT gen_random_uuid(),
+            $1,
+            (ARRAY[
+              'ai_plan_explanation',
+              'food_photo_analysis',
+              'progress_photo_analysis',
+              'progress_photo_retention'
+            ])[1 + ((series - 1) % 4)],
+            'history-v' || LPAD(series::text, 2, '0'),
+            NOW() - make_interval(mins => series),
+            CASE WHEN series % 3 = 0
+                 THEN NOW() - make_interval(mins => series) + INTERVAL '30 seconds'
+                 ELSE NULL
+            END
+     FROM generate_series(1, 12) AS series`,
+    [session.userId],
+  )
+
+  await page.reload()
+  await page.getByRole('button', { name: '查看全部凭证' }).click()
+  await expect(page.getByRole('button', { name: '收起历史' })).toHaveCSS(
+    'color',
+    'rgb(36, 76, 102)',
+  )
+  await expect(page.locator('.consent-history__item')).toHaveCount(10)
+  await expect(page.getByText('REVOKED INTERVAL').first()).toBeVisible()
+  await expect(page.getByText('ACCEPTED RECEIPT').first()).toBeVisible()
+  await expect(page.getByText(/当前状态以上方授权行为准/).first()).toBeVisible()
+  await page.getByRole('button', { name: '加载更早凭证' }).click()
+  await expect(page.locator('.consent-history__item')).toHaveCount(12)
+  await expect(page.getByRole('button', { name: '加载更早凭证' })).toHaveCount(0)
+  await expect(page.getByText('12 份已核对历史凭证')).toBeVisible()
+  await page.locator('.privacy-scroll').evaluate((scroll) => {
+    const history = scroll.querySelector('.consent-history')
+    if (!(history instanceof HTMLElement)) return
+    scroll.scrollTop +=
+      history.getBoundingClientRect().top - scroll.getBoundingClientRect().top - 16
+  })
+  await page.screenshot({
+    path: 'output/playwright/iteration-084-consent-receipt-history-mobile.png',
+    fullPage: true,
+  })
+  await expect(page.locator('body')).not.toContainText(session.userId)
+  expect(browserErrors).toEqual([])
+})
+
 test('logout removes every local editor draft before starting a new session', async ({
   page,
   request,

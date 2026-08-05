@@ -37,6 +37,7 @@ import type {
   PlanWorkoutLink,
   PlanWorkoutLinkClosure,
   PrivacyOverview,
+  ConsentReceiptHistory,
   RevocableConsentPurpose,
   ConsentRevocationResult,
   AccountDeletionRequest,
@@ -643,6 +644,12 @@ export const getAiExplanationHistory = async (planId: string) =>
   ).items
 
 export const getPrivacyOverview = () => authenticatedRequest<PrivacyOverview>('/me/privacy', 'GET')
+
+export const getConsentReceiptHistory = (options: RecordListOptions = {}) =>
+  authenticatedRequest<ConsentReceiptHistory>(
+    recordListPath('/me/privacy/consents/history', options),
+    'GET',
+  )
 
 export const revokeOptionalConsent = (purpose: RevocableConsentPurpose) =>
   authenticatedRequest<ConsentRevocationResult>(`/me/privacy/consents/${purpose}/revoke`, 'POST', {

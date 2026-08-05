@@ -1,6 +1,6 @@
 # Design system baseline
 
-Status: implemented and visually validated through iteration-083 portable-export client artifact verification
+Status: implemented and visually validated through iteration-084 bounded consent-receipt history
 
 Working brand: 衡迹 / MyFitness
 
@@ -858,6 +858,16 @@ At 390 × 844, a rejected old-version artifact keeps the established masthead, s
 The browser flow proves old-version rejection, wrong-media rejection and one valid real-service download. The visual evidence deliberately captures the rejected artifact because false success is the highest-risk state. H5 Blob URLs are released after use or rejection. The WeApp branch compiles and reads before `saveFile`, but its real-device file-system behavior remains a release gate rather than a screenshot claim.
 
 - [390 × 844 rejected old-version export above retained custody inventory](../../output/playwright/iteration-083-export-verification-mobile.png)
+
+## Bounded consent-receipt history — iteration 084
+
+The existing consent card now separates its current authorization rows from one explicitly historical receipt ledger. `HISTORICAL RECEIPTS` and the first explanatory line state that acceptance/revocation times do not decide whether processing is currently authorized; only the current rows and latest overview do. The history remains collapsed until requested, accepts a server-confirmed empty state and pages ten receipts at a time without moving or replacing the current controls.
+
+Each ruled item uses a compact chronological index, purpose label, bounded version and two factual timestamps. `ACCEPTED RECEIPT` means only that an acceptance was recorded; when no revocation time exists, the item repeats that current status is above. `REVOKED INTERVAL` closes the historical interval without claiming cleanup counts. The endpoint and UI expose no account/provider identifier or health content.
+
+The 390 × 844 evidence shows the open ledger after a real API continuation from ten to twelve receipts. Visual review caught Taro rendering `disabled="false"` as a disabled-looking white label on the open/close control. All four history actions now use the shared `aria-disabled` plus pointer/Enter/Space guard, and the browser asserts the mineral text color before accepting the screenshot. Empty/populated/continuation behavior is functional evidence; the screenshot documents hierarchy and legibility only.
+
+- [390 × 844 paged accepted/revoked consent-receipt history](../../output/playwright/iteration-084-consent-receipt-history-mobile.png)
 
 ## Screenshot review checklist
 

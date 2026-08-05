@@ -207,6 +207,100 @@ describe('privacy ownership API with PostgreSQL and private media', () => {
       .expect(204)
   })
 
+  it('pages owner consent receipts without turning history into current authorization', async () => {
+    const bareSession = await request(app.getHttpServer())
+      .post('/v1/auth/dev/session')
+      .send({ subject: `privacy-empty-${randomUUID()}` })
+      .expect(200)
+    users.add(String(bareSession.body.userId))
+    await request(app.getHttpServer())
+      .get('/v1/me/privacy/consents/history')
+      .set('Authorization', `Bearer ${String(bareSession.body.accessToken)}`)
+      .expect(200)
+      .expect({ items: [], nextCursor: null })
+
+    const owner = await createUser()
+    const other = await createUser()
+    await pool.query(
+      "UPDATE consent_events SET accepted_at = accepted_at - INTERVAL '1 day' WHERE user_id = $1",
+      [owner.userId],
+    )
+    await pool.query(
+      `INSERT INTO consent_events (id, user_id, purpose, version, accepted_at, revoked_at)
+       VALUES
+         (gen_random_uuid(), $1, 'ai_plan_explanation', 'history-ai-v1', NOW() - INTERVAL '3 minutes', NOW() - INTERVAL '2 minutes'),
+         (gen_random_uuid(), $1, 'food_photo_analysis', 'history-food-v1', NOW() - INTERVAL '1 minute', NULL),
+         (gen_random_uuid(), $1, 'progress_photo_analysis', 'history-progress-v1', NOW(), NULL)`,
+      [owner.userId],
+    )
+    const receiptCount = await pool.query<{ count: string }>(
+      'SELECT COUNT(*)::text AS count FROM consent_events WHERE user_id = $1',
+      [owner.userId],
+    )
+    expect(receiptCount.rows[0]?.count).toBe('6')
+
+    const first = await request(app.getHttpServer())
+      .get('/v1/me/privacy/consents/history?limit=2')
+      .set('Authorization', `Bearer ${owner.token}`)
+      .expect(200)
+    expect(first.body.items).toHaveLength(2)
+    expect(first.body.items.map((item: { purpose: string }) => item.purpose)).toEqual([
+      'progress_photo_analysis',
+      'food_photo_analysis',
+    ])
+    expect(first.body.nextCursor).toEqual(expect.any(String))
+    expect(first.body.items[0]).not.toHaveProperty('status')
+    expect(first.text).not.toContain(owner.userId)
+
+    const insertedAfterCursor = randomUUID()
+    await pool.query(
+      `INSERT INTO consent_events (id, user_id, purpose, version, accepted_at)
+       VALUES ($1, $2, 'progress_photo_retention', 'history-later-v1', NOW() + INTERVAL '1 second')`,
+      [insertedAfterCursor, owner.userId],
+    )
+
+    const seenIds = first.body.items.map((item: { receiptId: string }) => item.receiptId)
+    const observedPages = [
+      first.body.items.map((item: { purpose: string; acceptedAt: string }) => ({
+        purpose: item.purpose,
+        acceptedAt: item.acceptedAt,
+      })),
+    ]
+    let cursor: string | null = String(first.body.nextCursor)
+    while (cursor) {
+      const page = await request(app.getHttpServer())
+        .get(`/v1/me/privacy/consents/history?limit=2&cursor=${encodeURIComponent(cursor)}`)
+        .set('Authorization', `Bearer ${owner.token}`)
+        .expect(200)
+      seenIds.push(...page.body.items.map((item: { receiptId: string }) => item.receiptId))
+      observedPages.push(
+        page.body.items.map((item: { purpose: string; acceptedAt: string }) => ({
+          purpose: item.purpose,
+          acceptedAt: item.acceptedAt,
+        })),
+      )
+      cursor = page.body.nextCursor ? String(page.body.nextCursor) : null
+    }
+    expect(seenIds, JSON.stringify(observedPages)).toHaveLength(6)
+    expect(new Set(seenIds).size).toBe(6)
+    expect(seenIds).not.toContain(insertedAfterCursor)
+
+    const otherFirst = await request(app.getHttpServer())
+      .get('/v1/me/privacy/consents/history?limit=1')
+      .set('Authorization', `Bearer ${other.token}`)
+      .expect(200)
+    await request(app.getHttpServer())
+      .get(
+        `/v1/me/privacy/consents/history?limit=1&cursor=${encodeURIComponent(String(otherFirst.body.nextCursor))}`,
+      )
+      .set('Authorization', `Bearer ${owner.token}`)
+      .expect(400)
+    await request(app.getHttpServer())
+      .get('/v1/me/privacy/consents/history?cursor=not-a-cursor')
+      .set('Authorization', `Bearer ${owner.token}`)
+      .expect(400)
+  })
+
   it('revokes optional photo consent, clears its data and permits a later explicit grant', async () => {
     const { token, userId } = await createUser()
     const first = await createPhoto(token, userId)

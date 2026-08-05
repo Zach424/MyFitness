@@ -42,6 +42,7 @@ import {
   describeRevocationReconciliationFailure,
   type RevocationRecoveryReceipt,
 } from './privacy-revoke-recovery'
+import { ConsentReceiptHistory } from './consent-receipt-history'
 import './index.scss'
 
 type ExportChoice = 'downloaded' | 'skip' | null
@@ -646,6 +647,10 @@ const PrivacyPage = () => {
                       )
                     })}
                   </View>
+                  <ConsentReceiptHistory
+                    key={overview.generatedAt}
+                    disabled={!custodyAuthorityReady}
+                  />
                 </View>
 
                 <View className="privacy-card session-card">

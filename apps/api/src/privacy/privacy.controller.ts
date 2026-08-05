@@ -9,6 +9,7 @@ import {
   HttpCode,
   Param,
   Post,
+  Query,
   StreamableFile,
   UnauthorizedException,
 } from '@nestjs/common'
@@ -22,6 +23,7 @@ import {
   ApiOkResponse,
   ApiOperation,
   ApiProduces,
+  ApiQuery,
   ApiTags,
 } from '@nestjs/swagger'
 import {
@@ -30,11 +32,14 @@ import {
   accountDeletionResultSchema,
   consentRevocationRequestSchema,
   consentRevocationResultSchema,
+  consentReceiptHistoryQuerySchema,
+  consentReceiptHistorySchema,
   privacyOverviewSchema,
   revocableConsentPurposeSchema,
   erasureReceiptTokenSchema,
   type AccountDeletionRequest,
   type ConsentRevocationRequest,
+  type ConsentReceiptHistoryQuery,
 } from '@myfitness/contracts'
 import type { ZodType } from 'zod'
 
@@ -71,6 +76,31 @@ export class PrivacyController {
   @ApiOkResponse({ schema: openApiSchema(privacyOverviewSchema) })
   async overview(@CurrentUser() principal: AuthPrincipal) {
     return privacyOverviewSchema.parse(await this.privacy.overview(principal.userId))
+  }
+
+  @Get('consents/history')
+  @ApiOperation({ summary: 'List one stable page of authenticated consent receipts' })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    schema: { type: 'integer', minimum: 1, maximum: 20, default: 10 },
+  })
+  @ApiQuery({
+    name: 'cursor',
+    required: false,
+    schema: { type: 'string', minLength: 24, maxLength: 256 },
+  })
+  @ApiOkResponse({ schema: openApiSchema(consentReceiptHistorySchema) })
+  @ApiBadRequestResponse({ description: 'Pagination limit or owner-bound cursor is invalid.' })
+  async consentHistory(@CurrentUser() principal: AuthPrincipal, @Query() query: unknown) {
+    const parsed = parseBody<ConsentReceiptHistoryQuery>(
+      consentReceiptHistoryQuerySchema,
+      query,
+      'consent receipt history query is invalid',
+    )
+    return consentReceiptHistorySchema.parse(
+      await this.privacy.consentReceiptHistory(principal.userId, parsed),
+    )
   }
 
   @Get('export')

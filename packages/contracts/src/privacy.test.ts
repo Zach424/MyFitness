@@ -6,6 +6,8 @@ import {
   accountDeletionResultSchema,
   accountDeletionRequestSchema,
   consentRevocationRequestSchema,
+  consentReceiptHistoryQuerySchema,
+  consentReceiptHistorySchema,
   privacyDataCategories,
   privacyOverviewSchema,
   revocableConsentPurposeSchema,
@@ -23,6 +25,26 @@ describe('privacy contracts', () => {
     )
     expect(revocableConsentPurposeSchema.safeParse('health_data').success).toBe(false)
     expect(consentRevocationRequestSchema.parse({ confirmed: true })).toEqual({ confirmed: true })
+  })
+
+  it('bounds strict consent-receipt history pages without implying current state', () => {
+    expect(consentReceiptHistoryQuerySchema.parse({ limit: '2' })).toEqual({ limit: 2 })
+    expect(consentReceiptHistoryQuerySchema.parse({})).toEqual({ limit: 10 })
+    expect(consentReceiptHistoryQuerySchema.safeParse({ limit: 21 }).success).toBe(false)
+    expect(
+      consentReceiptHistorySchema.parse({
+        items: [
+          {
+            receiptId: '619ef62a-e665-40dc-95ed-3790b947b48c',
+            purpose: 'ai_plan_explanation',
+            version: 'ai-plan-v1',
+            acceptedAt: '2026-08-05T08:00:00.000Z',
+            revokedAt: '2026-08-05T09:00:00.000Z',
+          },
+        ],
+        nextCursor: null,
+      }),
+    ).not.toHaveProperty('status')
   })
 
   it('requires the exact permanent-account confirmation', () => {

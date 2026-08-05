@@ -1,6 +1,6 @@
 # Privacy ownership model
 
-Status: durable local ownership/erasure boundary with lost-response recovery, purpose-separated photo custody, catalog history, conflict-safe expiring record drafts, evidence-first optional-consent revocation and pre-save portable-export verification implemented through iteration 083
+Status: durable local ownership/erasure boundary with lost-response recovery, purpose-separated photo custody, catalog history, conflict-safe expiring record drafts, evidence-first optional-consent revocation, pre-save portable-export verification and bounded owner-visible consent history implemented through iteration 084
 
 ## User-owned surface
 
@@ -44,6 +44,8 @@ revoked + new explicit request → new accepted event → active
 `terms`, `privacy` and `health_data` are required to operate the current account. They cannot be withdrawn independently in the UI; account erasure stops that processing. `ai_plan_explanation`, `food_photo_analysis`, `progress_photo_analysis` and `progress_photo_retention` are optional and independently revocable.
 
 Consent rows remain append-oriented: dropping the old purpose/version uniqueness allows a new event after withdrawal instead of erasing the prior acceptance/revocation interval. AI and photo idempotency locks ensure one consent receipt is created for one unique request. Food-photo withdrawal removes every food analysis and only the `food` object scope. Progress-analysis withdrawal deletes temporary images but preserves separately retained images after clearing their machine checks; progress-retention withdrawal deletes every progress record and only the `progress` scope. AI withdrawal removes pending work while completed user-visible explanations remain exportable until account erasure. Media deletion can remain `pending` during a storage outage without being misreported as completed.
+
+`GET /v1/me/privacy/consents/history` exposes those append-oriented intervals as a separate default-10/max-20 read model. Each item contains only receipt UUID, purpose, version, acceptance time and optional revocation time; it deliberately has no current-status, user/provider or health-data field. The overview remains the only current consent authority used by mutation controls. The opaque cursor carries only version plus receipt UUID, is resolved under the authenticated owner and applies the complete `(accepted_at, id)` comparison inside PostgreSQL so timestamp microseconds are preserved. A new head receipt cannot disturb an issued continuation. H5 proves server-confirmed empty, accepted/revoked labels and 12-item continuation; the client retains no persistent history cache.
 
 If a revocation POST loses its response, the client does not repeat it. It retains only the exact purpose in page memory, keeps the accepted inventory visible and freezes every custody action until one explicit current-overview read resolves the purpose. `revoked` proves current inactive authorization, while `active` requires a fresh later confirmation and missing/`never_granted` evidence is divergent. The overview cannot reconstruct the POST's removed-photo/analysis counts, so reconciled completion never displays them; only the original successful response may provide that narrower cleanup result. No revocation purpose, request or recovery instruction enters application storage.
 

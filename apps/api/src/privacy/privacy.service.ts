@@ -1,6 +1,7 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
 
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   Logger,
@@ -16,10 +17,12 @@ import {
   privacyExportSchema,
   privacyExportSchemaVersion,
   privacyOverviewSchema,
+  consentReceiptHistorySchema,
   revocableConsentPurposes,
   type AccountDeletionRequest,
   type AccountDeletionIntent,
   type ConsentState,
+  type ConsentReceiptHistoryQuery,
   type PrivacyExport,
   type PrivacyInventoryItem,
   type RevocableConsentPurpose,
@@ -32,6 +35,7 @@ import { PhotoStorageService } from '../nutrition/photo-storage.service'
 import { DataOperationsService } from '../operations/data-operations.service'
 import { ProgressPhotosService } from '../progress-photos/progress-photos.service'
 import { ErasureLedgerService } from './erasure-ledger.service'
+import { decodeConsentReceiptCursor, encodeConsentReceiptCursor } from './consent-receipt-cursor'
 
 type InventoryRow = QueryResultRow & {
   category: PrivacyInventoryItem['category']
@@ -46,6 +50,8 @@ type ConsentRow = QueryResultRow & {
   accepted_at: Date
   revoked_at: Date | null
 }
+
+type ConsentReceiptRow = ConsentRow & { id: string }
 
 type AccountRow = QueryResultRow & {
   id: string
@@ -215,6 +221,51 @@ export class PrivacyService {
         confirmationPhrase: accountDeletionConfirmationPhrase,
         permanent: true,
       },
+    })
+  }
+
+  async consentReceiptHistory(userId: string, query: ConsentReceiptHistoryQuery) {
+    await this.account(userId)
+    const cursor = decodeConsentReceiptCursor(query.cursor)
+    let anchorId: string | undefined
+    if (cursor) {
+      anchorId = (
+        await this.database.query<{ id: string }>(
+          'SELECT id FROM consent_events WHERE user_id = $1 AND id = $2',
+          [userId, cursor.id],
+        )
+      ).rows[0]?.id
+      if (!anchorId) throw new BadRequestException('consent receipt cursor is invalid or expired')
+    }
+
+    const result = await this.database.query<ConsentReceiptRow>(
+      `SELECT id, purpose, version, accepted_at, revoked_at
+       FROM consent_events
+       WHERE user_id = $1
+         AND (
+           $3::uuid IS NULL
+           OR (accepted_at, id) < (
+             SELECT accepted_at, id
+             FROM consent_events
+             WHERE user_id = $1 AND id = $3::uuid
+           )
+         )
+       ORDER BY accepted_at DESC, id DESC
+       LIMIT $2`,
+      [userId, query.limit + 1, anchorId ?? null],
+    )
+    const hasMore = result.rows.length > query.limit
+    const rows = result.rows.slice(0, query.limit)
+    const last = rows.at(-1)
+    return consentReceiptHistorySchema.parse({
+      items: rows.map((row) => ({
+        receiptId: row.id,
+        purpose: row.purpose,
+        version: row.version,
+        acceptedAt: row.accepted_at.toISOString(),
+        revokedAt: row.revoked_at?.toISOString() ?? null,
+      })),
+      nextCursor: hasMore && last ? encodeConsentReceiptCursor(last.id) : null,
     })
   }
 
