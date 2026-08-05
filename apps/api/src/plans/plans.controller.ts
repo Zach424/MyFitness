@@ -9,6 +9,7 @@ import {
   Param,
   Post,
   Put,
+  Query,
 } from '@nestjs/common'
 import {
   ApiBadRequestResponse,
@@ -20,6 +21,7 @@ import {
   ApiOkResponse,
   ApiOperation,
   ApiParam,
+  ApiQuery,
   ApiTags,
   ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger'
@@ -33,6 +35,7 @@ import {
   planWorkoutLinkClosureSchema,
   planWorkoutLinkSchema,
   weeklyPlanHistorySchema,
+  weeklyPlanHistoryQuerySchema,
   weeklyPlanIdSchema,
   weeklyPlanListSchema,
   weeklyPlanSchema,
@@ -173,10 +176,30 @@ export class PlansController {
   @Get(':planId/history')
   @ApiOperation({ summary: 'Get immutable plan generation and decision history' })
   @ApiParam({ name: 'planId', schema: { type: 'string', format: 'uuid' } })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    schema: { type: 'integer', minimum: 1, maximum: 50 },
+  })
+  @ApiQuery({
+    name: 'cursor',
+    required: false,
+    schema: { type: 'string', minLength: 24, maxLength: 256 },
+  })
   @ApiOkResponse({ schema: openApiSchema(weeklyPlanHistorySchema) })
+  @ApiBadRequestResponse({ description: 'Plan identifier, history limit or cursor is invalid.' })
   @ApiNotFoundResponse({ description: 'Plan does not exist for this user.' })
-  async history(@CurrentUser() principal: AuthPrincipal, @Param('planId') rawId: string) {
+  async history(
+    @CurrentUser() principal: AuthPrincipal,
+    @Param('planId') rawId: string,
+    @Query() query: unknown,
+  ) {
     const planId = parse(weeklyPlanIdSchema, rawId, 'planId must be a UUID')
-    return weeklyPlanHistorySchema.parse(await this.plans.history(principal.userId, planId))
+    const parsed = parse(
+      weeklyPlanHistoryQuerySchema,
+      query,
+      'weekly plan history query is invalid',
+    )
+    return weeklyPlanHistorySchema.parse(await this.plans.history(principal.userId, planId, parsed))
   }
 }

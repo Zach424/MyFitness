@@ -9502,6 +9502,18 @@
             "required": true,
             "in": "path",
             "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "schema": { "type": "string", "minLength": 24, "maxLength": 256 }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": { "type": "integer", "minimum": 1, "maximum": 50 }
           }
         ],
         "responses": {
@@ -9518,6 +9530,7 @@
                       "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                     },
                     "items": {
+                      "maxItems": 50,
                       "type": "array",
                       "items": {
                         "type": "object",
@@ -9833,14 +9846,22 @@
                         ],
                         "additionalProperties": false
                       }
+                    },
+                    "nextCursor": {
+                      "nullable": true,
+                      "type": "string",
+                      "minLength": 24,
+                      "maxLength": 256,
+                      "pattern": "^[A-Za-z0-9_-]+$"
                     }
                   },
-                  "required": ["planId", "items"],
+                  "required": ["planId", "items", "nextCursor"],
                   "additionalProperties": false
                 }
               }
             }
           },
+          "400": { "description": "Plan identifier, history limit or cursor is invalid." },
           "401": { "description": "Bearer token is missing, invalid, expired or revoked." },
           "404": { "description": "Plan does not exist for this user." }
         },

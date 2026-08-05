@@ -1,6 +1,7 @@
 import * as z from 'zod'
 
 import { equipmentSchema, weekdaySchema } from './onboarding'
+import { recordListQuerySchema, recordPageCursorSchema } from './pagination'
 import {
   nutritionFocusKeys,
   planActivityRoles,
@@ -395,8 +396,13 @@ export const weeklyPlanHistoryItemSchema = weeklyPlanSchema.safeExtend({
   decisionNote: z.string().nullable(),
 })
 export const weeklyPlanHistorySchema = z
-  .object({ planId: z.string().uuid(), items: z.array(weeklyPlanHistoryItemSchema) })
+  .object({
+    planId: z.string().uuid(),
+    items: z.array(weeklyPlanHistoryItemSchema).max(50),
+    nextCursor: recordPageCursorSchema.nullable(),
+  })
   .strict()
+export const weeklyPlanHistoryQuerySchema = recordListQuerySchema(20, 50)
 export const weeklyPlanIdSchema = z.string().uuid()
 export const planWorkoutLinkIdSchema = z.string().uuid()
 
@@ -410,3 +416,5 @@ export type WeeklyPlanListItem = z.infer<typeof weeklyPlanListItemSchema>
 export type GenerateWeeklyPlan = z.infer<typeof generateWeeklyPlanSchema>
 export type PlanDecision = z.infer<typeof planDecisionSchema>
 export type WeeklyPlanHistoryItem = z.infer<typeof weeklyPlanHistoryItemSchema>
+export type WeeklyPlanHistory = z.infer<typeof weeklyPlanHistorySchema>
+export type WeeklyPlanHistoryQuery = z.infer<typeof weeklyPlanHistoryQuerySchema>

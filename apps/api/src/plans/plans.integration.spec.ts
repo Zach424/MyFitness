@@ -182,17 +182,56 @@ describe('weekly plan API with PostgreSQL', () => {
       .expect(200)
     expect(skipped.body).toMatchObject({ status: 'skipped', revision: 4 })
 
-    const history = await request(app.getHttpServer())
+    const firstPage = await request(app.getHttpServer())
       .get(`/v1/plans/weekly/${generated.body.id}/history`)
+      .query({ limit: 2 })
       .set('Authorization', `Bearer ${token}`)
       .expect(200)
-    expect(history.body.items.map((item: { action: string }) => item.action)).toEqual([
-      'skipped',
-      'accepted',
-      'modified',
-      'generated',
+    expect(firstPage.body.items.map((item: { revision: number }) => item.revision)).toEqual([4, 3])
+    expect(firstPage.body.items[0].decisionNote).toBe('本周行程变化')
+    expect(firstPage.body.nextCursor).toEqual(expect.any(String))
+
+    await request(app.getHttpServer())
+      .put(`/v1/plans/weekly/${generated.body.id}/decision`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ decision: 'accepted', expectedRevision: 4, selections: [] })
+      .expect(200)
+
+    const secondPage = await request(app.getHttpServer())
+      .get(`/v1/plans/weekly/${generated.body.id}/history`)
+      .query({ limit: 2, cursor: firstPage.body.nextCursor })
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200)
+    expect(secondPage.body.items.map((item: { revision: number }) => item.revision)).toEqual([2, 1])
+    expect(secondPage.body.nextCursor).toBeNull()
+
+    const refreshedHead = await request(app.getHttpServer())
+      .get(`/v1/plans/weekly/${generated.body.id}/history`)
+      .query({ limit: 2 })
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200)
+    expect(refreshedHead.body.items.map((item: { revision: number }) => item.revision)).toEqual([
+      5, 4,
     ])
-    expect(history.body.items[0].decisionNote).toBe('本周行程变化')
+
+    const missingAnchor = Buffer.from(
+      JSON.stringify({ v: 1, id: generated.body.id, revision: 999 }),
+    ).toString('base64url')
+    await request(app.getHttpServer())
+      .get(`/v1/plans/weekly/${generated.body.id}/history`)
+      .query({ cursor: missingAnchor })
+      .set('Authorization', `Bearer ${token}`)
+      .expect(400)
+    await request(app.getHttpServer())
+      .get(`/v1/plans/weekly/${randomUUID()}/history`)
+      .query({ cursor: firstPage.body.nextCursor })
+      .set('Authorization', `Bearer ${token}`)
+      .expect(400)
+    await request(app.getHttpServer())
+      .get(`/v1/plans/weekly/${generated.body.id}/history`)
+      .query({ unexpected: 'value' })
+      .set('Authorization', `Bearer ${token}`)
+      .expect(400)
 
     const list = await request(app.getHttpServer())
       .get('/v1/plans/weekly')

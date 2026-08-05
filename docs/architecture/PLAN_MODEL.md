@@ -1,6 +1,6 @@
 # Weekly plan model
 
-Status: implemented as `deterministic-v1` in iteration 008; bounded record-evidence freshness added in iteration 035; explicit plan-to-workout links added in iteration 036
+Status: implemented as `deterministic-v1` in iteration 008; bounded record-evidence freshness added in iteration 035; explicit plan-to-workout links added in iteration 036; stable revision-history pagination added in iteration 049
 
 ## Purpose and boundary
 
@@ -22,6 +22,8 @@ user
 ```
 
 `weekly_plans` is indexed and unique by `(user_id, week_start)`. The current content is stored as JSONB because the client reads and decides on the plan as one aggregate, while the stable ownership, week, revision, status, engine version and idempotency fields remain relational. Every JSON document is validated by Zod at the API boundary and every accepted transition is copied into `weekly_plan_revisions`.
+
+`GET /plans/weekly/:planId/history` returns strict `{ planId, items, nextCursor }` pages with a 20-row default and 50-row maximum; Week Fold requests 10 at a time. The opaque versioned cursor contains only plan UUID and positive revision. The route UUID, authenticated owner and exact anchor revision must agree before the query continues with `revision < anchorRevision ORDER BY revision DESC LIMIT limit + 1` over `weekly_plan_revisions_user_plan_idx`. Newer decisions or regeneration do not enter an already issued older suffix, while a fresh head request sees them. Missing/cross-owner plans remain concealed as `404`; malformed, cross-plan or missing-anchor cursors return `400`. Historical snapshots still pass legacy evidence normalization and full plan-schema validation before display.
 
 ## Deterministic-v1 generation rules
 

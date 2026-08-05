@@ -451,6 +451,16 @@ The 390 × 844 browser review creates food definition R1–R12, proves 10 initia
 
 - [390 × 844 progressive definition history](../../output/playwright/iteration-048-progressive-definition-revisions-mobile.png)
 
+## Progressive weekly-plan ledger review — iteration 049
+
+Week Fold's existing **VERSION TRACE / 决定历史** card now opens with the newest 10 generated, modified, accepted or skipped plan snapshots. It reuses the established quiet full-width continuation action as `继续载入更早决定`, disables it while reading and ends with `已载入全部决定版本`. Revision, action and time remain audit evidence; the interaction does not imply that a newer decision is more effective or healthier.
+
+Older pages append below the visible decisions without re-sorting. A decision made after the first page cannot enter that issued older suffix, while refreshing the current plan resets the ledger to its new head. Continuation failure leaves loaded evidence visible and reports through the page's existing status surface. Plan freshness, substitutions, AI consent and safety copy remain separate from pagination.
+
+The 390 × 844 production-browser review advanced one plan to v11, proved exactly 10 initial rows, loaded the final generated v1 snapshot and captured the complete terminal ledger. Request, page and console error capture remained empty; PostgreSQL coverage separately proves concurrent new-head insertion, cross-plan/missing-anchor rejection and exact owner concealment.
+
+- [390 × 844 progressive weekly-plan history](../../output/playwright/iteration-049-progressive-plan-revisions-mobile.png)
+
 ## Screenshot review checklist
 
 - The Rhythm Rail remains understandable without color.

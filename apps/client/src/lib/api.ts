@@ -54,8 +54,8 @@ import type {
   UpdateMeal,
   UpdateWorkout,
   WeeklyPlan,
+  WeeklyPlanHistory,
   WeeklyPlanListItem,
-  WeeklyPlanHistoryItem,
   Workout,
   WorkoutHistory,
   WorkoutList,
@@ -608,13 +608,11 @@ export const generateWeeklyPlan = (payload: GenerateWeeklyPlan, idempotencyKey: 
 export const decideWeeklyPlan = (planId: string, payload: PlanDecision) =>
   authenticatedRequest<WeeklyPlan>(`/plans/weekly/${planId}/decision`, 'PUT', payload)
 
-export const getWeeklyPlanHistory = async (planId: string) =>
-  (
-    await authenticatedRequest<{ items: WeeklyPlanHistoryItem[] }>(
-      `/plans/weekly/${planId}/history`,
-      'GET',
-    )
-  ).items
+export const getWeeklyPlanHistory = (planId: string, options: RecordListOptions = {}) =>
+  authenticatedRequest<WeeklyPlanHistory>(
+    recordListPath(`/plans/weekly/${planId}/history`, options),
+    'GET',
+  )
 
 export const generateAiExplanation = (
   planId: string,

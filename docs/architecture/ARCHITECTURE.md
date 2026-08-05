@@ -1,6 +1,6 @@
 # Architecture baseline
 
-Status: accepted and implemented through the iteration-048 stable definition-history pagination boundary; changes require an ADR.
+Status: accepted and implemented through the iteration-049 stable weekly-plan history pagination boundary; changes require an ADR.
 
 ## System shape
 
@@ -55,7 +55,7 @@ Implemented foundation:
 - A versioned starter food catalog plus owner-scoped custom definitions provide searchable aliases, required user-confirmed nutrition provenance, idempotent create, optimistic correction/archive and immutable definition revisions. Nutrition meal/item rows snapshot the selected composition and display/canonical portions; server-side rules calculate totals, owner favorites remain independent snapshots and definition edits cannot rewrite either fact boundary.
 - Read-only insight projections query confirmed/current source rows without persisted duplicate state. The dashboard produces Today evidence, nullable three-day readiness and cross-domain totals; exercise groups one stable key/completed sets; nutrition generates 90 local dates with null missing evidence; health groups one exact confirmed metric in its canonical unit while retaining display/source/timezone/revision provenance. Every projection recomputes after source correction/deletion.
 - The cross-domain history calendar is a separate bounded read model: PostgreSQL generates exactly 28 local dates in the requested IANA timezone and left-joins owner-visible current health, workout and meal occurrence facts no later than the reference instant. It returns counts and `hasRecords`, never zero-behavior/adherence claims, and persists no duplicate calendar state. A client backfill intent carries only a validated local date (at most 90 days old) and timezone; editors keep that date incomplete until the user supplies a real minute and the existing occurrence resolver maps it to an instant.
-- A deterministic weekly-plan aggregate snapshots onboarding revision and evidence, stores the current JSONB plan plus immutable revisions, and re-checks current eligibility before an accept/modify transition.
+- A deterministic weekly-plan aggregate snapshots onboarding revision and evidence, stores the current JSONB plan plus immutable revisions, and re-checks current eligibility before an accept/modify transition. Its history uses the common 20-default/50-maximum UUID/revision cursor boundary over the existing owner/plan/revision index; Week Fold renders 10 newest-first decisions before an explicit older-page request.
 - A FastAPI worker exposes an authenticated provider-neutral explanation endpoint. Local fixture and OpenAI Responses adapters share a strict schema; the business API owns consent, authorization, idempotency, validation, fallback and persistence.
 - AI explanation runs are minimized, fingerprinted and bound to the exact plan revision plus prompt/model/validator/consent provenance. Raw prompts and input payloads are not persisted.
 - Plan explanations and food-photo display copy share a versioned deterministic safety policy. Validator v2 applies Unicode NFKC normalization, strips format controls, compacts separators for policy matching and normalizes numeric evidence without rewriting persisted copy; stored v1 provenance remains readable.
@@ -106,7 +106,7 @@ The workout aggregate, derived-value rules, exercise-catalog boundary, exercise 
 
 The meal snapshot, canonical-gram, owner-catalog/favorite, daily-observation and photo-candidate boundaries are documented in [NUTRITION_MODEL.md](NUTRITION_MODEL.md). ADR-0006 records why mutable catalogs cannot be historical truth; ADR-0037 applies that rule to owner-created food definitions and their privacy lifecycle; ADR-0038 defines timezone-safe nutrition observation and explicit missing evidence.
 
-The deterministic weekly-plan rules, evidence provenance, revision lifecycle and limitations are documented in [PLAN_MODEL.md](PLAN_MODEL.md). ADR-0008 records why the structured rule path precedes model orchestration.
+The deterministic weekly-plan rules, evidence provenance, bounded revision lifecycle and limitations are documented in [PLAN_MODEL.md](PLAN_MODEL.md). ADR-0008 records why the structured rule path precedes model orchestration; ADR-0047 binds history continuation to an exact owner plan revision.
 
 The review-only AI boundary, minimization, provider contract, validation and fallback are documented in [AI_EXPLANATION_MODEL.md](AI_EXPLANATION_MODEL.md). ADR-0009 records why explanations cannot mutate plans or confirmed records.
 

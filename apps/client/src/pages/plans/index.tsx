@@ -177,6 +177,8 @@ const PlansPage = () => {
   const [sessionLinks, setSessionLinks] = useState<PlanWorkoutLink[]>([])
   const [workouts, setWorkouts] = useState<Workout[]>([])
   const [history, setHistory] = useState<WeeklyPlanHistoryItem[]>([])
+  const [historyNextCursor, setHistoryNextCursor] = useState<string | null>(null)
+  const [historyLoadingMore, setHistoryLoadingMore] = useState(false)
   const [aiHistory, setAiHistory] = useState<AiExplanation[]>([])
   const [aiConsent, setAiConsent] = useState(false)
   const [aiLoading, setAiLoading] = useState(false)
@@ -189,6 +191,7 @@ const PlansPage = () => {
   const pendingAiKey = useRef('')
   const savedPlanRef = useRef<WeeklyPlan>()
   const freshnessRef = useRef<PlanFreshness>()
+  const historyGenerationRef = useRef(0)
   const refreshInFlight = useRef(false)
   const lastProjectionCheck = useRef(0)
   const projectionRefreshRef = useRef<(announce?: boolean, force?: boolean) => Promise<void>>(
@@ -215,12 +218,34 @@ const PlansPage = () => {
   }
 
   const refreshPlanHistory = async (plan: WeeklyPlan) => {
+    const generation = ++historyGenerationRef.current
     const [planHistory, explanationHistory] = await Promise.all([
-      getWeeklyPlanHistory(plan.id),
+      getWeeklyPlanHistory(plan.id, { limit: 10 }),
       getAiExplanationHistory(plan.id),
     ])
-    setHistory(planHistory)
+    if (generation !== historyGenerationRef.current) return
+    setHistory(planHistory.items)
+    setHistoryNextCursor(planHistory.nextCursor)
     setAiHistory(explanationHistory)
+  }
+
+  const loadOlderPlanHistory = async () => {
+    if (!savedPlan || !historyNextCursor || historyLoadingMore) return
+    const generation = historyGenerationRef.current
+    setHistoryLoadingMore(true)
+    try {
+      const page = await getWeeklyPlanHistory(savedPlan.id, {
+        limit: 10,
+        cursor: historyNextCursor,
+      })
+      if (generation !== historyGenerationRef.current) return
+      setHistory((current) => [...current, ...page.items])
+      setHistoryNextCursor(page.nextCursor)
+    } catch (error) {
+      setFeedback(messageOf(error))
+    } finally {
+      setHistoryLoadingMore(false)
+    }
   }
 
   const refreshPlanProjection = async (announce = false, force = false) => {
@@ -992,6 +1017,18 @@ const PlansPage = () => {
                           <Text className="plan-history__revision metric">v{item.revision}</Text>
                         </View>
                       ))}
+                      {historyNextCursor ? (
+                        <Button
+                          {...buttonA11yProps}
+                          className="record-page-more"
+                          disabled={historyLoadingMore}
+                          onClick={() => void loadOlderPlanHistory()}
+                        >
+                          {historyLoadingMore ? '正在载入…' : '继续载入更早决定'}
+                        </Button>
+                      ) : history.length ? (
+                        <Text className="record-page-end">已载入全部决定版本</Text>
+                      ) : null}
                     </View>
                   </View>
                 </View>

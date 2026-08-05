@@ -52,7 +52,7 @@ Local routes after `pnpm db:up`, `pnpm db:migrate`, and `pnpm dev:api`:
 - Cross-domain 28-day history: `GET http://127.0.0.1:3100/v1/insights/history-calendar?timezone=Asia%2FShanghai`
 - Weekly-plan generation/list: `POST/GET http://127.0.0.1:3100/v1/plans/weekly`
 - Weekly-plan decision: `PUT http://127.0.0.1:3100/v1/plans/weekly/:planId/decision`
-- Weekly-plan history: `GET http://127.0.0.1:3100/v1/plans/weekly/:planId/history`
+- Weekly-plan history: `GET http://127.0.0.1:3100/v1/plans/weekly/:planId/history?limit=10&cursor=...`
 - AI plan explanation: `POST http://127.0.0.1:3100/v1/plans/weekly/:planId/explanation`
 - AI explanation history: `GET http://127.0.0.1:3100/v1/plans/weekly/:planId/explanations`
 - Swagger UI: `http://127.0.0.1:3100/docs`
@@ -67,6 +67,8 @@ The three current aggregate lists return `{ items, nextCursor }`. `limit` is opt
 The matching health/workout/meal `/:id/history` routes also return `{ aggregateId, items, nextCursor }` and accept `limit` (default 20, maximum 50) plus `cursor`. These immutable streams use revision descending rather than the current-list occurrence tuple. The cursor UUID must match the route and its exact owner revision must exist; continuation then reads only revisions below that boundary. A new revision does not enter an already issued older suffix, while a fresh request sees it at the head. Soft-deleted aggregates retain owner history.
 
 Exercise and food catalog `/:entryId/history` routes use the same bounded query and revision cursor contract, returning `{ entryId, items, nextCursor }`. The route entry, authenticated owner and exact anchor revision must agree before continuation. Archived definitions retain history; missing/cross-owner entries remain `404`, while invalid, cross-entry or missing-anchor cursors return `400`. Cursor payloads never include exercise semantics, nutrients, references or names.
+
+Weekly-plan `/:planId/history` completes the same bounded revision contract and returns `{ planId, items, nextCursor }` with a 20-item default and 50-item maximum. The cursor contains only plan UUID/revision, must bind to the route and an exact owner revision, and continues strictly below that immutable revision. New generation/decision heads do not contaminate an issued older suffix. Every returned structured snapshot still undergoes legacy evidence normalization and weekly-plan schema validation; cursor payloads never contain plan content, decision notes, evidence or user identifiers.
 
 Every routed response exposes `X-Request-ID`. A caller UUIDv4 is preserved and normalized; missing or invalid values are replaced. Redis applies an IP ingress window before authentication and then a standard or sensitive route window after authentication. Rate responses expose `RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset` and, on `429`, `Retry-After`. If Redis is unavailable, business routes return a request-correlated `503`; `/health/live` remains available while `/health` reports dependency failure.
 

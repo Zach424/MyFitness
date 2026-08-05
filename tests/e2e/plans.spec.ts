@@ -101,7 +101,7 @@ const seedProfileAndOpenPlans = async (
 test('weekly plan supports substitution, modification and acceptance history', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   const errors = collectBrowserErrors(page)
-  await seedProfileAndOpenPlans(page)
+  const accessToken = await seedProfileAndOpenPlans(page)
 
   const generatedPromise = page.waitForResponse(
     (response) =>
@@ -131,12 +131,44 @@ test('weekly plan supports substitution, modification and acceptance history', a
     (response) => response.url().endsWith('/decision') && response.request().method() === 'PUT',
   )
   await page.getByRole('button', { name: '采用调整后计划' }).click()
-  expect((await acceptedPromise).status()).toBe(200)
+  const acceptedResponse = await acceptedPromise
+  expect(acceptedResponse.status()).toBe(200)
+  const acceptedPlan = (await acceptedResponse.json()) as { id: string; revision: number }
   await expect(page.getByText('已采用', { exact: true })).toBeVisible()
   await expect(page.getByText('v3', { exact: true }).first()).toBeVisible()
   await page.locator('.plans-scroll').evaluate((element) => element.scrollTo({ top: 0 }))
   await page.screenshot({
     path: 'output/playwright/iteration-008-plans-mobile.png',
+  })
+
+  for (let expectedRevision = acceptedPlan.revision; expectedRevision < 11; expectedRevision += 1) {
+    const decision = await page.request.put(
+      `http://127.0.0.1:3100/v1/plans/weekly/${acceptedPlan.id}/decision`,
+      {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        data: { decision: 'accepted', expectedRevision, selections: [] },
+      },
+    )
+    expect(decision.status()).toBe(200)
+  }
+
+  await page.reload()
+  await expect(page.getByText('v11', { exact: true }).first()).toBeVisible()
+  const historyCard = page.locator('.history-card')
+  await historyCard.scrollIntoViewIfNeeded()
+  await expect(historyCard.locator('.plan-history')).toHaveCount(10)
+  const olderHistoryPromise = page.waitForResponse(
+    (response) =>
+      response.url().includes(`/v1/plans/weekly/${acceptedPlan.id}/history?`) &&
+      response.url().includes('cursor=') &&
+      response.request().method() === 'GET',
+  )
+  await page.getByRole('button', { name: '继续载入更早决定' }).click()
+  expect((await olderHistoryPromise).status()).toBe(200)
+  await expect(historyCard.locator('.plan-history')).toHaveCount(11)
+  await expect(page.getByText('已载入全部决定版本')).toBeVisible()
+  await page.screenshot({
+    path: 'output/playwright/iteration-049-progressive-plan-revisions-mobile.png',
   })
   expect(errors).toEqual([])
 })

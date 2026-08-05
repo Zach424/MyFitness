@@ -17,6 +17,7 @@ import type {
   WeeklyPlan,
   WeeklyPlanContent,
   WeeklyPlanHistoryItem,
+  WeeklyPlanHistoryQuery,
 } from '@myfitness/contracts'
 import {
   normalizePersistedPlanEvidence,
@@ -36,6 +37,7 @@ import type { QueryResult, QueryResultRow } from 'pg'
 import { DatabaseService } from '../database/database.service'
 import { InsightsService } from '../insights/insights.service'
 import { OnboardingService } from '../onboarding/onboarding.service'
+import { decodeRecordPageCursor, encodeRecordPageCursor } from '../pagination/record-page-cursor'
 
 type QueryExecutor = {
   query<T extends QueryResultRow>(text: string, values?: unknown[]): Promise<QueryResult<T>>
@@ -648,30 +650,49 @@ export class PlansService {
     })
   }
 
-  async history(userId: string, planId: string) {
+  async history(userId: string, planId: string, query: WeeklyPlanHistoryQuery = { limit: 20 }) {
+    const cursor = decodeRecordPageCursor(query.cursor, 'weekly plan history')
+    if (cursor && cursor.id !== planId) {
+      throw new BadRequestException('weekly plan history cursor is invalid or expired')
+    }
     const owned = await this.database.query<{ id: string }>(
       'SELECT id FROM weekly_plans WHERE id = $1 AND user_id = $2',
       [planId, userId],
     )
     if (!owned.rows[0]) throw new NotFoundException('weekly plan not found')
+    if (cursor) {
+      const anchor = await this.database.query<{ revision: number }>(
+        `SELECT revision FROM weekly_plan_revisions
+         WHERE plan_id = $1 AND user_id = $2 AND revision = $3`,
+        [planId, userId, cursor.revision],
+      )
+      if (!anchor.rows[0]) {
+        throw new BadRequestException('weekly plan history cursor is invalid or expired')
+      }
+    }
 
     const result = await this.database.query<{
+      revision: number
       action: WeeklyPlanHistoryItem['action']
       snapshot: WeeklyPlan
       decision_note: string | null
       changed_at: Date
     }>(
       `
-        SELECT action, snapshot, decision_note, changed_at
+        SELECT revision, action, snapshot, decision_note, changed_at
         FROM weekly_plan_revisions
         WHERE plan_id = $1 AND user_id = $2
+          AND ($3::integer IS NULL OR revision < $3)
         ORDER BY revision DESC
+        LIMIT $4
       `,
-      [planId, userId],
+      [planId, userId, cursor?.revision ?? null, query.limit + 1],
     )
+    const hasMore = result.rows.length > query.limit
+    const rows = result.rows.slice(0, query.limit)
     return {
       planId,
-      items: result.rows.map((revision) => {
+      items: rows.map((revision) => {
         const snapshot = weeklyPlanSchema.parse({
           ...revision.snapshot,
           evidence: normalizePersistedPlanEvidence(revision.snapshot.evidence),
@@ -683,6 +704,10 @@ export class PlansService {
           decisionNote: revision.decision_note,
         }
       }),
+      nextCursor:
+        hasMore && rows.at(-1)
+          ? encodeRecordPageCursor({ id: planId, revision: rows.at(-1)!.revision })
+          : null,
     }
   }
 }

@@ -8,6 +8,7 @@ import {
   planEvidenceSchema,
   planFreshnessSchema,
   planWorkoutLinkSchema,
+  weeklyPlanHistoryQuerySchema,
 } from './plan'
 
 describe('weekly plan contract', () => {
@@ -22,6 +23,13 @@ describe('weekly plan contract', () => {
         selections: [{ activityId: 'mon_squat', optionId: 'chair_squat' }],
       }),
     ).toMatchObject({ decision: 'modified' })
+  })
+
+  it('bounds immutable plan history pages and rejects extra query fields', () => {
+    expect(weeklyPlanHistoryQuerySchema.parse({})).toEqual({ limit: 20 })
+    expect(weeklyPlanHistoryQuerySchema.parse({ limit: '50' })).toEqual({ limit: 50 })
+    expect(weeklyPlanHistoryQuerySchema.safeParse({ limit: 51 }).success).toBe(false)
+    expect(weeklyPlanHistoryQuerySchema.safeParse({ unexpected: 'value' }).success).toBe(false)
   })
 
   it('rejects non-Monday weeks and ambiguous decision payloads', () => {
