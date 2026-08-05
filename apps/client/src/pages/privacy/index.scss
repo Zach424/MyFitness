@@ -546,7 +546,7 @@
 .consent-history__item-kicker {
   color: var(--color-mineral);
   font-family: var(--font-display);
-  font-size: 8px;
+  font-size: 0.5rem;
   font-weight: 740;
   letter-spacing: 0.12em;
 }
@@ -555,7 +555,7 @@
   max-width: 430px;
   margin-top: 5px;
   color: var(--color-muted);
-  font-size: 9px;
+  font-size: 0.5625rem;
   line-height: 1.6;
 }
 
@@ -567,8 +567,8 @@
   border-radius: var(--radius-control);
   color: var(--color-mineral);
   background: transparent;
-  font-size: 10px;
-  line-height: 40px;
+  font-size: 0.625rem;
+  line-height: 1.35;
   text-align: center;
 }
 
@@ -582,7 +582,7 @@
 .consent-history__empty {
   padding: 14px;
   color: var(--color-muted);
-  font-size: 10px;
+  font-size: 0.625rem;
   line-height: 1.6;
 }
 
@@ -605,14 +605,21 @@
 }
 
 .consent-history__failure-title {
-  font-size: 10px;
+  font-size: 0.625rem;
   font-weight: 720;
 }
 
 .consent-history__failure-note {
   margin-top: 4px;
-  font-size: 8px;
+  font-size: 0.5rem;
   line-height: 1.55;
+}
+
+.consent-history__failure-title,
+.consent-history__failure-note,
+.consent-history__item-title,
+.consent-history__item-time {
+  overflow-wrap: anywhere;
 }
 
 .consent-history__retry,
@@ -626,8 +633,9 @@
   border-radius: var(--radius-control);
   color: var(--color-mineral);
   background: var(--color-paper);
-  font-size: 9px;
+  font-size: 0.5625rem;
   font-weight: 720;
+  line-height: 1.35;
 }
 
 .consent-history__retry {
@@ -638,7 +646,7 @@
 .consent-history__progress {
   padding: 9px 13px 0;
   color: var(--color-muted);
-  font-size: 8px;
+  font-size: 0.5rem;
   line-height: 1.5;
 }
 
@@ -653,12 +661,16 @@
 .consent-history__index {
   color: rgba(36, 76, 102, 0.5);
   font-family: var(--font-metric);
-  font-size: 9px;
+  font-size: 0.5625rem;
+}
+
+.consent-history__item-copy {
+  min-width: 0;
 }
 
 .consent-history__item-title {
   margin-top: 4px;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 720;
 }
 
@@ -666,7 +678,7 @@
   margin-top: 4px;
   color: var(--color-muted);
   font-family: var(--font-metric);
-  font-size: 8px;
+  font-size: 0.5rem;
   line-height: 1.5;
 }
 
@@ -678,7 +690,7 @@
   padding: 11px 13px;
   color: var(--color-muted);
   font-family: var(--font-metric);
-  font-size: 8px;
+  font-size: 0.5rem;
 }
 
 .consent-history__footer-actions {

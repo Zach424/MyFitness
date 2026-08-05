@@ -1,6 +1,6 @@
 # Design system baseline
 
-Status: implemented and visually validated through iteration-085 consent-history read authority
+Status: implemented and visually validated through iteration-086 consent-history accessibility matrix
 
 Working brand: 衡迹 / MyFitness
 
@@ -878,6 +878,16 @@ The retained state names the failure family in a compact bilingual eyebrow, says
 The reviewed 390 × 844 evidence captures a failed continuation with ten accepted receipts still visible. The footer's explicit `核对最新凭证` action is validated functionally in the same browser flow; 320 px, large-text and full keyboard wrapping for every new state are the next bounded matrix rather than an unproven screenshot claim.
 
 - [390 × 844 retained consent-receipt prefix after continuation outage](../../output/playwright/iteration-085-consent-history-read-authority-mobile.png)
+
+## Consent-history accessibility matrix — iteration 086
+
+The history-owned type scale now uses root-relative units instead of fixed pixel sizes. At a 320 px viewport and 200% root font, the introductory authority note, bilingual failure eyebrow, title, retained-prefix receipt, long purpose/version labels and factual timestamps wrap within the privacy scroll plane. Buttons keep minimum targets but use content-driven line height, and long tokens use explicit wrapping rather than enlarging the page width.
+
+The reviewed failure state keeps one amber evidence block followed by the accepted prefix. The focus ring remains visible around `重新核对`, the ten-item retention/cursor sentence is complete, and the first long version wraps as readable text rather than clipping. The current consent controls remain above this optional chronology and are still usable after the history panel closes.
+
+The same 320 × 844 real API run uses only keyboard activation: Space opens, Enter retries the first read, Space refreshes the head, Enter starts continuation, Space retries the frozen cursor and Enter collapses. The scroll container is asserted at equal 320 px client/scroll width in unknown, ready and retained-stale states. This is Chromium H5 evidence; real screen-reader, browser text-only zoom and WeChat-device behavior remain separate gates.
+
+- [320 × 844 consent-history retained prefix at 200% root text](../../output/playwright/iteration-086-consent-history-large-text-mobile.png)
 
 ## Screenshot review checklist
 

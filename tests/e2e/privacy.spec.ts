@@ -444,6 +444,143 @@ test('consent receipt history retains authority across initial, refresh and cont
   expect(browserErrors.filter((message) => !injectedHttpFailures.includes(message))).toEqual([])
 })
 
+test('consent history reflows at 320px with large text and completes the keyboard matrix', async ({
+  page,
+  request,
+}) => {
+  await page.setViewportSize({ width: 320, height: 844 })
+  const browserErrors = collectBrowserErrors(page)
+  const session = await seedAccount(page, request)
+
+  await database.query('DELETE FROM nutrition_photo_candidates WHERE user_id = $1', [
+    session.userId,
+  ])
+  await database.query('DELETE FROM consent_events WHERE user_id = $1', [session.userId])
+  await database.query(
+    `INSERT INTO consent_events (id, user_id, purpose, version, accepted_at, revoked_at)
+     SELECT gen_random_uuid(),
+            $1,
+            (ARRAY[
+              'ai_plan_explanation',
+              'food_photo_analysis',
+              'progress_photo_analysis',
+              'progress_photo_retention'
+            ])[1 + ((series - 1) % 4)],
+            'accessibility-version-' || LPAD(series::text, 2, '0'),
+            NOW() - make_interval(mins => series),
+            CASE WHEN series % 4 = 0
+                 THEN NOW() - make_interval(mins => series) + INTERVAL '30 seconds'
+                 ELSE NULL
+            END
+     FROM generate_series(1, 12) AS series`,
+    [session.userId],
+  )
+  await page.reload()
+  await page.addStyleTag({ content: 'html { font-size: 200% !important; }' })
+
+  const expectNoHorizontalOverflow = async () => {
+    await expect
+      .poll(() =>
+        page.locator('.privacy-scroll').evaluate((element) => ({
+          clientWidth: element.clientWidth,
+          scrollWidth: element.scrollWidth,
+        })),
+      )
+      .toEqual({ clientWidth: 320, scrollWidth: 320 })
+  }
+
+  await page.route(
+    '**/v1/me/privacy/consents/history?limit=10',
+    (route) =>
+      route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'large-text-initial-raw-copy' }),
+      }),
+    { times: 1 },
+  )
+  const toggle = page.getByRole('button', { name: '查看全部凭证' })
+  await toggle.focus()
+  await page.keyboard.press(' ')
+  await expect(page.getByText('授权凭证历史服务暂时不可用。')).toBeVisible()
+  await expect(page.getByText(/不会显示为空历史/)).toBeVisible()
+  await expect(page.locator('#consent-history-retry')).toBeFocused()
+  await expectNoHorizontalOverflow()
+
+  await page.keyboard.press('Enter')
+  await expect(page.locator('.consent-history__item')).toHaveCount(10)
+  await expect(page.getByRole('button', { name: '核对最新凭证' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '加载更早凭证' })).toBeVisible()
+  await expectNoHorizontalOverflow()
+
+  let refreshReads = 0
+  await page.route('**/v1/me/privacy/consents/history?limit=10', async (route) => {
+    refreshReads += 1
+    await route.continue()
+  })
+  const refresh = page.getByRole('button', { name: '核对最新凭证' })
+  await refresh.focus()
+  await page.keyboard.press(' ')
+  await expect.poll(() => refreshReads).toBe(1)
+  await expect(refresh).toHaveAttribute('aria-disabled', 'false')
+
+  const continuationUrls: string[] = []
+  await page.route('**/v1/me/privacy/consents/history?limit=10&cursor=*', async (route) => {
+    continuationUrls.push(route.request().url())
+    if (continuationUrls.length === 1) {
+      await route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'large-text-continuation-raw-copy' }),
+      })
+      return
+    }
+    await route.continue()
+  })
+  const continuation = page.getByRole('button', { name: '加载更早凭证' })
+  await continuation.focus()
+  await page.keyboard.press('Enter')
+  await expect(page.locator('.consent-history__item')).toHaveCount(10)
+  await expect(page.getByText(/游标没有前进/)).toBeVisible()
+  await expect(page.locator('#consent-history-retry')).toBeFocused()
+  await expectNoHorizontalOverflow()
+  await page.locator('.privacy-scroll').evaluate((scroll) => {
+    const history = scroll.querySelector('.consent-history')
+    if (!(history instanceof HTMLElement)) return
+    scroll.scrollTop +=
+      history.getBoundingClientRect().top - scroll.getBoundingClientRect().top - 12
+  })
+  await page.screenshot({
+    path: 'output/playwright/iteration-086-consent-history-large-text-mobile.png',
+    fullPage: true,
+  })
+
+  await page.keyboard.press(' ')
+  await expect(page.locator('.consent-history__item')).toHaveCount(12)
+  expect(continuationUrls).toHaveLength(2)
+  expect(continuationUrls[1]).toBe(continuationUrls[0])
+  const collapse = page.getByRole('button', { name: '收起历史' })
+  await collapse.focus()
+  await page.keyboard.press('Enter')
+  await expect(page.locator('.consent-history__panel')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: '查看全部凭证' })).toHaveAttribute(
+    'aria-expanded',
+    'false',
+  )
+  await expect(page.getByRole('button', { name: '撤回这项授权' }).first()).toHaveAttribute(
+    'aria-disabled',
+    'false',
+  )
+  await expect(page.locator('body')).not.toContainText('large-text-initial-raw-copy')
+  await expect(page.locator('body')).not.toContainText('large-text-continuation-raw-copy')
+
+  const injectedHttpFailures = browserErrors.filter((message) =>
+    /Failed to load resource: the server responded with a status of 503/.test(message),
+  )
+  expect(injectedHttpFailures).toHaveLength(2)
+  expect(browserErrors.filter((message) => !injectedHttpFailures.includes(message))).toEqual([])
+})
+
 test('logout removes every local editor draft before starting a new session', async ({
   page,
   request,
