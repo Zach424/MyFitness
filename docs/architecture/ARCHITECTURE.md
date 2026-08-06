@@ -1,6 +1,6 @@
 # 架构基线
 
-状态：已接受并实现至第 093 轮交付路线图正文中文化；架构变更必须新增 ADR。
+状态：已接受并实现至第 094 轮架构基线正文中文化；架构变更必须新增 ADR。
 
 ## 系统形态
 
@@ -20,161 +20,161 @@ flowchart TB
 
 ## 仓库边界
 
-| Path                     | Responsibility                                               | Must not own                                         |
-| ------------------------ | ------------------------------------------------------------ | ---------------------------------------------------- |
-| `apps/client`            | End-user Mini Program/H5 rendering and interaction           | Health formulas, model prompts, server authorization |
-| `apps/admin`             | Operator login, bounded support evidence and audit reading   | User-content browsing or database mutation           |
-| `apps/api`               | Authentication, authorization, record lifecycle, plans, jobs | Provider-specific AI code in controllers             |
-| `apps/mobile`            | Native UI and platform health/device adapters                | Independent business schema                          |
-| `services/ai`            | Model gateway, image pipeline, prompt/evaluation versions    | Final authority to persist confirmed user facts      |
-| `packages/contracts`     | API schemas, enums, serialization                            | Database clients or UI styling                       |
-| `packages/domain`        | Units, metrics, plan and deterministic safety rules          | Network or framework dependencies                    |
-| `packages/design-tokens` | Cross-client visual primitives                               | Product data or business logic                       |
+| 路径                     | 职责                                     | 不得负责                           |
+| ------------------------ | ---------------------------------------- | ---------------------------------- |
+| `apps/client`            | 最终用户小程序/H5 的渲染与交互           | 健康公式、模型提示词、服务端授权   |
+| `apps/admin`             | 操作员登录、有界支持证据与审计读取       | 浏览用户内容或变更数据库           |
+| `apps/api`               | 身份验证、授权、记录生命周期、计划与任务 | 在控制器中实现提供方特定的 AI 代码 |
+| `apps/mobile`            | 原生 UI 与平台健康/设备适配器            | 独立的业务 Schema                  |
+| `services/ai`            | 模型网关、图像流水线、提示词/评估版本    | 持久化用户已确认事实的最终权限     |
+| `packages/contracts`     | API Schema、枚举与序列化                 | 数据库客户端或 UI 样式             |
+| `packages/domain`        | 单位、指标、计划与确定性安全规则         | 网络或框架依赖                     |
+| `packages/design-tokens` | 跨客户端视觉基础元素                     | 产品数据或业务逻辑                 |
 
 ## 交付架构
 
-Start as a pnpm monorepo and modular monolith. A single API deployable keeps transactions, authorization, migrations, and local development clear. AI work runs behind a queue/worker boundary because it has different runtimes, latency, cost, retry, and observability needs. Extract more services only after a measured scaling or ownership constraint.
+项目从 pnpm 单体仓库和模块化单体架构起步。单一 API 部署单元让事务、授权、迁移和本地开发保持清晰。AI 工作位于队列/工作进程边界之后，因为其运行时、延迟、成本、重试和可观测性需求不同。只有在发现经过测量的扩展压力或所有权约束后才拆分更多服务。
 
-Implemented foundation:
+已实现基础：
 
-- 中文项目记录由无第三方运行时依赖的 `myfitness-chinese-documentation/v2` 门禁约束。四份活跃权威文档保留中文导航契约；权威项目状态和交付路线图还要求各自整体中文占比不低于 72%，且不得存在纯英文叙述行；第 090 轮起的迭代档案和 ADR-0085 起的决策记录必须使用中文标题、元数据与以中文为主的正文。仓库状态仍是唯一权威来源，Obsidian 只保存逐字节镜像，其他活跃正文和历史英文档案按受控批次迁移。
+- 中文项目记录由无第三方运行时依赖的 `myfitness-chinese-documentation/v2` 门禁约束。四份活跃权威文档保留中文导航契约；权威项目状态、交付路线图和架构基线还要求各自整体中文占比不低于 72%，且不得存在纯英文叙述行；第 090 轮起的迭代档案和 ADR-0085 起的决策记录必须使用中文标题、元数据与以中文为主的正文。仓库状态仍是唯一权威来源，Obsidian 只保存逐字节镜像，用户身份运行手册和历史英文档案按受控批次迁移。
 
-- `apps/api` is a NestJS 11 process exposing readiness and health-record routes.
-- `packages/contracts` owns Zod request/response schemas and emits OpenAPI 3.0 JSON Schema.
-- `packages/domain` owns measurement units, canonical conversion, plausible ranges and integer score rules.
-- PostgreSQL 18.4 stores measurements through parameterized `pg`; ordered SQL migrations run transactionally and record a SHA-256 checksum to detect drift.
-- Protected routes resolve a provider-bound opaque Bearer session to a server-owned user principal. Only SHA-256 token hashes are persisted. The production-disabled local issuer and server-verified WeChat `code2Session` adapter share the ownership boundary; WeChat `session_key` is never stored.
-- The workout, meal and health-record create/correction editors share a dependency-free `myfitness-sensitive-draft/v1` vault over platform application storage. Exact per-editor guards accept incomplete form input but reject unknown fields; envelopes are owner-scoped, capped at 96 KiB, expire after 24 hours and require explicit restore/discard. Correction payloads carry only aggregate ID and base revision; restore performs one exact owner-visible current-aggregate read and proceeds only on an exact revision match. Missing/stale targets clear without submitting, and a change after restore still reaches the API with the previously rechecked expected revision. Save, cancel, logout and erasure initiation clear the relevant scope. Photos, authorization material, erasure receipts and AI candidate sheets are outside the draft contract.
-- The three record editors share a dependency-free local occurrence resolver. A calendar minute plus explicit IANA timezone is round-tripped through platform `Intl` data; nonexistent DST minutes fail and repeated minutes require an explicit offset choice. Client validation and shared write contracts reject future instants, while untouched corrections retain the exact original timestamp rather than truncating seconds to the editor's minute precision.
-- Administrator routes use an independent operator/identity/role/session boundary and `adminBearer` OpenAPI scheme. The API verifies pre-provisioned OIDC subjects against remote JWKS, issuer, audience, age and nonce, rejects token replay, re-resolves roles per request and keeps the local operator issuer production-disabled.
-- Adult profile, training goal, risk eligibility and immutable purpose/version consent events persist transactionally. Profile updates use optimistic revision checks.
-- A lost profile/goal PUT response replaces save with one current-profile GET. The client retains only the exact submitted request and nullable base revision in page memory and locks its controls until resolution. A first/advanced revision is accepted only when every response-visible profile, goal, ordered constraint, risk flag and required consent version matches; same-revision/confirmed-absence evidence restores only a later explicit-save boundary. Changed or missing current evidence reuses the existing no-silent-rebase resolution while preserving local input. Explicit refusal terminates the attempt, and reconciliation never sends PUT, polls or persists a command.
-- Body/recovery record creation, replacement and soft deletion run in database transactions. Each accepted state is copied to an append-only revision table; writes use expected revisions and lists exclude deleted records while owner history remains available.
-- Current health/workout/meal lists use revision-backed keyset pagination ordered by occurrence time, aggregate creation time and UUID descending. Versioned base64url cursors contain only aggregate UUID/revision; the API recovers the immutable owner sort boundary from revision tables, so anchor correction/deletion cannot invalidate continuation. No-query limits remain 100/50/50 for compatibility, editors load 20 at a time, and exact current-resource reads support off-page correction recovery without exposing deleted or foreign targets.
-- Health/workout/meal aggregate histories use revision-keyset pagination with the same minimal cursor envelope, a 20-row default and 50-row maximum. The API requires the path UUID, owner and exact anchor revision to agree before querying the strictly older suffix; editors load 10 at a time, new head revisions do not disturb continuation and soft-deleted aggregates retain owner-visible audit history.
-- Their three client sheets share a page-memory audit-read authority. Requested aggregate context survives an unknown first page, successful empty is distinct from unread, and failed continuation retains the accepted newest-first prefix under a frozen-cursor receipt. Retry repeats only the failed read; close, parent refresh and unmount invalidate late responses. An optional H5 focus boundary stores only the initiating control ID, focuses a safe close action after guarded keyboard/pointer opening, allows read failure to move focus to retry and restores the exact trigger or stable ledger fallback after Escape, explicit close or scrim dismissal. Programmatic parent close never steals focus. The sheets do not poll, persist audit snapshots, expose raw transport copy or borrow mutation authority from their parent ledgers.
-- Destructive confirmation for current health records, workouts and meals uses a separate page-memory focus boundary. Guarded row activation enters on safe cancel; Escape and explicit cancel restore the exact trigger. After submission, dismissal freezes until the expected-revision DELETE resolves. Failure refocuses cancel; success focuses a stable ledger refresh after the removed row disappears. The focus boundary neither persists state nor changes server soft-delete, revision or history semantics.
-- Both focus boundaries delegate acquisition to one H5-only finite scheduler. It makes at most four attempts at an 80 ms default interval, accepts explicit cancellation/caller authority and stops when another interactive control owns focus. After one successful `focus()`, it verifies stable element identity once; if Taro replaces the custom element and focus falls to the page body, the replacement may be reacquired inside the remaining budget. Dialog generations supersede enter/restore/complete work, while history focus also requires the current read token and a committed non-busy failure phase. Primary-before-fallback selection remains exact; no global event listener, persistence, unbounded polling or WeApp DOM claim is introduced.
-- A lost aggregate-delete response enters a shared read-side recovery receipt outside the closed modal. Network/retryable/unknown outcomes retain only the target aggregate/revision in page memory and freeze all delete triggers; explicit 4xx refusal is terminal. The exact owner-visible resource read resolves absence without another DELETE, allows a later user-confirmed attempt only for the identical revision, and replaces changed revision evidence while invalidating the old intent. Reconciliation read failure keeps the receipt, while a successful full-ledger refresh clears it as equivalent current evidence. No automatic replay or persistent deletion queue exists.
-- A lost aggregate-correction response replaces the health/workout/meal primary save with exact-resource reconciliation instead of replaying PUT. The client keeps the target ID, base revision, exact submitted payload and draft signature only in page memory. An advanced revision is accepted only when a dependency-free projection compares every submitted field equal; the same revision restores a later explicit-save boundary, while changed content/revision updates the comparison base without overwriting the draft. Missing current evidence removes the stale ledger row and freezes the correction until cancel so it cannot become an accidental create. Any input mutation invalidates the old recovery action before another callback can use it. No correction idempotency promise, request persistence or background replay exists.
-- A lost meal-favorite PUT/DELETE response replaces all favorite toggles with current favorite-list reconciliation. The client retains the operation, food key and exact submitted save snapshot only in page memory. Save evidence requires the key and complete food/default-serving projection to match; delete evidence requires key absence, while a changed snapshot is divergent and an unchanged list only permits a later explicit toggle. The accepted list can refresh independently without mutating the current meal snapshot or selected source tab. Explicit refusal terminates the attempt, and reconciliation never sends another mutation, polls, persists a request or creates a background queue.
-- A lost optional-consent revocation response replaces every custody action with current-overview reconciliation. The client retains only the target purpose in page memory and keeps the accepted inventory visible under an explicit receipt. One GET accepts only an explicit `revoked` state as applied; `active` permits a later fresh confirmation, while missing/never-granted evidence is divergent. Reconciled completion never claims removed-analysis/photo counts because the overview cannot reconstruct the lost POST result. Explicit refusal is terminal, and reconciliation never POSTs, polls, persists the purpose/request or creates a queue.
-- Workout session, ordered exercise and ordered set rows form one bounded relational aggregate. Server-side domain rules normalize load, calculate completed-only summaries and derive `completed` only when every persisted set is complete; deprecated client status hints are ignored. Each accepted aggregate state is also stored as an immutable JSON snapshot.
-- A dependency-free versioned starter catalog and owner-scoped custom exercise directory provide aliases, explicit tracking modes and equipment. Catalog create/correct/archive has immutable revisions, while workouts snapshot the selected definition fields instead of live-joining mutable directory content.
-- Exercise/food definition histories use a 20-row default, 50-row maximum and the same minimal UUID/revision cursor envelope. Exact route/owner/anchor checks precede revision-keyset continuation; archived definitions retain owner audit access and both clients render a shared 10-row progressive definition ledger. The ledger reuses the page-memory audit reader: unread differs from accepted-empty, a failed suffix keeps the exact immutable prefix under a frozen cursor and close/unmount invalidates late results. Definition correction/archive remain governed by the independently accepted owner register and are not frozen by an audit-only outage.
-- A versioned starter food catalog plus owner-scoped custom definitions provide searchable aliases, required user-confirmed nutrition provenance, idempotent create, optimistic correction/archive and immutable definition revisions. Nutrition meal/item rows snapshot the selected composition and display/canonical portions; server-side rules calculate totals, owner favorites remain independent snapshots and definition edits cannot rewrite either fact boundary.
-- Read-only insight projections query confirmed/current source rows without persisted duplicate state. The dashboard produces Today evidence, nullable three-day readiness and cross-domain totals; exercise groups one stable key/completed sets; nutrition generates 90 local dates with null missing evidence; health groups one exact confirmed metric in its canonical unit while retaining display/source/timezone/revision provenance. Every projection recomputes after source correction/deletion.
-- The cross-domain history calendar is a separate bounded read model: PostgreSQL generates exactly 28 local dates in the requested IANA timezone and left-joins owner-visible current health, workout and meal occurrence facts no later than the reference instant. It returns counts and `hasRecords`, never zero-behavior/adherence claims, and persists no duplicate calendar state. The client accepts the complete range/timezone/series atomically: unread totals remain unknown, while a failed refresh retains one labeled page-memory snapshot with date selection and all backfill navigation frozen. One explicit foreground retry restores authority without polling or persistent projection cache. A backfill intent carries only a validated local date (at most 90 days old) and timezone; editors keep that date incomplete until the user supplies a real minute and the existing occurrence resolver maps it to an instant.
-- A deterministic weekly-plan aggregate snapshots onboarding revision and evidence, stores the current JSONB plan plus immutable revisions, and re-checks current eligibility before an accept/modify transition. Its history uses the common 20-default/50-maximum UUID/revision cursor boundary over the existing owner/plan/revision index; Week Fold renders 10 newest-first decisions before an explicit older-page request. A failed continuation retains that accepted prefix under a frozen-cursor receipt and retries only the suffix. Current-plan and AI-explanation evidence remain independent, accepted-empty explanation history is explicit and no history retry can invoke generation or a model write.
-- A FastAPI worker exposes an authenticated provider-neutral explanation endpoint. Local fixture and OpenAI Responses adapters share a strict schema; the business API owns consent, authorization, idempotency, validation, fallback and persistence.
-- AI explanation runs are minimized, fingerprinted and bound to the exact plan revision plus prompt/model/validator/consent provenance. Raw prompts and input payloads are not persisted.
-- Plan explanations and food-photo display copy share a versioned deterministic safety policy. Validator v2 applies Unicode NFKC normalization, strips format controls, compacts separators for policy matching and normalizes numeric evidence without rewriting persisted copy; stored v1 provenance remains readable.
-- Food-photo reservations keep the raw upload in memory, sanitize to a private expiring JPEG, write it conditionally with a checksum to S3-compatible storage, send only that JPEG plus a catalog allow-list to the worker, validate candidates deterministically and enqueue media deletion on confirm/failure/reject/delete/expiry.
-- Food-photo prompt v2 treats all image text as untrusted data: the provider must not follow, repeat or reveal image-borne instructions, prompts or secrets, and instruction-dominant images are rejected instead of becoming nutrition candidates.
-- Progress-photo reservations keep raw uploads in memory, sanitize into the separate private `progress` object scope and perform only deterministic orientation/resolution/brightness/contrast checks. Analysis-only media expires after 24 hours; long-term comparison requires separate retention consent, uses the user's declared view and calculates no body/posture score.
-- PostgreSQL data-operation jobs are transactionally enqueued with lifecycle changes and claimed atomically using `FOR UPDATE SKIP LOCKED`, leases, bounded exponential retry, attempt evidence and dead-letter state. Successful jobs clear payload and sensitive dedupe material.
-- The authenticated privacy boundary inventories owned data, creates a no-store repeatable-read portable JSON export, records renewed consent cycles, revokes optional processing and closes account access before asynchronous media/primary erasure.
-- Optional-consent response-loss recovery binds current custody authority to the exact target purpose. Until one overview read resolves that purpose, export, all revocation and erasure preparation are frozen; current `revoked` evidence proves only inactive authorization, not the mutation's cleanup counts.
-- Portable-export client handling keeps the server artifact temporary until a privacy-only adapter verifies its JSON media type, exact v4 envelope/collection topology, identifiers, time and 50 MiB boundary. H5 creates a download and WeApp persists a file only after verification; page state receives only version, generation time and byte length.
-- Consent-receipt history remains separate from current authorization. A strict owner-scoped endpoint pages append-oriented acceptance intervals by database-native `(accepted_at, id)` order, exposes no current-status/user/provider/health fields and keeps one UUID-only opaque cursor; the client labels accepted/revoked history as read-only evidence and stores it only in page memory.
-- `durable-erasure-v2` receipts require a separate status token and expose independent primary/media/provider/backup dispositions. An external HMAC erasure ledger is replayed before a restored database can serve traffic, preventing known deleted accounts from being resurrected by an older backup.
-- Outer request middleware validates UUIDv4 correlation and records final status/duration from stable route templates. A Redis-backed IP guard runs before authentication; a second actor/route limiter runs after authentication. HMAC actor keys expire atomically, business traffic fails closed without Redis, and liveness stays separate from PostgreSQL+Redis+object-storage readiness.
-- Exact administrator support lookup requires an account UUID, bounded ticket and enumerated reason, then returns lifecycle/aggregate evidence only. Every accepted/not-found lookup and authorization decision is correlated into an append-only audit table whose target identifiers are HMAC references and whose update/delete trigger fails closed.
-- `apps/admin` is a Next.js 16 App Router BFF/UI. Authorization Code + PKCE/state/nonce remains server-side, administrator API tokens stay in secure-by-default HttpOnly cookies, and the Evidence Rail renders only the bounded support/audit contract.
-- API, administrator and AI runtime boundaries have non-root OCI images with pinned base manifests, health checks and source/revision labels. API production output is a pruned pnpm deploy directory; administrator output is Next.js standalone; Python runtime dependencies are fully pinned.
-- A one-shot API-image migration task gates container traffic. The disposable deployment topology proves container networking, migrations, PostgreSQL/Redis/object readiness, AI health and administrator security headers, while remaining explicitly non-production.
-- API binding defaults to loopback outside production and all interfaces in production, with an explicit IP-only override. GitHub Actions defines source gates, image smoke, multi-architecture GHCR publishing and provenance attestations; managed infrastructure remains vendor-neutral.
-- Every external GitHub Action is selected by a reviewed full commit in a strict lock rather than a branch or tag. Offline workflow discovery rejects drift, exact SemVer comments preserve review intent, weekly Dependabot proposals expose updates and repository policy requires SHA pins after the baseline reaches `main`.
-- Candidate publication begins with dependency-free hosted qualification: the remote lightweight/annotated tag must resolve to the workflow commit, that commit must remain in current `main`, and the exact SHA must have a completed successful `main` push run of `.github/workflows/ci.yml`. The strict qualification record is checked again before manifest assembly and retained with the immutable Release.
+- `apps/api` 是一个 NestJS 11 进程，提供就绪状态与健康记录路由。
+- `packages/contracts` 负责 Zod 请求/响应 Schema，并生成 OpenAPI 3.0 JSON Schema。
+- `packages/domain` 负责测量单位、规范转换、合理范围与整数评分规则。
+- PostgreSQL 18.4 通过参数化 `pg` 存储测量值；有序 SQL 迁移在事务中执行，并记录 SHA-256 校验和以检测漂移。
+- 受保护路由把与提供方绑定的不透明 Bearer 会话解析为服务端拥有的用户主体。持久化内容只有 SHA-256 令牌哈希。生产环境禁用的本地签发方与服务端验证的微信 `code2Session` 适配器共享同一所有权边界；永不存储微信 `session_key`。
+- 训练、餐食和健康记录的新建/更正编辑器在平台应用存储上共享无依赖的 `myfitness-sensitive-draft/v1` 保管库。各编辑器的精确守卫允许不完整表单输入，但拒绝未知字段；信封按所有者限定，最大 96 KiB，24 小时后过期，并要求显式恢复或丢弃。更正载荷只携带聚合 ID 和基础修订；恢复时执行一次精确的、所有者可见的当前聚合读取，并且只在修订完全匹配时继续。目标缺失或过期时清理草稿且不提交；恢复后发生的修改仍以此前复核的预期修订发送到 API。保存、取消、登出和发起擦除会清理相关范围。照片、授权材料、擦除收据和 AI 候选表不属于草稿契约。
+- 三个记录编辑器共享无依赖的本地发生时间解析器。日历分钟与显式 IANA 时区通过平台 `Intl` 数据往返解析；不存在的 DST 分钟会失败，重复分钟必须显式选择偏移量。客户端校验与共享写入契约拒绝未来时刻；未改动的更正保留精确原始时间戳，不会按编辑器的分钟精度截断秒数。
+- 管理员路由采用独立的操作员/身份/角色/会话边界和 `adminBearer` OpenAPI 方案。API 针对远程 JWKS、签发方、受众、时效与 nonce 验证预配置 OIDC 主体，拒绝令牌重放，每次请求重新解析角色，并在生产环境禁用本地操作员签发方。
+- 成人档案、训练目标、风险资格与不可变的用途/版本同意事件在事务中持久化。档案更新使用乐观修订检查。
+- 档案/目标 PUT 响应丢失时，保存流程改为执行一次当前档案 GET。客户端只在页面内存保留精确提交的请求和可空基础修订，并锁定控件直至解析完成。只有响应中可见的档案、目标、有序约束、风险标志和必需同意版本全部匹配，才接受首个/更高修订；相同修订或已确认不存在的证据只恢复到稍后显式保存的边界。当前证据变化或缺失时，复用现有的“禁止静默变基”处理并保留本地输入。显式拒绝会终止尝试；对账绝不发送 PUT、轮询或持久化命令。
+- 身体/恢复记录的新建、替换与软删除都在数据库事务中执行。每个接受状态复制到只追加修订表；写入使用预期修订，列表排除已删除记录，但所有者历史仍可访问。
+- 当前健康/训练/餐食列表使用修订支撑的键集分页，按发生时间、聚合创建时间和 UUID 降序排列。版本化 base64url 游标只包含聚合 UUID/修订；API 从修订表恢复不可变的所有者排序边界，因此锚点更正或删除不会使续页失效。为兼容性保留无查询参数时的 100/50/50 上限，编辑器每次加载 20 条；精确当前资源读取支持页外更正恢复，且不会暴露已删除或外部所有者目标。
+- 健康/训练/餐食聚合历史使用带同一最小游标信封的修订键集分页，默认 20 行，最大 50 行。API 在查询严格更旧的后缀前，要求路径 UUID、所有者和精确锚点修订一致；编辑器每次加载 10 条，新头部修订不扰动续页，软删除聚合仍保留所有者可见的审计历史。
+- 三个客户端面板共享页面内存中的审计读取权限。请求的聚合上下文可以经受首个页面未知；成功空结果与未读取明确区分；续页失败时，在冻结游标收据下保留已接受的最新优先前缀。重试只重复失败的读取；关闭、父级刷新和卸载会使迟到响应失效。可选 H5 焦点边界只保存发起控件 ID，在受保护的键盘/指针打开后聚焦安全关闭动作，读取失败时允许焦点移到重试，并在 Escape、显式关闭或遮罩关闭后恢复精确触发器或稳定账本回退。父级程序化关闭绝不窃取焦点。面板不轮询、不持久化审计快照、不暴露原始传输文案，也不借用父账本的变更权限。
+- 当前健康记录、训练和餐食的破坏性确认使用独立的页面内存焦点边界。受保护的行激活会先进入安全取消；Escape 和显式取消恢复精确触发器。提交后冻结关闭，直到带预期修订的 DELETE 完成。失败时重新聚焦取消；成功时在已删除行消失后聚焦稳定的账本刷新。焦点边界既不持久化状态，也不改变服务端软删除、修订或历史语义。
+- 两种焦点边界都把焦点获取委托给同一个仅 H5 有限调度器。它按默认 80 ms 间隔最多尝试四次，接受显式取消/调用方权限，并在另一个交互控件持有焦点时停止。一次 `focus()` 成功后会再次验证稳定元素身份；如果 Taro 替换自定义元素且焦点落到页面主体，可在剩余预算内重新获取替代元素。对话框代次会取代进入/恢复/完成任务；历史焦点还要求当前读取令牌和已提交的非忙碌失败阶段。主目标优先于回退目标的选择保持精确；不引入全局事件监听器、持久化、无界轮询或 WeApp DOM 声明。
+- 聚合删除响应丢失时，在已关闭模态框之外进入共享读取侧恢复收据。网络/可重试/未知结果只在页面内存保留目标聚合/修订并冻结全部删除触发器；显式 4xx 拒绝为终态。精确的所有者可见资源读取无需再次 DELETE 即可确认不存在；只有修订相同才允许稍后的用户确认尝试，修订变化时替换证据并使旧意图失效。对账读取失败会保留收据；完整账本刷新成功则作为等价当前证据清除它。不存在自动重放或持久删除队列。
+- 聚合更正响应丢失时，健康/训练/餐食主保存流程改用精确资源对账，而不重放 PUT。客户端只在页面内存保留目标 ID、基础修订、精确提交载荷和草稿签名。只有无依赖投影比较每个提交字段都相等时，才接受更高修订；相同修订恢复到稍后显式保存的边界；内容/修订变化则更新比较基础而不覆盖草稿。当前证据缺失时移除过期账本行，并冻结更正直到取消，防止意外变为新建。任何输入变化都会在其他回调使用旧恢复动作前使其失效。不承诺更正幂等性，也不持久化请求或后台重放。
+- 餐食收藏 PUT/DELETE 响应丢失时，所有收藏切换都改用当前收藏列表对账。客户端只在页面内存保留操作、食物键和精确提交的保存快照。保存证据要求键以及完整食物/默认份量投影匹配；删除证据要求键不存在；变化的快照属于分歧，未变化列表只允许稍后显式切换。已接受列表可以独立刷新，不改变当前餐食快照或所选来源标签。显式拒绝终止尝试；对账绝不发送另一项变更、轮询、持久化请求或创建后台队列。
+- 可选同意撤销响应丢失时，每项数据保管操作都改用当前概览对账。客户端只在页面内存保留目标用途，并在显式收据下保持已接受清单可见。一次 GET 只有看到明确 `revoked` 状态才认定已应用；`active` 允许稍后重新确认，缺失/从未授予的证据属于分歧。对账完成绝不声称移除了多少分析或照片，因为概览无法重建丢失的 POST 结果。显式拒绝为终态；对账绝不再次 POST、轮询、持久化用途/请求或创建队列。
+- 训练课次、有序动作与有序组行组成一个有界关系聚合。服务端领域规则规范化负荷，计算仅已完成摘要，并且只有每个持久化组都完成时才派生 `completed`；已弃用的客户端状态提示会被忽略。每个接受的聚合状态还会保存为不可变 JSON 快照。
+- 无依赖的版本化起始目录和按所有者限定的自定义动作目录提供别名、显式跟踪模式与器械。目录的新建/更正/归档具有不可变修订；训练会快照所选定义字段，而不是实时关联可变目录内容。
+- 动作/食物定义历史使用默认 20 行、最大 50 行和同一最小 UUID/修订游标信封。修订键集续页前先执行精确路由/所有者/锚点检查；已归档定义仍保留所有者审计访问，两个客户端都渲染共享的 10 行渐进定义账本。账本复用页面内存审计读取器：未读与已接受空结果不同，后缀失败时在冻结游标下保留精确不可变前缀，关闭/卸载会使迟到结果失效。定义更正/归档仍受独立接受的所有者登记册控制，不会因仅审计中断而冻结。
+- 版本化起始食物目录与按所有者限定的自定义定义提供可搜索别名、必需的用户确认营养来源凭据、幂等新建、乐观更正/归档和不可变定义修订。饮食餐食/条目行快照所选组成及展示/规范份量；服务端规则计算总计，所有者收藏仍是独立快照，定义编辑不能重写任一事实边界。
+- 只读洞察投影查询已确认/当前来源行，不持久化重复状态。仪表板生成“今日”证据、可空三日恢复度和跨领域总计；动作按一个稳定键/已完成组进行分组；饮食生成 90 个本地日期并以空值表示缺失证据；健康在规范单位中按一个精确已确认指标分组，同时保留展示/来源/时区/修订凭据。来源更正/删除后，每个投影都会重新计算。
+- 跨领域历史日历是独立有界读取模型：PostgreSQL 在请求的 IANA 时区中精确生成 28 个本地日期，并左关联不晚于参考时刻且所有者可见的当前健康、训练和餐食发生事实。它返回计数与 `hasRecords`，从不声称零行为或依从性，也不持久化重复日历状态。客户端原子接受完整范围/时区/序列：未读总计保持未知；刷新失败时保留一个带标签的页面内存快照，并冻结日期选择与全部回填导航。一次显式前台重试可恢复权限，无需轮询或持久投影缓存。回填意图只携带已验证的本地日期（最多 90 天前）和时区；在用户提供真实分钟且现有发生时间解析器把它映射为时刻前，编辑器都保持该日期未完成。
+- 确定性周计划聚合会快照引导修订与证据，保存当前 JSONB 计划和不可变修订，并在接受/修改转换前重新检查当前资格。其历史在既有所有者/计划/修订索引上使用通用的默认 20/最大 50 UUID/修订游标边界；“周折叠”在显式请求更旧页面前渲染最新优先的 10 项决策。续页失败时，在冻结游标收据下保留已接受前缀，只重试后缀。当前计划与 AI 解释证据保持独立；已接受空解释历史明确可见，任何历史重试都不能触发生成或模型写入。
+- FastAPI 工作进程提供经过身份验证且与提供方无关的解释端点。本地固定测试实现与 OpenAI Responses 适配器共享严格 Schema；业务 API 负责同意、授权、幂等、校验、回退与持久化。
+- AI 解释运行经过最小化和指纹化，并绑定到精确计划修订及提示词/模型/校验器/同意来源凭据。不持久化原始提示词和输入载荷。
+- 计划解释与食物照片展示文案共享版本化确定性安全策略。校验器 v2 执行 Unicode NFKC 规范化，移除格式控制字符，压缩分隔符用于策略匹配，并规范数字证据而不重写持久文案；已存储的 v1 来源凭据仍可读取。
+- 食物照片预留把原始上传保留在内存中，净化为私有且会过期的 JPEG，使用校验和有条件写入 S3 兼容存储；只向工作进程发送该 JPEG 和目录允许列表，确定性校验候选，并在确认/失败/拒绝/删除/过期时将媒体删除入队。
+- 食物照片提示词 v2 把所有图像文字视为不可信数据：提供方不得遵循、复述或泄露图像中的指令、提示词或秘密；以指令为主的图像会被拒绝，而不会变成营养候选。
+- 进度照片预留把原始上传保留在内存中，净化到独立私有 `progress` 对象范围，并且只执行确定性的方向/分辨率/亮度/对比度检查。仅分析媒体在 24 小时后过期；长期比较要求独立保留同意，使用用户声明的视角，且不计算身体或体态分数。
+- PostgreSQL 数据操作任务随生命周期变更在事务中入队，并使用 `FOR UPDATE SKIP LOCKED`、租约、有界指数重试、尝试证据和死信状态进行原子领取。成功任务会清除载荷和敏感去重材料。
+- 经身份验证的隐私边界盘点所有者数据，创建禁止存储的可重复读便携 JSON 导出，记录续期同意周期，撤销可选处理，并在异步媒体/主存储擦除前关闭账号访问。
+- 可选同意响应丢失恢复把当前数据保管权限绑定到精确目标用途。在一次概览读取解析该用途前，导出、全部撤销和擦除准备都会冻结；当前 `revoked` 证据只证明授权已停用，不证明变更的清理数量。
+- 便携导出客户端处理让服务端产物保持临时状态，直到隐私专用适配器验证其 JSON 媒体类型、精确 v4 信封/集合拓扑、标识符、时间和 50 MiB 边界。只有验证后，H5 才创建下载，WeApp 才持久保存文件；页面状态只接收版本、生成时间和字节长度。
+- 同意收据历史与当前授权保持分离。严格按所有者限定的端点依数据库原生 `(accepted_at, id)` 顺序分页只追加的接受区间，不暴露当前状态/用户/提供方/健康字段，并只保留一个仅 UUID 的不透明游标；客户端把接受/撤销历史标为只读证据，且只存于页面内存。
+- `durable-erasure-v2` 收据要求独立状态令牌，并暴露相互独立的主存储/媒体/提供方/备份处置。恢复后的数据库对外服务前会重放外部 HMAC 擦除账本，防止已知删除账号被较旧备份复活。
+- 外层请求中间件校验 UUIDv4 关联，并从稳定路由模板记录最终状态/持续时间。Redis 支撑的 IP 守卫在身份验证前运行；第二个参与者/路由限制器在身份验证后运行。HMAC 参与者键原子过期；缺少 Redis 时业务流量失败关闭；存活状态与 PostgreSQL+Redis+对象存储的就绪状态保持分离。
+- 精确管理员支持查询要求账号 UUID、有界工单和枚举原因，然后只返回生命周期/聚合证据。每项接受/未找到查询与授权决策都关联到只追加审计表；目标标识符使用 HMAC 引用，其更新/删除触发器失败关闭。
+- `apps/admin` 是 Next.js 16 App Router BFF/UI。Authorization Code + PKCE/state/nonce 保持在服务端，管理员 API 令牌保存在默认安全的 HttpOnly Cookie 中，证据栏只渲染有界支持/审计契约。
+- API、管理员与 AI 运行时边界具有固定基础清单、健康检查和源码/修订标签的非 root OCI 镜像。API 生产输出是裁剪后的 pnpm 部署目录；管理员输出是 Next.js standalone；Python 运行时依赖全部固定版本。
+- 一次性 API 镜像迁移任务为容器流量设置门禁。可丢弃部署拓扑证明容器网络、迁移、PostgreSQL/Redis/对象就绪状态、AI 健康和管理员安全响应头，同时明确保持非生产性质。
+- API 在非生产环境默认绑定回环地址，在生产环境绑定全部接口，并提供显式仅 IP 覆盖。GitHub Actions 定义源码门禁、镜像冒烟、多架构 GHCR 发布和来源证明；托管基础设施保持供应商中立。
+- 每项外部 GitHub Action 都由严格锁中的已审阅完整提交选定，而不是分支或标签。离线工作流发现会拒绝漂移，精确 SemVer 注释保留审阅意图，每周 Dependabot 提案暴露更新；基线进入 `main` 后，仓库策略要求固定 SHA。
+- 候选发布从无依赖的托管资格校验开始：远程轻量/附注标签必须解析到工作流提交，该提交必须仍位于当前 `main`，且精确 SHA 必须具有一次已完成且成功的 `.github/workflows/ci.yml` `main` push 运行。严格资格记录在组装清单前再次检查，并随不可变 Release 一起保留。
 - 本地 OIDC 浏览器套件另有 `myfitness-oidc-e2e-artifact/v1` 测试收据：构建包装器先清除旧收据，成功后对 `dist-h5` 中按相对路径排序的全部普通文件生成 SHA-256，并在外部 `.taro` 目录记录固定 `oidc` 模式和测试 API 基址。Playwright 全局预检重新计算摘要、检查静态回调桥并要求 API 基址完全一致。收据不进入客户端树、质量预算或候选 TAR，也不包含发布来源/版本/交付级别，因此不能扩大为发布或真实身份声明。
-- Parent-qualified pnpm overrides place audited floors only on affected Taro 4.2.1 edges: client Vite 6.4.3, webpack 5.104.1, Swiper 12.1.2 and lodash-es 4.18.1. Root Vite 8.1.5 stays isolated for Vitest; frozen install, peer checks, dual builds, E2E and the zero-critical/high audit gate control every graph change.
+- 父级限定的 pnpm 覆盖只在受影响的 Taro 4.2.1 依赖边上设置已审计最低版本：客户端 Vite 6.4.3、webpack 5.104.1、Swiper 12.1.2 和 lodash-es 4.18.1。根 Vite 8.1.5 继续与 Vitest 隔离；冻结安装、对等依赖检查、双端构建、E2E 和 critical/high 零值审计门禁控制每次依赖图变更。
 
 ## 数据规则
 
-All health-domain events store:
+所有健康领域事件都存储：
 
-- Stable user and record identifiers.
-- Numeric value and canonical/display unit.
-- Source: manual, device, imported, or AI estimate.
-- Confidence and candidate alternatives for estimates.
-- Occurrence time, timezone, creation time, update time, and revision actor.
-- Consent/purpose reference when the source requires sensitive-data permission.
+- 稳定的用户与记录标识符。
+- 数值以及规范/展示单位。
+- 来源：手工、设备、导入或 AI 估计。
+- 估计的置信度与候选替代项。
+- 发生时间、时区、创建时间、更新时间与修订参与者。
+- 来源需要敏感数据权限时使用的同意/用途引用。
 
-AI output is a proposal. Only an explicit user action or deterministic system process with a documented contract can create a confirmed record.
+AI 输出属于提议。只有显式用户操作，或具有已记录契约的确定性系统流程，才能创建已确认记录。
 
-The implemented measurement subset and field-level invariants are documented in [HEALTH_RECORD_MODEL.md](HEALTH_RECORD_MODEL.md). ADR-0002 records why contract validation, deterministic normalization and database checks deliberately overlap.
+已实现的测量子集与字段级不变量记录在 [HEALTH_RECORD_MODEL.md](HEALTH_RECORD_MODEL.md)。ADR-0002 说明契约校验、确定性规范化与数据库检查为何有意重叠。
 
-The implemented identity, profile, goal, risk and consent invariants are documented in [IDENTITY_PROFILE_MODEL.md](IDENTITY_PROFILE_MODEL.md). ADR-0003 records the replaceable provider identity and opaque session decision; ADR-0076 requires exact current evidence before any profile/goal PUT can follow an ambiguous response.
+已实现的身份、档案、目标、风险与同意不变量记录在 [IDENTITY_PROFILE_MODEL.md](IDENTITY_PROFILE_MODEL.md)。ADR-0003 记录可替换提供方身份与不透明会话决策；ADR-0076 要求在模糊响应后再次发送任何档案/目标 PUT 前，必须先取得精确当前证据。
 
-ADR-0004 records the health-record replacement, append-only snapshot, soft-delete and optimistic-concurrency decision.
+ADR-0004 记录健康记录替换、只追加快照、软删除与乐观并发决策。
 
-The exact-metric confirmed-only health observation is documented in [HEALTH_RECORD_MODEL.md](HEALTH_RECORD_MODEL.md). ADR-0039 keeps canonical statistics separate from recorded display provenance and prohibits cross-metric or candidate aggregation.
+精确指标且仅含已确认值的健康观察记录在 [HEALTH_RECORD_MODEL.md](HEALTH_RECORD_MODEL.md)。ADR-0039 将规范统计与已记录展示来源凭据分开，并禁止跨指标或候选聚合。
 
-Recoverable local editor state is documented in ADR-0040. It is a short-lived client recovery copy, not a fourth persistence authority: PostgreSQL remains authoritative after save, while receipt storage remains separate for erasure recovery.
+可恢复本地编辑器状态记录在 ADR-0040。它是短期客户端恢复副本，而不是第四个持久化权威来源：保存后仍以 PostgreSQL 为准；用于擦除恢复的收据存储保持独立。
 
-Conflict-safe correction recovery is documented in ADR-0042. A local correction draft is only an editing intention against one base revision; it does not authorize a write, bypass ownership or replace the server's current aggregate.
+冲突安全的更正恢复记录在 ADR-0042。本地更正草稿只是针对一个基础修订的编辑意图；它不授权写入、不绕过所有权，也不替代服务端当前聚合。
 
-Explicit occurrence editing is documented in ADR-0041. Local civil time is never persisted as an assumed instant: the client resolves it with the named timezone and DST choice, and the API accepts only an unambiguous offset timestamp that is not in the future.
+显式发生时间编辑记录在 ADR-0041。本地民用时间绝不会作为假定时刻持久化：客户端使用具名时区与 DST 选择进行解析，API 只接受无歧义且不在未来的带偏移时间戳。
 
-The workout aggregate, derived-value rules, exercise-catalog boundary, exercise observation and safe repeat semantics are documented in [WORKOUT_MODEL.md](WORKOUT_MODEL.md). ADR-0005 records the normalized current graph plus immutable-snapshot decision; ADR-0030 makes set evidence authoritative for workout completion status; ADR-0035 keeps mutable exercise definitions separate from workout fact snapshots; ADR-0036 defines stable-key completed-only insight projection.
+训练聚合、派生值规则、动作目录边界、动作观察与安全重复语义记录在 [WORKOUT_MODEL.md](WORKOUT_MODEL.md)。ADR-0005 记录规范化当前关系图与不可变快照决策；ADR-0030 将组证据定为训练完成状态的权威来源；ADR-0035 使可变动作定义与训练事实快照分离；ADR-0036 定义稳定键且仅含已完成值的洞察投影。
 
-The meal snapshot, canonical-gram, owner-catalog/favorite, daily-observation and photo-candidate boundaries are documented in [NUTRITION_MODEL.md](NUTRITION_MODEL.md). ADR-0006 records why mutable catalogs cannot be historical truth; ADR-0037 applies that rule to owner-created food definitions and their privacy lifecycle; ADR-0038 defines timezone-safe nutrition observation and explicit missing evidence; ADR-0075 keeps favorite mutation uncertainty separate from meal facts and requires current-list evidence before another toggle.
+餐食快照、规范克数、所有者目录/收藏、每日观察与照片候选边界记录在 [NUTRITION_MODEL.md](NUTRITION_MODEL.md)。ADR-0006 说明可变目录为何不能作为历史事实；ADR-0037 将该规则应用于所有者创建的食物定义及其隐私生命周期；ADR-0038 定义时区安全的饮食观察与显式缺失证据；ADR-0075 使收藏变更不确定性与餐食事实分离，并要求再次切换前取得当前列表证据。
 
-The deterministic weekly-plan rules, evidence provenance, bounded revision lifecycle and limitations are documented in [PLAN_MODEL.md](PLAN_MODEL.md). ADR-0008 records why the structured rule path precedes model orchestration; ADR-0047 binds history continuation to an exact owner plan revision.
+确定性周计划规则、证据来源凭据、有界修订生命周期与限制记录在 [PLAN_MODEL.md](PLAN_MODEL.md)。ADR-0008 说明结构化规则路径为何先于模型编排；ADR-0047 将历史续页绑定到精确的所有者计划修订。
 
-The review-only AI boundary, minimization, provider contract, validation and fallback are documented in [AI_EXPLANATION_MODEL.md](AI_EXPLANATION_MODEL.md). ADR-0009 records why explanations cannot mutate plans or confirmed records.
+仅审阅 AI 边界、最小化、提供方契约、校验与回退记录在 [AI_EXPLANATION_MODEL.md](AI_EXPLANATION_MODEL.md)。ADR-0009 说明解释为何不能变更计划或已确认记录。
 
-The private media lifecycle, candidate contract, vision provider boundary and no-auto-write rule are documented in [FOOD_PHOTO_MODEL.md](FOOD_PHOTO_MODEL.md). ADR-0010 records why images and model output remain revocable proposals.
+私有媒体生命周期、候选契约、视觉提供方边界与禁止自动写入规则记录在 [FOOD_PHOTO_MODEL.md](FOOD_PHOTO_MODEL.md)。ADR-0010 说明图像和模型输出为何始终是可撤销提议。
 
-The purpose-separated progress-photo lifecycle, bounded capture-quality method, two-consent withdrawal semantics and user-controlled same-view overlay are documented in [PROGRESS_PHOTO_MODEL.md](PROGRESS_PHOTO_MODEL.md). ADR-0029 records why this boundary excludes posture diagnosis, body-composition inference and external datasets.
+按用途分离的进度照片生命周期、有界采集质量方法、双同意撤回语义与用户控制的同视角叠加记录在 [PROGRESS_PHOTO_MODEL.md](PROGRESS_PHOTO_MODEL.md)。ADR-0029 说明该边界为何排除体态诊断、身体组成推断与外部数据集。
 
-The inventory/export/consent/erasure boundary is documented in [PRIVACY_OWNERSHIP_MODEL.md](PRIVACY_OWNERSHIP_MODEL.md). ADR-0011 records the user-scoped media, renewed consent and unlinkable primary-store receipt decisions; ADR-0077 requires exact current-purpose evidence before another optional-consent mutation can follow an ambiguous response; ADR-0078 requires local artifact evidence before H5 download or WeApp persistent save; ADR-0079 keeps bounded historical consent evidence separate from current mutation authority; ADR-0080 keeps failed first/history-suffix reads distinct from empty history and freezes accepted cursors until one explicit retry succeeds; ADR-0081 binds the new history states to a 320 px exact synthetic 2× component-text and explicit Space/Enter matrix without conflicting with Taro's root sizing; ADR-0082 makes collapse, unmount and parent disablement monotonic request-generation boundaries so stale asynchronous history results cannot commit; ADR-0083 carries the same mounted/current-custody authority through local export verification and the final H5/WeApp file side effect. ADR-0084 makes deferred H5 focus finite, cancellable and stable across Taro node replacement without overriding a different user-selected control.
+清单/导出/同意/擦除边界记录在 [PRIVACY_OWNERSHIP_MODEL.md](PRIVACY_OWNERSHIP_MODEL.md)。ADR-0011 记录按用户限定的媒体、续期同意与不可关联主存储收据决策；ADR-0077 要求在模糊响应后再次变更可选同意前取得精确当前用途证据；ADR-0078 要求 H5 下载或 WeApp 持久保存前取得本地产物证据；ADR-0079 使有界历史同意证据与当前变更权限分离；ADR-0080 使首次/历史后缀读取失败与空历史保持不同，并冻结已接受游标直至一次显式重试成功；ADR-0081 将新历史状态绑定到精确 320 px、合成 2× 组件文字和显式 Space/Enter 矩阵，且不与 Taro 根尺寸冲突；ADR-0082 把折叠、卸载和父级禁用设为单调请求代次边界，使过期异步历史结果无法提交；ADR-0083 让同一已挂载/当前数据保管权限贯穿本地导出验证和最终 H5/WeApp 文件副作用。ADR-0084 使延迟 H5 焦点在 Taro 节点替换时保持有限、可取消且稳定，不覆盖用户选择的其他控件。
 
-The request-correlation, shared-rate-limit, health and metric boundary is documented in [OPERATIONS_PERIMETER.md](OPERATIONS_PERIMETER.md). ADR-0012 records why ingress protection precedes authentication and administrator access.
+请求关联、共享速率限制、健康与指标边界记录在 [OPERATIONS_PERIMETER.md](OPERATIONS_PERIMETER.md)。ADR-0012 说明入口保护为何先于身份验证与管理员访问。
 
-ADR-0013 records the parent-qualified Taro security floors, separate compiler/test Vite lanes, high-severity audit gate and override removal conditions.
+ADR-0013 记录父级限定的 Taro 安全最低版本、分离的编译器/测试 Vite 通道、高严重性审计门禁与覆盖移除条件。
 
-The independent operator identity, evidence-only lookup and immutable audit boundary is documented in [ADMIN_SUPPORT_MODEL.md](ADMIN_SUPPORT_MODEL.md). ADR-0014 records why it cannot reuse end-user identity or expose generic administration.
+独立操作员身份、仅证据查询与不可变审计边界记录在 [ADMIN_SUPPORT_MODEL.md](ADMIN_SUPPORT_MODEL.md)。ADR-0014 说明它为何不能复用最终用户身份或暴露通用管理能力。
 
-The S3-compatible media boundary, durable deletion jobs, status-token receipt and restore ledger are documented in [PRIVACY_OWNERSHIP_MODEL.md](PRIVACY_OWNERSHIP_MODEL.md), [FOOD_PHOTO_MODEL.md](FOOD_PHOTO_MODEL.md) and the [data custody runbook](../operations/DATA_CUSTODY_RUNBOOK.md). ADR-0015 records why cross-system erasure uses transactional enqueue plus an external HMAC restore control.
+S3 兼容媒体边界、持久删除任务、状态令牌收据与恢复账本记录在 [PRIVACY_OWNERSHIP_MODEL.md](PRIVACY_OWNERSHIP_MODEL.md)、[FOOD_PHOTO_MODEL.md](FOOD_PHOTO_MODEL.md) 和[数据保管运行手册](../operations/DATA_CUSTODY_RUNBOOK.md)。ADR-0015 说明跨系统擦除为何使用事务入队与外部 HMAC 恢复控制。
 
 ## API 与事件约定
 
-- HTTP JSON contracts are defined in `packages/contracts` and exposed as OpenAPI.
-- Client-generated idempotency keys protect record creation and photo reservation.
-- Mutations use optimistic concurrency or revision numbers where edits can conflict.
-- Background jobs carry validated logical storage keys or scoped user IDs, never public object URLs; successful jobs clear their payload.
-- Logs exclude raw health payloads, images, access tokens, full prompts, and direct identifiers.
-- Every routed response carries a bounded request ID. Metrics/logs use stable route templates and actor class, never raw URLs, queries, IPs, users or request bodies.
-- Domain events use past tense and versioned payloads, for example `workout.recorded.v1`.
+- HTTP JSON 契约在 `packages/contracts` 中定义，并通过 OpenAPI 暴露。
+- 客户端生成的幂等键保护记录新建与照片预留。
+- 可能发生编辑冲突的变更使用乐观并发或修订号。
+- 后台任务携带已验证的逻辑存储键或有范围的用户 ID，绝不携带公开对象 URL；成功任务会清除载荷。
+- 日志排除原始健康载荷、图像、访问令牌、完整提示词和直接标识符。
+- 每个经过路由的响应都携带有界请求 ID。指标/日志使用稳定路由模板与参与者类别，绝不使用原始 URL、查询、IP、用户或请求正文。
+- 领域事件使用过去时态与版本化载荷，例如 `workout.recorded.v1`。
 
 ## AI 执行路径
 
-1. API verifies purpose-specific consent and creates a job.
-2. Worker fetches the minimum required, short-lived input.
-3. Deterministic preprocessing computes facts and removes disallowed metadata.
-4. Provider returns structured candidates through the model gateway.
-5. Schema and safety validators reject or repair output within a bounded policy.
-6. API exposes an estimated proposal with model/prompt/validator versions.
-7. User confirms or edits; only then is the formal record or plan version stored.
+1. API 验证特定用途同意并创建任务。
+2. 工作进程获取最少必需的短期输入。
+3. 确定性预处理计算事实并移除不允许的元数据。
+4. 提供方通过模型网关返回结构化候选。
+5. Schema 与安全校验器在有界策略内拒绝或修复输出。
+6. API 暴露带模型/提示词/校验器版本的估计提议。
+7. 用户确认或编辑；只有此后才存储正式记录或计划版本。
 
-Provider outages fall back to manual recording and deterministic summaries; core records never depend on an available model.
+提供方中断时回退到手工记录和确定性摘要；核心记录绝不依赖模型可用性。
 
 ## 安全与隐私基线
 
-- TLS in transit; managed key encryption at rest; field-level or envelope encryption for selected sensitive values.
-- Private object storage with short-lived signed access, checksummed conditional writes and production-required encryption; lifecycle/versioning/replication remain provider configuration gates.
-- Purpose-specific consent versions and revocation state.
-- Tenant/user authorization enforced in the API, never inferred from client filters.
-- Independent administrator identity, least-privilege RBAC, exact support purpose and primary-database immutable audit events; just-in-time approval and external retention remain release gates.
-- Export, correction, durable deletion, retention expiry, restore-ledger replay and conservative provider disposition are explicit workflows. `policy_bound` is not a remote-delete claim.
-- China-region deployment is the default for China-user health data; any cross-border provider use requires a separate architecture and legal decision.
+- 传输中使用 TLS；静态数据使用托管密钥加密；选定敏感值使用字段级或信封加密。
+- 私有对象存储采用短期签名访问、带校验和的条件写入及生产必需加密；生命周期/版本控制/复制仍是提供方配置门禁。
+- 特定用途的同意版本与撤销状态。
+- 租户/用户授权由 API 强制执行，绝不从客户端筛选器推断。
+- 独立管理员身份、最小权限 RBAC、精确支持用途与主数据库不可变审计事件；即时审批和外部保留仍是发布门禁。
+- 导出、更正、持久删除、保留过期、恢复账本重放与保守提供方处置都是显式流程。`policy_bound` 不表示远程删除声明。
+- 面向中国用户的健康数据默认部署在中国区域；使用任何跨境提供方都必须另行作出架构与法律决策。
 
 ## 初始本地与生产目标
 
-- Local: Node 24 runtime, pnpm 11, Docker Compose, PostgreSQL 18.4, Redis 8.8, pinned MinIO and the fixture AI provider.
-- CI: install lockfile, format check, lint, typecheck, unit/integration tests, H5 build, Mini Program build, dependency audit, artifact upload.
-- Production candidate: managed container/runtime, managed PostgreSQL and Redis, private object storage, KMS/secrets manager, CDN only for public static assets, centralized metrics and alerts.
-- Deployment artifacts: immutable API/admin/AI image digests, separate migration job, secret-manager environment injection and black-box post-deploy verification. Application rollback selects the prior digest and never reverses the database.
+- 本地：Node 24 运行时、pnpm 11、Docker Compose、PostgreSQL 18.4、Redis 8.8、固定版本 MinIO 与固定测试 AI 提供方。
+- CI：按锁文件安装、格式检查、代码检查、类型检查、单元/集成测试、H5 构建、小程序构建、依赖审计与产物上传。
+- 生产候选：托管容器/运行时、托管 PostgreSQL 与 Redis、私有对象存储、KMS/秘密管理器、仅用于公开静态资源的 CDN、集中指标与告警。
+- 部署产物：不可变 API/管理员/AI 镜像摘要、独立迁移任务、秘密管理器环境注入和部署后黑盒验证。应用回滚选择前一个摘要，绝不逆转数据库。
 
-Specific cloud vendor selection is deferred until expected China-region traffic, company entity, budget, filing owner, and operations capability are known.
+具体云供应商选择推迟到中国区域预期流量、公司主体、预算、备案责任人与运维能力明确之后。

@@ -39,6 +39,8 @@ export const chineseDocumentationPolicy = {
         '## 安全与隐私基线',
         '## 初始本地与生产目标',
       ],
+      minimumHanShare: 0.72,
+      rejectEnglishOnlyNarrativeLines: true,
     },
     {
       path: 'docs/operations/USER_IDENTITY_RUNBOOK.md',

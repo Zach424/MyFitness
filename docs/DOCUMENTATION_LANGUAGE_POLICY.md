@@ -18,7 +18,7 @@ MyFitness / 衡迹的项目状态、迭代档案、架构决策和面向维护�
 `pnpm docs:check-language` 执行无第三方运行时依赖的 `myfitness-chinese-documentation/v2` 检查：
 
 - 四份活跃权威文档必须保留约定的中文一级、二级导航标题；
-- `docs/PROJECT_STATUS.md` 和 `docs/product/ROADMAP.md` 排除代码与链接后的中文占比均不得低于 72%，且不得存在包含三个及以上英文单词而完全没有汉字的纯英文叙述行；围栏代码块不参与逐行判断；
+- `docs/PROJECT_STATUS.md`、`docs/product/ROADMAP.md` 和 `docs/architecture/ARCHITECTURE.md` 排除代码与链接后的中文占比均不得低于 72%，且不得存在包含三个及以上英文单词而完全没有汉字的纯英文叙述行；围栏代码块不参与逐行判断；
 - 第 090 轮起的迭代档案和 ADR-0085 起的架构决策必须使用包含中文的一级标题、`日期：YYYY-MM-DD` 与中文 `状态：` 字段；
 - 排除代码块、行内代码、链接目标和 URL 后，每份受检记录至少包含 200 个汉字，且汉字在汉字与拉丁字母总量中的占比不得低于 60%；
 - CI 在格式检查后执行相同命令，任何新记录语言回退都会失败关闭。
