@@ -2,131 +2,131 @@
 
 路线图按受控迭代组织。一轮可以跨越多个工作会话，但只有在实现、验证、档案更新和提交全部完成后才结束。
 
-进度快照（2026-08-06）：第 0–92 轮已在本地完成。权威项目状态的当前架构和风险已逐条中文化；`myfitness-chinese-documentation/v2` 要求该文件中文占比至少为 72% 且纯英文叙述行为零，当前实测为 89.9%/零行。迁移范围与提交前版本相比，65 个行内代码字面量、70 个数字令牌、链接目标与代码块完全一致；低质量本地机器翻译候选未采用。第 090 轮起的迭代档案和 ADR-0085 起的决策记录继续由同一 CI 命令检查。OIDC 完整 H5 树收据、有限焦点调度、便携导出、同意历史及既有恢复/读取表面保持已验证状态。H5/WeApp 实测总量为 2,813,023/1,069,025 字节；H5 入口/最大异步块为 319,238/205,488，WeApp vendor/最大页面为 19,338/55,697，预算不变。单元测试 425 项、集成测试 63 项、浏览器测试 97 项，生产依赖为 0 个 critical/high。托管质量/冒烟仍只确认到第 030 轮精确 SHA；本轮未检查更晚的托管 SHA 证据。账号、预算、域名、凭据和付费提供方继续停放，但仍是正式发布门槛。
+进度快照（2026-08-06）：第 0–93 轮已在本地完成。0–97 轮的范围、退出证据、发布门禁和变更控制现在全部使用中文；`myfitness-chinese-documentation/v2` 要求项目状态与路线图各自中文占比至少为 72% 且纯英文叙述行为零，当前实测分别为 89.8%/90.6% 和零/零行。路线图迁移范围与提交前版本相比，107 个数字令牌、链接目标和代码块完全一致，且该范围没有行内代码。第 090 轮起的迭代档案和 ADR-0085 起的决策记录继续由同一 CI 命令检查。OIDC 完整 H5 树收据、有限焦点调度、便携导出、同意历史及既有恢复/读取表面保持已验证状态。H5/WeApp 实测总量为 2,813,023/1,069,025 字节；H5 入口/最大异步块为 319,238/205,488，WeApp vendor/最大页面为 19,338/55,697，预算不变。单元测试 425 项、集成测试 63 项、浏览器测试 97 项，生产依赖为 0 个 critical/high。托管质量/冒烟仍只确认到第 030 轮精确 SHA；本轮未检查更晚的托管 SHA 证据。账号、预算、域名、凭据和付费提供方继续停放，但仍是正式发布门槛。
 
-| Iteration | Primary scope                                       | Exit evidence                                                                                      |
-| --------- | --------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| 0         | Product, design, architecture, iteration governance | Baseline documents cross-link, repository status reviewed, local commit created                    |
-| 1         | Multi-end client foundation and Today shell         | H5 boots; Mini Program build is checked; screenshot reviewed; token tests pass                     |
-| 2         | API foundation and health-record contract           | PostgreSQL migration, OpenAPI contract, provenance/unit tests, local stack health check            |
-| 3         | Adult onboarding and goals                          | Profile flow persists through API; consent version recorded; E2E happy/error paths pass            |
-| 4         | Body and recovery recording                         | Create/edit/delete/history flows; trends use correct time/unit semantics                           |
-| 5         | Workout recording                                   | Exercise/set model, repeat-last-workout flow, volume calculations and E2E tests                    |
-| 6         | Nutrition recording                                 | Search/favorites/manual portions; macro totals and revision history verified                       |
-| 7         | Today and trend loop                                | Plan-vs-actual rail uses real API data; empty/loading/offline/error states tested                  |
-| 8         | Deterministic plan engine                           | Structured plan contract, substitutions, load constraints and versioning                           |
-| 9         | AI explanation and plan orchestration               | Model gateway, prompt/version logs, validators, offline fixtures and evaluation report             |
-| 10        | Food-photo assistance                               | EXIF removal, signed upload, uncertainty/confirmation, retention deletion tests                    |
-| 11        | User privacy ownership                              | Inventory, portable export, optional-consent revocation and primary-store erasure exercised        |
-| 12        | API operational perimeter                           | Correlation, Redis abuse limits, health/metrics, outage tests and incident runbook                 |
-| 13        | Production dependency remediation                   | Zero critical/high audit findings plus full type/test/dual-build/E2E compatibility evidence        |
-| 14        | Administrator access and support                    | Operator identity, RBAC, immutable audit and read-only support workflow exercised                  |
-| 15        | Durable data operations                             | Durable jobs, private object storage, fault retries, restore ledger and provider disposition       |
-| 16        | Verified WeChat user identity                       | Server code exchange, provider-bound sessions, erasure suppression and WeApp build proof           |
-| 17        | Reproducible deployment artifacts                   | Non-root OCI images, migration gate, local topology proof, CI/release workflow and rollback unit   |
-| 18        | Hermetic CI bootstrap                               | Dependency-free unit/contract generation, Node 24 actions and green hosted quality/image smoke     |
-| 19        | Immutable OCI release promotion                     | One strict digest manifest, provenance, candidate GHCR/GitHub Release and pull proof               |
-| 20        | Managed environment admission                       | Strict non-secret inventory, release/checksum binding, ordered plan and explicit rollback          |
-| 21        | Immutable client delivery artifacts                 | Deterministic H5/WeApp TARs, checksums, source/API binding and byte-level admission integration    |
-| 22        | Recoverable account-erasure receipts                | Single-use intent, hashed secret, lost-response/reload recovery and restore-safe proof             |
-| 23        | Crash-safe AI explanation lifecycle                 | Durable deadline/fallback, startup/interval recovery, aggregate operations and race proof          |
-| 24        | Adversarial AI output safety                        | Versioned normalization, instruction-image boundary and exact-reason 23-case regression corpus     |
-| 25        | Reproducible AI evaluation artifacts                | Formatter-owned reports plus post-eval format and zero-diff CI gates                               |
-| 26        | Qualified release source provenance                 | Remote tag/current-main ancestry/exact successful CI record blocks publication and is retained     |
-| 27        | Immutable GitHub Actions supply chain               | Full-SHA pins, reviewed lock, mutation tests, Dependabot path and repository enforcement           |
-| 28        | H5 OIDC server trust boundary                       | Public-safe config, server code exchange, ID-token verification and identity minimization          |
-| 29        | H5 OIDC browser and release contract                | State/nonce/S256 callback, error UI, deterministic candidate TAR and browser tests                 |
-| 30        | Authoritative status and Obsidian mirror            | Exact-byte write/verify CLI, contained vault target, workflow docs, local mirror and unit proof    |
-| 31        | Privacy-first progress-photo assistance             | Consent, EXIF removal, private lifecycle, alignment comparison, deletion and browser proof         |
-| 32        | Server-authoritative workout completion             | Derived status, legacy compatibility, backfill, idempotency/history and browser proof              |
-| 33        | Proactive stale-plan refresh                        | Visible revision drift, safe reload/retry and current-plan browser proof                           |
-| 34        | Client accessibility and bundle hardening           | 320 px/large text/keyboard checks plus enforced H5/WeApp bundle budgets                            |
-| 35        | Record-evidence plan freshness                      | Bounded fingerprint/policy, no-op/material drift proof, safe refresh and immutable history         |
-| 36        | Plan-to-actual session linking                      | Explicit user-owned plan/workout link, no inferred adherence, history and H5 proof                 |
-| 37        | User-owned exercise catalog                         | Custom exercise/equipment semantics, safe reuse, export/delete and client/PostgreSQL proof         |
-| 38        | Exercise-level history and trends                   | Stable-key completed-only metrics, correction-safe grouping and H5/PostgreSQL proof                |
-| 39        | User-owned food catalog and provenance              | Explicit user-confirmed nutrients, correction/archive, meal snapshots and privacy proof            |
-| 40        | Daily nutrition history and trends                  | Confirmed-meal-only daily projection, correction-safe windows and non-prescriptive client proof    |
-| 41        | Metric-specific body/recovery observation           | Unit-safe current evidence, revision detail, correction/deletion and non-diagnostic client proof   |
-| 42        | Recoverable sensitive editor drafts                 | Versioned/expiring local drafts, visible recovery and save/cancel/logout/erasure clearing proof    |
-| 43        | Explicit occurrence-time recording                  | Local-time input/backfill/correction with timezone/DST validation across three record editors      |
-| 44        | Conflict-safe correction draft recovery             | Owner/aggregate/base-revision binding, stale refusal and lifecycle clearing across three editors   |
-| 45        | Timezone-safe cross-domain history calendar         | Current occurrence projection, explicit missing days and safe past-date backfill entry points      |
-| 46        | Bounded record-list pagination                      | Opaque cursors, stable owner ordering and progressive health/workout/meal client loading           |
-| 47        | Bounded aggregate revision histories                | Stable cursors, deleted-owner access and progressive revision sheets                               |
-| 48        | Bounded user-definition revision histories          | Exercise/food definition cursors, archived-owner access and progressive correction sheets          |
-| 49        | Bounded weekly-plan revision history                | Stable plan cursor, structured snapshot bounds and progressive Week Fold history                   |
-| 50        | Dedicated lazy action-definition register           | Equivalent create/correct/archive/history flow and a smaller workout page artifact                 |
-| 51        | Lazy food-photo review workflow                     | Explicit confirmed-candidate return, no sensitive draft persistence and a smaller nutrition page   |
-| 52        | Automated accessibility state matrix                | Keyboard completion, status/name semantics, focus return, reduced motion and viewport proof        |
-| 53        | Ambiguous health-record create recovery             | Lost committed response retains input/key; explicit retry yields exactly one record                |
-| 54        | Workout and meal ambiguous-create recovery          | Same unchanged-payload key, explicit failure states and duplicate-free real API browser proof      |
-| 55        | Sensitive workbench failure/recovery matrix         | Action/photo state survives safely without background media sync or authority drift                |
-| 56        | Owner-food definition recovery parity               | Same-key create plus evidence-first correction/archive without nutrient-authority drift            |
-| 57        | Progress-photo failure/recovery parity              | Authority-based capture/delete recovery without media replay or overstated custody claims          |
-| 58        | Weekly-plan decision failure/recovery               | Evidence-first accept/modify/skip/regenerate without duplicate or false decisions                  |
-| 59        | Plan-to-workout link failure/recovery               | Exact revision/link reconciliation without inferred adherence or blind create/delete replay        |
-| 60        | AI explanation response-loss recovery               | Durable-run/idempotency authority with exact plan/provenance reconciliation and no duplicate note  |
-| 61        | Immutable AI explanation history                    | Bounded owner history, frozen/current distinction and provenance without regeneration              |
-| 62        | Read-side resilience and recovery states            | Confirmed evidence survives refresh failure; explicit retry restores the entry surface             |
-| 63        | Week Fold read authority and recovery               | Unknown is not “no plan”; retained revision/history stays read-only until explicit retry           |
-| 64        | Privacy-ledger read authority and recovery          | Unknown inventory cannot enable export/revocation/erasure; explicit retry restores authority       |
-| 65        | Health-record ledger read authority and recovery    | Unknown list cannot enable record mutation; explicit retry restores the current ledger             |
-| 66        | Workout-ledger read authority and recovery          | Unknown training log cannot enable workout mutation; explicit retry restores authority             |
-| 67        | Nutrition-ledger read authority and recovery        | Unknown meal log cannot enable nutrition mutation; explicit retry restores authority               |
-| 68        | Owner-definition register read authority            | Unknown catalog cannot enable correction/archive; explicit retry restores both register variants   |
-| 69        | Long-term observation read authority                | Unknown projection cannot become empty evidence; explicit retry restores all observation variants  |
-| 70        | Private-photo inventory read authority              | Unknown private list cannot enable media/custody actions; explicit retry restores both workflows   |
-| 71        | Profile/goal register read authority                | Confirmed absence differs from outage; unavailable base revision cannot overwrite owner settings   |
-| 72        | Cross-domain history-calendar read authority        | Unknown projection cannot become zero days; retained range freezes backfill until explicit retry   |
-| 73        | Aggregate revision-sheet read authority             | Unread audit evidence stays unknown; retained revisions freeze continuation until explicit retry   |
-| 74        | Owner-definition revision-ledger read authority     | Unread definition history stays unknown; retained revisions freeze continuation until retry        |
-| 75        | Weekly-plan revision-history read authority         | Plan/AI history boundary stays explicit through partial-read and continuation failure              |
-| 76        | Aggregate-history dialog focus boundary             | Safe focus entry, Escape/close unification and exact trigger return across three record sheets     |
-| 77        | Destructive record-dialog focus boundary            | Safe cancel-first entry, Escape return and post-delete fallback across three record ledgers        |
-| 78        | Aggregate-delete response-loss recovery             | Exact-read reconciliation proves removed/current/changed state without blind DELETE replay         |
-| 79        | Aggregate-correction response-loss recovery         | Exact revision/content reconciliation prevents blind PUT replay across three record editors        |
-| 80        | Meal-favorite mutation response-loss recovery       | Exact-key/list reconciliation prevents false favorite state or blind removal replay                |
-| 81        | Profile/goal response-loss recovery                 | Exact revision/content reconciliation prevents blind PUT replay or silent local-draft rebase       |
-| 82        | Optional-consent revocation response recovery       | Current-overview evidence prevents blind revocation replay or overstated cleanup                   |
-| 83        | Portable-export client artifact validation          | Version/content verification prevents malformed custody artifacts from becoming success            |
-| 84        | Bounded consent-receipt history                     | Owner-scoped event pagination separates historical consent evidence from current authority         |
-| 85        | Consent-history read authority                      | Failed initial/continuation reads cannot become empty or advance an unverified cursor              |
-| 86        | Consent-history accessibility matrix                | 320 px/large-text/keyboard proof binds all new history read-authority states                       |
-| 87        | Consent-history lifecycle invalidation              | Collapse/unmount rejects late reads and hidden focus while explicit reopen starts fresh            |
-| 88        | Portable-export operation lifecycle                 | Late artifacts cannot download/save/publish after page authority ends; explicit retry starts fresh |
-| 89        | Bounded deferred-focus reliability                  | Late-mounted targets retry finitely without stale focus theft or changing dialog authority         |
-| 90        | OIDC 测试产物预检与本地 Beta 验证顺序               | 完整 H5 树摘要、回调桥/API 基址预检、错误身份构建失败关闭、部署准入契约回归                        |
-| 91        | 中文项目记录治理                                    | 中文权威导航与模块总览、术语/迁移规范、编号记录语言门禁及 CI 回归                                  |
-| 92        | 权威项目状态正文中文化                              | 当前架构与风险逐条中文迁移、技术结构签名一致、状态正文比例/纯英文行门禁                            |
-| 93        | 交付路线图正文中文化                                | 迭代范围、退出证据、发布门禁和变更控制中文迁移，保持编号与历史顺序                                 |
-| 94        | 架构基线正文中文化                                  | 仓库边界、交付架构、数据规则、API/AI/安全边界中文迁移及结构签名验证                                |
-| 95        | 用户身份运行手册正文中文化                          | 信任边界、配置、共享环境预检、事件轮换与回滚中文迁移及命令字面量验证                               |
-| 96        | Managed shared deployment, beta hardening/release   | Real identity/custody/telemetry, rollback, security/a11y/filing review and staged rollout          |
-| 97        | Native App feasibility and device sync              | Retention gate reviewed; HealthKit/Health Connect/Huawei proof of concept                          |
+| 迭代 | 主要范围                              | 退出证据                                                                    |
+| ---- | ------------------------------------- | --------------------------------------------------------------------------- |
+| 0    | 产品、设计、架构与迭代治理            | 基线文档互相链接，仓库状态完成审阅，并创建本地提交                          |
+| 1    | 多端客户端基础与“今日”外壳            | H5 可启动，小程序构建完成检查，截图完成审阅，令牌测试通过                   |
+| 2    | API 基础与健康记录契约                | PostgreSQL 迁移、OpenAPI 契约、来源/单位测试和本地栈健康检查通过            |
+| 3    | 成人引导与目标                        | 档案流程通过 API 持久化，同意版本已记录，E2E 正常/错误路径通过              |
+| 4    | 身体与恢复记录                        | 新建/编辑/删除/历史流程通过；趋势使用正确的时间和单位语义                   |
+| 5    | 训练记录                              | 动作/组模型、重复上次训练流程、训练量计算和 E2E 测试通过                    |
+| 6    | 饮食记录                              | 搜索、收藏和手工份量可用；宏量营养总计与修订历史通过验证                    |
+| 7    | “今日”与趋势闭环                      | 计划与实际证据带使用真实 API 数据；空、加载、离线和错误状态已测试           |
+| 8    | 确定性计划引擎                        | 结构化计划契约、替换、负荷约束和版本控制通过                                |
+| 9    | AI 解释与计划编排                     | 模型网关、提示词/版本日志、校验器、离线固定测试实现和评估报告完成           |
+| 10   | 食物照片辅助                          | EXIF 移除、签名上传、不确定性/确认和保留删除测试通过                        |
+| 11   | 用户隐私所有权                        | 清单、便携导出、可选同意撤销和主存储擦除完成演练                            |
+| 12   | API 运维边界                          | 请求关联、Redis 滥用限制、健康/指标、中断测试和事件运行手册完成             |
+| 13   | 生产依赖修复                          | critical/high 审计为零，并具备完整类型、测试、双端构建和 E2E 兼容证据       |
+| 14   | 管理员访问与支持                      | 操作员身份、RBAC、不可变审计和只读支持流程完成演练                          |
+| 15   | 持久数据操作                          | 持久任务、私有对象存储、故障重试、恢复账本和提供方处置完成                  |
+| 16   | 已验证微信用户身份                    | 服务器 code 交换、提供方绑定会话、擦除抑制和 WeApp 构建证明通过             |
+| 17   | 可复现部署产物                        | 非 root OCI 镜像、迁移门禁、本地拓扑证明、CI/发布工作流和回滚单元完成       |
+| 18   | 密封 CI 启动                          | 无第三方依赖的单元/契约生成、Node 24 Actions 及托管质量/镜像冒烟通过        |
+| 19   | 不可变 OCI 发布晋级                   | 单一严格摘要清单、来源凭据、候选 GHCR/GitHub Release 和拉取证明完成         |
+| 20   | 托管环境准入                          | 严格非秘密清单、发布/校验和绑定、有序计划与显式回滚完成                     |
+| 21   | 不可变客户端交付产物                  | 确定性 H5/WeApp TAR、校验和、源码/API 绑定和字节级准入集成通过              |
+| 22   | 可恢复账号擦除收据                    | 单次意图、哈希秘密、响应丢失/重载恢复和恢复安全证明通过                     |
+| 23   | 崩溃安全的 AI 解释生命周期            | 持久截止时间/回退、启动/定时恢复、聚合运维和竞态证明通过                    |
+| 24   | 对抗性 AI 输出安全                    | 版本化规范化、指令图像边界和精确原因 23 用例回归语料通过                    |
+| 25   | 可复现 AI 评估产物                    | 格式化器拥有报告，并设置评估后格式与零差异 CI 门禁                          |
+| 26   | 合格发布源码来源凭据                  | 远程标签、当前 main 祖先关系和精确成功 CI 记录阻止不合格发布并被保留        |
+| 27   | 不可变 GitHub Actions 供应链          | 完整 SHA 固定、已审阅锁、变更测试、Dependabot 路径和仓库强制策略完成        |
+| 28   | H5 OIDC 服务器信任边界                | 公开安全配置、服务器 code 交换、ID-token 校验和身份最小化通过               |
+| 29   | H5 OIDC 浏览器与发布契约              | State/nonce/S256 回调、错误 UI、确定性候选 TAR 和浏览器测试通过             |
+| 30   | 权威状态与 Obsidian 镜像              | 逐字节写入/验证 CLI、vault 内目标、工作流文档、本地镜像和单元证明完成       |
+| 31   | 隐私优先进度照片辅助                  | 同意、EXIF 移除、私有生命周期、对齐比较、删除和浏览器证明通过               |
+| 32   | 服务器权威训练完成状态                | 派生状态、旧数据兼容、回填、幂等/历史和浏览器证明通过                       |
+| 33   | 主动刷新过期计划                      | 修订漂移可见，安全重载/重试和当前计划浏览器证明通过                         |
+| 34   | 客户端无障碍与包体强化                | 320 px、大字、键盘检查及强制 H5/WeApp 包预算通过                            |
+| 35   | 基于记录证据的计划新鲜度              | 有界指纹/策略、无操作/实质漂移证明、安全刷新和不可变历史通过                |
+| 36   | 计划课次与实际训练关联                | 显式用户自有计划/训练关联、不推断依从性、历史和 H5 证明通过                 |
+| 37   | 用户自有动作目录                      | 自定义动作/器械语义、安全复用、导出/删除和客户端/PostgreSQL 证明通过        |
+| 38   | 动作级历史与趋势                      | 稳定键、仅已完成指标、对更正安全的分组和 H5/PostgreSQL 证明通过             |
+| 39   | 用户自有食物目录与来源凭据            | 显式用户确认营养、更正/归档、餐食快照和隐私证明通过                         |
+| 40   | 每日饮食历史与趋势                    | 仅已确认餐食的每日投影、对更正安全的窗口和非处方客户端证明通过              |
+| 41   | 指标特定的身体/恢复观察               | 单位安全当前证据、修订细节、更正/删除和非诊断客户端证明通过                 |
+| 42   | 可恢复敏感编辑器草稿                  | 版本化/过期本地草稿、可见恢复及保存/取消/登出/擦除清理证明通过              |
+| 43   | 显式发生时间记录                      | 三个记录编辑器的本地时间输入/回填/更正及时区/DST 校验通过                   |
+| 44   | 冲突安全的更正草稿恢复                | 三个编辑器的所有者/聚合/基础修订绑定、过期拒绝和生命周期清理通过            |
+| 45   | 时区安全的跨领域历史日历              | 当前发生投影、显式缺失日和安全历史日期回填入口通过                          |
+| 46   | 有界记录列表分页                      | 不透明游标、稳定所有者排序和健康/训练/餐食客户端渐进加载通过                |
+| 47   | 有界聚合修订历史                      | 稳定游标、已删除所有者访问和渐进修订面板通过                                |
+| 48   | 有界用户定义修订历史                  | 动作/食物定义游标、归档所有者访问和渐进更正面板通过                         |
+| 49   | 有界周计划修订历史                    | 稳定计划游标、结构化快照边界和渐进周计划历史通过                            |
+| 50   | 专用延迟动作定义登记册                | 等价的新建/更正/归档/历史流程及更小的训练页产物通过                         |
+| 51   | 延迟食物照片审阅流程                  | 显式已确认候选返回、无敏感草稿持久化和更小的饮食页通过                      |
+| 52   | 自动无障碍状态矩阵                    | 键盘完成、状态/名称语义、焦点返回、减少动态效果和视口证明通过               |
+| 53   | 健康记录新建歧义恢复                  | 已提交响应丢失时保留输入/键；显式重试只产生一条记录                         |
+| 54   | 训练与餐食新建歧义恢复                | 同一未变载荷键、显式失败状态和无重复真实 API 浏览器证明通过                 |
+| 55   | 敏感工作台失败/恢复矩阵               | 动作/照片状态在无后台媒体同步或权限漂移时安全保留                           |
+| 56   | 用户食物定义恢复对等                  | 同键新建及证据优先更正/归档，不发生营养权限漂移                             |
+| 57   | 进度照片失败/恢复对等                 | 基于权限的采集/删除恢复，无媒体重放或夸大数据保管声明                       |
+| 58   | 周计划决策失败/恢复                   | 证据优先接受/修改/跳过/重新生成，无重复或虚假决策                           |
+| 59   | 计划到训练关联失败/恢复               | 精确修订/关联对账，不推断依从性或盲目重放新建/删除                          |
+| 60   | AI 解释响应丢失恢复                   | 持久运行/幂等权限结合精确计划/来源对账，无重复说明                          |
+| 61   | 不可变 AI 解释历史                    | 有界所有者历史、冻结/当前区分和来源凭据，不重新生成                         |
+| 62   | 读取侧韧性与恢复状态                  | 已确认证据在刷新失败后保留；显式重试恢复入口表面                            |
+| 63   | 周计划读取权限与恢复                  | 未知不等于“没有计划”；保留修订/历史在显式重试前保持只读                     |
+| 64   | 隐私账本读取权限与恢复                | 未知清单不能启用导出/撤销/擦除；显式重试恢复权限                            |
+| 65   | 健康记录账本读取权限与恢复            | 未知列表不能启用记录变更；显式重试恢复当前账本                              |
+| 66   | 训练账本读取权限与恢复                | 未知训练日志不能启用训练变更；显式重试恢复权限                              |
+| 67   | 饮食账本读取权限与恢复                | 未知餐食日志不能启用饮食变更；显式重试恢复权限                              |
+| 68   | 用户定义登记册读取权限                | 未知目录不能启用更正/归档；显式重试恢复两种登记册                           |
+| 69   | 长期观察读取权限                      | 未知投影不能变成空证据；显式重试恢复全部观察变体                            |
+| 70   | 私有照片清单读取权限                  | 未知私有列表不能启用媒体/保管操作；显式重试恢复两种流程                     |
+| 71   | 档案/目标登记册读取权限               | 已确认不存在与中断不同；不可用基础修订不能覆盖用户设置                      |
+| 72   | 跨领域历史日历读取权限                | 未知投影不能变成零天；保留范围在显式重试前冻结回填                          |
+| 73   | 聚合修订面板读取权限                  | 未读审计证据保持未知；保留修订在显式重试前冻结续页                          |
+| 74   | 用户定义修订账本读取权限              | 未读定义历史保持未知；保留修订在重试前冻结续页                              |
+| 75   | 周计划修订历史读取权限                | 部分读取和续页失败时，计划/AI 历史边界仍保持明确                            |
+| 76   | 聚合历史对话框焦点边界                | 三个记录面板具备安全焦点进入、Escape/关闭统一和精确触发器返回               |
+| 77   | 破坏性记录对话框焦点边界              | 三个记录账本先进入安全取消、Escape 返回并在删除后使用回退焦点               |
+| 78   | 聚合删除响应丢失恢复                  | 精确读取对账证明已移除/当前/已变化状态，不盲目重放 DELETE                   |
+| 79   | 聚合更正响应丢失恢复                  | 精确修订/内容对账阻止三个记录编辑器盲目重放 PUT                             |
+| 80   | 餐食收藏变更响应丢失恢复              | 精确键/列表对账阻止虚假收藏状态或盲目重放移除                               |
+| 81   | 档案/目标响应丢失恢复                 | 精确修订/内容对账阻止盲目重放 PUT 或静默重设本地草稿基础                    |
+| 82   | 可选同意撤销响应恢复                  | 当前概览证据阻止盲目重放撤销或夸大清理结果                                  |
+| 83   | 便携导出客户端产物校验                | 版本/内容校验防止格式错误的数据保管产物被视为成功                           |
+| 84   | 有界同意收据历史                      | 所有者作用域事件分页把历史同意证据与当前权限分离                            |
+| 85   | 同意历史读取权限                      | 初始/续页读取失败不能变成空状态或推进未验证游标                             |
+| 86   | 同意历史无障碍矩阵                    | 320 px、大字和键盘证明绑定全部新增历史读取权限状态                          |
+| 87   | 同意历史生命周期失效                  | 折叠/卸载拒绝迟到读取和隐藏焦点；显式重开启动全新请求                       |
+| 88   | 便携导出操作生命周期                  | 页面权限结束后，迟到产物不能下载/保存/发布；显式重试重新开始                |
+| 89   | 有界延迟焦点可靠性                    | 迟挂载目标进行有限重试，不窃取旧焦点或改变对话框权限                        |
+| 90   | OIDC 测试产物预检与本地 Beta 验证顺序 | 完整 H5 树摘要、回调桥/API 基址预检、错误身份构建失败关闭、部署准入契约回归 |
+| 91   | 中文项目记录治理                      | 中文权威导航与模块总览、术语/迁移规范、编号记录语言门禁及 CI 回归           |
+| 92   | 权威项目状态正文中文化                | 当前架构与风险逐条中文迁移、技术结构签名一致、状态正文比例/纯英文行门禁     |
+| 93   | 交付路线图正文中文化                  | 迭代范围、退出证据、发布门禁和变更控制中文迁移，保持编号与历史顺序          |
+| 94   | 架构基线正文中文化                    | 仓库边界、交付架构、数据规则、API/AI/安全边界中文迁移及结构签名验证         |
+| 95   | 用户身份运行手册正文中文化            | 信任边界、配置、共享环境预检、事件轮换与回滚中文迁移及命令字面量验证        |
+| 96   | 托管共享环境部署、封闭测试强化与发布  | 真实身份/数据保管/遥测、回滚、安全/a11y/备案审阅和分阶段发布                |
+| 97   | 原生 App 可行性与设备同步             | 审阅留存门禁；完成 HealthKit/Health Connect/华为概念验证                    |
 
 ## 发布门禁
 
 ### 内部 Alpha
 
-- Iterations 1–8 complete.
-- Entire non-AI record and planning path works with deterministic fixtures.
-- No known critical data-loss or authorization defects.
+- 第 1–8 轮完成。
+- 完整非 AI 记录与规划路径使用确定性固定测试实现可运行。
+- 没有已知的严重数据丢失或授权缺陷。
 
 ### 封闭测试
 
-- Iterations 9–47 complete.
-- AI evaluation set is versioned and safety validators block known high-risk cases.
-- Data export and deletion are exercised end to end.
-- Support, monitoring, cost limits, rollback, and incident ownership are assigned.
+- 第 9–47 轮完成。
+- AI 评估集已版本化，安全校验器可以阻止已知高风险用例。
+- 数据导出与删除完成端到端演练。
+- 支持、监控、成本限制、回滚和事件责任已经分配。
 
 ### 公开发布
 
-- Iteration 47 complete.
-- Applicable ICP/APP/Mini Program privacy/AI registration and content-labeling work is reviewed.
-- Store materials match actual data practices and product claims.
-- Release starts with a small cohort and automatic rollback thresholds.
+- 第 47 轮完成。
+- 适用的 ICP、APP、小程序隐私/AI 登记和内容标识工作完成审阅。
+- 商店材料与真实数据实践和产品声明一致。
+- 发布从小规模用户组开始，并设置自动回滚阈值。
 
 ## 变更控制
 
-New feature requests enter the risk/backlog section of the next iteration archive. They do not interrupt an active round unless they fix a correctness, security, privacy, or data-loss issue on the current critical path.
+新功能请求进入下一轮迭代档案的风险/待办部分。除非用于修复当前关键路径上的正确性、安全、隐私或数据丢失问题，否则不得中断正在进行的迭代。

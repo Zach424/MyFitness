@@ -23,6 +23,8 @@ export const chineseDocumentationPolicy = {
     {
       path: 'docs/product/ROADMAP.md',
       headings: ['# 交付路线图', '## 发布门禁', '## 变更控制'],
+      minimumHanShare: 0.72,
+      rejectEnglishOnlyNarrativeLines: true,
     },
     {
       path: 'docs/architecture/ARCHITECTURE.md',
