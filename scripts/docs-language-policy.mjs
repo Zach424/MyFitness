@@ -17,6 +17,8 @@ export const chineseDocumentationPolicy = {
         '## 质量门禁',
         '## 首要下一步',
       ],
+      minimumHanShare: 0.72,
+      rejectEnglishOnlyNarrativeLines: true,
     },
     {
       path: 'docs/product/ROADMAP.md',
@@ -78,6 +80,26 @@ const naturalLanguageOnly = (text) =>
     .replace(/!??\[[^\]]*\]\([^\r\n)]*\)/g, '')
     .replace(/https?:\/\/\S+/g, '')
 
+export const findEnglishOnlyNarrativeLines = (text) => {
+  const lines = text.split(/\r?\n/)
+  const findings = []
+  let inFence = false
+  for (const [index, line] of lines.entries()) {
+    if (/^\s*(```|~~~)/.test(line)) {
+      inFence = !inFence
+      continue
+    }
+    if (inFence || /^\s*\|?\s*:?-{3,}/.test(line)) continue
+    const narrative = naturalLanguageOnly(line)
+    const hanCharacters = [...narrative.matchAll(/\p{Script=Han}/gu)].length
+    const latinWords = [...narrative.matchAll(/[A-Za-z]{2,}/g)].map((match) => match[0])
+    if (hanCharacters === 0 && latinWords.length >= 3) {
+      findings.push({ line: index + 1, latinWords, text: line.trim() })
+    }
+  }
+  return findings
+}
+
 export const measureChineseNarrative = (text) => {
   const narrative = naturalLanguageOnly(text)
   const hanCharacters = [...narrative.matchAll(/\p{Script=Han}/gu)].length
@@ -119,7 +141,28 @@ const verifyActiveDocument = async (root, document) => {
   if (missing.length > 0) {
     fail(`${document.path} 缺少中文权威标题：${missing.join('；')}`)
   }
-  return { path: document.path, headings: document.headings.length }
+  const measurement = measureChineseNarrative(text)
+  if (document.minimumHanShare && measurement.hanShare < document.minimumHanShare) {
+    fail(
+      `${document.path} 中文占比不足：${measurement.hanShare.toFixed(3)} < ${document.minimumHanShare}`,
+    )
+  }
+  const englishOnlyNarrativeLines = document.rejectEnglishOnlyNarrativeLines
+    ? findEnglishOnlyNarrativeLines(text)
+    : []
+  if (englishOnlyNarrativeLines.length > 0) {
+    const samples = englishOnlyNarrativeLines
+      .slice(0, 5)
+      .map((finding) => `第 ${finding.line} 行`)
+      .join('、')
+    fail(`${document.path} 仍有 ${englishOnlyNarrativeLines.length} 行纯英文叙述（${samples}）`)
+  }
+  return {
+    path: document.path,
+    headings: document.headings.length,
+    ...measurement,
+    englishOnlyNarrativeLines: englishOnlyNarrativeLines.length,
+  }
 }
 
 const verifyChineseRecord = async (entry, series, policy) => {
@@ -169,7 +212,7 @@ export const verifyChineseDocumentation = async (
   }
   return {
     status: '通过',
-    schemaVersion: 'myfitness-chinese-documentation/v1',
+    schemaVersion: 'myfitness-chinese-documentation/v2',
     activeDocuments,
     records,
   }

@@ -1,6 +1,6 @@
 # 架构基线
 
-状态：已接受并实现至第 091 轮中文项目记录治理；架构变更必须新增 ADR。
+状态：已接受并实现至第 092 轮权威项目状态正文中文化；架构变更必须新增 ADR。
 
 ## 系统形态
 
@@ -37,7 +37,7 @@ Start as a pnpm monorepo and modular monolith. A single API deployable keeps tra
 
 Implemented foundation:
 
-- 中文项目记录由无第三方运行时依赖的 `myfitness-chinese-documentation/v1` 门禁约束。四份活跃权威文档保留中文导航契约；第 090 轮起的迭代档案和 ADR-0085 起的决策记录必须使用中文标题、元数据与以中文为主的正文。仓库状态仍是唯一权威来源，Obsidian 只保存逐字节镜像，历史英文档案按受控批次迁移。
+- 中文项目记录由无第三方运行时依赖的 `myfitness-chinese-documentation/v2` 门禁约束。四份活跃权威文档保留中文导航契约；权威项目状态还要求整体中文占比不低于 72%，且不得存在纯英文叙述行；第 090 轮起的迭代档案和 ADR-0085 起的决策记录必须使用中文标题、元数据与以中文为主的正文。仓库状态仍是唯一权威来源，Obsidian 只保存逐字节镜像，历史英文档案按受控批次迁移。
 
 - `apps/api` is a NestJS 11 process exposing readiness and health-record routes.
 - `packages/contracts` owns Zod request/response schemas and emits OpenAPI 3.0 JSON Schema.

@@ -6,7 +6,11 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 // 生产检查器保持为无第三方依赖的 ESM JavaScript。
 // @ts-expect-error ESM 脚本不单独发布类型声明
-import { measureChineseNarrative, verifyChineseDocumentation } from './docs-language-policy.mjs'
+import {
+  findEnglishOnlyNarrativeLines,
+  measureChineseNarrative,
+  verifyChineseDocumentation,
+} from './docs-language-policy.mjs'
 
 const temporaryRoots: string[] = []
 
@@ -49,6 +53,20 @@ describe('中文文档策略', () => {
     ).toMatchObject({ hanCharacters: 8, latinCharacters: 0, hanShare: 1 })
   })
 
+  it('识别纯英文叙述行但允许中文句子中的技术字面量', () => {
+    expect(
+      findEnglishOnlyNarrativeLines(
+        '- Taro client uses React and TypeScript.\n- 客户端使用 Taro、React 与 TypeScript。\n```ts\nconst englishCode = true\n```\n',
+      ),
+    ).toEqual([
+      {
+        line: 1,
+        latinWords: ['Taro', 'client', 'uses', 'React', 'and', 'TypeScript'],
+        text: '- Taro client uses React and TypeScript.',
+      },
+    ])
+  })
+
   it('接受带中文元数据且正文以中文为主的新记录', async () => {
     const root = await fixture(
       '# 第 090 轮：中文记录\n\n日期：2026-08-05\n\n状态：已完成\n\n这是一段用于验证权威记录语言约束的中文正文，保留 `OIDC` 等代码字面量。\n',
@@ -83,5 +101,27 @@ describe('中文文档策略', () => {
     await writeFile(resolve(root, 'docs', 'active.md'), '# Project status\n\n## Current state\n')
 
     await expect(verifyChineseDocumentation(root, policy)).rejects.toThrow('缺少中文权威标题')
+  })
+
+  it('拒绝活跃权威文档中的纯英文叙述正文', async () => {
+    const root = await fixture(
+      '# 第 090 轮：中文记录\n\n日期：2026-08-05\n\n状态：已完成\n\n这是一段用于验证权威记录语言约束的中文正文，确保中文字符数量足够。\n',
+    )
+    await writeFile(
+      resolve(root, 'docs', 'active.md'),
+      '# 项目状态\n\n## 当前状态\n\n- This paragraph remains English prose.\n',
+    )
+    const strictPolicy = {
+      ...policy,
+      activeDocuments: [
+        {
+          path: 'docs/active.md',
+          headings: ['# 项目状态', '## 当前状态'],
+          rejectEnglishOnlyNarrativeLines: true,
+        },
+      ],
+    }
+
+    await expect(verifyChineseDocumentation(root, strictPolicy)).rejects.toThrow('纯英文叙述')
   })
 })

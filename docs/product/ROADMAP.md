@@ -2,7 +2,7 @@
 
 路线图按受控迭代组织。一轮可以跨越多个工作会话，但只有在实现、验证、档案更新和提交全部完成后才结束。
 
-进度快照（2026-08-05）：第 0–91 轮已在本地完成。四份活跃权威文档使用中文导航契约，项目状态入口和模块总览已中文化；第 090 轮起的迭代档案及 ADR-0085 起的架构决策由 `myfitness-chinese-documentation/v1` 检查标题、元数据、最低汉字数和中文占比，CI 与本地使用同一命令。技术字面量和链接不进入比例，历史英文记录按受控批次迁移。OIDC 完整 H5 树收据、有限焦点调度、便携导出、同意历史及既有恢复/读取表面保持已验证状态。H5/WeApp 实测总量为 2,813,023/1,069,025 字节；H5 入口/最大异步块为 319,238/205,488，WeApp vendor/最大页面为 19,338/55,697，预算不变。单元测试 423 项、集成测试 63 项、浏览器测试 97 项，生产依赖为 0 个 critical/high。托管质量/冒烟仍只确认到第 030 轮精确 SHA；本轮未检查更晚的托管 SHA 证据。账号、预算、域名、凭据和付费提供方继续停放，但仍是正式发布门槛。
+进度快照（2026-08-06）：第 0–92 轮已在本地完成。权威项目状态的当前架构和风险已逐条中文化；`myfitness-chinese-documentation/v2` 要求该文件中文占比至少为 72% 且纯英文叙述行为零，当前实测为 89.9%/零行。迁移范围与提交前版本相比，65 个行内代码字面量、70 个数字令牌、链接目标与代码块完全一致；低质量本地机器翻译候选未采用。第 090 轮起的迭代档案和 ADR-0085 起的决策记录继续由同一 CI 命令检查。OIDC 完整 H5 树收据、有限焦点调度、便携导出、同意历史及既有恢复/读取表面保持已验证状态。H5/WeApp 实测总量为 2,813,023/1,069,025 字节；H5 入口/最大异步块为 319,238/205,488，WeApp vendor/最大页面为 19,338/55,697，预算不变。单元测试 425 项、集成测试 63 项、浏览器测试 97 项，生产依赖为 0 个 critical/high。托管质量/冒烟仍只确认到第 030 轮精确 SHA；本轮未检查更晚的托管 SHA 证据。账号、预算、域名、凭据和付费提供方继续停放，但仍是正式发布门槛。
 
 | Iteration | Primary scope                                       | Exit evidence                                                                                      |
 | --------- | --------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
@@ -98,9 +98,12 @@
 | 89        | Bounded deferred-focus reliability                  | Late-mounted targets retry finitely without stale focus theft or changing dialog authority         |
 | 90        | OIDC 测试产物预检与本地 Beta 验证顺序               | 完整 H5 树摘要、回调桥/API 基址预检、错误身份构建失败关闭、部署准入契约回归                        |
 | 91        | 中文项目记录治理                                    | 中文权威导航与模块总览、术语/迁移规范、编号记录语言门禁及 CI 回归                                  |
-| 92        | 活跃权威文档正文中文化                              | 当前架构/风险、路线图门禁、架构基线和身份手册正文分段迁移，扩展自动检查                            |
-| 93        | Managed shared deployment, beta hardening/release   | Real identity/custody/telemetry, rollback, security/a11y/filing review and staged rollout          |
-| 94        | Native App feasibility and device sync              | Retention gate reviewed; HealthKit/Health Connect/Huawei proof of concept                          |
+| 92        | 权威项目状态正文中文化                              | 当前架构与风险逐条中文迁移、技术结构签名一致、状态正文比例/纯英文行门禁                            |
+| 93        | 交付路线图正文中文化                                | 迭代范围、退出证据、发布门禁和变更控制中文迁移，保持编号与历史顺序                                 |
+| 94        | 架构基线正文中文化                                  | 仓库边界、交付架构、数据规则、API/AI/安全边界中文迁移及结构签名验证                                |
+| 95        | 用户身份运行手册正文中文化                          | 信任边界、配置、共享环境预检、事件轮换与回滚中文迁移及命令字面量验证                               |
+| 96        | Managed shared deployment, beta hardening/release   | Real identity/custody/telemetry, rollback, security/a11y/filing review and staged rollout          |
+| 97        | Native App feasibility and device sync              | Retention gate reviewed; HealthKit/Health Connect/Huawei proof of concept                          |
 
 ## 发布门禁
 
