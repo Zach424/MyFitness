@@ -56,6 +56,20 @@ export const chineseDocumentationPolicy = {
       minimumHanShare: 0.72,
       rejectEnglishOnlyNarrativeLines: true,
     },
+    {
+      path: 'docs/DOCUMENTATION_MIGRATION_INDEX.md',
+      headings: [
+        '# 中文文档迁移索引',
+        '## 目的与边界',
+        '## 已受门禁保护的范围',
+        '## 待迁移专题批次',
+        '## 待迁移历史批次',
+        '## 自动检查',
+        '## 参考',
+      ],
+      minimumHanShare: 0.72,
+      rejectEnglishOnlyNarrativeLines: true,
+    },
   ],
   recordSeries: [
     {

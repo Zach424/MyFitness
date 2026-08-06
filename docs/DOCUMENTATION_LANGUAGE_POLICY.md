@@ -17,8 +17,8 @@ MyFitness / 衡迹的项目状态、迭代档案、架构决策和面向维护�
 
 `pnpm docs:check-language` 执行无第三方运行时依赖的 `myfitness-chinese-documentation/v2` 检查：
 
-- 四份活跃权威文档必须保留约定的中文一级、二级导航标题；
-- `docs/PROJECT_STATUS.md`、`docs/product/ROADMAP.md`、`docs/architecture/ARCHITECTURE.md` 和 `docs/operations/USER_IDENTITY_RUNBOOK.md` 排除代码与链接后的中文占比均不得低于 72%，且不得存在包含三个及以上英文单词而完全没有汉字的纯英文叙述行；围栏代码块不参与逐行判断；
+- 五份活跃权威文档必须保留约定的中文一级、二级导航标题；
+- `docs/PROJECT_STATUS.md`、`docs/product/ROADMAP.md`、`docs/architecture/ARCHITECTURE.md`、`docs/operations/USER_IDENTITY_RUNBOOK.md` 和 `docs/DOCUMENTATION_MIGRATION_INDEX.md` 排除代码与链接后的中文占比均不得低于 72%，且不得存在包含三个及以上英文单词而完全没有汉字的纯英文叙述行；围栏代码块不参与逐行判断；
 - 第 090 轮起的迭代档案和 ADR-0085 起的架构决策必须使用包含中文的一级标题、`日期：YYYY-MM-DD` 与中文 `状态：` 字段；
 - 排除代码块、行内代码、链接目标和 URL 后，每份受检记录至少包含 200 个汉字，且汉字在汉字与拉丁字母总量中的占比不得低于 60%；
 - CI 在格式检查后执行相同命令，任何新记录语言回退都会失败关闭。
@@ -54,6 +54,7 @@ MyFitness / 衡迹的项目状态、迭代档案、架构决策和面向维护�
 3. 数字证据必须来自本轮实际运行或明确注明沿用哪一轮；未重跑的检查不得写成已通过。
 4. 翻译既有文档时保持链接目标、代码字面量、风险级别、验证数字和历史语义不变；每轮只处理一个可复核边界。
 5. 最终格式检查完成后再同步 Obsidian，并对状态和当轮档案做逐字节或 SHA-256 一致性核验。
+6. 既有文档迁移前先运行 `pnpm docs:check-migration-index`；每份 Markdown 必须恰好归入一个批次，批次完成后同步更新索引、检查策略和保护范围。
 
 ## 参考
 
@@ -61,4 +62,5 @@ MyFitness / 衡迹的项目状态、迭代档案、架构决策和面向维护�
 - [交付路线图](product/ROADMAP.md)
 - [架构基线](architecture/ARCHITECTURE.md)
 - [ADR-0086](architecture/decisions/0086-chinese-documentation-governance.md)
+- [中文文档迁移索引](DOCUMENTATION_MIGRATION_INDEX.md)
 - [仓库工作约定](../AGENTS.md)
