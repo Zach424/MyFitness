@@ -53,6 +53,8 @@ export const chineseDocumentationPolicy = {
         '## 回滚',
         '## 主要参考',
       ],
+      minimumHanShare: 0.72,
+      rejectEnglishOnlyNarrativeLines: true,
     },
   ],
   recordSeries: [
