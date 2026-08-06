@@ -430,7 +430,7 @@ const OnboardingPage = () => {
               {...buttonA11yProps}
               id="onboarding-close"
               className="close-action"
-              aria-label="返回今天"
+              aria-label="返回上一页"
               onClick={() => void Taro.navigateBack()}
             >
               ×

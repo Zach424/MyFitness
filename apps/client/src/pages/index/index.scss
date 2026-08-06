@@ -596,32 +596,6 @@
   text-align: left;
 }
 
-.inline-feedback {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  justify-content: space-between;
-  margin: 4px 0 12px;
-  padding: 12px 14px;
-  border-left: 3px solid var(--color-mineral);
-  color: var(--color-mineral);
-  background: var(--color-mineral-soft);
-  font-size: 12px;
-  line-height: 1.5;
-}
-
-.inline-feedback__close {
-  width: auto;
-  min-width: 44px;
-  margin: 0;
-  padding: 0 4px;
-  color: var(--color-mineral);
-  background: transparent;
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 44px;
-}
-
 .reason-card,
 .quick-card {
   margin-top: 16px;

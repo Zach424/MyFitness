@@ -8,6 +8,7 @@ import { getDashboard, listWeeklyPlans } from '../../lib/api'
 import { todayPlanReconciliation } from '../plans/plan.model'
 import { CoachWorkbench } from './coach-workbench'
 import { buildCoachSnapshot } from './coach.model'
+import { MeHub } from './me-hub'
 import {
   classifyTodayReadFailure,
   todayReadPhase,
@@ -134,9 +135,8 @@ const RailEntry = ({ item }: { item: TodayEvidence }) => (
 const IndexPage = () => {
   const [dashboard, setDashboard] = useState<Dashboard>()
   const [plans, setPlans] = useState<WeeklyPlanListItem[]>([])
-  const [activeView, setActiveView] = useState<'today' | 'coach'>('today')
+  const [activeView, setActiveView] = useState<'today' | 'coach' | 'me'>('today')
   const [trendDays, setTrendDays] = useState<7 | 30 | 90>(7)
-  const [feedback, setFeedback] = useState('')
   const [readFailure, setReadFailure] = useState<TodayReadFailureKind>()
   const [loading, setLoading] = useState(true)
   const dashboardRef = useRef<Dashboard>()
@@ -193,13 +193,12 @@ const IndexPage = () => {
   const trend = dashboard?.trends.find((item) => item.days === trendDays)
   const activeTicks = readiness.score === null ? 0 : Math.ceil(readiness.score / 20)
 
-  const activateNavigation = (key: (typeof navItems)[number]['key'], label: string) => {
+  const activateNavigation = (key: (typeof navItems)[number]['key']) => {
     if (key === 'today') setActiveView('today')
     else if (key === 'coach') setActiveView('coach')
-    else if (key === 'me') void Taro.navigateTo({ url: '/pages/privacy/index' })
+    else if (key === 'me') setActiveView('me')
     else if (key === 'record') openRecords()
     else if (key === 'plan') openPlans()
-    else setFeedback(`${label}模块将在后续迭代接入。`)
   }
 
   return (
@@ -215,9 +214,10 @@ const IndexPage = () => {
             onClose={() => setActiveView('today')}
           />
         ) : null}
+        {activeView === 'me' ? <MeHub onClose={() => setActiveView('today')} /> : null}
         <View
           className="today-shell"
-          style={activeView === 'coach' ? { display: 'none' } : undefined}
+          style={activeView !== 'today' ? { display: 'none' } : undefined}
         >
           <View className="topbar">
             <View className="wordmark" aria-label="衡迹 MyFitness">
@@ -388,19 +388,6 @@ const IndexPage = () => {
                     </Text>
                   </View>
                 )}
-
-                {feedback ? (
-                  <View className="inline-feedback" role="status">
-                    <Text>{feedback}</Text>
-                    <Button
-                      {...buttonA11yProps}
-                      className="inline-feedback__close"
-                      onClick={() => setFeedback('')}
-                    >
-                      关闭
-                    </Button>
-                  </View>
-                ) : null}
               </View>
             </View>
 
@@ -483,7 +470,7 @@ const IndexPage = () => {
       <View className="bottom-nav" role="navigation" aria-label="主要导航">
         {navItems.map((item) => (
           <Button
-            {...buttonActivationProps(() => activateNavigation(item.key, item.label))}
+            {...buttonActivationProps(() => activateNavigation(item.key))}
             className={`nav-item ${item.key === activeView ? 'nav-item--active' : ''}`}
             key={item.key}
             aria-current={item.key === activeView ? 'page' : undefined}

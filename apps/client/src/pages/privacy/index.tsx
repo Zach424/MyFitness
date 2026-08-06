@@ -423,10 +423,10 @@ const PrivacyPage = () => {
             <Button
               {...buttonA11yProps}
               className="back-action"
-              aria-label="返回今日"
+              aria-label="返回上一页"
               onClick={() => void Taro.navigateBack()}
             >
-              ← 今日
+              ← 返回
             </Button>
             <View className="privacy-wordmark" aria-label="衡迹数据与隐私">
               <Text>衡迹</Text>

@@ -114,6 +114,8 @@ const seedAccount = async (
   await page.reload()
   await beforeOpen?.()
   await page.getByRole('button', { name: '我的', exact: true }).click()
+  await expect(page.getByText('你提供什么，由你决定。')).toBeVisible()
+  await page.getByRole('button', { name: '打开数据保管台账' }).click()
   await expect(page.getByText('把数据带走，也能彻底离开。')).toBeVisible()
   return session
 }
@@ -296,14 +298,14 @@ test('privacy export rejects late artifacts after unmount or custody-authority l
 
   await page.getByRole('button', { name: '下载我的数据' }).click()
   await unmountedExportStarted
-  await page.getByRole('button', { name: '返回今日' }).click()
-  await expect(page.getByRole('button', { name: '我的', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: '返回上一页' }).click()
+  await expect(page.getByText('你提供什么，由你决定。')).toBeVisible()
   releaseUnmountedExport()
   await unmountedExportSettled
   await page.waitForTimeout(150)
   expect(downloads).toBe(0)
 
-  await page.getByRole('button', { name: '我的', exact: true }).click()
+  await page.getByRole('button', { name: '打开数据保管台账' }).click()
   await expect(page.getByText('把数据带走，也能彻底离开。')).toBeVisible()
   const firstFreshDownload = page.waitForEvent('download')
   await page.getByRole('button', { name: '下载我的数据' }).click()
