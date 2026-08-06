@@ -119,6 +119,55 @@ test('real Today empty state remains balanced on wide H5', async ({ page }) => {
   expect(errors).toEqual([])
 })
 
+test('Coach orders confirmed evidence before plan and AI without inventing an empty plan', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 844 })
+  const errors = browserErrors(page)
+  await page.goto('/')
+  await expect(page.getByText('今天还没有已确认记录')).toBeVisible()
+
+  await page.getByRole('button', { name: '教练', exact: true }).click()
+  await expect(page.getByText('过去 7 天，实际发生了什么')).toBeVisible()
+  await expect(page.getByText('本周还没有计划折页')).toBeVisible()
+  await expect(page.getByRole('button', { name: '建立本周计划' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '查看 AI 边注档案' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: '教练', exact: true })).toHaveAttribute(
+    'aria-current',
+    'page',
+  )
+
+  const mobileWidths = await page.evaluate(() => ({
+    viewport: document.documentElement.clientWidth,
+    document: document.documentElement.scrollWidth,
+    body: document.body.scrollWidth,
+  }))
+  expect(mobileWidths).toEqual({ viewport: 320, document: 320, body: 320 })
+  await page.screenshot({
+    path: 'output/playwright/iteration-096-coach-mobile.png',
+    fullPage: true,
+  })
+
+  await page.setViewportSize({ width: 1280, height: 900 })
+  const desktopHeader = await page.evaluate(() => {
+    const refresh = document.querySelector('.coach-refresh')?.getBoundingClientRect()
+    const navigation = document.querySelector('.bottom-nav')?.getBoundingClientRect()
+    return {
+      refreshVisible: Boolean(refresh?.width && refresh?.height),
+      overlaps: Boolean(
+        refresh &&
+        navigation &&
+        refresh.right > navigation.left &&
+        refresh.left < navigation.right &&
+        refresh.bottom > navigation.top &&
+        refresh.top < navigation.bottom,
+      ),
+    }
+  })
+  expect(desktopHeader).toEqual({ refreshVisible: true, overlaps: false })
+  expect(errors).toEqual([])
+})
+
 test('Today refuses to turn an initial offline read into a zero-value empty state', async ({
   page,
 }) => {
