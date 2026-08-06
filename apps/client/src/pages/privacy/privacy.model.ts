@@ -39,6 +39,18 @@ export const privacyReadPhase = ({
   return hasSnapshot ? 'ready' : 'initial-loading'
 }
 
+export const privacyExportRequestCanCommit = ({
+  requestGeneration,
+  currentGeneration,
+  mounted,
+  custodyAuthorityReady,
+}: {
+  requestGeneration: number
+  currentGeneration: number
+  mounted: boolean
+  custodyAuthorityReady: boolean
+}) => requestGeneration === currentGeneration && mounted && custodyAuthorityReady
+
 export const privacyCategoryCopy: Record<
   PrivacyDataCategory,
   { label: string; shortLabel: string; note: string }

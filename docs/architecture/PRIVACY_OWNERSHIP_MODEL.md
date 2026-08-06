@@ -1,6 +1,6 @@
 # Privacy ownership model
 
-Status: durable local ownership/erasure boundary with lost-response recovery, purpose-separated photo custody, catalog history, conflict-safe expiring record drafts, evidence-first optional-consent revocation, pre-save portable-export verification and lifecycle-safe consent history implemented through iteration 087
+Status: durable local ownership/erasure boundary with lost-response recovery, purpose-separated photo custody, catalog history, conflict-safe expiring record drafts, evidence-first optional-consent revocation, lifecycle-safe portable-export verification and consent history implemented through iteration 088
 
 ## User-owned surface
 
@@ -32,6 +32,8 @@ The onboarding register contains broad identity, planning, risk and required-con
 Raw session tokens, token hashes, idempotency keys, request/input fingerprints, storage keys and provider response identifiers are excluded. The synchronous JSON path is a closed-beta implementation; large-account streaming archives, password/envelope encryption and async delivery remain an operations gate.
 
 Transport completion is not sufficient client evidence. A lazily loaded file adapter reads the H5 Blob or WeApp temporary file before any H5 download action or WeApp persistent save. A dependency-free verifier requires `application/json` (an optional charset is accepted), the exact four-field v4 envelope, the current data-collection key set, object/array topology, a valid offset generation time, UUID account identifier and an exact UTF-8 size no larger than 50 MiB. Invalid, old-version, wrong-media, oversized or unreadable artifacts never enter success and use product-owned copy only. The page retains only schema version, generation time and byte length as its receipt; account ID and export content are not logged, persisted or rendered. Temporary H5 Blob URLs are revoked on failure and after download. WeApp production compilation proves adapter compatibility, while real-device temporary-file and saved-file behavior remains an explicit external gate.
+
+The export action also requires one monotonic page generation, mounted component and currently accepted custody overview. That predicate travels into the lazy adapter and is checked before token/network work, after the temporary response and local read, after schema verification and immediately before an H5 anchor click or WeApp `saveFile`. Page unmount, overview refresh, revocation-recovery entry, account-erasure start and logout invalidate the generation. Stale H5 Blob URLs are revoked; if a WeApp save completes while authority ends, the adapter attempts `removeSavedFile` before rejecting. An invalidated operation changes neither the downloaded/skipped erasure choice nor success/error feedback and never restarts automatically. Real H5 proof covers a late complete response after navigation and a custody-freeze race; WeApp rollback remains compile-time rather than physical-device evidence.
 
 ## Consent lifecycle
 

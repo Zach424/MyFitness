@@ -32,6 +32,7 @@ import {
   deletionReady,
   formatInventoryCount,
   formatReceiptToken,
+  privacyExportRequestCanCommit,
   privacyReadPhase,
   privacyCategoryCopy,
   type PrivacyReadFailureKind,
@@ -121,6 +122,19 @@ const PrivacyPage = () => {
   const [deleting, setDeleting] = useState(false)
   const [deleted, setDeleted] = useState<AccountDeletionResult | null>(null)
   const readInFlight = useRef(false)
+  const exportInFlight = useRef(false)
+  const exportGeneration = useRef(0)
+  const mounted = useRef(true)
+  const custodyAuthorityReadyRef = useRef(false)
+
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+      exportGeneration.current += 1
+      exportInFlight.current = false
+    }
+  }, [])
 
   useEffect(() => {
     if (!deleted || deleted.status === 'completed' || deleted.status === 'dead_letter') return
@@ -140,8 +154,16 @@ const PrivacyPage = () => {
     setReadFailure(undefined)
   }
 
+  const invalidateExportRequest = () => {
+    if (!exportInFlight.current) return
+    exportGeneration.current += 1
+    exportInFlight.current = false
+    if (mounted.current) setExporting(false)
+  }
+
   const loadOverview = async (focusOnFailure = true) => {
     if (readInFlight.current) return false
+    invalidateExportRequest()
     readInFlight.current = true
     setLoading(true)
     setReadFailure(undefined)
@@ -197,9 +219,17 @@ const PrivacyPage = () => {
   })
   const readAuthorityReady = readPhase === 'ready'
   const custodyAuthorityReady = readAuthorityReady && !revocationRecovery
+  custodyAuthorityReadyRef.current = custodyAuthorityReady
   const readFailurePresentation = readFailure
     ? privacyReadFailureCopy(readFailure, hasReadSnapshot)
     : undefined
+
+  useEffect(() => {
+    if (custodyAuthorityReady || !exportInFlight.current) return
+    exportGeneration.current += 1
+    exportInFlight.current = false
+    setExporting(false)
+  }, [custodyAuthorityReady])
 
   const readyToDelete = useMemo(
     () => custodyAuthorityReady && deletionReady({ phrase, exportChoice, understandsPermanent }),
@@ -207,12 +237,24 @@ const PrivacyPage = () => {
   )
 
   const handleExport = async () => {
-    if (exporting || !custodyAuthorityReady) return
+    if (exportInFlight.current || !custodyAuthorityReady) return
+    const requestGeneration = exportGeneration.current + 1
+    exportGeneration.current = requestGeneration
+    exportInFlight.current = true
+    const canCommit = () =>
+      privacyExportRequestCanCommit({
+        requestGeneration,
+        currentGeneration: exportGeneration.current,
+        mounted: mounted.current,
+        custodyAuthorityReady: custodyAuthorityReadyRef.current,
+      })
     setExporting(true)
     setError('')
     try {
       const { downloadPrivacyExport } = await import('../../lib/privacy-export-download')
-      const result = await downloadPrivacyExport()
+      if (!canCommit()) return
+      const result = await downloadPrivacyExport({ canCommit })
+      if (!canCommit()) return
       setExportChoice('downloaded')
       setFeedback(
         process.env.TARO_ENV === 'h5'
@@ -220,8 +262,11 @@ const PrivacyPage = () => {
           : `${result.fileName} 已通过 ${result.schemaVersion} 结构验证，已保存到本地（${result.byteLength.toLocaleString('zh-CN')} 字节）。`,
       )
     } catch (downloadError) {
+      if (!canCommit()) return
       setError(downloadError instanceof Error ? downloadError.message : '数据导出生成失败')
     } finally {
+      if (requestGeneration !== exportGeneration.current || !mounted.current) return
+      exportInFlight.current = false
       setExporting(false)
     }
   }
@@ -247,6 +292,7 @@ const PrivacyPage = () => {
       const receipt = describeRevocationFailure(revokeError, consentCopy[purpose].label)
       setRevokeTarget(null)
       if (receipt.authority === 'reconcile_required') {
+        invalidateExportRequest()
         setRevocationRecovery({ purpose, receipt })
       } else {
         setError(receipt.message)
@@ -292,6 +338,7 @@ const PrivacyPage = () => {
 
   const handleDelete = async () => {
     if (!readyToDelete || deleting || !custodyAuthorityReady) return
+    invalidateExportRequest()
     setDeleting(true)
     setError('')
     try {
@@ -319,6 +366,7 @@ const PrivacyPage = () => {
   }
 
   const handleLogout = () => {
+    invalidateExportRequest()
     logoutClientSession()
     void Taro.reLaunch({ url: '/pages/login/index' })
   }

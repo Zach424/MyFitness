@@ -15,8 +15,31 @@ export type PrivacyExportDownloadResult = {
   generatedAt: string
 }
 
-export const downloadPrivacyExport = async (retry = true): Promise<PrivacyExportDownloadResult> => {
+export type PrivacyExportDownloadOptions = {
+  retry?: boolean
+  canCommit?: () => boolean
+}
+
+export class PrivacyExportLifecycleError extends Error {
+  constructor() {
+    super('当前隐私清单已变化，本次导出未保存。')
+    this.name = 'PrivacyExportLifecycleError'
+  }
+}
+
+const requireExportAuthority = (canCommit: () => boolean, release?: () => void) => {
+  if (canCommit()) return
+  release?.()
+  throw new PrivacyExportLifecycleError()
+}
+
+export const downloadPrivacyExport = async ({
+  retry = true,
+  canCommit = () => true,
+}: PrivacyExportDownloadOptions = {}): Promise<PrivacyExportDownloadResult> => {
+  requireExportAuthority(canCommit)
   const token = await getClientAccessToken()
+  requireExportAuthority(canCommit)
   const response = await Taro.downloadFile({
     url: `${getClientApiBaseUrl()}/me/privacy/export`,
     header: { authorization: `Bearer ${token}` },
@@ -31,10 +54,11 @@ export const downloadPrivacyExport = async (retry = true): Promise<PrivacyExport
       window.URL.revokeObjectURL(response.tempFilePath)
     }
   }
+  requireExportAuthority(canCommit, releaseH5TemporaryFile)
   if (response.statusCode === 401 && retry) {
     releaseH5TemporaryFile()
     clearClientAccessToken()
-    return downloadPrivacyExport(false)
+    return downloadPrivacyExport({ retry: false, canCommit })
   }
   if (response.statusCode < 200 || response.statusCode >= 300) {
     releaseH5TemporaryFile()
@@ -45,6 +69,7 @@ export const downloadPrivacyExport = async (retry = true): Promise<PrivacyExport
   let artifactText: string
   let contentType: string | undefined
   try {
+    requireExportAuthority(canCommit, releaseH5TemporaryFile)
     if (process.env.TARO_ENV === 'h5') {
       const localResponse = await fetch(response.tempFilePath, { cache: 'no-store' })
       const blob = await localResponse.blob()
@@ -61,9 +86,14 @@ export const downloadPrivacyExport = async (retry = true): Promise<PrivacyExport
       })
       contentType = privacyExportContentTypeFromHeaders(response.header)
     }
+    requireExportAuthority(canCommit, releaseH5TemporaryFile)
   } catch (error) {
     releaseH5TemporaryFile()
-    if (error instanceof PrivacyExportVerificationError) throw error
+    if (
+      error instanceof PrivacyExportVerificationError ||
+      error instanceof PrivacyExportLifecycleError
+    )
+      throw error
     throw new PrivacyExportVerificationError('unreadable')
   }
 
@@ -74,6 +104,7 @@ export const downloadPrivacyExport = async (retry = true): Promise<PrivacyExport
     releaseH5TemporaryFile()
     throw error
   }
+  requireExportAuthority(canCommit, releaseH5TemporaryFile)
 
   if (process.env.TARO_ENV === 'h5' && typeof document !== 'undefined') {
     const anchor = document.createElement('a')
@@ -87,7 +118,18 @@ export const downloadPrivacyExport = async (retry = true): Promise<PrivacyExport
     return { fileName, filePath: response.tempFilePath, ...verification }
   }
 
+  requireExportAuthority(canCommit)
   const saved = await Taro.saveFile({ tempFilePath: response.tempFilePath })
+  if (!canCommit()) {
+    if ('savedFilePath' in saved) {
+      try {
+        await Taro.removeSavedFile({ filePath: saved.savedFilePath })
+      } catch {
+        // Best-effort rollback for a platform save that completed as authority ended.
+      }
+    }
+    throw new PrivacyExportLifecycleError()
+  }
   const filePath = 'savedFilePath' in saved ? saved.savedFilePath : response.tempFilePath
   return { fileName, filePath, ...verification }
 }

@@ -1,6 +1,6 @@
 # Design system baseline
 
-Status: implemented and visually validated through iteration-087 consent-history lifecycle invalidation
+Status: implemented and visually validated through iteration-088 portable-export lifecycle authority
 
 Working brand: 衡迹 / MyFitness
 
@@ -896,6 +896,16 @@ Collapse is now an immediate visual and authority boundary rather than only a pa
 The reviewed 390 × 844 state contains all twelve accepted receipts after an interrupted continuation was reopened with the exact cursor. A deliberately late 503 from the old request cannot add an amber failure block, raw service copy or hidden focus target; focus stays on the visible collapse control. The ordinary-density screenshot also served as a regression check for the corrected Taro type scale.
 
 - [390 × 844 accepted consent history after interrupted continuation](../../output/playwright/iteration-087-consent-history-interruption-mobile.png)
+
+## Portable-export lifecycle authority — iteration 088
+
+The existing portable-copy card keeps one deliberate action and one product-owned success receipt; lifecycle invalidation does not add a background-progress surface, cancellation toast or retry queue. Leaving the page or losing custody authority silently withdraws the obsolete operation because there is no valid file outcome to announce. The export choice used by account erasure changes only after a currently authorized artifact has actually triggered download/save.
+
+The 390 × 844 reviewed state is the later explicit success after two invalidated attempts: one complete response returned after navigation, and one request overlapped revocation-response recovery. Neither created a download or stale receipt. Current-overview reconciliation restored the action, and the new click produced the visible v4 schema, generated filename and bounded byte count while the nine-item ownership ledger remained intact.
+
+The full browser run also exposed a test-semantic issue outside the privacy page: the nutrition recovery scenario queried an unscoped `role=status` after the local-draft notice and nutrition feedback both legitimately existed. The locator now names `.nutrition-feedback`; no visual or product behavior changed. Intermittent one-shot deferred-focus misses under the 94-test load remain the next bounded accessibility audit rather than being hidden as success.
+
+- [390 × 844 fresh verified export after lifecycle invalidation and reconciliation](../../output/playwright/iteration-088-export-lifecycle-mobile.png)
 
 ## Screenshot review checklist
 

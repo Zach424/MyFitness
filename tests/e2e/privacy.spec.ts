@@ -258,6 +258,154 @@ test('privacy export validates local content and media type before download succ
   expect(browserErrors).toEqual([])
 })
 
+test('privacy export rejects late artifacts after unmount or custody-authority loss', async ({
+  page,
+  request,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  const browserErrors = collectBrowserErrors(page)
+  await seedAccount(page, request)
+  let downloads = 0
+  page.on('download', () => {
+    downloads += 1
+  })
+
+  let releaseUnmountedExport = () => {}
+  const unmountedExportGate = new Promise<void>((resolve) => {
+    releaseUnmountedExport = resolve
+  })
+  let markUnmountedExportStarted = () => {}
+  const unmountedExportStarted = new Promise<void>((resolve) => {
+    markUnmountedExportStarted = resolve
+  })
+  let markUnmountedExportSettled = () => {}
+  const unmountedExportSettled = new Promise<void>((resolve) => {
+    markUnmountedExportSettled = resolve
+  })
+  await page.route(
+    '**/v1/me/privacy/export',
+    async (route) => {
+      const response = await route.fetch()
+      markUnmountedExportStarted()
+      await unmountedExportGate
+      await route.fulfill({ response })
+      markUnmountedExportSettled()
+    },
+    { times: 1 },
+  )
+
+  await page.getByRole('button', { name: '下载我的数据' }).click()
+  await unmountedExportStarted
+  await page.getByRole('button', { name: '返回今日' }).click()
+  await expect(page.getByRole('button', { name: '我的', exact: true })).toBeVisible()
+  releaseUnmountedExport()
+  await unmountedExportSettled
+  await page.waitForTimeout(150)
+  expect(downloads).toBe(0)
+
+  await page.getByRole('button', { name: '我的', exact: true }).click()
+  await expect(page.getByText('把数据带走，也能彻底离开。')).toBeVisible()
+  const firstFreshDownload = page.waitForEvent('download')
+  await page.getByRole('button', { name: '下载我的数据' }).click()
+  await firstFreshDownload
+  await expect(
+    page.getByText(/已通过 myfitness-portable-export-v4 结构验证，已开始下载/),
+  ).toBeVisible()
+  expect(downloads).toBe(1)
+  await page.locator('.privacy-feedback').getByRole('button', { name: '关闭' }).click()
+
+  let releaseStaleAuthorityExport = () => {}
+  const staleAuthorityExportGate = new Promise<void>((resolve) => {
+    releaseStaleAuthorityExport = resolve
+  })
+  let markStaleAuthorityExportStarted = () => {}
+  const staleAuthorityExportStarted = new Promise<void>((resolve) => {
+    markStaleAuthorityExportStarted = resolve
+  })
+  let markStaleAuthorityExportSettled = () => {}
+  const staleAuthorityExportSettled = new Promise<void>((resolve) => {
+    markStaleAuthorityExportSettled = resolve
+  })
+  let staleAuthorityTransport: 'fulfilled' | 'cancelled' = 'fulfilled'
+  await page.route(
+    '**/v1/me/privacy/export',
+    async (route) => {
+      const response = await route.fetch()
+      markStaleAuthorityExportStarted()
+      await staleAuthorityExportGate
+      try {
+        await route.fulfill({ response })
+      } catch (routeError) {
+        if (!(routeError instanceof Error) || !routeError.message.includes('already handled')) {
+          throw routeError
+        }
+        staleAuthorityTransport = 'cancelled'
+      } finally {
+        markStaleAuthorityExportSettled()
+      }
+    },
+    { times: 1 },
+  )
+
+  await page.route(
+    '**/v1/me/privacy/consents/ai_plan_explanation/revoke',
+    (route) => route.abort('failed'),
+    { times: 1 },
+  )
+
+  await page.getByRole('button', { name: '下载我的数据' }).click()
+  await staleAuthorityExportStarted
+  const aiConsent = page.locator('.consent-row').filter({ hasText: 'AI 计划解释' })
+  await aiConsent.getByRole('button', { name: '撤回这项授权' }).click()
+  await aiConsent.getByRole('button', { name: '确认撤回' }).click()
+  await expect(page.getByText('REVOCATION UNKNOWN / 禁止重复撤回')).toBeVisible()
+  await expect(page.getByRole('button', { name: '下载我的数据' })).toHaveAttribute(
+    'aria-disabled',
+    'true',
+  )
+
+  releaseStaleAuthorityExport()
+  await staleAuthorityExportSettled
+  await page.waitForTimeout(150)
+  expect(downloads).toBe(1)
+  expect(staleAuthorityTransport).toBe('cancelled')
+  await expect(page.locator('body')).not.toContainText('当前隐私清单已变化，本次导出未保存')
+  await expect(page.locator('body')).not.toContainText('已开始下载（')
+
+  await page.getByRole('button', { name: '核对撤回结果' }).click()
+  await expect(aiConsent.getByText('有效', { exact: true })).toBeVisible()
+  await expect(page.getByText(/仍然有效；系统没有自动重放撤回/)).toBeVisible()
+  await expect(page.getByRole('button', { name: '下载我的数据' })).toHaveAttribute(
+    'aria-disabled',
+    'false',
+  )
+  const secondFreshDownload = page.waitForEvent('download')
+  await page.getByRole('button', { name: '下载我的数据' }).click()
+  await secondFreshDownload
+  await expect(
+    page.getByText(/已通过 myfitness-portable-export-v4 结构验证，已开始下载/),
+  ).toBeVisible()
+  expect(downloads).toBe(2)
+  await page.locator('.privacy-scroll').evaluate((scroll) => {
+    scroll.scrollTop = 0
+  })
+  await page.screenshot({
+    path: 'output/playwright/iteration-088-export-lifecycle-mobile.png',
+    fullPage: true,
+  })
+  expect(
+    browserErrors.filter(
+      (error) =>
+        error !== 'Failed to load resource: net::ERR_FAILED' &&
+        !(
+          error.includes('Request failed: POST') &&
+          error.includes('/v1/me/privacy/consents/ai_plan_explanation/revoke')
+        ) &&
+        !(error.includes('Request failed: GET') && error.includes('/v1/me/privacy/export')),
+    ),
+  ).toEqual([])
+})
+
 test('consent receipt history keeps empty, current and continuation evidence distinct', async ({
   page,
   request,

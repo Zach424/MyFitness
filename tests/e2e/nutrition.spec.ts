@@ -655,7 +655,7 @@ test('favorite mutations reconcile the exact list before any new toggle', async 
   await recovery.getByRole('button', { name: '核对收藏状态' }).click()
   const removeFavorite = page.getByRole('button', { name: '取消收藏熟鸡胸肉' })
   await expect(removeFavorite).toBeEnabled()
-  await expect(page.getByRole('status')).toContainText('完整快照与份量已收藏')
+  await expect(page.locator('.nutrition-feedback')).toContainText('完整快照与份量已收藏')
   await expect(title).toHaveValue('收藏恢复午餐')
   await expect(serving).toHaveValue('120')
   expect(saveAttempts).toBe(1)

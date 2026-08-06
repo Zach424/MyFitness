@@ -7,6 +7,7 @@ import {
   deletionReady,
   formatInventoryCount,
   formatReceiptToken,
+  privacyExportRequestCanCommit,
   privacyReadPhase,
 } from './privacy.model'
 
@@ -57,5 +58,18 @@ describe('privacy page model', () => {
     expect(classifyPrivacyReadFailure({ statusCode: 429 })).toBe('refused')
     expect(classifyPrivacyReadFailure({ statusCode: 503 })).toBe('service')
     expect(classifyPrivacyReadFailure({ statusCode: 302 })).toBe('unknown')
+  })
+
+  it('requires the same mounted export generation and current custody authority', () => {
+    const current = {
+      requestGeneration: 7,
+      currentGeneration: 7,
+      mounted: true,
+      custodyAuthorityReady: true,
+    }
+    expect(privacyExportRequestCanCommit(current)).toBe(true)
+    expect(privacyExportRequestCanCommit({ ...current, currentGeneration: 8 })).toBe(false)
+    expect(privacyExportRequestCanCommit({ ...current, mounted: false })).toBe(false)
+    expect(privacyExportRequestCanCommit({ ...current, custodyAuthorityReady: false })).toBe(false)
   })
 })
