@@ -11,6 +11,7 @@ export const documentationMigrationPolicy = {
     'docs/PROJECT_STATUS.md',
     'docs/product/ROADMAP.md',
     'docs/product/PRODUCT_BRIEF.md',
+    'docs/product/RISK_REGISTER.md',
     'docs/architecture/ARCHITECTURE.md',
     'docs/operations/USER_IDENTITY_RUNBOOK.md',
     'docs/DOCUMENTATION_MIGRATION_INDEX.md',
@@ -21,11 +22,7 @@ export const documentationMigrationPolicy = {
       id: 'topic-product-design',
       label: '产品、设计与 API 说明',
       status: 'pending',
-      paths: [
-        'docs/api/README.md',
-        'docs/design/DESIGN_SYSTEM.md',
-        'docs/product/RISK_REGISTER.md',
-      ],
+      paths: ['docs/api/README.md', 'docs/design/DESIGN_SYSTEM.md'],
     },
     {
       id: 'topic-architecture-models',

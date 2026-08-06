@@ -47,6 +47,18 @@ export const chineseDocumentationPolicy = {
       rejectEnglishOnlyNarrativeLines: true,
     },
     {
+      path: 'docs/product/RISK_REGISTER.md',
+      headings: ['# 产品风险登记册'],
+      requiredTokens: [
+        '最后审阅：2026-08-05，第 043 轮',
+        '当前控制 / 下一门禁',
+        '产品级风险只有在具名的发布证据存在后才能关闭。',
+      ],
+      forbiddenTokens: ['| High', '| Medium', '| Low'],
+      minimumHanShare: 0.72,
+      rejectEnglishOnlyNarrativeLines: true,
+    },
+    {
       path: 'docs/architecture/ARCHITECTURE.md',
       headings: [
         '# 架构基线',
@@ -180,6 +192,14 @@ const verifyActiveDocument = async (root, document) => {
   const missing = document.headings.filter((heading) => !actualHeadings.has(heading))
   if (missing.length > 0) {
     fail(`${document.path} 缺少中文权威标题：${missing.join('；')}`)
+  }
+  const missingTokens = (document.requiredTokens ?? []).filter((token) => !text.includes(token))
+  if (missingTokens.length > 0) {
+    fail(`${document.path} 缺少受控正文标记：${missingTokens.join('；')}`)
+  }
+  const forbiddenTokens = (document.forbiddenTokens ?? []).filter((token) => text.includes(token))
+  if (forbiddenTokens.length > 0) {
+    fail(`${document.path} 仍包含禁用正文标记：${forbiddenTokens.join('；')}`)
   }
   const measurement = measureChineseNarrative(text)
   if (document.minimumHanShare && measurement.hanShare < document.minimumHanShare) {

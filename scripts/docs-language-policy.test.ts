@@ -124,4 +124,44 @@ describe('中文文档策略', () => {
 
     await expect(verifyChineseDocumentation(root, strictPolicy)).rejects.toThrow('纯英文叙述')
   })
+
+  it('拒绝活跃权威文档缺失受控正文标记', async () => {
+    const root = await fixture(
+      '# 第 090 轮：中文记录\n\n日期：2026-08-05\n\n状态：已完成\n\n这是一段用于验证权威记录语言约束的中文正文，确保中文字符数量足够。\n',
+    )
+    const strictPolicy = {
+      ...policy,
+      activeDocuments: [
+        {
+          path: 'docs/active.md',
+          headings: ['# 项目状态', '## 当前状态'],
+          requiredTokens: ['最后审阅：'],
+        },
+      ],
+    }
+
+    await expect(verifyChineseDocumentation(root, strictPolicy)).rejects.toThrow('缺少受控正文标记')
+  })
+
+  it('拒绝活跃权威文档包含禁用正文标记', async () => {
+    const root = await fixture(
+      '# 第 090 轮：中文记录\n\n日期：2026-08-05\n\n状态：已完成\n\n这是一段用于验证权威记录语言约束的中文正文，确保中文字符数量足够。\n',
+    )
+    await writeFile(
+      resolve(root, 'docs', 'active.md'),
+      '# 项目状态\n\n## 当前状态\n\n| 风险 | High |\n',
+    )
+    const strictPolicy = {
+      ...policy,
+      activeDocuments: [
+        {
+          path: 'docs/active.md',
+          headings: ['# 项目状态', '## 当前状态'],
+          forbiddenTokens: ['| High'],
+        },
+      ],
+    }
+
+    await expect(verifyChineseDocumentation(root, strictPolicy)).rejects.toThrow('禁用正文标记')
+  })
 })

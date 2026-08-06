@@ -1,37 +1,37 @@
-# Product risk register
+# 产品风险登记册
 
-Last reviewed: 2026-08-05, iteration 043
+最后审阅：2026-08-05，第 043 轮
 
-This register tracks release-affecting uncertainty. A mitigation is evidence to collect, not a claim that the risk is gone.
+本登记册跟踪会影响发布的不确定性。缓解措施代表需要收集的证据，不表示风险已经消失。
 
-| ID    | Risk                                                                                   | Level  | Current control / next gate                                                                                                                                   |
-| ----- | -------------------------------------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| R-002 | WeChat is mock-proven; H5 OIDC is browser/provider-double proven but not shared        | High   | Configure real clients/domains, verify exact hosted callback behavior and exercise device/browser login before beta                                           |
-| R-003 | Local restore-ledger erasure works, but production backup/provider ownership is absent | High   | Automate backup/retention, independently retain ledger, exercise shared restore and approve provider controls                                                 |
-| R-004 | Real food-photo quality, latency, cost and provider data controls are unknown          | High   | Fixture remains default; require owner-approved canary, legal/region/retention review and thresholds                                                          |
-| R-005 | Local MinIO does not prove production object-store custody                             | High   | Configure cloud bucket/KMS/IAM/lifecycle/versioning/replication and exercise failure/restore                                                                  |
-| R-006 | Starter food composition is demonstration data                                         | High   | Select licensed/localized versioned catalog and attribution before beta                                                                                       |
-| R-007 | Twenty-three deterministic AI cases are insufficient real-world safety evidence        | High   | v2 blocks covered Unicode/instruction slices with exact reasons; add expert-reviewed real images, homoglyphs, multilingual attacks, refusals and thresholds   |
-| R-008 | Process metrics lack central scraping, alert delivery and named ownership              | High   | Deploy private aggregation, dashboards, paging and exercise the iteration-012 incident runbook before beta                                                    |
-| R-009 | H5 and WeApp bundles exceed recommended warnings                                       | Medium | Establish budgets and split large route/vendor chunks before beta                                                                                             |
-| R-010 | Food-photo estimates may still be trusted too readily                                  | High   | Keep ranges/source/PROOF treatment, user edits, no auto-write; validate with target users and experts                                                         |
-| R-011 | Consent/events exist without complete policy/filing review                             | High   | Align actual retention/provider behavior with privacy text and applicable China release requirements                                                          |
-| R-012 | PostgreSQL, object storage and providers cross transaction boundaries                  | Medium | Durable outbox/leases/retry/fault tests exist; add shared alerts, dead-letter ownership and provider evidence                                                 |
-| R-013 | Synchronous JSON export can exceed API memory or Mini Program 50 MiB limits            | Medium | Measure closed-beta account sizes; move to encrypted expiring archive jobs before the threshold is reachable                                                  |
-| R-014 | Fixed-window limits and proxy-hop trust are not traffic/topology calibrated            | Medium | Load-test boundaries and verify exact `TRUST_PROXY_HOPS` in the shared environment before opening traffic                                                     |
-| R-015 | Production audit retains 9 moderate Taro build/development-chain advisories            | Medium | Critical/high are zero; remove remaining build-chain findings through a supported Taro upgrade and rerun full graph/dual-client/E2E evidence                  |
-| R-016 | Enterprise operator identity and access governance are not configured                  | High   | Select OIDC tenant/client and named owner; exercise dual-reviewed provisioning, recertification, disablement, revocation and shared login before use          |
-| R-017 | Administrator audit is immutable only inside the primary database                      | High   | Define retention and owner; export to independently protected storage, include restore evidence and alert on write/access anomalies before real access        |
-| R-019 | Erasure ledger/secret loss would invalidate user and provider-identity suppression     | High   | Independently retain/replicate ledger and recover HMAC secret; implement dual-read version rotation and exercise loss scenarios                               |
-| R-020 | Dead-letter jobs lack named alerts and a least-privilege recovery service              | High   | Use exact-job audited runbook locally; add centralized paging, owner and safe recovery workflow before shared beta                                            |
-| R-021 | MVP erased-identity suppression currently prevents a new account for the same identity | High   | Confirm product/legal policy; if return is allowed, require an explicit fresh-account consent flow without reconnecting erased data before beta               |
-| R-022 | Managed deployment remains unproven after release and environment-admission proof      | Medium | Hosted quality/smoke are green and the next release now requires exact tag/main/CI proof; provision managed resources, deploy a canary and exercise rollback  |
-| R-023 | Offline admission cannot prove external references exist or were genuinely approved    | High   | Create, dereference and approve the dossier inside a protected change workflow; never grant credentials or traffic from local verifier success alone          |
-| R-024 | The published `v0.1.0-rc.1` has no H5/WeApp or source-qualification asset              | Medium | Configure the approved client API URL, publish a new qualified immutable candidate, then independently verify all service/client/qualification assets         |
-| R-025 | A receipt bearer secret remains in client application storage until explicit removal   | Medium | Keep it masked and no-store over HTTP; review secure platform storage, shared-device behavior and expiry/removal policy before closed beta                    |
-| R-026 | Reviewed GitHub Action pins can age or miss upstream security/compatibility fixes      | Medium | Dependabot proposes weekly; verify exact upstream tag/source, update lock and every use together, then require complete hosted CI before merge                |
-| R-027 | End-user OIDC tenant, recovery, linking and provider data policy are unapproved        | High   | Select tenant/client and owners; review region/retention/recovery; keep cross-provider linking off; exercise JWKS rotation and incident paths before beta     |
-| R-028 | Progress photos can be over-interpreted or create long-lived sensitive-media custody   | High   | Keep capture-only checks/no body score, separate analysis/retention consent and scoped deletion; require real-user research, policy and managed custody proof |
-| R-029 | Client occurrence conversion depends on platform `Intl` timezone data                  | Medium | Gap/overlap/future tests pass; verify supported H5 browsers and real WeChat devices across representative IANA zones before closed beta                       |
+| ID    | 风险                                                                            | 等级 | 当前控制 / 下一门禁                                                                                       |
+| ----- | ------------------------------------------------------------------------------- | ---- | --------------------------------------------------------------------------------------------------------- |
+| R-002 | 微信登录只有模拟证明；H5 OIDC 已通过浏览器/提供方替身证明，但尚未在共享环境验证 | 高   | 配置真实客户端与域名，验证托管环境中的精确回调行为，并在封闭测试前演练设备/浏览器登录                     |
+| R-003 | 本地恢复账本擦除有效，但缺少生产备份和提供方保管责任                            | 高   | 自动化备份/保留，独立保留账本，演练共享恢复并审批提供方控制                                               |
+| R-004 | 真实食物照片的质量、延迟、成本和提供方数据控制仍未知                            | 高   | 默认继续使用夹具；要求责任人批准金丝雀，完成法务/区域/保留审阅并设定阈值                                  |
+| R-005 | 本地 MinIO 不能证明生产对象存储的数据保管责任                                   | 高   | 配置云存储桶/KMS/IAM/生命周期/版本控制/复制，并演练故障与恢复                                             |
+| R-006 | 初始食物成分数据只是演示数据                                                    | 高   | 在封闭测试前选择有许可、本地化、版本化且具备来源标注的目录                                                |
+| R-007 | 二十三项确定性 AI 用例不足以形成真实世界安全证据                                | 高   | v2 已覆盖受阻 Unicode/指令切片及精确理由；补充专家审阅的真实图像、同形异义字、多语言攻击、拒绝案例和阈值  |
+| R-008 | 进程指标缺少集中抓取、告警投递和具名责任人                                      | 高   | 部署私有聚合、仪表板和呼叫通知，并在封闭测试前演练第 012 轮事件运行手册                                   |
+| R-009 | H5 与 WeApp 包体超过建议警告值                                                  | 中   | 在封闭测试前建立预算并拆分大型路由/vendor 分块                                                            |
+| R-010 | 用户仍可能过度信任食物照片估算                                                  | 高   | 保留范围/来源/PROOF 处理、用户编辑和禁止自动写入；与目标用户及专家共同验证                                |
+| R-011 | 已有同意/事件机制，但政策与备案审阅尚未完成                                     | 高   | 使实际保留/提供方行为与隐私文本及适用的中国发布要求一致                                                   |
+| R-012 | PostgreSQL、对象存储和提供方跨越事务边界                                        | 中   | 已有持久发件箱/租约/重试/故障测试；补充共享告警、死信责任人和提供方证据                                   |
+| R-013 | 同步 JSON 导出可能超过 API 内存或小程序 50 MiB 限制                             | 中   | 测量封闭测试账号规模；在接近阈值前迁移到加密、限时归档任务                                                |
+| R-014 | 固定窗口限流和代理跳数信任尚未按流量/拓扑校准                                   | 中   | 开放流量前执行边界负载测试，并在共享环境验证精确的 `TRUST_PROXY_HOPS`                                     |
+| R-015 | 生产审计仍保留 9 个 Taro 构建/开发链 moderate 公告                              | 中   | critical/high 已为零；通过受支持的 Taro 升级消除剩余构建链问题，并重跑完整依赖图、双端客户端与 E2E 证据   |
+| R-016 | 企业操作员身份和访问治理尚未配置                                                | 高   | 选择 OIDC 租户/客户端和具名责任人；使用前演练双人复核的开通、再认证、停用、撤销和共享登录                 |
+| R-017 | 管理员审计只在主数据库内不可变                                                  | 高   | 定义保留与责任人；导出到独立保护的存储，纳入恢复证据，并在真实访问前为写入/访问异常配置告警               |
+| R-019 | 擦除账本/密钥丢失会使用户与提供方身份抑制失效                                   | 高   | 独立保留/复制账本并恢复 HMAC 密钥；实现双读版本轮换并演练丢失场景                                         |
+| R-020 | 死信任务缺少具名告警和最小权限恢复服务                                          | 高   | 本地使用精确任务审计运行手册；在共享封闭测试前补充集中呼叫、责任人和安全恢复流程                          |
+| R-021 | MVP 的已擦除身份抑制当前会阻止同一身份创建新账号                                | 高   | 确认产品/法律政策；如允许回归，封闭测试前必须提供显式的新账号同意流程，且不得重新连接已擦除数据           |
+| R-022 | 发布与环境准入证明通过后，托管部署仍未得到验证                                  | 中   | 托管质量/冒烟已通过，下一候选现在要求精确标签/main/CI 证明；开通托管资源、部署金丝雀并演练回滚            |
+| R-023 | 离线准入无法证明外部引用真实存在或确已批准                                      | 高   | 在受保护的变更流程中创建、解引用并批准材料包；绝不因本地校验器成功而单独授予凭据或流量                    |
+| R-024 | 已发布的 `v0.1.0-rc.1` 没有 H5/WeApp 或源码资格资产                             | 中   | 配置获批的客户端 API URL，发布新的合格不可变候选，再独立验证全部服务/客户端/资格资产                      |
+| R-025 | 一个收据持有者密钥会留在客户端应用存储中，直至显式移除                          | 中   | 通过 HTTP 保持掩码和 no-store；在封闭测试前审阅安全平台存储、共享设备行为及过期/移除政策                  |
+| R-026 | 已审阅的 GitHub Action 固定引用可能老化或错过上游安全/兼容修复                  | 中   | Dependabot 每周提出更新；核对精确上游标签/源码，同时更新锁定和所有用法，并在合并前要求完整托管 CI         |
+| R-027 | 最终用户 OIDC 租户、恢复、关联和提供方数据政策尚未获批                          | 高   | 选择租户/客户端与责任人；审阅区域/保留/恢复；保持跨提供方关联关闭，并在封闭测试前演练 JWKS 轮换与事件路径 |
+| R-028 | 进度照片可能被过度解读，或形成长期敏感媒体保管责任                              | 高   | 保留仅采集检查/无身体评分、分离分析/保留同意与限定范围删除；要求真实用户研究、政策和托管保管证明          |
+| R-029 | 客户端发生时间转换依赖平台 `Intl` 时区数据                                      | 中   | 间隙/重叠/未来时间测试已通过；在封闭测试前跨代表性 IANA 时区验证受支持 H5 浏览器和真实微信设备            |
 
-Resolved implementation defects remain documented in their iteration archive rather than removed from history. Product-level risks close only when the named release evidence exists.
+已解决的实现缺陷继续记录在各自迭代档案中，不从历史删除。产品级风险只有在具名的发布证据存在后才能关闭。
