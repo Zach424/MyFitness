@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 
-import { deferH5Focus, deferH5FocusWithFallback } from './accessibility'
+import {
+  deferH5Focus,
+  deferH5FocusWithFallback,
+  type DeferredH5FocusRequest,
+} from './accessibility'
 import {
   aggregateHistoryReadPhase,
   classifyAggregateHistoryReadFailure,
@@ -32,21 +36,52 @@ export const useAggregateHistory = <Target extends AggregateTarget, Item>(
   const [failure, setFailure] = useState<AggregateHistoryReadFailure>()
   const requestToken = useRef(0)
   const returnFocusId = useRef('')
+  const focusGeneration = useRef(0)
+  const focusRequest = useRef<DeferredH5FocusRequest>()
+
+  const invalidateFocus = () => {
+    focusGeneration.current += 1
+    focusRequest.current?.cancel()
+    focusRequest.current = undefined
+  }
+
+  const scheduleFocus = (primaryId: string, fallbackId = '', delayMs = 0) => {
+    invalidateFocus()
+    const generation = focusGeneration.current
+    const token = requestToken.current
+    const options = {
+      canFocus: () => focusGeneration.current === generation && requestToken.current === token,
+    }
+    const request = fallbackId
+      ? deferH5FocusWithFallback(primaryId, fallbackId, delayMs, options)
+      : deferH5Focus(primaryId, delayMs, options)
+    focusRequest.current = request || undefined
+    return request
+  }
 
   useEffect(
     () => () => {
       requestToken.current += 1
+      invalidateFocus()
     },
     [],
   )
 
   useEffect(() => {
-    if (target && focusBoundary?.initialFocusId) deferH5Focus(focusBoundary.initialFocusId)
+    if (!target || !focusBoundary?.initialFocusId) return
+    const request = scheduleFocus(focusBoundary.initialFocusId)
+    return () => {
+      if (request) request.cancel()
+    }
   }, [focusBoundary?.initialFocusId, target])
 
   useEffect(() => {
-    if (failure) deferH5Focus(retryId)
-  }, [failure, retryId])
+    if (!failure || busy) return
+    const request = scheduleFocus(retryId)
+    return () => {
+      if (request) request.cancel()
+    }
+  }, [busy, failure, retryId])
 
   const read = async (
     currentTarget: Target,
@@ -73,6 +108,7 @@ export const useAggregateHistory = <Target extends AggregateTarget, Item>(
 
   const open = (nextTarget: Target, triggerId = '') => {
     requestToken.current += 1
+    invalidateFocus()
     returnFocusId.current = triggerId
     setTarget(nextTarget)
     setItems(undefined)
@@ -83,6 +119,7 @@ export const useAggregateHistory = <Target extends AggregateTarget, Item>(
 
   const close = () => {
     requestToken.current += 1
+    invalidateFocus()
     returnFocusId.current = ''
     setTarget(undefined)
     setItems(undefined)
@@ -95,7 +132,7 @@ export const useAggregateHistory = <Target extends AggregateTarget, Item>(
     const focusId = returnFocusId.current
     const fallbackFocusId = focusBoundary?.fallbackFocusId ?? ''
     close()
-    if (focusId || fallbackFocusId) deferH5FocusWithFallback(focusId, fallbackFocusId, 40)
+    if (focusId || fallbackFocusId) scheduleFocus(focusId, fallbackFocusId, 40)
   }
 
   const phase = aggregateHistoryReadPhase({

@@ -769,6 +769,17 @@ test('health history sheet progressively loads immutable older revisions', async
   expect(seed.statuses).toEqual([201, ...Array.from({ length: 11 }, () => 200)])
   expect(seed.revision).toBe(12)
 
+  await page.addInitScript(() => {
+    const originalGetElementById = Document.prototype.getElementById
+    Document.prototype.getElementById = function (elementId: string) {
+      const state = window as typeof window & { __healthHistoryFocusMisses?: number }
+      if (elementId === 'health-history-close' && !state.__healthHistoryFocusMisses) {
+        state.__healthHistoryFocusMisses = 1
+        return null
+      }
+      return originalGetElementById.call(this, elementId)
+    }
+  })
   await page.reload()
   const currentEntry = page.locator('.log-entry').first()
   await expect(currentEntry.getByText('v12')).toBeVisible()
@@ -783,6 +794,17 @@ test('health history sheet progressively loads immutable older revisions', async
   const historyDialog = page.getByRole('dialog', { name: '记录历史' })
   await expect(historyDialog.locator('.history-entry')).toHaveCount(10)
   await expect(historyDialog.locator('#health-history-close')).toBeFocused()
+  expect(
+    await page.evaluate(
+      () =>
+        (window as typeof window & { __healthHistoryFocusMisses?: number })
+          .__healthHistoryFocusMisses,
+    ),
+  ).toBe(1)
+  await page.screenshot({
+    path: 'output/playwright/iteration-089-bounded-focus-mobile.png',
+    fullPage: false,
+  })
   await page.screenshot({
     path: 'output/playwright/iteration-076-history-focus-mobile.png',
     fullPage: false,

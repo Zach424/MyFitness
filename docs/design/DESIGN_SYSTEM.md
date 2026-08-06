@@ -907,6 +907,16 @@ The full browser run also exposed a test-semantic issue outside the privacy page
 
 - [390 × 844 fresh verified export after lifecycle invalidation and reconciliation](../../output/playwright/iteration-088-export-lifecycle-mobile.png)
 
+## Bounded deferred-focus reliability — iteration 089
+
+The visual treatment is intentionally unchanged; this round makes the existing mineral focus rings reliable under lazy Taro commits. A focus request now has four attempts and confirms that the custom element it focused survives the next bounded interval. If Taro replaces that node and the browser falls back to the page body, the new instance receives the same ring. If the user has moved to another interactive control, the request ends and never pulls focus back.
+
+The 390 × 844 health-history evidence deliberately hides the circular close action from the first DOM lookup. The final sheet still places the double-ring close control at the top-right above v12–v7 immutable entries, proving delayed acquisition without a loading overlay, focus toast or changed reading order. Retained-history retry was separately stressed 10/10 after instrumentation showed that an initially focused Taro button could be replaced and drop focus to `BODY`.
+
+Dialog enter/restore/complete and history close/retry/return each supersede older focus generations. Primary trigger remains preferred over stable fallback, programmatic parent close restores nothing and WeApp receives no DOM-focus claim. The evidence remains Chromium H5 automation rather than screen-reader, physical keyboard or WeChat-device certification.
+
+- [390 × 844 health-history close focus after a deliberately missed first lookup](../../output/playwright/iteration-089-bounded-focus-mobile.png)
+
 ## Screenshot review checklist
 
 - The Rhythm Rail remains understandable without color.
