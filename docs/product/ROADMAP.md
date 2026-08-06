@@ -1,8 +1,8 @@
-# Delivery roadmap
+# 交付路线图
 
-The roadmap is organized as controlled iterations. A round may take several working sessions, but it ends only after implementation, validation, archive update, and a commit.
+路线图按受控迭代组织。一轮可以跨越多个工作会话，但只有在实现、验证、档案更新和提交全部完成后才结束。
 
-进度快照（2026-08-05）：第 0–90 轮已在本地完成。OIDC 浏览器验证现在通过一个自包含命令重建 OIDC H5，并在构建目录外写入绑定完整文件树、身份模式和测试 API 基址的 SHA-256 收据。Playwright 在页面断言前重新计算摘要并验证静态回调桥；普通开发身份构建、缺失/过期收据和树/API 漂移都会明确失败。测试收据不进入候选 TAR 或发布元数据。第 89 轮有限焦点调度、便携导出、同意历史及所有既有恢复/读取表面保持绿色。H5/WeApp 实测总量为 2,813,023/1,069,025 字节；H5 入口/最大异步块为 319,238/205,488，WeApp vendor/最大页面为 19,338/55,697，预算不变。单元测试 419 项、集成测试 63 项、浏览器测试 97 项，生产依赖为 0 个 critical/high。托管质量/冒烟仍只确认到第 030 轮精确 SHA；本轮未检查更晚的托管 SHA 证据。账号、预算、域名、凭据和付费提供方继续停放，但仍是正式发布门槛。
+进度快照（2026-08-05）：第 0–91 轮已在本地完成。四份活跃权威文档使用中文导航契约，项目状态入口和模块总览已中文化；第 090 轮起的迭代档案及 ADR-0085 起的架构决策由 `myfitness-chinese-documentation/v1` 检查标题、元数据、最低汉字数和中文占比，CI 与本地使用同一命令。技术字面量和链接不进入比例，历史英文记录按受控批次迁移。OIDC 完整 H5 树收据、有限焦点调度、便携导出、同意历史及既有恢复/读取表面保持已验证状态。H5/WeApp 实测总量为 2,813,023/1,069,025 字节；H5 入口/最大异步块为 319,238/205,488，WeApp vendor/最大页面为 19,338/55,697，预算不变。单元测试 423 项、集成测试 63 项、浏览器测试 97 项，生产依赖为 0 个 critical/high。托管质量/冒烟仍只确认到第 030 轮精确 SHA；本轮未检查更晚的托管 SHA 证据。账号、预算、域名、凭据和付费提供方继续停放，但仍是正式发布门槛。
 
 | Iteration | Primary scope                                       | Exit evidence                                                                                      |
 | --------- | --------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
@@ -97,32 +97,33 @@ The roadmap is organized as controlled iterations. A round may take several work
 | 88        | Portable-export operation lifecycle                 | Late artifacts cannot download/save/publish after page authority ends; explicit retry starts fresh |
 | 89        | Bounded deferred-focus reliability                  | Late-mounted targets retry finitely without stale focus theft or changing dialog authority         |
 | 90        | OIDC 测试产物预检与本地 Beta 验证顺序               | 完整 H5 树摘要、回调桥/API 基址预检、错误身份构建失败关闭、部署准入契约回归                        |
-| 91        | 权威活跃文档中文化                                  | 项目状态/路线图/架构/主要手册中文迁移、术语表与自动检查，保持链接和技术字面量                      |
-| 92        | Managed shared deployment, beta hardening/release   | Real identity/custody/telemetry, rollback, security/a11y/filing review and staged rollout          |
-| 93        | Native App feasibility and device sync              | Retention gate reviewed; HealthKit/Health Connect/Huawei proof of concept                          |
+| 91        | 中文项目记录治理                                    | 中文权威导航与模块总览、术语/迁移规范、编号记录语言门禁及 CI 回归                                  |
+| 92        | 活跃权威文档正文中文化                              | 当前架构/风险、路线图门禁、架构基线和身份手册正文分段迁移，扩展自动检查                            |
+| 93        | Managed shared deployment, beta hardening/release   | Real identity/custody/telemetry, rollback, security/a11y/filing review and staged rollout          |
+| 94        | Native App feasibility and device sync              | Retention gate reviewed; HealthKit/Health Connect/Huawei proof of concept                          |
 
-## Release gates
+## 发布门禁
 
-### Internal alpha
+### 内部 Alpha
 
 - Iterations 1–8 complete.
 - Entire non-AI record and planning path works with deterministic fixtures.
 - No known critical data-loss or authorization defects.
 
-### Closed beta
+### 封闭测试
 
 - Iterations 9–47 complete.
 - AI evaluation set is versioned and safety validators block known high-risk cases.
 - Data export and deletion are exercised end to end.
 - Support, monitoring, cost limits, rollback, and incident ownership are assigned.
 
-### Public release
+### 公开发布
 
 - Iteration 47 complete.
 - Applicable ICP/APP/Mini Program privacy/AI registration and content-labeling work is reviewed.
 - Store materials match actual data practices and product claims.
 - Release starts with a small cohort and automatic rollback thresholds.
 
-## Change control
+## 变更控制
 
 New feature requests enter the risk/backlog section of the next iteration archive. They do not interrupt an active round unless they fix a correctness, security, privacy, or data-loss issue on the current critical path.

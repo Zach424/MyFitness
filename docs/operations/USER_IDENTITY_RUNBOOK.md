@@ -1,8 +1,8 @@
-# User identity operations runbook
+# 用户身份运行手册
 
 Status: WeChat plus the complete H5 OIDC browser/API exchange, provider-bound sessions and erased-identity suppression are proven against local provider doubles; real Mini Program credentials, identity tenants, hosted callback/domains and device/shared-environment evidence remain gated
 
-## Trust boundary
+## 信任边界
 
 Neither client is an identity authority.
 
@@ -11,7 +11,7 @@ Neither client is an identity authority.
 
 PostgreSQL stores application-token SHA-256 hashes and explicit providers. OIDC identity rows store a one-way issuer/subject digest; WeChat identities store the AppID-namespaced openid. Never accept `openid`, OIDC subject, issuer, audience, user ID or session provider from a client. Never put authorization codes, verifiers, nonces, AppSecret, OIDC client secret, provider tokens/responses or raw subjects in logs, metrics, traces, support views or browser-visible configuration.
 
-## Configuration
+## 配置
 
 WeChat production requirements:
 
@@ -58,7 +58,7 @@ pnpm test:e2e:oidc
 
 The tag workflow supplies the approved HTTPS API base plus immutable release metadata and requires `oidc / candidate`. Its canonical TAR must contain `index.html`, `auth/callback/index.html`, `auth/callback/redirect.js` and `myfitness-client-build.json`. Candidate status permits controlled preview only; do not expose H5 to public traffic until the real provider, domain, callback and custody preflight below passes.
 
-## Shared-environment preflight
+## 共享环境预检
 
 1. Name business/technical owners for the real Mini Program and end-user OIDC tenant/client. Record provider region, retention, incident, account-recovery and availability policy.
 2. Put WeChat AppSecret and any OIDC client secret in the secret manager. Restrict reads to the API workload identity and define rotation/emergency revocation owners.
@@ -71,7 +71,7 @@ The tag workflow supplies the approved HTTPS API base plus immutable release met
 9. Exercise account deletion for both providers. Confirm immediate access closure, completed receipt, raw identity removal, one HMAC suppression and later `403` without a replacement user.
 10. Run `pnpm ops:verify-backup-restore` against the approved isolated restore path and retain identity, erasure and deployment proof together.
 
-## Incidents and rotation
+## 事件与轮换
 
 - Provider unavailable, JWKS unavailable or malformed response: return a generic `503`, create no user, and alert only on aggregate failure class/rate.
 - Invalid/expired code, bad ID Token or nonce mismatch: return generic `401`. Exact callback/contract violations return `400`. Verified session attempts are bounded at 30/minute per normalized IP in addition to ingress limits.
@@ -81,11 +81,11 @@ The tag workflow supplies the approved HTTPS API base plus immutable release met
 - Erased identity: `403` is expected. Do not remove/bypass suppression through support tooling. Fresh-account re-registration needs separate product/legal approval and explicit consent.
 - `ERASURE_LEDGER_HASH_SECRET` loss/rotation: keep traffic closed on restored data. Implement and exercise versioned dual-read/dual-write before planned rotation.
 
-## Rollback
+## 回滚
 
 Migrations 0015 and 0019 remain applied after provider sessions or suppressions exist. Remove a failing adapter from `AUTH_ENABLED_PROVIDERS` and hold its login/client traffic. An older API may not safely understand OIDC sessions or v2 erasure semantics, so retain a compatible erasure worker/reconciler. Never re-enable `dev`, reactivate a deletion-pending user, remove a suppression, restore a raw subject or weaken token verification to make rollback appear healthy.
 
-## Primary references
+## 主要参考
 
 - [Taro `login` API](https://docs.taro.zone/en/docs/apis/open-api/login/)
 - [WeChat Mini Program login flow](https://developers.weixin.qq.com/miniprogram/en/dev/framework/open-ability/login.html)

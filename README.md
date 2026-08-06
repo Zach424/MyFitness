@@ -40,9 +40,10 @@ output/playwright/ 浏览器视觉验收证据
 ```bash
 pnpm docs:sync-obsidian
 pnpm docs:verify-obsidian
+pnpm docs:check-language
 ```
 
-命令会读取 Obsidian 的本机 vault 配置，优先选择最近打开的 vault，并把状态精确镜像到 `10_Projects/MyFitness/PROJECT_STATUS.md`。`OBSIDIAN_VAULT_PATH` 可以显式选择 vault，`MYFITNESS_OBSIDIAN_STATUS_TARGET` 可以覆盖 vault 内相对路径；目标路径不能逃逸 vault，验证命令会拒绝缺失或过期的镜像。Obsidian 副本属于本机知识库，不进入本仓库提交。
+前两个命令会读取 Obsidian 的本机 vault 配置，优先选择最近打开的 vault，并把状态精确镜像到 `10_Projects/MyFitness/PROJECT_STATUS.md`。`OBSIDIAN_VAULT_PATH` 可以显式选择 vault，`MYFITNESS_OBSIDIAN_STATUS_TARGET` 可以覆盖 vault 内相对路径；目标路径不能逃逸 vault，验证命令会拒绝缺失或过期的镜像。第三个命令检查活跃权威标题及第 90 轮后的中文记录契约，CI 也会执行。具体规则见[中文项目记录规范](docs/DOCUMENTATION_LANGUAGE_POLICY.md)。Obsidian 副本属于本机知识库，不进入本仓库提交。
 
 ## 本地运行
 
@@ -128,6 +129,7 @@ Playwright 会复用或启动 API、H5 与管理员预览服务。`pnpm db:down`
 ## 文档入口
 
 - [产品定义](docs/product/PRODUCT_BRIEF.md)
+- [中文项目记录规范](docs/DOCUMENTATION_LANGUAGE_POLICY.md)
 - [交付路线图](docs/product/ROADMAP.md)
 - [产品风险登记](docs/product/RISK_REGISTER.md)
 - [设计系统](docs/design/DESIGN_SYSTEM.md)

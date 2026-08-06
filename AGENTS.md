@@ -14,8 +14,9 @@ Before changing code or product behavior:
 4. Run targeted checks before broader checks.
 5. Update global module status, risks, decisions, and documentation affected by the work.
 6. Add exactly one new iteration archive under `docs/iterations/` using the previous archive as the structure guide.
-7. On a development machine with a configured Obsidian vault, run `pnpm docs:sync-obsidian` and `pnpm docs:verify-obsidian`; `docs/PROJECT_STATUS.md` remains the authoritative copy.
-8. Commit the validated round with a Conventional Commit message.
+7. Write new project records in Chinese, preserve technical literals, and run `pnpm docs:check-language`.
+8. On a development machine with a configured Obsidian vault, run `pnpm docs:sync-obsidian` and `pnpm docs:verify-obsidian`; `docs/PROJECT_STATUS.md` remains the authoritative copy.
+9. Commit the validated round with a Conventional Commit message.
 
 Do not claim a feature is done without reproducible validation evidence. Do not mix unrelated refactors into a feature round. Preserve user changes and never force-push or rewrite shared history without explicit approval.
 

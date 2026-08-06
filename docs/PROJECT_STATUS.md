@@ -1,39 +1,40 @@
-# Project status
+# 项目状态
 
-Last reviewed: 2026-08-05
+最后审阅：2026-08-05
 
-阶段：内部 Alpha，可在本地完整运行。OIDC 浏览器验证现在由单一自包含命令先构建 OIDC H5，再生成位于 `dist-h5` 之外的严格测试收据；收据把 `oidc` 身份模式、测试 API 基址和当前完整文件树 SHA-256 绑定在一起。Playwright 在页面断言前重新核对摘要和 `index.html`、两个静态回调文件；普通开发身份构建、缺失/过期收据、构建树变更或 API 基址漂移都会明确失败。测试收据不进入客户端质量统计、候选 TAR 或发布元数据。第 89 轮焦点生命周期、便携导出、同意历史及既有恢复/读取边界继续通过。H5/WeApp 总量仍为 2,813,023/1,069,025 字节；H5 入口/最大异步块为 319,238/205,488，vendor 为 19,338，WeApp 最大页面为 55,697 字节，预算不变。生产依赖仍为 0 个 critical/high、9 个已登记 moderate。云账号、域名、真实提供方、遥测和政策工作继续停放；下一轮按用户要求迁移权威活跃文档为中文。
+阶段：内部 Alpha，可在本地完整运行。第 091 轮建立了 `myfitness-chinese-documentation/v1` 中文记录门禁：四份活跃权威文档现在使用稳定的中文一级、二级导航，项目状态入口、模块总览和质量门禁已完成中文化；第 090 轮起的迭代档案及 ADR-0085 起的架构决策必须使用中文标题、日期/状态字段和以中文为主的正文。CI 在格式检查后执行同一门禁，技术字面量与链接从语言比例中排除。仓库状态继续是唯一权威来源，Obsidian 只保留逐字节镜像；历史英文正文按受控轮次迁移。OIDC 产物预检、焦点生命周期、便携导出、同意历史及既有恢复/读取边界继续沿用已验证证据。H5/WeApp 总量仍为 2,813,023/1,069,025 字节；H5 入口/最大异步块为 319,238/205,488，vendor 为 19,338，WeApp 最大页面为 55,697 字节，预算不变。生产依赖仍为 0 个 critical/high、9 个已登记 moderate。云账号、域名、真实提供方、遥测和政策工作继续停放；下一轮翻译活跃权威文档的剩余英文正文。
 
-Primary release target: WeChat Mini Program + responsive H5
+主要交付目标：微信小程序 + 响应式 H5
 
-## Objective
+## 产品目标
 
-MyFitness / 衡迹 turns body, training, nutrition, and recovery records into safe, explainable, user-editable daily actions and weekly plans. The product is a general fitness and lifestyle tool, not a medical diagnosis or treatment product.
+MyFitness / 衡迹把身体、训练、饮食与恢复记录转化为安全、可解释且可由用户编辑的每日行动和周计划。本产品是通用健身与生活方式工具，不提供医疗诊断或治疗。
 
-## Module status
+## 模块状态
 
-| Module                  | Status                             | Current evidence                                                         | Next gate                                   |
-| ----------------------- | ---------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------- |
-| Product scope           | Done for MVP baseline              | `docs/product/PRODUCT_BRIEF.md`                                          | Validate with target-user interviews        |
-| Delivery roadmap        | Done for planning baseline         | `docs/product/ROADMAP.md`                                                | Continue local gaps; keep external gates    |
-| Design language         | Partial, eighty-three flows tested | Core flows + 320 px/large-text/keyboard proof + 116 reviewed screenshots | Screen readers and remaining state matrix   |
-| Client: Mini Program/H5 | Partial, candidate paths local     | H5/WeApp measured budgets plus candidate identity/release contracts      | Real providers/domains/device/browser proof |
-| Admin console           | Partial, local slice done          | OIDC BFF, exact lookup, role split and Evidence Rail exercised           | Select IdP, owner, retention and deployment |
-| Business API            | Partial                            | Verified WeChat/OIDC identity plus self-contained OCI runtime            | Shared deployment and real credential proof |
-| Domain rules            | Partial                            | Stable current and all user-facing revision-history cursor pages         | Evaluate adaptive-plan policy safely        |
-| AI service              | Partial                            | Crash-safe runs + adversarial text/vision validators + 23 evals          | Expert corpus + approved provider canary    |
-| Native App/devices      | Deferred                           | Phase-two decision                                                       | MVP retention gate reached                  |
-| Privacy/compliance      | Partial, durable local proof       | Purpose-scoped photo consent/export/deletion + restore replay tested     | Production retention/provider/legal review  |
-| Testing/observability   | Partial                            | 419 unit, 63 integration, 97 browser tests + client quality gate         | Centralize telemetry after account approval |
-| Deployment              | Partial, source/admission ready    | Immutable actions + tag/main/CI + service/client/environment gates       | Approve dossier, provision and canary       |
+| 模块              | 状态                     | 当前证据                                                         | 下一门禁                           |
+| ----------------- | ------------------------ | ---------------------------------------------------------------- | ---------------------------------- |
+| 产品范围          | MVP 基线已完成           | `docs/product/PRODUCT_BRIEF.md`                                  | 由目标用户访谈验证                 |
+| 交付路线图        | 规划基线已完成           | `docs/product/ROADMAP.md`                                        | 继续补齐本地缺口并保留外部门禁     |
+| 设计语言          | 部分完成，已测试 83 条流 | 核心流程、320 px/大字/键盘证明及 116 张已审截图                  | 屏幕阅读器与剩余状态矩阵           |
+| 客户端：小程序/H5 | 部分完成，本地候选路径   | H5/WeApp 实测预算及候选身份/发布契约                             | 真实提供方、域名、设备和浏览器证明 |
+| 管理端            | 部分完成，本地切片可用   | OIDC BFF、精确检索、角色拆分与证据栏已演练                       | 选择 IdP、责任人、保留策略与部署   |
+| 业务 API          | 部分完成                 | 已验证微信/OIDC 身份及自包含 OCI 运行时                          | 共享部署和真实凭据证明             |
+| 领域规则          | 部分完成                 | 当前聚合及所有用户可见修订历史游标页稳定                         | 安全评估自适应计划策略             |
+| AI 服务           | 部分完成                 | 崩溃安全运行、对抗性文本/视觉校验器及 23 项评估                  | 专家语料和获批提供方金丝雀         |
+| 原生 App/设备     | 已延期                   | 第二阶段决策                                                     | 达到 MVP 留存门禁                  |
+| 隐私/合规         | 部分完成，本地持久证据   | 已测试按目的照片同意、导出/删除及恢复回放                        | 生产保留、提供方和法务审查         |
+| 测试/可观测性     | 部分完成                 | 423 项单元、63 项集成、97 项浏览器测试、中文文档及客户端质量门禁 | 账号获批后接入集中遥测             |
+| 部署              | 部分完成，源码/准入就绪  | 不可变 Actions、标签/main/CI 及服务端、客户端、环境门禁          | 批准材料、资源开通与金丝雀         |
 
-Status vocabulary: `Done` means validated for the present stage, `Partial` means usable but missing a named gate, `Pending` means not implemented, and `Deferred` means intentionally outside the current release.
+状态词汇：`已完成`表示已通过当前阶段验证，`部分完成`表示可用但仍缺少已命名门禁，`待实现`表示尚未实现，`已延期`表示有意排除在当前版本之外。
 
-## Current architecture
+## 当前架构
 
 - Taro 4 + React + TypeScript for Mini Program and H5.
 - pnpm workspace with checked-in lockfile and a shared CSS/TypeScript design-token package.
 - A dependency-free project-status mirror selects the most recent open Obsidian vault (or an explicit override), copies `docs/PROJECT_STATUS.md` byte-for-byte inside that vault and independently rejects stale or path-escaping targets. The repository copy remains authoritative.
+- 无第三方运行时依赖的 `myfitness-chinese-documentation/v1` 检查器锁定四份活跃权威文档的中文导航标题，并要求第 090 轮起的迭代档案和 ADR-0085 起的架构决策包含中文元数据与以中文为主的正文。代码块、行内代码、链接目标和 URL 不进入比例；CI 与本地使用同一失败关闭命令，历史英文档案按编号门槛分批迁移。
 - Parent-qualified pnpm security floors isolate the Taro client on Vite 6.4.3/webpack 5.104.1 and patched parser/glob dependencies, while Next admin 16.2.11 keeps PostCSS 8.5.19 and omits its unused old Sharp optional dependency. The API retains Sharp 0.35.3 and Vitest remains on Vite 8.1.5; critical/high production audit findings are zero and nine moderate Taro build-chain findings remain registered.
 - Separate `dist-h5` and `dist-weapp` production roots prevent one platform build from deleting the other. A dependency-free `myfitness-client-quality/v1` verifier measures the index-derived H5 entrypoint, largest async route, WeApp vendor/page bundles and total trees; strict checked-in budgets run after both builds in CI and before immutable release assembly.
 - Portable-export transport is a lazily loaded client adapter so the privacy-only file path does not duplicate validation code across ordinary route chunks. It reads the H5 Blob or WeApp temporary file, then a dependency-free verifier accepts only the current JSON media type, exact v4 envelope/collection topology, valid generation time/account UUID and at most 50 MiB before creating an H5 anchor or invoking WeApp persistent save. The success receipt exposes only schema version, generation time and byte length; export content/account identity never enters UI state, logs or application storage, and rejected H5 Blob URLs are revoked.
@@ -115,9 +116,9 @@ Status vocabulary: `Done` means validated for the present stage, `Partial` means
 - 本地 OIDC 浏览器验证使用独立的 `myfitness-oidc-e2e-artifact/v1` 收据。`build:h5:oidc` 在构建前删除旧收据，成功后对完整 `dist-h5` 普通文件树生成版本化 SHA-256，并把固定 `oidc` 模式和测试 API 基址写入 Git 忽略的 `.taro`。Playwright 全局预检重新计算摘要并检查两个回调桥文件；收据缺失、树/API 漂移或普通身份构建会在浏览器断言前失败。该收据不含版本/仓库/提交/交付级别，不进入 `dist-h5`，不能替代发布候选元数据或真实提供方证明。
 - `myfitness-managed-environment/v1` plus `myfitness-deployment-admission/v2` require explicit account/budget, distinct public origins, secret-manager references, data-custody owners, telemetry and AI policy evidence before binding both verified release planes to migration/private-service/canary order, guarded client delivery and an explicit rollback mode.
 
-## Current risks
+## 当前风险
 
-| Risk                                                                                          | Level  | Mitigation / next evidence                                                                                                                                            |
+| 风险                                                                                          | 级别   | 缓解措施/下一证据                                                                                                                                                     |
 | --------------------------------------------------------------------------------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Production audit retains nine moderate Taro build-chain advisories                            | Medium | Remove through a supported Taro/build-chain upgrade; rerun graph, dual-build and E2E proof                                                                            |
 | Offline admission cannot prove external references exist or were genuinely approved           | High   | Create/dereference the dossier inside a protected change system; never deploy from local success alone                                                                |
@@ -156,18 +157,19 @@ Status vocabulary: `Done` means validated for the present stage, `Partial` means
 | Occurrence conversion depends on browser/Mini Program `Intl` timezone data                    | Medium | Deterministic gap/overlap tests pass; verify supported real devices/timezones before closed beta                                                                      |
 | Automated keyboard/focus proof does not establish real screen-reader or device behavior       | Medium | Run VoiceOver, TalkBack and WeChat-device audits before closed beta; keep claims limited to tested H5 semantics                                                       |
 | Browser response-loss simulations do not prove physical radio loss or WeChat device behavior  | Medium | Run real-device/network-transition checks; retain same-key/reconcile/terminal boundaries and never background-replay sensitive operations                             |
+| 自动语言比例不能证明翻译准确、术语一致或记录完整                                              | 中     | 保留人工审阅、术语表和逐轮迁移；每轮核对链接、技术字面量、验证数字与历史语义                                                                                          |
 
-## Quality gates
+## 质量门禁
 
-The MVP cannot enter public beta until all of the following are reproducible:
+在下列事项全部可复现之前，MVP 不得进入公开测试：
 
-- A new user can complete onboarding, record body/training/nutrition/recovery data, view trends, receive a plan, and delete/export their data.
-- AI-derived values never silently become confirmed records.
-- Plan output passes schema, training-load, energy-intake, and risk-phrase validation.
-- Permissions, account deletion, photo retention, audit logging, backups, and incident rollback are exercised.
-- CI passes formatting, linting, type checks, unit tests, integration tests, zero critical/high production dependency audit, and production builds.
-- H5 and WeApp production trees pass checked-in entry/route/vendor/page/total budgets and the client validation-runtime regression scan.
+- 新用户可以完成引导，记录身体、训练、饮食与恢复数据，查看趋势、获取计划，并删除或导出自己的数据。
+- AI 推导值绝不在没有用户确认的情况下变成已确认记录。
+- 计划输出通过结构、训练负荷、能量摄入和风险措辞校验。
+- 权限、账号删除、照片保留、审计日志、备份与事件回滚均完成演练。
+- CI 通过格式、代码检查、类型检查、单元测试、集成测试、生产依赖零 critical/high 审计和生产构建。
+- H5 与 WeApp 生产文件树通过入库的入口、路由、vendor、页面和总量预算，以及客户端校验运行时回归扫描。
 
-## Primary next step
+## 首要下一步
 
-第 091 轮：执行权威活跃文档中文化。先把 `docs/PROJECT_STATUS.md`、路线图、当前架构和主要运行手册迁移为中文，建立中英术语表与自动检查，保持代码字面量、链接、风险级别、验证数字和历史语义不变；既有英文历史迭代档案按受控批次后续迁移，不在同一轮混入产品重构。云账号/预算、域名/TLS、真实微信/OIDC、生产对象存储/KMS、数据责任人、集中遥测、政策/备案、真实 WeApp 文件系统和获批付费模型 canary 仍是强制外部输入，但继续停放，等待用户提供。
+第 092 轮：继续中文化四份活跃权威文档的剩余英文正文，优先处理 `docs/PROJECT_STATUS.md` 的当前架构/风险、路线图的发布门禁、架构基线的仓库/数据规则和身份运行手册；保持链接、代码字面量、风险级别、验证数字及历史语义不变，并逐步扩展自动检查。既有英文历史迭代档案继续作为审计证据，后续按受控批次迁移。云账号/预算、域名/TLS、真实微信/OIDC、生产对象存储/KMS、数据责任人、集中遥测、政策/备案、真实 WeApp 文件系统和获批付费模型 canary 仍是强制外部输入，但继续停放，等待用户提供。

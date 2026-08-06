@@ -1,8 +1,8 @@
-# Architecture baseline
+# 架构基线
 
-Status: accepted and implemented through iteration-088 portable-export lifecycle authority; changes require an ADR.
+状态：已接受并实现至第 091 轮中文项目记录治理；架构变更必须新增 ADR。
 
-## System shape
+## 系统形态
 
 ```mermaid
 flowchart TB
@@ -18,7 +18,7 @@ flowchart TB
   V --> E["Approved model providers"]
 ```
 
-## Repository boundaries
+## 仓库边界
 
 | Path                     | Responsibility                                               | Must not own                                         |
 | ------------------------ | ------------------------------------------------------------ | ---------------------------------------------------- |
@@ -31,11 +31,13 @@ flowchart TB
 | `packages/domain`        | Units, metrics, plan and deterministic safety rules          | Network or framework dependencies                    |
 | `packages/design-tokens` | Cross-client visual primitives                               | Product data or business logic                       |
 
-## Delivery architecture
+## 交付架构
 
 Start as a pnpm monorepo and modular monolith. A single API deployable keeps transactions, authorization, migrations, and local development clear. AI work runs behind a queue/worker boundary because it has different runtimes, latency, cost, retry, and observability needs. Extract more services only after a measured scaling or ownership constraint.
 
 Implemented foundation:
+
+- 中文项目记录由无第三方运行时依赖的 `myfitness-chinese-documentation/v1` 门禁约束。四份活跃权威文档保留中文导航契约；第 090 轮起的迭代档案和 ADR-0085 起的决策记录必须使用中文标题、元数据与以中文为主的正文。仓库状态仍是唯一权威来源，Obsidian 只保存逐字节镜像，历史英文档案按受控批次迁移。
 
 - `apps/api` is a NestJS 11 process exposing readiness and health-record routes.
 - `packages/contracts` owns Zod request/response schemas and emits OpenAPI 3.0 JSON Schema.
@@ -87,7 +89,7 @@ Implemented foundation:
 - 本地 OIDC 浏览器套件另有 `myfitness-oidc-e2e-artifact/v1` 测试收据：构建包装器先清除旧收据，成功后对 `dist-h5` 中按相对路径排序的全部普通文件生成 SHA-256，并在外部 `.taro` 目录记录固定 `oidc` 模式和测试 API 基址。Playwright 全局预检重新计算摘要、检查静态回调桥并要求 API 基址完全一致。收据不进入客户端树、质量预算或候选 TAR，也不包含发布来源/版本/交付级别，因此不能扩大为发布或真实身份声明。
 - Parent-qualified pnpm overrides place audited floors only on affected Taro 4.2.1 edges: client Vite 6.4.3, webpack 5.104.1, Swiper 12.1.2 and lodash-es 4.18.1. Root Vite 8.1.5 stays isolated for Vitest; frozen install, peer checks, dual builds, E2E and the zero-critical/high audit gate control every graph change.
 
-## Data rules
+## 数据规则
 
 All health-domain events store:
 
@@ -136,7 +138,7 @@ The independent operator identity, evidence-only lookup and immutable audit boun
 
 The S3-compatible media boundary, durable deletion jobs, status-token receipt and restore ledger are documented in [PRIVACY_OWNERSHIP_MODEL.md](PRIVACY_OWNERSHIP_MODEL.md), [FOOD_PHOTO_MODEL.md](FOOD_PHOTO_MODEL.md) and the [data custody runbook](../operations/DATA_CUSTODY_RUNBOOK.md). ADR-0015 records why cross-system erasure uses transactional enqueue plus an external HMAC restore control.
 
-## API and event conventions
+## API 与事件约定
 
 - HTTP JSON contracts are defined in `packages/contracts` and exposed as OpenAPI.
 - Client-generated idempotency keys protect record creation and photo reservation.
@@ -146,7 +148,7 @@ The S3-compatible media boundary, durable deletion jobs, status-token receipt an
 - Every routed response carries a bounded request ID. Metrics/logs use stable route templates and actor class, never raw URLs, queries, IPs, users or request bodies.
 - Domain events use past tense and versioned payloads, for example `workout.recorded.v1`.
 
-## AI execution path
+## AI 执行路径
 
 1. API verifies purpose-specific consent and creates a job.
 2. Worker fetches the minimum required, short-lived input.
@@ -158,7 +160,7 @@ The S3-compatible media boundary, durable deletion jobs, status-token receipt an
 
 Provider outages fall back to manual recording and deterministic summaries; core records never depend on an available model.
 
-## Security and privacy baseline
+## 安全与隐私基线
 
 - TLS in transit; managed key encryption at rest; field-level or envelope encryption for selected sensitive values.
 - Private object storage with short-lived signed access, checksummed conditional writes and production-required encryption; lifecycle/versioning/replication remain provider configuration gates.
@@ -168,7 +170,7 @@ Provider outages fall back to manual recording and deterministic summaries; core
 - Export, correction, durable deletion, retention expiry, restore-ledger replay and conservative provider disposition are explicit workflows. `policy_bound` is not a remote-delete claim.
 - China-region deployment is the default for China-user health data; any cross-border provider use requires a separate architecture and legal decision.
 
-## Initial local and production targets
+## 初始本地与生产目标
 
 - Local: Node 24 runtime, pnpm 11, Docker Compose, PostgreSQL 18.4, Redis 8.8, pinned MinIO and the fixture AI provider.
 - CI: install lockfile, format check, lint, typecheck, unit/integration tests, H5 build, Mini Program build, dependency audit, artifact upload.
