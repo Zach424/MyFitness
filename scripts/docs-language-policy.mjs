@@ -27,6 +27,26 @@ export const chineseDocumentationPolicy = {
       rejectEnglishOnlyNarrativeLines: true,
     },
     {
+      path: 'docs/product/PRODUCT_BRIEF.md',
+      headings: [
+        '# 产品简报',
+        '## 产品主张',
+        '## 初始受众',
+        '## 核心用户任务',
+        '## 信息架构',
+        '## MVP 功能范围',
+        '### 基础与个人资料',
+        '### 记录',
+        '### 洞察与规划',
+        '### 图像辅助',
+        '## 首个版本明确排除项',
+        '## 成功模型',
+        '## 商业模式假设',
+      ],
+      minimumHanShare: 0.72,
+      rejectEnglishOnlyNarrativeLines: true,
+    },
+    {
       path: 'docs/architecture/ARCHITECTURE.md',
       headings: [
         '# 架构基线',

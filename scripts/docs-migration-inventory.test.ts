@@ -1,4 +1,4 @@
-import { mkdir, rm, unlink, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rm, unlink, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 
@@ -79,7 +79,7 @@ const fixture = async () => {
     write(
       root,
       'docs/DOCUMENTATION_MIGRATION_INDEX.md',
-      '# 中文文档迁移索引\n\nSchema：`myfitness-documentation-migration-index/v1`\n\n待迁移总量：5 份（专题 1 份，历史 4 份）。\n\n`topic-one` [专题](topic.md)\n\n`iterations-old`\n\n`decisions-old`\n',
+      '# 中文文档迁移索引\n\nSchema：`myfitness-documentation-migration-index/v1`\n\n受保护活跃文档：2 份。\n\n待迁移总量：5 份（专题 1 份，历史 4 份）。\n\n`topic-one` [专题](topic.md)\n\n`iterations-old`\n\n`decisions-old`\n',
     ),
   ])
   return root
@@ -148,6 +148,20 @@ describe('文档迁移索引', () => {
       'docs/DOCUMENTATION_MIGRATION_INDEX.md',
       '# 中文文档迁移索引\n\nSchema：`myfitness-documentation-migration-index/v1`\n\n待迁移总量：3 份（专题 1 份，历史 2 份）。\n',
     )
+
+    await expect(verifyDocumentationMigrationInventory(root, policy)).rejects.toThrow(
+      '迁移索引缺少受控标记',
+    )
+  })
+
+  it('拒绝陈旧的活跃文档计数', async () => {
+    const root = await fixture()
+    const indexPath = resolve(root, 'docs/DOCUMENTATION_MIGRATION_INDEX.md')
+    const staleIndex = (await readFile(indexPath, 'utf8')).replace(
+      '受保护活跃文档：2 份。',
+      '受保护活跃文档：1 份。',
+    )
+    await writeFile(indexPath, staleIndex)
 
     await expect(verifyDocumentationMigrationInventory(root, policy)).rejects.toThrow(
       '迁移索引缺少受控标记',

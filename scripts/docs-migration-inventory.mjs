@@ -10,6 +10,7 @@ export const documentationMigrationPolicy = {
   activePaths: [
     'docs/PROJECT_STATUS.md',
     'docs/product/ROADMAP.md',
+    'docs/product/PRODUCT_BRIEF.md',
     'docs/architecture/ARCHITECTURE.md',
     'docs/operations/USER_IDENTITY_RUNBOOK.md',
     'docs/DOCUMENTATION_MIGRATION_INDEX.md',
@@ -23,7 +24,6 @@ export const documentationMigrationPolicy = {
       paths: [
         'docs/api/README.md',
         'docs/design/DESIGN_SYSTEM.md',
-        'docs/product/PRODUCT_BRIEF.md',
         'docs/product/RISK_REGISTER.md',
       ],
     },
@@ -251,6 +251,7 @@ export const verifyDocumentationMigrationInventory = async (
   const requiredTokens = [
     '# 中文文档迁移索引',
     `Schema：\`${policy.schemaVersion}\``,
+    `受保护活跃文档：${policy.activePaths.length} 份。`,
     `待迁移总量：${pendingTotal} 份（专题 ${pendingTopicFiles} 份，历史 ${pendingHistoricalFiles} 份）。`,
     ...policy.topicBatches.map((batch) => `\`${batch.id}\``),
     ...policy.historicalBatches.map((batch) => `\`${batch.id}\``),

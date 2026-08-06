@@ -1,87 +1,87 @@
-# Product brief
+# 产品简报
 
-## Product thesis
+## 产品主张
 
-Fitness data is usually scattered across notes, watches, food apps, and memory. MyFitness / 衡迹 gives one calm daily view that compares the plan with what actually happened, then turns the difference into the next safe adjustment.
+健身数据通常散落在笔记、手表、饮食应用和记忆中。MyFitness / 衡迹提供一个平静、统一的每日视图，用来比较计划与实际发生的事情，再把差异转化为下一项安全调整。
 
-## Initial audience
+## 初始受众
 
-Adults beginning or resuming structured fitness who want to lose fat, gain muscle, improve fitness, or build consistency. They have limited coaching support and need a record that is faster than a spreadsheet but more accountable than a chat response.
+初次开始或重新开始系统健身的成年人，他们希望减脂、增肌、提升体能或建立稳定习惯。他们能获得的教练支持有限，需要一种比电子表格更快捷、比聊天回复更可追责的记录方式。
 
-The MVP intentionally excludes minors and therapeutic plans for pregnancy, eating disorders, diabetes, kidney disease, cardiac conditions, or other cases requiring individualized medical care.
+MVP 明确排除未成年人，以及针对妊娠、进食障碍、糖尿病、肾脏疾病、心脏疾病或其他需要个体化医疗照护情形的治疗性计划。
 
-## Core user jobs
+## 核心用户任务
 
-1. See what matters today without interpreting multiple dashboards.
-2. Record a workout, meal, body metric, or recovery signal in under 30 seconds for a common repeat action.
-3. Understand weekly change without overreacting to one measurement.
-4. Receive a realistic plan that respects time, equipment, experience, preferences, fatigue, and pain signals.
-5. Correct AI mistakes and remain in control of every stored fact.
-6. Export or delete personal data without contacting support.
+1. 无需解读多个仪表板，就能看清今天最重要的事情。
+2. 对常见重复操作，能在 30 秒内记录一次训练、餐食、身体指标或恢复信号。
+3. 理解每周变化，而不过度回应单次测量。
+4. 获得一份尊重可用时间、器械、经验、偏好、疲劳和疼痛信号的现实计划。
+5. 能够纠正 AI 错误，并始终掌控每一项已存储事实。
+6. 无需联系支持人员即可导出或删除个人数据。
 
-## Information architecture
+## 信息架构
 
-| Area   | User question                           | MVP content                                            |
-| ------ | --------------------------------------- | ------------------------------------------------------ |
-| Today  | What should I do next?                  | Readiness, next action, plan-vs-actual rail, quick add |
-| Record | What happened?                          | Body, workout, nutrition, sleep/recovery entries       |
-| Plan   | What is this week trying to achieve?    | Weekly training and nutrition targets, substitutions   |
-| Coach  | Why is the plan changing?               | Evidence-backed summary, questions, feedback           |
-| Me     | What data and permissions do I control? | Profile, goals, units, consent, export, deletion       |
+| 区域 | 用户问题                 | MVP 内容                                   |
+| ---- | ------------------------ | ------------------------------------------ |
+| 今日 | 下一步应该做什么？       | 准备度、下一行动、计划与实际对照、快速记录 |
+| 记录 | 发生了什么？             | 身体、训练、营养、睡眠与恢复记录           |
+| 计划 | 本周要达成什么？         | 每周训练与营养目标、替代方案               |
+| 教练 | 为什么计划发生变化？     | 有证据支持的摘要、问题与反馈               |
+| 我的 | 我能控制哪些数据和权限？ | 个人资料、目标、单位、同意、导出与删除     |
 
-## MVP functional scope
+## MVP 功能范围
 
-### Foundation and profile
+### 基础与个人资料
 
-- WeChat/phone-ready identity boundary, with local demo identity before backend integration.
-- Height, weight, age band, goal, experience, available days, session length, equipment, dietary preferences, unit system, and timezone.
-- Explicit warnings and safe exit for health-risk answers.
+- 支持微信/手机号的身份边界；后端集成前使用本地演示身份。
+- 身高、体重、年龄段、目标、经验、可训练天数、单次时长、器械、饮食偏好、单位制和时区。
+- 对健康风险回答提供明确警告和安全退出路径。
 
-### Records
+### 记录
 
-- Body: weight, waist, optional device-reported body-fat estimate, resting heart rate.
-- Workout: exercise, sets, reps, load, duration, distance, RPE, completion, pain/fatigue feedback.
-- Nutrition: food, portion, energy and macronutrients; favorites and recent items.
-- Recovery: sleep duration/quality, soreness, energy, stress, optional note.
-- Every record includes source, unit, occurred-at time, timezone, confidence where estimated, and revision history.
+- 身体：体重、腰围、可选的设备报告体脂估算、静息心率。
+- 训练：动作、组数、次数、负重、时长、距离、RPE、完成情况、疼痛与疲劳反馈。
+- 营养：食物、份量、能量和宏量营养素；收藏与最近项目。
+- 恢复：睡眠时长/质量、酸痛、精力、压力和可选备注。
+- 每条记录包含来源、单位、发生时间、时区、估算数据的置信信息及修订历史。
 
-### Insight and planning
+### 洞察与规划
 
-- Seven-, thirty-, and ninety-day trends using moving averages where appropriate.
-- Weekly summary derived from computed metrics before narrative generation.
-- Structured weekly plan with reason, alternatives, version, and user changes.
-- AI responses visibly labeled and never treated as medical advice.
+- 在适当场景使用移动平均线展示七日、三十日和九十日趋势。
+- 先从计算指标生成每周摘要，再生成叙述文本。
+- 提供包含理由、替代方案、版本和用户修改的结构化周计划。
+- AI 响应必须有清晰标记，且绝不作为医疗建议处理。
 
-### Image assistance
+### 图像辅助
 
-- Food recognition proposes candidates, portion range, uncertainty, and missing ingredients; the user confirms the final record.
-- Progress photos support pose alignment and visual comparison only. They do not diagnose posture disorders or infer an exact body-fat percentage.
-- EXIF is removed; analysis-only images are deleted by default; retained progress photos require separate consent.
+- 食物识别提出候选项、份量范围、不确定性和可能缺失的配料；最终记录由用户确认。
+- 进度照片只用于姿势对齐和视觉比较，不诊断姿势障碍，也不推断精确体脂率。
+- 移除 EXIF；仅供分析的图像默认删除；保留进度照片需要单独同意。
 
-## Explicit exclusions for the first release
+## 首个版本明确排除项
 
-- Social feed, leaderboards, live classes, marketplace, coach matching, insurance use, medical records, disease diagnosis, treatment claims, minors, and automatic integration with every wearable ecosystem.
+- 社交动态、排行榜、直播课程、市场、教练匹配、保险用途、医疗记录、疾病诊断、治疗声明、未成年人，以及与所有可穿戴设备生态自动集成。
 
-## Success model
+## 成功模型
 
-North-star metric: completed planned actions per weekly active user.
+北极星指标：每位周活跃用户完成的计划行动数。
 
-Supporting metrics:
+辅助指标：
 
-- Onboarding-to-first-record completion.
-- Number of days with at least one meaningful record per week.
-- Weekly plan acceptance, modification, skip, and completion rates.
-- Seven- and thirty-day retention.
-- AI correction and rejection rates by feature and user segment.
-- Safety-rule triggers, false positives, and unhandled incidents.
-- Image analysis latency and cost per confirmed nutrition record.
+- 从新手引导到首条记录的完成率。
+- 每周至少有一条有意义记录的天数。
+- 周计划的接受、修改、跳过和完成率。
+- 七日与三十日留存率。
+- 按功能和用户群体划分的 AI 纠正率与拒绝率。
+- 安全规则触发、误报和未处理事件。
+- 图像分析延迟，以及每条已确认营养记录的成本。
 
-Numeric targets will be set after prototype testing and the first 100-user baseline instead of inventing benchmarks without evidence.
+数字目标将在原型测试和首批 100 名用户基线形成后设定，不会在缺少证据时臆造基准。
 
-## Business model hypothesis
+## 商业模式假设
 
-- Free: manual records, core trends, basic weekly recap.
-- Pro subscription: adaptive plans, richer AI explanations, photo assistance, long-term comparison and advanced exports.
-- No advertising targeted with health data and no sale of user health data.
+- 免费版：手工记录、核心趋势和基础每周回顾。
+- 专业订阅：自适应计划、更丰富的 AI 解释、照片辅助、长期对比和高级导出。
+- 不使用健康数据投放定向广告，也不出售用户健康数据。
 
-This hypothesis is not part of the first engineering milestone; retention and trust are the first gates.
+该假设不属于首个工程里程碑；留存与信任才是第一道门禁。
