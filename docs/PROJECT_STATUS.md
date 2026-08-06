@@ -2,7 +2,7 @@
 
 Last reviewed: 2026-08-05
 
-Stage: internal alpha locally runnable; deferred H5 focus now uses one four-attempt lifecycle-aware scheduler instead of a one-shot timer. A late-mounted target retries, a Taro custom element replaced after initially accepting focus is reacquired and then stability-confirmed, while a user-selected different control, caller authority loss, reset, close or unmount ends the request. Aggregate-history retry focus starts only after its failure phase is committed and is bound to the existing read token; destructive dialogs supersede older enter/restore/complete requests through an in-memory generation. Primary/fallback order, mutation/read authority and WeApp DOM behavior remain unchanged. Portable-export and consent-history lifecycle authority plus all prior recovery/read surfaces remain green. H5/WeApp totals now measure 2,813,023/1,069,025 bytes; H5 entry/largest async are 319,238/205,488, vendor is 19,338 and the largest WeApp page is 55,697 bytes. Only the H5 total gate was narrowly rebased to 2,815,000 bytes; all other budgets are unchanged. Zero critical/high production audit findings remain. Owner-operated cloud, domains, real providers, telemetry and policy work stay parked while locally reproducible managed-beta verification sequencing is audited next.
+阶段：内部 Alpha，可在本地完整运行。OIDC 浏览器验证现在由单一自包含命令先构建 OIDC H5，再生成位于 `dist-h5` 之外的严格测试收据；收据把 `oidc` 身份模式、测试 API 基址和当前完整文件树 SHA-256 绑定在一起。Playwright 在页面断言前重新核对摘要和 `index.html`、两个静态回调文件；普通开发身份构建、缺失/过期收据、构建树变更或 API 基址漂移都会明确失败。测试收据不进入客户端质量统计、候选 TAR 或发布元数据。第 89 轮焦点生命周期、便携导出、同意历史及既有恢复/读取边界继续通过。H5/WeApp 总量仍为 2,813,023/1,069,025 字节；H5 入口/最大异步块为 319,238/205,488，vendor 为 19,338，WeApp 最大页面为 55,697 字节，预算不变。生产依赖仍为 0 个 critical/high、9 个已登记 moderate。云账号、域名、真实提供方、遥测和政策工作继续停放；下一轮按用户要求迁移权威活跃文档为中文。
 
 Primary release target: WeChat Mini Program + responsive H5
 
@@ -24,7 +24,7 @@ MyFitness / 衡迹 turns body, training, nutrition, and recovery records into sa
 | AI service              | Partial                            | Crash-safe runs + adversarial text/vision validators + 23 evals          | Expert corpus + approved provider canary    |
 | Native App/devices      | Deferred                           | Phase-two decision                                                       | MVP retention gate reached                  |
 | Privacy/compliance      | Partial, durable local proof       | Purpose-scoped photo consent/export/deletion + restore replay tested     | Production retention/provider/legal review  |
-| Testing/observability   | Partial                            | 415 unit, 63 integration, 97 browser tests + client quality gate         | Centralize telemetry after account approval |
+| Testing/observability   | Partial                            | 419 unit, 63 integration, 97 browser tests + client quality gate         | Centralize telemetry after account approval |
 | Deployment              | Partial, source/admission ready    | Immutable actions + tag/main/CI + service/client/environment gates       | Approve dossier, provision and canary       |
 
 Status vocabulary: `Done` means validated for the present stage, `Partial` means usable but missing a named gate, `Pending` means not implemented, and `Deferred` means intentionally outside the current release.
@@ -112,6 +112,7 @@ Status vocabulary: `Done` means validated for the present stage, `Partial` means
 - A dependency-free `myfitness-release-qualification/v1` gate resolves lightweight or annotated remote tags, proves the exact commit remains in current `main` and selects that SHA's successful `main` push CI before registry login or client packaging. The strict record is rechecked against the release workflow and retained as an immutable Release asset.
 - A dependency-free `myfitness-release/v1` control plane binds API, administrator and AI digests to one qualified SemVer tag, full source revision and workflow run; the tag workflow rejects mixed fragments and publishes checksummed, non-overwritable GitHub Release assets.
 - A dependency-free `myfitness-client-release/v1` control plane packages sorted, fixed-metadata USTAR H5/WeApp roots, verifies canonical bytes and tree digests, and binds both platforms to one source/workflow/API base. H5 is a `candidate` with OIDC identity and required callback assets; WeApp is a `candidate` with WeChat identity. Both remain controlled-preview artifacts until real identity and custody proof.
+- 本地 OIDC 浏览器验证使用独立的 `myfitness-oidc-e2e-artifact/v1` 收据。`build:h5:oidc` 在构建前删除旧收据，成功后对完整 `dist-h5` 普通文件树生成版本化 SHA-256，并把固定 `oidc` 模式和测试 API 基址写入 Git 忽略的 `.taro`。Playwright 全局预检重新计算摘要并检查两个回调桥文件；收据缺失、树/API 漂移或普通身份构建会在浏览器断言前失败。该收据不含版本/仓库/提交/交付级别，不进入 `dist-h5`，不能替代发布候选元数据或真实提供方证明。
 - `myfitness-managed-environment/v1` plus `myfitness-deployment-admission/v2` require explicit account/budget, distinct public origins, secret-manager references, data-custody owners, telemetry and AI policy evidence before binding both verified release planes to migration/private-service/canary order, guarded client delivery and an explicit rollback mode.
 
 ## Current risks
@@ -169,4 +170,4 @@ The MVP cannot enter public beta until all of the following are reproducible:
 
 ## Primary next step
 
-Iteration 90: harden the locally reproducible managed-beta verification sequence. Acceptance should make the required H5 identity artifact explicit before OIDC browser validation, fail closed instead of silently testing the ordinary development-identity build, preserve current candidate packaging and re-run deployment-admission evidence without provisioning or claiming a managed environment. Owner-operated cloud account/budget, domain/TLS, real WeChat/OIDC, production object storage/KMS, data-custody owners, centralized telemetry, policy/filing decisions, real WeApp file-system proof and any approved paid-provider canary remain mandatory external inputs but are parked until the user supplies them.
+第 091 轮：执行权威活跃文档中文化。先把 `docs/PROJECT_STATUS.md`、路线图、当前架构和主要运行手册迁移为中文，建立中英术语表与自动检查，保持代码字面量、链接、风险级别、验证数字和历史语义不变；既有英文历史迭代档案按受控批次后续迁移，不在同一轮混入产品重构。云账号/预算、域名/TLS、真实微信/OIDC、生产对象存储/KMS、数据责任人、集中遥测、政策/备案、真实 WeApp 文件系统和获批付费模型 canary 仍是强制外部输入，但继续停放，等待用户提供。

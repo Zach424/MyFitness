@@ -2,7 +2,7 @@
 
 The roadmap is organized as controlled iterations. A round may take several working sessions, but it ends only after implementation, validation, archive update, and a commit.
 
-Progress snapshot (2026-08-05): iterations 0–89 are complete locally. Deferred H5 focus now retries within a four-attempt budget, confirms that a focused Taro target survives the next renderer interval and reacquires a replacement node only when focus fell back to the page body. A different user-selected control, caller authority loss, reset, close or unmount ends the request. Aggregate history couples focus to its read token and committed failure phase; destructive dialogs supersede stale focus generations while exact primary/fallback semantics remain intact. A first-lookup browser fault and 10/10 repeated retained-history failures pass, followed by the complete 94-test main suite. Portable export, consent-history lifecycle/failure authority and every established recovery/read surface remain green. Measured H5/WeApp totals are 2,813,023/1,069,025 bytes, with H5 entry/largest async 319,238/205,488 and WeApp vendor/largest page 19,338/55,697. Only the H5 total gate was narrowly rebased to 2,815,000 bytes. The expanded focus matrix, 415 unit tests, 63 integration tests, 97 browser tests and zero critical/high production audit findings remain green. Hosted quality/smoke is green through the iteration-030 exact SHA; later hosted exact-SHA evidence has not been inspected in this round. Owner-operated account, budget, domain, credentials and paid-provider work remains parked while locally reproducible product gaps continue; those release gates remain mandatory.
+进度快照（2026-08-05）：第 0–90 轮已在本地完成。OIDC 浏览器验证现在通过一个自包含命令重建 OIDC H5，并在构建目录外写入绑定完整文件树、身份模式和测试 API 基址的 SHA-256 收据。Playwright 在页面断言前重新计算摘要并验证静态回调桥；普通开发身份构建、缺失/过期收据和树/API 漂移都会明确失败。测试收据不进入候选 TAR 或发布元数据。第 89 轮有限焦点调度、便携导出、同意历史及所有既有恢复/读取表面保持绿色。H5/WeApp 实测总量为 2,813,023/1,069,025 字节；H5 入口/最大异步块为 319,238/205,488，WeApp vendor/最大页面为 19,338/55,697，预算不变。单元测试 419 项、集成测试 63 项、浏览器测试 97 项，生产依赖为 0 个 critical/high。托管质量/冒烟仍只确认到第 030 轮精确 SHA；本轮未检查更晚的托管 SHA 证据。账号、预算、域名、凭据和付费提供方继续停放，但仍是正式发布门槛。
 
 | Iteration | Primary scope                                       | Exit evidence                                                                                      |
 | --------- | --------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
@@ -96,8 +96,10 @@ Progress snapshot (2026-08-05): iterations 0–89 are complete locally. Deferred
 | 87        | Consent-history lifecycle invalidation              | Collapse/unmount rejects late reads and hidden focus while explicit reopen starts fresh            |
 | 88        | Portable-export operation lifecycle                 | Late artifacts cannot download/save/publish after page authority ends; explicit retry starts fresh |
 | 89        | Bounded deferred-focus reliability                  | Late-mounted targets retry finitely without stale focus theft or changing dialog authority         |
-| 90        | Managed shared deployment, beta hardening/release   | Real identity/custody/telemetry, rollback, security/a11y/filing review and staged rollout          |
-| 91        | Native App feasibility and device sync              | Retention gate reviewed; HealthKit/Health Connect/Huawei proof of concept                          |
+| 90        | OIDC 测试产物预检与本地 Beta 验证顺序               | 完整 H5 树摘要、回调桥/API 基址预检、错误身份构建失败关闭、部署准入契约回归                        |
+| 91        | 权威活跃文档中文化                                  | 项目状态/路线图/架构/主要手册中文迁移、术语表与自动检查，保持链接和技术字面量                      |
+| 92        | Managed shared deployment, beta hardening/release   | Real identity/custody/telemetry, rollback, security/a11y/filing review and staged rollout          |
+| 93        | Native App feasibility and device sync              | Retention gate reviewed; HealthKit/Health Connect/Huawei proof of concept                          |
 
 ## Release gates
 

@@ -50,7 +50,6 @@ jobs:
       - run: pnpm ops:verify-backup-restore
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm test:e2e
-      - run: pnpm build:h5:oidc
       - run: pnpm test:e2e:oidc
       - name: Stop local dependencies
         if: always()

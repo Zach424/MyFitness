@@ -51,9 +51,10 @@ pnpm build:weapp
 H5 OIDC local build and browser proof:
 
 ```powershell
-pnpm build:h5:oidc
 pnpm test:e2e:oidc
 ```
+
+`test:e2e:oidc` 会先强制执行 OIDC 模式构建，再在仓库忽略的 `.taro` 目录写入绑定完整 `dist-h5` 文件树、OIDC 身份模式和测试 API 基址的 SHA-256 收据。Playwright 全局预检会在浏览器断言前核对该收据、当前文件树和两个静态回调文件；普通开发身份构建、过期收据、被修改的产物或错误 API 基址都会直接失败。收据不位于 `dist-h5`，因此不会进入候选 TAR，也不能替代发布构建中的 `myfitness-client-build.json`。
 
 The tag workflow supplies the approved HTTPS API base plus immutable release metadata and requires `oidc / candidate`. Its canonical TAR must contain `index.html`, `auth/callback/index.html`, `auth/callback/redirect.js` and `myfitness-client-build.json`. Candidate status permits controlled preview only; do not expose H5 to public traffic until the real provider, domain, callback and custody preflight below passes.
 

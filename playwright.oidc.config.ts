@@ -3,6 +3,7 @@ import { defineConfig } from '@playwright/test'
 export default defineConfig({
   testDir: './tests/e2e',
   testMatch: 'oidc-login.spec.ts',
+  globalSetup: './scripts/verify-oidc-e2e-artifact.mjs',
   fullyParallel: false,
   retries: 0,
   workers: 1,

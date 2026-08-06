@@ -39,7 +39,7 @@
     "eval:ai": "pnpm --filter @myfitness/contracts build && pnpm --filter @myfitness/domain build && node scripts/run-ai-evals.mjs",
     "eval:food-photo": "pnpm --filter @myfitness/contracts build && pnpm --filter @myfitness/domain build && node scripts/run-food-photo-evals.mjs",
     "test:e2e": "playwright test",
-    "test:e2e:oidc": "playwright test --config playwright.oidc.config.ts",
+    "test:e2e:oidc": "pnpm build:h5:oidc && playwright test --config playwright.oidc.config.ts",
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "typecheck": "pnpm --filter @myfitness/contracts build && pnpm --filter @myfitness/domain build && pnpm -r --if-present typecheck"
   },

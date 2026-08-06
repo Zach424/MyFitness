@@ -69,6 +69,8 @@ pnpm test:e2e:oidc
 
 H5 和微信小程序产物分别生成到 `apps/client/dist-h5` 与 `apps/client/dist-weapp`，两次构建不会互相清理。完成双端构建后，`pnpm client:verify` 会检查 H5 入口/异步页面与小程序 vendor/页面/总量预算，并拒绝完整验证运行时重新进入客户端包；CI 与客户端发布组装均执行同一门槛。
 
+`pnpm test:e2e:oidc` 是自包含的身份浏览器验证命令：它会先重建 OIDC H5、在构建目录之外写入完整文件树摘要收据，再由 Playwright 预检当前产物。不要在该命令前额外执行一次 `build:h5:oidc`；普通 `build:h5`、缺失回调桥或过期摘要会在页面测试前被明确拒绝。
+
 Taro 4.2.1 当前通过父级限定的 pnpm override 使用已验证的 Swiper、lodash-es、Vite、webpack、解析器与 glob 安全下限；Vitest 保留独立 Vite 8 工具链。`pnpm audit:prod` 把严重/高危作为阻断门槛，当前生产树为 0 critical / 0 high，原始审计中的 9 个中危 Taro 构建链项仍在风险登记中；升级与 override 退出规则见 [ADR-0013](docs/architecture/decisions/0013-auditable-transitive-security-floors.md)。
 
 Next.js 16.2.11 的管理员构建路径通过父级限定 override 使用 PostCSS 8.5.19，并移除管理员未使用的旧版可选 Sharp；图片处理 API 独立保留 Sharp 0.35.3。任何 Next/Taro 升级都必须重新检查是否可以删除对应 override，而不是长期无条件保留。
