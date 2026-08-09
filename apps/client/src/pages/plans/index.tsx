@@ -5,6 +5,7 @@ import type {
   AiExplanation,
   PlanDecision,
   PlanFreshness,
+  PlanOutcomeReview,
   PlanWorkoutLink,
   WeeklyPlan,
   WeeklyPlanHistoryItem,
@@ -148,6 +149,16 @@ const aiSourceLabels: Record<AiExplanation['source'], string> = {
   model: 'AI 解释',
   fixture: '本地演示解释',
   fallback: '确定性安全说明',
+}
+
+const recoveryMetricLabels: Record<
+  PlanOutcomeReview['recoveryObservations'][number]['metric'],
+  string
+> = {
+  'recovery.energy': '精力',
+  'recovery.sleep_quality': '睡眠质量',
+  'recovery.stress': '压力',
+  'recovery.soreness': '酸痛感',
 }
 
 const requestKey = () =>
@@ -302,6 +313,7 @@ const PlansPage = () => {
   const [draftPlan, setDraftPlan] = useState<WeeklyPlan>()
   const [freshness, setFreshness] = useState<PlanFreshness>()
   const [sessionLinks, setSessionLinks] = useState<PlanWorkoutLink[]>([])
+  const [outcomeReview, setOutcomeReview] = useState<PlanOutcomeReview | null>(null)
   const [workouts, setWorkouts] = useState<Workout[]>([])
   const [history, setHistory] = useState<WeeklyPlanHistoryItem[]>([])
   const [historyNextCursor, setHistoryNextCursor] = useState<string | null>(null)
@@ -341,6 +353,7 @@ const PlansPage = () => {
     plan: WeeklyPlan,
     nextFreshness: PlanFreshness = currentPlanFreshness(plan),
     nextSessionLinks: PlanWorkoutLink[] = [],
+    nextOutcomeReview: PlanOutcomeReview | null = null,
   ) => {
     savedPlanRef.current = plan
     freshnessRef.current = nextFreshness
@@ -348,6 +361,7 @@ const PlansPage = () => {
     setDraftPlan(plan)
     setFreshness(nextFreshness)
     setSessionLinks(nextSessionLinks)
+    setOutcomeReview(nextOutcomeReview)
     setAiConsent(false)
     projectionAcceptedRef.current = true
     setHasReadSnapshot(true)
@@ -360,8 +374,13 @@ const PlansPage = () => {
   }
 
   const applyProjectedPlan = (projected: WeeklyPlanListItem) => {
-    const { freshness: nextFreshness, sessionLinks: nextSessionLinks, ...plan } = projected
-    setCurrentPlan(plan, nextFreshness, nextSessionLinks)
+    const {
+      freshness: nextFreshness,
+      sessionLinks: nextSessionLinks,
+      outcomeReview: nextOutcomeReview,
+      ...plan
+    } = projected
+    setCurrentPlan(plan, nextFreshness, nextSessionLinks, nextOutcomeReview)
     return plan
   }
 
@@ -378,8 +397,9 @@ const PlansPage = () => {
     message: string,
     nextFreshness: PlanFreshness = currentPlanFreshness(plan),
     nextSessionLinks: PlanWorkoutLink[] = [],
+    nextOutcomeReview: PlanOutcomeReview | null = null,
   ) => {
-    setCurrentPlan(plan, nextFreshness, nextSessionLinks)
+    setCurrentPlan(plan, nextFreshness, nextSessionLinks, nextOutcomeReview)
     try {
       await refreshPlanHistory(plan)
       setReadFailure(undefined)
@@ -472,7 +492,12 @@ const PlansPage = () => {
         if (announce) setFeedback('已向服务端复核：当前账户仍没有本周计划。')
         return
       }
-      const { freshness: nextFreshness, sessionLinks: nextSessionLinks, ...plan } = projected
+      const {
+        freshness: nextFreshness,
+        sessionLinks: nextSessionLinks,
+        outcomeReview: nextOutcomeReview,
+        ...plan
+      } = projected
       const previousFreshness = freshnessRef.current
       const planChanged = !current || plan.id !== current.id || plan.revision !== current.revision
       const freshnessChanged =
@@ -481,7 +506,7 @@ const PlansPage = () => {
       if (planChanged || freshnessChanged) {
         const historySnapshot = planChanged ? await readPlanHistorySnapshot(plan) : undefined
         setWorkouts(workoutList.items)
-        setCurrentPlan(plan, nextFreshness, nextSessionLinks)
+        setCurrentPlan(plan, nextFreshness, nextSessionLinks, nextOutcomeReview)
         if (historySnapshot) {
           ++historyGenerationRef.current
           applyPlanHistorySnapshot(historySnapshot)
@@ -491,6 +516,7 @@ const PlansPage = () => {
         freshnessRef.current = nextFreshness
         setFreshness(nextFreshness)
         setSessionLinks(nextSessionLinks)
+        setOutcomeReview(nextOutcomeReview)
         projectionAcceptedRef.current = true
         setHasReadSnapshot(true)
         setReadFailure(undefined)
@@ -532,9 +558,14 @@ const PlansPage = () => {
       setWorkouts(workoutList.items)
       lastProjectionCheck.current = Date.now()
       if (latest && historySnapshot) {
-        const { freshness: initialFreshness, sessionLinks: initialLinks, ...plan } = latest
+        const {
+          freshness: initialFreshness,
+          sessionLinks: initialLinks,
+          outcomeReview: initialOutcomeReview,
+          ...plan
+        } = latest
         ++historyGenerationRef.current
-        setCurrentPlan(plan, initialFreshness, initialLinks)
+        setCurrentPlan(plan, initialFreshness, initialLinks, initialOutcomeReview)
         applyPlanHistorySnapshot(historySnapshot)
       } else {
         projectionAcceptedRef.current = true
@@ -669,6 +700,7 @@ const PlansPage = () => {
         decision === 'skipped' && freshness ? freshness : currentPlanFreshness(plan),
         sessionLinks,
       )
+      if (decision === 'accepted') await refreshPlanProjection(false, true)
     } catch (error) {
       setPlanRecovery(describeWorkbenchFailure(decisionOperation(decision), error))
     } finally {
@@ -721,6 +753,7 @@ const PlansPage = () => {
             : `核对完成：服务端已有 v${projected.revision} 周计划，页面未重复生成。`,
           projected.freshness,
           projected.sessionLinks,
+          projected.outcomeReview,
         )
         return
       }
@@ -756,6 +789,7 @@ const PlansPage = () => {
           }，页面未重复提交。`,
           projected.freshness,
           projected.sessionLinks,
+          projected.outcomeReview,
         )
         return
       }
@@ -886,6 +920,7 @@ const PlansPage = () => {
         `已载入服务端当前 v${projected.revision}；请重新检查后再作决定。`,
         projected.freshness,
         projected.sessionLinks,
+        projected.outcomeReview,
       )
       return
     }
@@ -1561,6 +1596,106 @@ const PlansPage = () => {
                       </View>
                     </View>
                   </View>
+
+                  {savedPlan?.status === 'accepted' ? (
+                    <View className="plan-aside-card outcome-review-card">
+                      <View className="outcome-review__heading">
+                        <View>
+                          <Text className="plans-eyebrow">EVIDENCE → DECISION → FOLLOW-UP</Text>
+                          <Text className="plan-aside-card__title">采用后回看</Text>
+                        </View>
+                        <Text
+                          className={`outcome-review__state outcome-review__state--${outcomeReview?.followUpState ?? 'unknown'}`}
+                        >
+                          {outcomeReview?.followUpState === 'observed' ? '已有后续记录' : 'Unknown'}
+                        </Text>
+                      </View>
+                      {outcomeReview ? (
+                        <>
+                          <Text className="outcome-review__window metric">
+                            PLAN v{outcomeReview.planRevision} · 采用于{' '}
+                            {historyTime(outcomeReview.adoptedAt)} · 观察至{' '}
+                            {historyTime(outcomeReview.observationWindow.observedThrough)} ·{' '}
+                            {outcomeReview.observationWindow.state === 'open' ? '开放' : '已结束'}
+                          </Text>
+                          <View className="outcome-review__chain" aria-label="计划结果证据链">
+                            <Text>
+                              生成依据 ·{' '}
+                              {outcomeReview.planningEvidence.recoveryState?.state === 'unknown' ||
+                              !outcomeReview.planningEvidence.recoveryState
+                                ? '恢复状态 Unknown'
+                                : outcomeReview.planningEvidence.recoveryState.label}{' '}
+                              · SCORE {outcomeReview.planningEvidence.readinessScore ?? '—'} ·{' '}
+                              {outcomeReview.planningEvidence.recoveryState?.evidence.length ?? 0}{' '}
+                              REFS
+                            </Text>
+                            <Text>
+                              ↓ 你的决定 · 采用 v{outcomeReview.planRevision} ·{' '}
+                              {outcomeReview.adjustments.length} 项替代
+                            </Text>
+                            <Text>
+                              ↓ 后续观察 · {outcomeReview.linkedWorkouts.length} 条明确训练关联 ·{' '}
+                              {outcomeReview.recoveryObservationTotal} 条恢复记录
+                            </Text>
+                          </View>
+
+                          {outcomeReview.adjustments.length ? (
+                            <Text className="outcome-review__evidence">
+                              替代：
+                              {outcomeReview.adjustments
+                                .map(
+                                  (item) =>
+                                    `${shortDate(item.sessionDate)} ${item.before.title} → ${item.adopted.title}`,
+                                )
+                                .join('；')}
+                            </Text>
+                          ) : null}
+
+                          {outcomeReview.followUpState === 'unknown' ? (
+                            <Text className="outcome-review__unknown">
+                              目前不能判断调整后发生了什么。采用后还没有明确训练关联或已确认恢复记录；没有记录不会被补成“无效果”。
+                            </Text>
+                          ) : (
+                            <View className="outcome-review__evidence">
+                              <Text>
+                                训练证据：
+                                {outcomeReview.linkedWorkouts.length
+                                  ? outcomeReview.linkedWorkouts
+                                      .map(
+                                        (item) =>
+                                          `${item.workoutTitle} · PLAN v${item.planRevision} ↔ WORKOUT v${item.workoutRevision}`,
+                                      )
+                                      .join('；')
+                                  : '无'}
+                              </Text>
+                              <Text>
+                                恢复证据：
+                                {outcomeReview.recoveryObservations.length
+                                  ? outcomeReview.recoveryObservations
+                                      .slice(0, 3)
+                                      .map(
+                                        (item) =>
+                                          `${recoveryMetricLabels[item.metric]} ${item.canonicalValue}/5 · ${item.recordId.slice(0, 8)} v${item.revision}`,
+                                      )
+                                      .join('；')
+                                  : '无'}
+                                {outcomeReview.recoveryObservationTotal > 3
+                                  ? `；另有 ${outcomeReview.recoveryObservationTotal - 3} 条`
+                                  : ''}
+                              </Text>
+                            </View>
+                          )}
+                          <Text className="outcome-review__caution">
+                            时间先后和记录共现不能证明因果或计划效果；本卡不会生成依从性评分，也不会自动调整下一份计划。
+                          </Text>
+                        </>
+                      ) : (
+                        <Text className="plan-aside-card__lead">
+                          正在读取与当前采用版本绑定的回看；此前不展示推测结果。
+                        </Text>
+                      )}
+                    </View>
+                  ) : null}
 
                   <View className="plan-aside-card nutrition-focus-card">
                     <Text className="plans-eyebrow">FOOD FOCUS</Text>

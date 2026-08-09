@@ -102,6 +102,63 @@ describe('weekly plan contract', () => {
     ).toBe(false)
   })
 
+  it('keeps a persisted recovery estimate and its planning score consistent', () => {
+    const recoveryState = {
+      policyVersion: 'subjective-recovery-state-v1' as const,
+      state: 'unknown' as const,
+      score: null,
+      baselineScore: null,
+      changeFromBaseline: null,
+      confidence: 'insufficient' as const,
+      consistency: 'unknown' as const,
+      label: '主观恢复证据不足',
+      note: '没有形成状态估计。',
+      coverage: {
+        recent: {
+          startAt: '2026-08-03T00:00:00.000Z',
+          endAt: '2026-08-10T00:00:00.000Z',
+          days: 7 as const,
+          observationCount: 0,
+          recordedDays: 0,
+          metricCount: 0,
+        },
+        baseline: {
+          startAt: '2026-07-06T00:00:00.000Z',
+          endAt: '2026-08-03T00:00:00.000Z',
+          days: 28 as const,
+          observationCount: 0,
+          recordedDays: 0,
+          metricCount: 0,
+        },
+        excludedObservationCount: 0,
+      },
+      factors: [],
+      evidence: [],
+      limitations: ['缺少近期证据。'],
+    }
+    const evidence = {
+      onboardingRevision: 1,
+      dashboardGeneratedAt: '2026-08-10T00:00:00.000Z',
+      readinessScore: null,
+      recentActiveDays: 0,
+      recentWorkoutCount: 0,
+      recentActiveMinutes: 0,
+      recentMealCount: 0,
+      recoveryState,
+      evidencePolicyVersion: 'planning-impact-v1' as const,
+      evidenceFingerprint: 'planning-impact-v1:readiness-missing' as const,
+    }
+
+    expect(planEvidenceSchema.parse(evidence).recoveryState).toEqual(recoveryState)
+    expect(
+      planEvidenceSchema.safeParse({
+        ...evidence,
+        readinessScore: 80,
+        evidenceFingerprint: 'planning-impact-v1:readiness-standard',
+      }).success,
+    ).toBe(false)
+  })
+
   it('requires evidence drift projections to be non-actionable and internally consistent', () => {
     const checkedAt = '2026-08-04T08:00:00.000Z'
     const changed = {

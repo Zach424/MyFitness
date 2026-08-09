@@ -7,6 +7,7 @@ import {
   buildWeeklyPlanContent,
   comparePlanEvidence,
 } from './plan'
+import { buildPlanOutcomeReview } from './plan-outcome'
 import { estimateSubjectiveRecoveryState } from './recovery-state'
 
 const recoveryAt = new Date('2026-07-19T08:00:00.000Z')
@@ -123,6 +124,13 @@ const dashboard = {
 } satisfies Dashboard
 
 describe('deterministic weekly plan', () => {
+  it('keeps the generated recovery evidence in the plan snapshot', () => {
+    const plan = buildWeeklyPlanContent({ weekStart: '2026-07-20', onboarding, dashboard })
+
+    expect(plan.evidence.recoveryState).toEqual(dashboard.readiness)
+    expect(plan.evidence.readinessScore).toBeNull()
+  })
+
   it('respects available days, conservative recovery and dietary preferences', () => {
     const plan = buildWeeklyPlanContent({ weekStart: '2026-07-20', onboarding, dashboard })
     const sessions = plan.days.filter((day) => day.session)
@@ -214,5 +222,111 @@ describe('deterministic weekly plan', () => {
     expect(() =>
       applyPlanSelections(plan, [{ activityId: activity.id, optionId: 'unknown_option' }]),
     ).toThrow(/not available/)
+  })
+})
+
+describe('plan outcome review', () => {
+  it('traces adopted substitutions and subsequent confirmed evidence without inferring effect', () => {
+    const id = '10000000-0000-4000-8000-000000000001'
+    const content = buildWeeklyPlanContent({ weekStart: '2026-07-20', onboarding, dashboard })
+    const activity = content.days
+      .flatMap((day) => day.session?.activities ?? [])
+      .find((candidate) => candidate.options.length > 1)!
+    const adoptedOption = activity.options[1]!
+    const adjusted = applyPlanSelections(content, [
+      { activityId: activity.id, optionId: adoptedOption.id },
+    ])
+    const aggregate = {
+      id,
+      userId: onboarding.userId,
+      weekStart: '2026-07-20',
+      timezone: 'Asia/Shanghai',
+      engineVersion: 'deterministic-v1' as const,
+      createdAt: '2026-07-20T00:00:00.000Z',
+      updatedAt: '2026-07-20T00:00:00.000Z',
+    }
+    const baseline = { ...aggregate, ...content, status: 'draft' as const, revision: 1 }
+    const adopted = { ...aggregate, ...adjusted, status: 'accepted' as const, revision: 3 }
+    const review = buildPlanOutcomeReview({
+      baseline,
+      adopted,
+      adoptedAt: '2026-07-20T08:00:00.000Z',
+      observedThrough: '2026-07-22T08:00:00.000Z',
+      linkedWorkouts: [
+        {
+          id: '20000000-0000-4000-8000-000000000001',
+          userId: onboarding.userId,
+          planId: id,
+          planRevision: 3,
+          sessionDate: '2026-07-21',
+          workoutId: '30000000-0000-4000-8000-000000000001',
+          workoutRevision: 1,
+          currentWorkoutRevision: 1,
+          workoutTitle: '采用后的实际训练',
+          workoutStatus: 'completed',
+          workoutStartedAt: '2026-07-21T08:00:00.000Z',
+          revision: 1,
+          linkedAt: '2026-07-21T09:00:00.000Z',
+        },
+      ],
+      recoveryObservations: [
+        {
+          recordId: '40000000-0000-4000-8000-000000000001',
+          revision: 2,
+          metric: 'recovery.energy',
+          canonicalValue: 4,
+          occurredAt: '2026-07-22T07:00:00.000Z',
+          sourceKind: 'manual',
+        },
+      ],
+      recoveryObservationTotal: 1,
+    })
+
+    expect(review).toMatchObject({
+      policyVersion: 'plan-outcome-review-v1',
+      planRevision: 3,
+      followUpState: 'observed',
+      plannedSessionCount: 2,
+      planningEvidence: { recoveryState: dashboard.readiness },
+    })
+    expect(review.adjustments).toEqual([
+      expect.objectContaining({
+        activityId: activity.id,
+        before: { id: activity.selectedOptionId, title: expect.any(String) },
+        adopted: { id: adoptedOption.id, title: adoptedOption.title },
+      }),
+    ])
+    expect(review.limitations.join(' ')).toContain('不能单独证明计划造成了变化')
+  })
+
+  it('keeps the outcome unknown when no post-adoption record exists', () => {
+    const content = buildWeeklyPlanContent({ weekStart: '2026-07-20', onboarding, dashboard })
+    const plan = {
+      id: '10000000-0000-4000-8000-000000000002',
+      userId: onboarding.userId,
+      weekStart: '2026-07-20',
+      timezone: 'Asia/Shanghai',
+      engineVersion: 'deterministic-v1' as const,
+      status: 'accepted' as const,
+      revision: 2,
+      createdAt: '2026-07-20T00:00:00.000Z',
+      updatedAt: '2026-07-20T00:00:00.000Z',
+      ...content,
+    }
+    const review = buildPlanOutcomeReview({
+      baseline: { ...plan, status: 'draft', revision: 1 },
+      adopted: plan,
+      adoptedAt: '2026-07-20T08:00:00.000Z',
+      observedThrough: '2026-07-27T08:00:00.000Z',
+      linkedWorkouts: [],
+      recoveryObservations: [],
+      recoveryObservationTotal: 0,
+    })
+
+    expect(review).toMatchObject({
+      followUpState: 'unknown',
+      observationWindow: { state: 'closed' },
+      adjustments: [],
+    })
   })
 })

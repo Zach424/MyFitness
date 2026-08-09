@@ -402,6 +402,7 @@ export const buildWeeklyPlanContent = ({
       recentWorkoutCount: sevenDay.workoutCount,
       recentActiveMinutes: sevenDay.activeMinutes,
       recentMealCount: sevenDay.mealCount,
+      recoveryState: dashboard.readiness,
       evidencePolicyVersion: planEvidencePolicyVersion,
       evidenceFingerprint: planEvidenceFingerprint(readiness),
     },

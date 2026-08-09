@@ -13,6 +13,8 @@ import type {
   PlanDecision,
   OnboardingResponse,
   PlanFreshness,
+  PlanOutcomeRecoveryObservation,
+  PlanOutcomeReview,
   PlanWorkoutLink,
   WeeklyPlan,
   WeeklyPlanContent,
@@ -22,6 +24,7 @@ import type {
 import {
   normalizePersistedPlanEvidence,
   planEngineVersion,
+  subjectiveRecoveryMetrics,
   weeklyPlanContentSchema,
   weeklyPlanSchema,
 } from '@myfitness/contracts'
@@ -29,6 +32,7 @@ import {
   applyPlanSelections,
   assessPlanEligibility,
   buildWeeklyPlanContent,
+  buildPlanOutcomeReview,
   comparePlanEvidence,
   PlanSelectionError,
   planningReadinessScore,
@@ -83,6 +87,25 @@ type LinkableWorkoutRow = {
   started_at: Date
 }
 
+type PlanOutcomeContextRow = {
+  plan_id: string
+  plan_revision: number
+  snapshot: WeeklyPlan
+  baseline_snapshot: WeeklyPlan
+  adopted_at: Date
+}
+
+type PlanOutcomeRecoveryRow = {
+  plan_id: string
+  record_id: string
+  revision: number
+  metric: PlanOutcomeRecoveryObservation['metric']
+  canonical_value: string
+  occurred_at: Date
+  source_kind: PlanOutcomeRecoveryObservation['sourceKind']
+  total_count: string
+}
+
 const localDate = (value: string | Date) => {
   if (typeof value === 'string') return value.slice(0, 10)
   const pad = (part: number) => String(part).padStart(2, '0')
@@ -107,6 +130,12 @@ const mapPlan = (row: PlanRow): WeeklyPlan => ({
   createdAt: row.created_at.toISOString(),
   updatedAt: row.updated_at.toISOString(),
 })
+
+const normalizePlanSnapshot = (snapshot: WeeklyPlan) =>
+  weeklyPlanSchema.parse({
+    ...snapshot,
+    evidence: normalizePersistedPlanEvidence(snapshot.evidence),
+  })
 
 const mapPlanWorkoutLink = (row: PlanWorkoutLinkRow): PlanWorkoutLink => ({
   id: row.id,
@@ -147,6 +176,125 @@ const loadActivePlanWorkoutLinks = async (
     [userId, planIds],
   )
   return result.rows.map(mapPlanWorkoutLink)
+}
+
+const loadPlanOutcomeReviews = async (
+  executor: QueryExecutor,
+  userId: string,
+  plans: WeeklyPlan[],
+  linksByPlan: Map<string, PlanWorkoutLink[]>,
+  now: Date,
+) => {
+  const acceptedIds = plans.filter((plan) => plan.status === 'accepted').map((plan) => plan.id)
+  const reviews = new Map<string, PlanOutcomeReview>()
+  if (!acceptedIds.length) return reviews
+
+  const contexts = await executor.query<PlanOutcomeContextRow>(
+    `
+      SELECT adopted.plan_id, adopted.revision AS plan_revision,
+             adopted.snapshot, adopted.changed_at AS adopted_at,
+             baseline.snapshot AS baseline_snapshot
+      FROM weekly_plan_revisions AS adopted
+      JOIN weekly_plans AS current
+        ON current.id = adopted.plan_id AND current.user_id = adopted.user_id
+      JOIN LATERAL (
+        SELECT generated.snapshot
+        FROM weekly_plan_revisions AS generated
+        WHERE generated.plan_id = adopted.plan_id
+          AND generated.user_id = adopted.user_id
+          AND generated.action = 'generated'
+          AND generated.revision <= adopted.revision
+        ORDER BY generated.revision DESC
+        LIMIT 1
+      ) AS baseline ON TRUE
+      WHERE adopted.user_id = $1
+        AND adopted.plan_id = ANY($2::uuid[])
+        AND adopted.action = 'accepted'
+        AND adopted.revision = current.revision
+        AND current.status = 'accepted'
+    `,
+    [userId, acceptedIds],
+  )
+  if (!contexts.rows.length) return reviews
+
+  const windows = contexts.rows.map((context) => {
+    const adoptedAt = context.adopted_at.toISOString()
+    return {
+      planId: context.plan_id,
+      adoptedAt,
+      observedThrough: new Date(
+        Math.min(now.getTime(), context.adopted_at.getTime() + 7 * 24 * 60 * 60 * 1_000),
+      ).toISOString(),
+    }
+  })
+  const recoveryResult = await executor.query<PlanOutcomeRecoveryRow>(
+    `
+      WITH review_windows AS (
+        SELECT
+          (item ->> 'planId')::uuid AS plan_id,
+          (item ->> 'adoptedAt')::timestamptz AS adopted_at,
+          (item ->> 'observedThrough')::timestamptz AS observed_through
+        FROM jsonb_array_elements($2::jsonb) AS item
+      )
+      SELECT review.plan_id, observation.id AS record_id, observation.revision,
+             observation.metric, observation.canonical_value, observation.occurred_at,
+             observation.source_kind, observation.total_count
+      FROM review_windows AS review
+      JOIN LATERAL (
+        SELECT record.id, record.revision, record.metric, record.canonical_value,
+               record.occurred_at, record.source_kind,
+               COUNT(*) OVER ()::text AS total_count
+        FROM health_records AS record
+        WHERE record.user_id = $1
+          AND record.deleted_at IS NULL
+          AND record.status = 'confirmed'
+          AND record.source_kind <> 'ai_estimate'
+          AND record.metric = ANY($3::text[])
+          AND record.occurred_at >= review.adopted_at
+          AND record.occurred_at <= review.observed_through
+        ORDER BY record.occurred_at DESC, record.id DESC
+        LIMIT 100
+      ) AS observation ON TRUE
+      ORDER BY review.plan_id, observation.occurred_at DESC, observation.id DESC
+    `,
+    [userId, JSON.stringify(windows), subjectiveRecoveryMetrics],
+  )
+  const recoveryByPlan = new Map<
+    string,
+    { items: PlanOutcomeRecoveryObservation[]; total: number }
+  >()
+  for (const row of recoveryResult.rows) {
+    const current = recoveryByPlan.get(row.plan_id) ?? { items: [], total: Number(row.total_count) }
+    current.items.push({
+      recordId: row.record_id,
+      revision: row.revision,
+      metric: row.metric,
+      canonicalValue: Number(row.canonical_value),
+      occurredAt: row.occurred_at.toISOString(),
+      sourceKind: row.source_kind,
+    })
+    recoveryByPlan.set(row.plan_id, current)
+  }
+
+  const planById = new Map(plans.map((plan) => [plan.id, plan]))
+  for (const [index, context] of contexts.rows.entries()) {
+    const adopted = planById.get(context.plan_id)
+    if (!adopted || adopted.revision !== context.plan_revision) continue
+    const recovery = recoveryByPlan.get(context.plan_id) ?? { items: [], total: 0 }
+    reviews.set(
+      context.plan_id,
+      buildPlanOutcomeReview({
+        baseline: normalizePlanSnapshot(context.baseline_snapshot),
+        adopted,
+        adoptedAt: windows[index]!.adoptedAt,
+        observedThrough: windows[index]!.observedThrough,
+        linkedWorkouts: linksByPlan.get(context.plan_id) ?? [],
+        recoveryObservations: recovery.items,
+        recoveryObservationTotal: recovery.total,
+      }),
+    )
+  }
+  return reviews
 }
 
 const projectFreshness = (
@@ -391,6 +539,7 @@ export class PlansService {
       `,
       [userId],
     )
+    const plans = result.rows.map(mapPlan)
     const sessionLinks = await loadActivePlanWorkoutLinks(
       this.database,
       userId,
@@ -402,6 +551,13 @@ export class PlansService {
       current.push(link)
       linksByPlan.set(link.planId, current)
     }
+    const outcomeReviews = await loadPlanOutcomeReviews(
+      this.database,
+      userId,
+      plans,
+      linksByPlan,
+      new Date(),
+    )
     let profile: OnboardingResponse | undefined
     try {
       profile = await this.onboarding.get(userId)
@@ -415,12 +571,12 @@ export class PlansService {
     }
     const checkedAt = new Date().toISOString()
     return {
-      items: result.rows.map((row) => {
-        const plan = mapPlan(row)
+      items: plans.map((plan) => {
         return {
           ...plan,
           freshness: projectFreshness(plan, profile, currentReadinessScore, checkedAt),
           sessionLinks: linksByPlan.get(plan.id) ?? [],
+          outcomeReview: outcomeReviews.get(plan.id) ?? null,
         }
       }),
     }

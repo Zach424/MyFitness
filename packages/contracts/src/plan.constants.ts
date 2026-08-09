@@ -34,6 +34,10 @@ export const planEvidenceChangeReasons = [
   'recovery_threshold_crossed',
 ] as const
 
+export const planOutcomeReviewPolicyVersion = 'plan-outcome-review-v1' as const
+export const planOutcomeFollowUpStates = ['unknown', 'observed'] as const
+export const planOutcomeWindowStates = ['open', 'closed'] as const
+
 export type PlanReadinessBand = (typeof planReadinessBands)[number]
 export type PlanEvidenceFingerprint = (typeof planEvidenceFingerprints)[number]
 

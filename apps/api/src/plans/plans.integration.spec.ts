@@ -315,6 +315,160 @@ describe('weekly plan API with PostgreSQL', () => {
     })
   })
 
+  it('projects an evidence-bound post-adoption review without causal or inferred adherence claims', async () => {
+    const outcomeToken = await createSession(`plans-outcome-${randomUUID()}`)
+    await request(app.getHttpServer())
+      .put('/v1/me/onboarding')
+      .set('Authorization', `Bearer ${outcomeToken}`)
+      .send(onboarding())
+      .expect(200)
+    await addModerateRecoveryEvidence(outcomeToken, Date.now() - 60_000)
+
+    const generated = await request(app.getHttpServer())
+      .post('/v1/plans/weekly')
+      .set('Authorization', `Bearer ${outcomeToken}`)
+      .set('x-idempotency-key', `plan-${randomUUID()}`)
+      .send({ weekStart: '2026-08-10' })
+      .expect(201)
+    expect(generated.body.evidence.recoveryState).toMatchObject({
+      policyVersion: 'subjective-recovery-state-v1',
+      confidence: 'moderate',
+    })
+    expect(generated.body.evidence.recoveryState.evidence.length).toBeGreaterThan(0)
+
+    const activity = generated.body.days
+      .flatMap(
+        (day: { session: { activities: unknown[] } | null }) => day.session?.activities ?? [],
+      )
+      .find((candidate: { options: unknown[] }) => candidate.options.length > 1) as {
+      id: string
+      selectedOptionId: string
+      options: { id: string; title: string }[]
+    }
+    const alternative = activity.options.find((option) => option.id !== activity.selectedOptionId)!
+    const modified = await request(app.getHttpServer())
+      .put(`/v1/plans/weekly/${generated.body.id}/decision`)
+      .set('Authorization', `Bearer ${outcomeToken}`)
+      .send({
+        decision: 'modified',
+        expectedRevision: 1,
+        selections: [{ activityId: activity.id, optionId: alternative.id }],
+      })
+      .expect(200)
+    const accepted = await request(app.getHttpServer())
+      .put(`/v1/plans/weekly/${generated.body.id}/decision`)
+      .set('Authorization', `Bearer ${outcomeToken}`)
+      .send({ decision: 'accepted', expectedRevision: modified.body.revision, selections: [] })
+      .expect(200)
+
+    const postAdoptionRecoveryAt = new Date().toISOString()
+    const confirmedRecovery = await request(app.getHttpServer())
+      .post('/v1/health-records')
+      .set('Authorization', `Bearer ${outcomeToken}`)
+      .set('x-idempotency-key', `record-${randomUUID()}`)
+      .send({
+        metric: 'recovery.soreness',
+        value: 2,
+        unit: 'score_1_5',
+        source: { kind: 'manual' },
+        status: 'confirmed',
+        occurredAt: postAdoptionRecoveryAt,
+        timezone: 'Asia/Shanghai',
+      })
+      .expect(201)
+    await request(app.getHttpServer())
+      .post('/v1/health-records')
+      .set('Authorization', `Bearer ${outcomeToken}`)
+      .set('x-idempotency-key', `record-${randomUUID()}`)
+      .send({
+        metric: 'recovery.energy',
+        value: 4,
+        unit: 'score_1_5',
+        source: {
+          kind: 'ai_estimate',
+          metadata: { modelVersion: 'fixture-v1', promptVersion: 'fixture-v1' },
+        },
+        confidence: 0.7,
+        status: 'candidate',
+        occurredAt: new Date().toISOString(),
+        timezone: 'Asia/Shanghai',
+      })
+      .expect(201)
+
+    const workoutAt = new Date().toISOString()
+    const workout = await request(app.getHttpServer())
+      .post('/v1/workouts')
+      .set('Authorization', `Bearer ${outcomeToken}`)
+      .set('x-idempotency-key', `workout-${randomUUID()}`)
+      .send({
+        title: '采用后的确认训练',
+        source: { kind: 'manual' },
+        exercises: [
+          {
+            position: 1,
+            exerciseKey: 'chair_squat',
+            name: '椅子深蹲',
+            category: 'strength',
+            sets: [{ position: 1, kind: 'working', reps: 8, completed: true }],
+          },
+        ],
+        startedAt: workoutAt,
+        endedAt: workoutAt,
+        timezone: 'Asia/Shanghai',
+        painLevel: 0,
+        fatigue: 2,
+      })
+      .expect(201)
+    const sessionDate = accepted.body.days.find((day: { session: unknown }) => day.session)
+      .date as string
+    const link = await request(app.getHttpServer())
+      .post(`/v1/plans/weekly/${generated.body.id}/session-links`)
+      .set('Authorization', `Bearer ${outcomeToken}`)
+      .send({
+        expectedPlanRevision: accepted.body.revision,
+        sessionDate,
+        workoutId: workout.body.id,
+        expectedWorkoutRevision: workout.body.revision,
+      })
+      .expect(201)
+
+    const list = await request(app.getHttpServer())
+      .get('/v1/plans/weekly')
+      .set('Authorization', `Bearer ${outcomeToken}`)
+      .expect(200)
+    const review = list.body.items[0].outcomeReview
+    expect(review).toMatchObject({
+      policyVersion: 'plan-outcome-review-v1',
+      planId: generated.body.id,
+      planRevision: accepted.body.revision,
+      followUpState: 'observed',
+      observationWindow: { state: 'open' },
+      recoveryObservationTotal: 1,
+      planningEvidence: {
+        recoveryState: { policyVersion: 'subjective-recovery-state-v1' },
+      },
+    })
+    expect(review.adjustments).toEqual([
+      expect.objectContaining({
+        activityId: activity.id,
+        adopted: { id: alternative.id, title: alternative.title },
+      }),
+    ])
+    expect(review.linkedWorkouts).toEqual([
+      expect.objectContaining({ id: link.body.id, workoutId: workout.body.id }),
+    ])
+    expect(review.recoveryObservations).toEqual([
+      expect.objectContaining({
+        recordId: confirmedRecovery.body.id,
+        revision: confirmedRecovery.body.revision,
+        sourceKind: 'manual',
+      }),
+    ])
+    expect(review.limitations.join(' ')).toContain('不能单独证明计划造成了变化')
+    expect(JSON.stringify(review)).not.toContain('ai_estimate')
+    expect(JSON.stringify(review)).not.toContain('adherence')
+  })
+
   it('links only explicit owner-selected current revisions and preserves closure history', async () => {
     const generated = await request(app.getHttpServer())
       .post('/v1/plans/weekly')

@@ -7,9 +7,9 @@
     "forbiddenJavaScriptMarkers": ["Invalid input: expected", "localeError"]
   },
   "weapp": {
-    "maxTotalBytes": 1098000,
+    "maxTotalBytes": 1110000,
     "maxVendorBytes": 25000,
-    "maxPageJavaScriptBytes": 56100,
+    "maxPageJavaScriptBytes": 63000,
     "forbiddenJavaScriptMarkers": ["Invalid input: expected", "localeError"]
   }
 }

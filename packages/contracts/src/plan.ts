@@ -2,6 +2,7 @@ import * as z from 'zod'
 
 import { equipmentSchema, weekdaySchema } from './onboarding'
 import { recordListQuerySchema, recordPageCursorSchema } from './pagination'
+import { recoveryStateEstimateSchema, subjectiveRecoveryMetricSchema } from './recovery-state'
 import {
   nutritionFocusKeys,
   planActivityRoles,
@@ -11,6 +12,9 @@ import {
   planEvidenceFingerprints,
   planEvidencePolicyVersion,
   planIntensityLevels,
+  planOutcomeFollowUpStates,
+  planOutcomeReviewPolicyVersion,
+  planOutcomeWindowStates,
   planRevisionActions,
   planSessionKinds,
   planStatuses,
@@ -118,6 +122,7 @@ const planEvidenceBase = {
   recentWorkoutCount: z.number().int().min(0),
   recentActiveMinutes: z.number().finite().min(0),
   recentMealCount: z.number().int().min(0),
+  recoveryState: recoveryStateEstimateSchema.optional(),
 } as const
 
 export const planEvidenceSchema = z
@@ -135,6 +140,21 @@ export const planEvidenceSchema = z
         message: 'evidenceFingerprint must match the planning-impact readiness band',
         path: ['evidenceFingerprint'],
       })
+    }
+    if (evidence.recoveryState) {
+      const expectedReadiness =
+        evidence.recoveryState.state !== 'unknown' &&
+        evidence.recoveryState.confidence === 'moderate' &&
+        evidence.recoveryState.consistency === 'aligned'
+          ? evidence.recoveryState.score
+          : null
+      if (evidence.readinessScore !== expectedReadiness) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'readinessScore must match the persisted recovery-state planning projection',
+          path: ['readinessScore'],
+        })
+      }
     }
   })
 
@@ -334,7 +354,119 @@ export const planFreshnessSchema = z.discriminatedUnion('state', [
 export const weeklyPlanListItemSchema = weeklyPlanSchema.safeExtend({
   freshness: planFreshnessSchema,
   sessionLinks: z.array(planWorkoutLinkSchema),
+  outcomeReview: z.lazy(() => planOutcomeReviewSchema).nullable(),
 })
+
+export const planOutcomeAdjustmentSchema = z
+  .object({
+    sessionDate: localDateSchema,
+    activityId: stableKeySchema,
+    role: planActivityRoleSchema,
+    before: z.object({ id: stableKeySchema, title: z.string().trim().min(1).max(80) }).strict(),
+    adopted: z.object({ id: stableKeySchema, title: z.string().trim().min(1).max(80) }).strict(),
+  })
+  .strict()
+  .refine((adjustment) => adjustment.before.id !== adjustment.adopted.id, {
+    message: 'outcome adjustment must describe an actual selection change',
+  })
+
+export const planOutcomeRecoveryObservationSchema = z
+  .object({
+    recordId: z.string().uuid(),
+    revision: z.number().int().positive(),
+    metric: subjectiveRecoveryMetricSchema,
+    canonicalValue: z.number().finite().min(1).max(5),
+    occurredAt: z.string().datetime({ offset: true }),
+    sourceKind: z.enum(['manual', 'device', 'imported']),
+  })
+  .strict()
+
+export const planOutcomeReviewSchema = z
+  .object({
+    policyVersion: z.literal(planOutcomeReviewPolicyVersion),
+    planId: z.string().uuid(),
+    planRevision: z.number().int().positive(),
+    adoptedAt: z.string().datetime({ offset: true }),
+    observationWindow: z
+      .object({
+        scheduledEndAt: z.string().datetime({ offset: true }),
+        observedThrough: z.string().datetime({ offset: true }),
+        state: z.enum(planOutcomeWindowStates),
+      })
+      .strict(),
+    planningEvidence: z
+      .object({
+        onboardingRevision: z.number().int().positive(),
+        dashboardGeneratedAt: z.string().datetime({ offset: true }),
+        readinessScore: z.number().int().min(0).max(100).nullable(),
+        evidencePolicyVersion: z.literal(planEvidencePolicyVersion),
+        evidenceFingerprint: planEvidenceFingerprintSchema,
+        recoveryState: recoveryStateEstimateSchema.nullable(),
+      })
+      .strict(),
+    adjustments: z.array(planOutcomeAdjustmentSchema).max(24),
+    plannedSessionCount: z.number().int().min(0).max(7),
+    linkedWorkouts: z.array(planWorkoutLinkSchema).max(7),
+    recoveryObservations: z.array(planOutcomeRecoveryObservationSchema).max(100),
+    recoveryObservationTotal: z.number().int().min(0),
+    followUpState: z.enum(planOutcomeFollowUpStates),
+    limitations: z.array(z.string().trim().min(1).max(240)).min(2).max(5),
+  })
+  .strict()
+  .superRefine((review, ctx) => {
+    const adoptedAt = Date.parse(review.adoptedAt)
+    const scheduledEndAt = Date.parse(review.observationWindow.scheduledEndAt)
+    const observedThrough = Date.parse(review.observationWindow.observedThrough)
+    if (scheduledEndAt - adoptedAt !== 7 * 24 * 60 * 60 * 1_000) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'outcome review window must span exactly seven days',
+      })
+    }
+    if (observedThrough < adoptedAt || observedThrough > scheduledEndAt) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'observedThrough must stay inside the review window',
+      })
+    }
+    const expectedWindowState = observedThrough === scheduledEndAt ? 'closed' : 'open'
+    if (review.observationWindow.state !== expectedWindowState) {
+      ctx.addIssue({ code: 'custom', message: 'outcome window state must match observedThrough' })
+    }
+    if (review.recoveryObservationTotal < review.recoveryObservations.length) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'recovery observation total cannot be smaller than exposed evidence',
+      })
+    }
+    const hasFollowUp = review.linkedWorkouts.length > 0 || review.recoveryObservationTotal > 0
+    if ((review.followUpState === 'observed') !== hasFollowUp) {
+      ctx.addIssue({ code: 'custom', message: 'follow-up state must match observed evidence' })
+    }
+    for (const workout of review.linkedWorkouts) {
+      const occurredAt = Date.parse(workout.workoutStartedAt)
+      if (
+        workout.planId !== review.planId ||
+        workout.planRevision !== review.planRevision ||
+        occurredAt < adoptedAt ||
+        occurredAt > observedThrough
+      ) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'linked workout must belong to the adopted revision and review window',
+        })
+      }
+    }
+    for (const observation of review.recoveryObservations) {
+      const occurredAt = Date.parse(observation.occurredAt)
+      if (occurredAt < adoptedAt || occurredAt > observedThrough) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'recovery observation must fall inside the review window',
+        })
+      }
+    }
+  })
 
 export const generateWeeklyPlanSchema = z
   .object({ weekStart: localDateSchema })
@@ -411,6 +543,9 @@ export type WeeklyPlan = z.infer<typeof weeklyPlanSchema>
 export type PlanWorkoutLink = z.infer<typeof planWorkoutLinkSchema>
 export type CreatePlanWorkoutLink = z.infer<typeof createPlanWorkoutLinkSchema>
 export type PlanWorkoutLinkClosure = z.infer<typeof planWorkoutLinkClosureSchema>
+export type PlanOutcomeAdjustment = z.infer<typeof planOutcomeAdjustmentSchema>
+export type PlanOutcomeRecoveryObservation = z.infer<typeof planOutcomeRecoveryObservationSchema>
+export type PlanOutcomeReview = z.infer<typeof planOutcomeReviewSchema>
 export type PlanFreshness = z.infer<typeof planFreshnessSchema>
 export type WeeklyPlanListItem = z.infer<typeof weeklyPlanListItemSchema>
 export type GenerateWeeklyPlan = z.infer<typeof generateWeeklyPlanSchema>

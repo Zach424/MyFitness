@@ -144,6 +144,15 @@ test('weekly plan supports substitution, modification and acceptance history', a
   const acceptedPlan = (await acceptedResponse.json()) as { id: string; revision: number }
   await expect(page.getByText('已采用', { exact: true })).toBeVisible()
   await expect(page.getByText('v3', { exact: true }).first()).toBeVisible()
+  const outcomeReview = page.locator('.outcome-review-card')
+  await expect(outcomeReview.getByText('采用后回看')).toBeVisible()
+  await expect(outcomeReview.getByText('Unknown', { exact: true })).toBeVisible()
+  await expect(outcomeReview).toContainText('高脚杯深蹲')
+  await expect(outcomeReview).toContainText('不能证明因果或计划效果')
+  await outcomeReview.scrollIntoViewIfNeeded()
+  await page.screenshot({
+    path: 'output/playwright/iteration-103-plan-outcome-unknown-mobile.png',
+  })
   await page.locator('.plans-scroll').evaluate((element) => element.scrollTo({ top: 0 }))
   await page.screenshot({
     path: 'output/playwright/iteration-008-plans-mobile.png',
@@ -637,9 +646,7 @@ test('user explicitly reconciles a planned session with one actual workout', asy
   await page.getByRole('button', { name: '采用这份计划' }).click()
   await expect(page.getByText('已采用', { exact: true })).toBeVisible()
 
-  const localMidnight = Date.parse(`${sessionDate}T00:00:00+08:00`)
-  const actualWorkoutEnd = Math.min(localMidnight + 30 * 60_000, Date.now() - 1_000)
-  const actualWorkoutStart = Math.max(localMidnight, actualWorkoutEnd - 30 * 60_000)
+  const actualWorkoutAt = new Date().toISOString()
 
   const workout = await page.request.post(`${apiUrl}/workouts`, {
     headers: {
@@ -658,8 +665,8 @@ test('user explicitly reconciles a planned session with one actual workout', asy
           sets: [{ position: 1, kind: 'working', reps: 8, completed: true }],
         },
       ],
-      startedAt: new Date(actualWorkoutStart).toISOString(),
-      endedAt: new Date(actualWorkoutEnd).toISOString(),
+      startedAt: actualWorkoutAt,
+      endedAt: actualWorkoutAt,
       timezone: 'Asia/Shanghai',
       painLevel: 0,
       fatigue: 2,
@@ -678,6 +685,15 @@ test('user explicitly reconciles a planned session with one actual workout', asy
     page.getByText('这是你的明确选择，不是根据标题、日期或时长推测的完成情况。'),
   ).toBeVisible()
   await expect(page.locator('.week-fold__day--recorded')).toHaveCount(1)
+  const observedReview = page.locator('.outcome-review-card')
+  await expect(observedReview.getByText('已有后续记录', { exact: true })).toBeVisible()
+  await expect(observedReview).toContainText('1 条明确训练关联')
+  await expect(observedReview).toContainText('PLAN v2 ↔ WORKOUT v1')
+  await expect(observedReview).toContainText('不能证明因果或计划效果')
+  await observedReview.scrollIntoViewIfNeeded()
+  await page.screenshot({
+    path: 'output/playwright/iteration-103-plan-outcome-observed-mobile.png',
+  })
   await page.locator('.session-link-card').scrollIntoViewIfNeeded()
   await page.screenshot({ path: 'output/playwright/iteration-036-plan-link-mobile.png' })
 
