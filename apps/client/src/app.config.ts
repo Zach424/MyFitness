@@ -7,6 +7,7 @@ export default defineAppConfig({
     'pages/history/index',
     'pages/health-insights/index',
     'pages/progress-photos/index',
+    'pages/food-photo-workflow/index',
     'pages/workouts/index',
     'pages/exercise-insights/index',
     'pages/nutrition/index',

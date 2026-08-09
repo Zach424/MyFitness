@@ -428,7 +428,7 @@ const NutritionPage = () => {
   const openFoodPhotoWorkflow = () => {
     photoReturnFocus.current = true
     void Taro.navigateTo({
-      url: '/pages/progress-photos/index?kind=food',
+      url: '/pages/food-photo-workflow/index',
       events: {
         foodPhotoConfirmed: (items: ConfirmFoodPhotoCandidate['items']) => {
           try {

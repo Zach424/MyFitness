@@ -1,3 +1,7 @@
+import { detectedTimeZone } from './detected-time-zone'
+
+export { detectedTimeZone } from './detected-time-zone'
+
 export type OccurrenceCandidate = {
   instant: string
   offsetMinutes: number
@@ -106,14 +110,6 @@ const candidateOffsets = (formatter: Intl.DateTimeFormat, approximateInstant: nu
     values.add((localUtc(local) - instant) / 60_000)
   }
   return [...values].filter(Number.isInteger)
-}
-
-export const detectedTimeZone = () => {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Shanghai'
-  } catch {
-    return 'Asia/Shanghai'
-  }
 }
 
 export const resolveLocalOccurrence = (

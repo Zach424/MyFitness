@@ -53,7 +53,7 @@ Local development uses a pinned private MinIO container. Shared/production deplo
 
 ## Client workbench boundary
 
-The nutrition page contains only an explanation and launcher. It does not list photo candidates, own consent/upload/review state or receive an image. The complete optional workflow runs under `pages/progress-photos/index?kind=food`, reusing the existing registered private-photo route while keeping a separate component/model/style boundary.
+The nutrition page contains only an explanation and launcher. It does not list photo candidates, own consent/upload/review state or receive an image. The complete optional workflow runs under the dedicated lazy route `pages/food-photo-workflow/index`, while reusing the existing private-photo API and read-state boundaries with a separate component/model/style boundary.
 
 The still-open nutrition page registers one Taro opener event. The workbench validates the displayed selection, confirms it through the API and emits only the successful response's catalog keys and integer grams before navigating back. The channel is in-memory and single-hop: photos, preview URLs, consent state and unconfirmed candidates never enter URL parameters, application storage or the recoverable meal-draft envelope. After return, confirmed inputs become normal unsaved food drafts and may be protected by the meal-draft vault; they still require an explicit Save Meal action.
 
