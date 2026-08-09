@@ -57,6 +57,55 @@ describe('weekly plan API with PostgreSQL', () => {
     return response.body.accessToken as string
   }
 
+  const addModerateRecoveryEvidence = async (accessToken: string, at: number) => {
+    const records = [
+      ...Array.from({ length: 7 }, (_, dayIndex) =>
+        (
+          [
+            ['recovery.energy', 3],
+            ['recovery.sleep_quality', 3],
+            ['recovery.stress', 3],
+          ] as const
+        ).map(([metric, value]) => ({
+          metric,
+          value,
+          occurredAt: new Date(at - (dayIndex + 8) * 86_400_000).toISOString(),
+        })),
+      ).flat(),
+      ...Array.from({ length: 3 }, (_, dayIndex) =>
+        (
+          [
+            ['recovery.energy', 5],
+            ['recovery.sleep_quality', 5],
+            ['recovery.stress', 1],
+          ] as const
+        ).map(([metric, value]) => ({
+          metric,
+          value,
+          occurredAt: new Date(at - dayIndex * 86_400_000).toISOString(),
+        })),
+      ).flat(),
+    ]
+    await Promise.all(
+      records.map(({ metric, value, occurredAt }) =>
+        request(app.getHttpServer())
+          .post('/v1/health-records')
+          .set('Authorization', `Bearer ${accessToken}`)
+          .set('x-idempotency-key', `record-${randomUUID()}`)
+          .send({
+            metric,
+            value,
+            unit: 'score_1_5',
+            source: { kind: 'manual' },
+            status: 'confirmed',
+            occurredAt,
+            timezone: 'Asia/Shanghai',
+          })
+          .expect(201),
+      ),
+    )
+  }
+
   beforeAll(async () => {
     await runMigrations(databaseUrl)
     pool = new Pool({ connectionString: databaseUrl })
@@ -337,6 +386,7 @@ describe('weekly plan API with PostgreSQL', () => {
         timezone: 'Asia/Shanghai',
       })
       .expect(201)
+    await addModerateRecoveryEvidence(token, Date.now())
     const evidenceStaleLink = await request(app.getHttpServer())
       .post(`/v1/plans/weekly/${generated.body.id}/session-links`)
       .set('Authorization', `Bearer ${token}`)
@@ -697,6 +747,26 @@ describe('weekly plan API with PostgreSQL', () => {
         timezone: 'Asia/Shanghai',
       })
       .expect(201)
+
+    const singleSelfReportList = await request(app.getHttpServer())
+      .get('/v1/plans/weekly')
+      .set('Authorization', `Bearer ${evidenceToken}`)
+      .expect(200)
+    expect(singleSelfReportList.body.items[0].freshness).toMatchObject({
+      state: 'current',
+      planEvidenceFingerprint: 'planning-impact-v1:readiness-missing',
+      currentEvidenceFingerprint: 'planning-impact-v1:readiness-missing',
+    })
+
+    const singleSelfReportRegeneration = await request(app.getHttpServer())
+      .post('/v1/plans/weekly')
+      .set('Authorization', `Bearer ${evidenceToken}`)
+      .set('x-idempotency-key', `plan-${randomUUID()}`)
+      .send({ weekStart: '2026-08-03' })
+      .expect(201)
+    expect(singleSelfReportRegeneration.body).toMatchObject({ id: generated.body.id, revision: 1 })
+
+    await addModerateRecoveryEvidence(evidenceToken, now)
 
     const staleList = await request(app.getHttpServer())
       .get('/v1/plans/weekly')

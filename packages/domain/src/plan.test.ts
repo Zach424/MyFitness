@@ -7,6 +7,52 @@ import {
   buildWeeklyPlanContent,
   comparePlanEvidence,
 } from './plan'
+import { estimateSubjectiveRecoveryState } from './recovery-state'
+
+const recoveryAt = new Date('2026-07-19T08:00:00.000Z')
+const recoveryObservation = (
+  id: number,
+  metric: 'recovery.energy' | 'recovery.sleep_quality' | 'recovery.stress',
+  occurredAt: string,
+  canonicalValue: number,
+) => ({
+  recordId: `00000000-0000-4000-8000-${String(id).padStart(12, '0')}`,
+  revision: 1,
+  metric,
+  occurredAt: new Date(occurredAt),
+  canonicalValue,
+  sourceKind: 'manual' as const,
+})
+
+const unknownReadiness = estimateSubjectiveRecoveryState([], 'Asia/Shanghai', recoveryAt)
+const moderateReadiness = estimateSubjectiveRecoveryState(
+  [
+    ...Array.from({ length: 7 }, (_, index) =>
+      (['recovery.energy', 'recovery.sleep_quality', 'recovery.stress'] as const).map(
+        (metric, metricIndex) =>
+          recoveryObservation(
+            index * 3 + metricIndex + 1,
+            metric,
+            `2026-07-${String(index + 1).padStart(2, '0')}T08:00:00.000Z`,
+            3,
+          ),
+      ),
+    ).flat(),
+    ...Array.from({ length: 3 }, (_, index) =>
+      (['recovery.energy', 'recovery.sleep_quality', 'recovery.stress'] as const).map(
+        (metric, metricIndex) =>
+          recoveryObservation(
+            30 + index * 3 + metricIndex,
+            metric,
+            `2026-07-${16 + index}T08:00:00.000Z`,
+            metric === 'recovery.stress' ? 2 : 4,
+          ),
+      ),
+    ).flat(),
+  ],
+  'Asia/Shanghai',
+  recoveryAt,
+)
 
 const onboarding = {
   userId: '00000000-0000-4000-8000-000000000001',
@@ -38,7 +84,7 @@ const dashboard = {
   generatedAt: '2026-07-19T08:00:00.000Z',
   timezone: 'Asia/Shanghai',
   today: { date: '2026-07-19', items: [] },
-  readiness: { score: null, label: '等待恢复记录', note: '没有证据', factors: [] },
+  readiness: unknownReadiness,
   trends: [
     {
       days: 7,
@@ -112,7 +158,7 @@ describe('deterministic weekly plan', () => {
       },
       dashboard: {
         ...dashboard,
-        readiness: { ...dashboard.readiness, score: 82 },
+        readiness: moderateReadiness,
       },
     })
     expect(plan.days.flatMap((day) => (day.session ? [day.session.kind] : []))).toEqual([

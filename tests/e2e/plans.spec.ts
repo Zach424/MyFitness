@@ -532,10 +532,64 @@ test('material recovery evidence freezes the old fold and regenerates it safely'
   expect(record.status()).toBe(201)
 
   await page.getByRole('button', { name: '检查版本' }).click()
+  await expect(page.getByRole('alert')).toHaveCount(0)
+  await expect(page.getByText('v1', { exact: true }).first()).toBeVisible()
+
+  const now = Date.now()
+  const calibratedRecords = [
+    ...Array.from({ length: 7 }, (_, dayIndex) =>
+      (
+        [
+          ['recovery.energy', 3],
+          ['recovery.sleep_quality', 3],
+          ['recovery.stress', 3],
+        ] as const
+      ).map(([metric, value]) => ({
+        metric,
+        value,
+        occurredAt: new Date(now - (dayIndex + 8) * 86_400_000).toISOString(),
+      })),
+    ).flat(),
+    ...Array.from({ length: 3 }, (_, dayIndex) =>
+      (
+        [
+          ['recovery.energy', 5],
+          ['recovery.sleep_quality', 5],
+          ['recovery.stress', 1],
+        ] as const
+      ).map(([metric, value]) => ({
+        metric,
+        value,
+        occurredAt: new Date(now - dayIndex * 86_400_000).toISOString(),
+      })),
+    ).flat(),
+  ]
+  const responses = await Promise.all(
+    calibratedRecords.map(({ metric, value, occurredAt }) =>
+      page.request.post(`${apiUrl}/health-records`, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'x-idempotency-key': `plan-evidence-${randomUUID()}`,
+        },
+        data: {
+          metric,
+          value,
+          unit: 'score_1_5',
+          source: { kind: 'manual' },
+          status: 'confirmed',
+          occurredAt,
+          timezone: 'Asia/Shanghai',
+        },
+      }),
+    ),
+  )
+  expect(responses.every((response) => response.status() === 201)).toBe(true)
+
+  await page.getByRole('button', { name: '检查版本' }).click()
   const alert = page.getByRole('alert')
   await expect(alert).toContainText('EVIDENCE SHIFT')
-  await expect(alert).toContainText('新的恢复记录改变了本周安排边界')
-  await expect(alert).toContainText('不是医学判断')
+  await expect(alert).toContainText('中等置信恢复估计改变了计划依据')
+  await expect(alert).toContainText('不是身体事实或医学判断')
   await expect(page.getByRole('button', { name: '高脚杯深蹲' })).toHaveAttribute(
     'aria-disabled',
     'true',

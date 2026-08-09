@@ -87,14 +87,14 @@ export const planFreshnessNotice = (freshness: PlanFreshness) => {
   if (freshness.state === 'current') return null
   if (freshness.state === 'evidence_changed') {
     const title = {
-      recovery_added: '新的恢复记录改变了本周安排边界',
+      recovery_added: '中等置信恢复估计改变了计划依据',
       recovery_expired: '生成时的恢复摘要已超出当前窗口',
       recovery_threshold_crossed: '近期恢复摘要跨过了保守安排边界',
     }[freshness.changeReason]
     return {
       eyebrow: 'EVIDENCE SHIFT',
       title,
-      body: '这是近期记录的规则摘要，不是医学判断。采用、替换动作和 AI 边注已冻结；你仍可跳过本周，或按最新记录安全重排。',
+      body: '这是基于个人基线、覆盖与方向一致性的规则估计，不是身体事实或医学判断。采用、替换动作和 AI 边注已冻结；你仍可跳过本周，或按最新记录安全重排。',
       actionLabel: '按最新记录重排本周',
     }
   }

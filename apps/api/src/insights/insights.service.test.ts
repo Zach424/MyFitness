@@ -44,6 +44,7 @@ describe('dashboard aggregation', () => {
           canonical_value: '4',
           occurred_at: new Date('2026-07-18T00:00:00.000Z'),
           revision: 1,
+          source_kind: 'manual',
         },
         {
           id: '00000000-0000-4000-8000-000000000002',
@@ -53,6 +54,7 @@ describe('dashboard aggregation', () => {
           canonical_value: '2',
           occurred_at: new Date('2026-07-17T12:00:00.000Z'),
           revision: 1,
+          source_kind: 'manual',
         },
       ],
       workouts: [
@@ -87,8 +89,16 @@ describe('dashboard aggregation', () => {
       'nutrition',
       'workout',
     ])
-    expect(dashboard.readiness).toMatchObject({ score: 80, label: '恢复信号较稳' })
-    expect(dashboard.readiness.factors[0]).toMatchObject({ value: '4 /5' })
+    expect(dashboard.readiness).toMatchObject({
+      state: 'current_only',
+      score: 75,
+      confidence: 'low',
+      consistency: 'aligned',
+    })
+    expect(dashboard.readiness.factors[0]).toMatchObject({
+      metric: 'recovery.energy',
+      recentScore: 75,
+    })
     expect(dashboard.trends[0]).toMatchObject({
       days: 7,
       activeDays: 2,
@@ -107,6 +117,11 @@ describe('dashboard aggregation', () => {
       new Date('2026-07-18T12:00:00.000Z'),
     )
     expect(dashboard.readiness.score).toBeNull()
+    expect(dashboard.readiness).toMatchObject({
+      state: 'unknown',
+      confidence: 'insufficient',
+      consistency: 'unknown',
+    })
     expect(dashboard.today.items).toEqual([])
   })
 })

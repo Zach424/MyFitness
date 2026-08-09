@@ -72,6 +72,20 @@ const displayTime = (value: string) =>
     new Date(value),
   )
 
+const recoveryEvidenceHint = (readiness: Dashboard['readiness']) => {
+  const recent = readiness.coverage.recent
+  if (readiness.state === 'unknown') {
+    return `近 7 天：${recent.recordedDays}/2 个记录日 · ${recent.metricCount}/2 类指标`
+  }
+  if (readiness.state === 'current_only') {
+    return `低置信 · ${recent.recordedDays} 个记录日 · 个人基线不足`
+  }
+  if (readiness.consistency === 'mixed') return '低置信 · 各指标方向不一致'
+  const confidence = readiness.confidence === 'moderate' ? '中等置信' : '低置信'
+  const delta = readiness.changeFromBaseline ?? 0
+  return `${confidence} · 较个人基线 ${delta >= 0 ? '+' : ''}${delta}`
+}
+
 const readFailureCopy = (
   kind: TodayReadFailureKind,
   hasSnapshot: boolean,
@@ -176,22 +190,23 @@ const IndexPage = () => {
   const failureCopy = readFailure ? readFailureCopy(readFailure, hasSnapshot) : undefined
   const coachSnapshot = dashboard ? buildCoachSnapshot(dashboard, plans) : undefined
 
-  const readiness = dashboard?.readiness ?? {
-    score: null,
-    label: loading ? '正在整理记录' : readFailure ? '今日证据尚未读取' : '等待恢复记录',
-    note: loading
+  const readiness = dashboard?.readiness
+  const readinessLabel =
+    readiness?.label ??
+    (loading ? '正在整理记录' : readFailure ? '今日证据尚未读取' : '等待恢复记录')
+  const readinessNote =
+    readiness?.note ??
+    (loading
       ? '正在读取已确认的身体、恢复、训练与饮食记录。'
       : readFailure
         ? '证据读取完成后才会显示今日记录、恢复摘要与趋势。'
-        : '先完成一条记录，今日页会在这里整理真实证据。',
-    factors: [],
-  }
+        : '先完成一条记录，今日页会在这里整理真实证据。')
   const rail = dashboard?.today.items ?? []
   const planReconciliation = dashboard
     ? todayPlanReconciliation(plans, dashboard.today.date)
     : undefined
   const trend = dashboard?.trends.find((item) => item.days === trendDays)
-  const activeTicks = readiness.score === null ? 0 : Math.ceil(readiness.score / 20)
+  const activeTicks = readiness?.score == null ? 0 : Math.ceil(readiness.score / 20)
 
   const activateNavigation = (key: (typeof navItems)[number]['key']) => {
     if (key === 'today') setActiveView('today')
@@ -258,15 +273,13 @@ const IndexPage = () => {
                       ? '正在读取今日证据'
                       : '今日证据尚未读取'}
                 </Text>
-                <Text className="hero__body">{readiness.note}</Text>
+                <Text className="hero__body">{readinessNote}</Text>
                 <View className="readiness">
-                  <View className="readiness__score metric">{readiness.score ?? '—'}</View>
+                  <View className="readiness__score metric">{readiness?.score ?? '—'}</View>
                   <View className="readiness__copy">
-                    <Text className="readiness__label">{readiness.label}</Text>
+                    <Text className="readiness__label">{readinessLabel}</Text>
                     <Text className="readiness__hint">
-                      {readiness.score === null
-                        ? '没有恢复证据时不生成分数'
-                        : '根据近 3 天已确认恢复记录等权整理'}
+                      {readiness ? recoveryEvidenceHint(readiness) : '证据读取完成前保持未知状态'}
                     </Text>
                   </View>
                   <View className="readiness__ticks" aria-hidden="true">
@@ -462,7 +475,7 @@ const IndexPage = () => {
           </View>
 
           <Text className="safety-note">
-            恢复分数和趋势是确定性记录摘要，不是医疗诊断或 AI 建议。
+            主观记录是用户陈述；恢复状态是带置信度的估计，不是已确认事实、医疗诊断或 AI 建议。
           </Text>
         </View>
       </ScrollView>

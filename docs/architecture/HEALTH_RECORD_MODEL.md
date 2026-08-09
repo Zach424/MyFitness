@@ -78,3 +78,9 @@ The dedicated client page may position values on a relative calibration strip, b
 ## Cross-domain history-calendar participation
 
 `GET /v1/insights/history-calendar` counts each current, non-deleted, confirmed health record on the local date obtained from `occurred_at` in the requested IANA timezone. It intentionally combines body and recovery into one source count and exposes neither values nor metric labels. Candidate rows, later-than-reference rows, immutable revisions and other owners never contribute. Correction can move the count to another local date; soft deletion removes it on the next read. A selected calendar day may prefill the editor's date and timezone, but no occurrence instant exists until the user adds a valid local minute.
+
+## Calibrated subjective recovery state
+
+`GET /v1/insights/dashboard` treats confirmed energy, sleep-quality, stress and soreness records as time-stamped self-reports, not direct facts about physiological readiness. `subjective-recovery-state-v1` selects at most the latest record per local day and metric, excludes AI estimates, invalid values and future observations, and retains record UUID, revision, occurrence time, source kind and window on every evidence reference.
+
+The estimate uses a 7-day recent window and the preceding 28 days as a personal baseline. Fewer than two recent local days or two metrics remains `unknown` with no score. Sufficient recent coverage without at least seven baseline days and two comparable metrics is `current_only` with low confidence. A baseline comparison reaches moderate confidence only with at least three recent days, three comparable metrics and aligned factors; a 50-point factor range is explicitly `mixed` and remains low confidence. Only a moderate, aligned estimate yields a planning readiness value. These thresholds are versioned heuristics, not validated physiology, diagnosis, treatment or causal attribution; ADR-0097 records the boundary.

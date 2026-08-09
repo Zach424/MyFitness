@@ -31,6 +31,7 @@ import {
   buildWeeklyPlanContent,
   comparePlanEvidence,
   PlanSelectionError,
+  planningReadinessScore,
 } from '@myfitness/domain'
 import type { QueryResult, QueryResultRow } from 'pg'
 
@@ -276,7 +277,10 @@ export class PlansService {
     planReadinessScore: number | null,
   ) {
     const dashboard = await this.insights.dashboard(userId, profile.profile.timezone)
-    const evidence = comparePlanEvidence(planReadinessScore, dashboard.readiness.score)
+    const evidence = comparePlanEvidence(
+      planReadinessScore,
+      planningReadinessScore(dashboard.readiness),
+    )
     if (!evidence.current) {
       throw new ConflictException({
         code: 'plan_evidence_changed',
@@ -407,7 +411,7 @@ export class PlansService {
     let currentReadinessScore: number | null | undefined
     if (result.rows.length && profile && assessPlanEligibility(profile).allowed) {
       const dashboard = await this.insights.dashboard(userId, profile.profile.timezone)
-      currentReadinessScore = dashboard.readiness.score
+      currentReadinessScore = planningReadinessScore(dashboard.readiness)
     }
     const checkedAt = new Date().toISOString()
     return {

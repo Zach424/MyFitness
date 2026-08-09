@@ -13,10 +13,14 @@ import type {
   NutritionInsight,
   NutritionInsightDay,
   NutritionInsightWindow,
+  RecordSource,
+  SubjectiveRecoveryMetric,
   TodayEvidence,
   TrendWindow,
   UnitCode,
 } from '@myfitness/contracts'
+import { subjectiveRecoveryMetrics } from '@myfitness/contracts'
+import { estimateSubjectiveRecoveryState } from '@myfitness/domain'
 
 import { DatabaseService } from '../database/database.service'
 
@@ -28,6 +32,7 @@ type HealthRow = {
   canonical_value: string
   occurred_at: Date
   revision: number
+  source_kind: RecordSource['kind']
 }
 
 type WorkoutRow = {
@@ -144,12 +149,7 @@ const recoveryMetrics = new Set([
   'recovery.energy',
   'recovery.stress',
 ])
-const readinessMetrics = [
-  'recovery.energy',
-  'recovery.sleep_quality',
-  'recovery.stress',
-  'recovery.soreness',
-]
+const subjectiveRecoveryMetricSet = new Set<string>(subjectiveRecoveryMetrics)
 
 const displayUnitLabels: Record<string, string> = {
   score_1_5: '/5',
@@ -422,46 +422,20 @@ export const buildDashboard = (rows: InsightRows, timezone: string, at = new Dat
       })),
   ].sort((a, b) => timeValue(new Date(a.occurredAt)) - timeValue(new Date(b.occurredAt)))
 
-  const recentBoundary = at.getTime() - 3 * 86_400_000
-  const latest = new Map<string, HealthRow>()
-  for (const row of rows.health) {
-    if (row.occurred_at.getTime() < recentBoundary || !readinessMetrics.includes(row.metric))
-      continue
-    if (!latest.has(row.metric)) latest.set(row.metric, row)
-  }
-  const factors = [...latest.entries()].map(([metric, row]) => ({
-    label: metricLabels[metric] ?? metric,
-    value: displayMeasurement(row.display_value, row.display_unit),
-  }))
-  const normalizedScores = [...latest.entries()].map(([metric, row]) => {
-    const value = Number(row.canonical_value)
-    return metric === 'recovery.stress' || metric === 'recovery.soreness' ? 6 - value : value
-  })
-  const readinessScore = normalizedScores.length
-    ? Math.round(
-        (normalizedScores.reduce((sum, value) => sum + value, 0) / normalizedScores.length / 5) *
-          100,
-      )
-    : null
-  const readiness =
-    readinessScore === null
-      ? {
-          score: null,
-          label: '等待恢复记录',
-          note: '近 3 天还没有足够的精力、睡眠、压力或酸痛记录；先记录，再判断。',
-          factors,
-        }
-      : {
-          score: readinessScore,
-          label:
-            readinessScore >= 80
-              ? '恢复信号较稳'
-              : readinessScore >= 60
-                ? '恢复尚可'
-                : '建议保守安排',
-          note: `根据近 3 天 ${normalizedScores.length} 项主观记录做等权整理；这是记录摘要，不是医学评分。`,
-          factors,
-        }
+  const readiness = estimateSubjectiveRecoveryState(
+    rows.health
+      .filter((row) => subjectiveRecoveryMetricSet.has(row.metric))
+      .map((row) => ({
+        recordId: row.id,
+        revision: row.revision,
+        metric: row.metric as SubjectiveRecoveryMetric,
+        canonicalValue: Number(row.canonical_value),
+        occurredAt: row.occurred_at,
+        sourceKind: row.source_kind,
+      })),
+    timezone,
+    at,
+  )
 
   const trends = ([7, 30, 90] as const).map((days): TrendWindow => {
     const boundary = at.getTime() - days * 86_400_000
@@ -504,7 +478,8 @@ export class InsightsService {
     const [health, workouts, meals] = await Promise.all([
       this.database.query<HealthRow>(
         `
-          SELECT id, metric, display_value, display_unit, canonical_value, occurred_at, revision
+          SELECT id, metric, display_value, display_unit, canonical_value, occurred_at, revision,
+            source_kind
           FROM health_records
           WHERE user_id = $1 AND deleted_at IS NULL AND status = 'confirmed' AND occurred_at >= $2
           ORDER BY occurred_at DESC

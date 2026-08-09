@@ -12,6 +12,8 @@ import {
   weeklyPlanContentSchema,
 } from '@myfitness/contracts'
 
+import { planningReadinessScore } from './recovery-state'
+
 type PlanningInput = {
   weekStart: string
   onboarding: OnboardingResponse
@@ -287,7 +289,7 @@ export const buildWeeklyPlanContent = ({
   dashboard,
 }: PlanningInput): WeeklyPlanContent => {
   const sevenDay = dashboard.trends.find((trend) => trend.days === 7)!
-  const readiness = dashboard.readiness.score
+  const readiness = planningReadinessScore(dashboard.readiness)
   const intensity = readiness === null || readiness < 60 ? 'easy' : 'moderate'
   const experienceCap = { beginner: 2, intermediate: 3, advanced: 4 }[onboarding.goal.experience]
   const recoveryCap = readiness === null || readiness < 60 ? 2 : experienceCap
@@ -346,11 +348,11 @@ export const buildWeeklyPlanContent = ({
     },
     {
       code: readiness === null ? 'recovery_missing' : 'recovery_considered',
-      label: readiness === null ? '恢复证据不足' : '已考虑恢复记录',
+      label: readiness === null ? '恢复证据不足' : '已考虑中等置信恢复估计',
       detail:
         readiness === null
           ? '没有用空白数据生成“正常”分数，因此先采用轻松强度。'
-          : `生成时的恢复摘要为 ${readiness}/100；它只用于保守调整，不是医学判断。`,
+          : `生成时的中等置信恢复估计为 ${readiness}/100；它只用于保守调整，不是身体事实或医学判断。`,
     },
     {
       code: 'public_guidance_context',

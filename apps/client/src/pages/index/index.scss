@@ -208,11 +208,9 @@
 }
 
 .readiness__hint {
-  overflow: hidden;
   color: var(--color-muted);
   font-size: 11px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.45;
 }
 
 .readiness__ticks {

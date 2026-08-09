@@ -2,6 +2,7 @@ import * as z from 'zod'
 
 import { exerciseEquipmentSchema, exerciseTrackingModeSchema } from './exercise-catalog'
 import { metricCodeSchema, recordSourceSchema, unitCodeSchema } from './health-record'
+import { recoveryStateEstimateSchema } from './recovery-state'
 import { exerciseCategorySchema, exerciseKeySchema } from './workout'
 
 export const evidenceKindSchema = z.enum(['body', 'recovery', 'workout', 'nutrition'])
@@ -17,14 +18,7 @@ export const todayEvidenceSchema = z
   })
   .strict()
 
-export const readinessSummarySchema = z
-  .object({
-    score: z.number().int().min(0).max(100).nullable(),
-    label: z.string().min(1),
-    note: z.string().min(1),
-    factors: z.array(z.object({ label: z.string(), value: z.string() }).strict()).max(4),
-  })
-  .strict()
+export const readinessSummarySchema = recoveryStateEstimateSchema
 
 export const trendWindowSchema = z
   .object({

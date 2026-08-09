@@ -114,10 +114,10 @@ describe('plan page model', () => {
     } as const
     expect(planFreshnessNotice(changed)).toMatchObject({
       eyebrow: 'EVIDENCE SHIFT',
-      title: '新的恢复记录改变了本周安排边界',
+      title: '中等置信恢复估计改变了计划依据',
       actionLabel: '按最新记录重排本周',
     })
-    expect(planFreshnessNotice(changed)?.body).toContain('不是医学判断')
+    expect(planFreshnessNotice(changed)?.body).toContain('不是身体事实或医学判断')
     expect(planFreshnessProjectionKey(changed)).not.toBe(
       planFreshnessProjectionKey({
         ...changed,
