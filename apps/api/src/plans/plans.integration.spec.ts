@@ -444,6 +444,7 @@ describe('weekly plan API with PostgreSQL', () => {
       followUpState: 'observed',
       observationWindow: { state: 'open' },
       recoveryObservationTotal: 1,
+      withdrawnEvidence: { workoutLinkCount: 0, recoveryRecordCount: 0 },
       planningEvidence: {
         recoveryState: { policyVersion: 'subjective-recovery-state-v1' },
       },
@@ -467,6 +468,54 @@ describe('weekly plan API with PostgreSQL', () => {
     expect(review.limitations.join(' ')).toContain('不能单独证明计划造成了变化')
     expect(JSON.stringify(review)).not.toContain('ai_estimate')
     expect(JSON.stringify(review)).not.toContain('adherence')
+
+    await request(app.getHttpServer())
+      .delete(`/v1/plans/weekly/${generated.body.id}/session-links/${link.body.id}`)
+      .set('Authorization', `Bearer ${outcomeToken}`)
+      .set('x-expected-revision', String(link.body.revision))
+      .expect(200)
+    await request(app.getHttpServer())
+      .delete(`/v1/health-records/${confirmedRecovery.body.id}`)
+      .set('Authorization', `Bearer ${outcomeToken}`)
+      .set('x-expected-revision', String(confirmedRecovery.body.revision))
+      .expect(204)
+    await request(app.getHttpServer())
+      .put(`/v1/plans/weekly/${generated.body.id}/decision`)
+      .set('Authorization', `Bearer ${outcomeToken}`)
+      .send({ decision: 'skipped', expectedRevision: accepted.body.revision, selections: [] })
+      .expect(200)
+
+    const noCurrentReview = await request(app.getHttpServer())
+      .get('/v1/plans/weekly')
+      .set('Authorization', `Bearer ${outcomeToken}`)
+      .expect(200)
+    expect(noCurrentReview.body.items[0].outcomeReview).toBeNull()
+
+    const historicalReview = await request(app.getHttpServer())
+      .get(`/v1/plans/weekly/${generated.body.id}/history/${accepted.body.revision}/outcome`)
+      .set('Authorization', `Bearer ${outcomeToken}`)
+      .expect('Cache-Control', 'private, no-store')
+      .expect(200)
+    expect(historicalReview.body).toMatchObject({
+      planId: generated.body.id,
+      planRevision: accepted.body.revision,
+      followUpState: 'unknown',
+      recoveryObservationTotal: 0,
+      linkedWorkouts: [],
+      recoveryObservations: [],
+      withdrawnEvidence: { workoutLinkCount: 1, recoveryRecordCount: 1 },
+    })
+    expect(historicalReview.body.adjustments).toEqual(review.adjustments)
+    expect(historicalReview.body.limitations.join(' ')).toContain('撤销事实不再构成后续证据')
+
+    await request(app.getHttpServer())
+      .get(`/v1/plans/weekly/${generated.body.id}/history/${accepted.body.revision}/outcome`)
+      .set('Authorization', `Bearer ${otherToken}`)
+      .expect(404)
+    await request(app.getHttpServer())
+      .get(`/v1/plans/weekly/${generated.body.id}/history/${modified.body.revision}/outcome`)
+      .set('Authorization', `Bearer ${outcomeToken}`)
+      .expect(404)
   })
 
   it('links only explicit owner-selected current revisions and preserves closure history', async () => {

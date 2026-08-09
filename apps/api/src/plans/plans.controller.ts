@@ -4,6 +4,7 @@ import {
   Controller,
   Delete,
   Get,
+  Header,
   Headers,
   HttpCode,
   Param,
@@ -31,6 +32,7 @@ import {
   generateWeeklyPlanSchema,
   idempotencyKeySchema,
   planDecisionSchema,
+  planOutcomeReviewSchema,
   planWorkoutLinkIdSchema,
   planWorkoutLinkClosureSchema,
   planWorkoutLinkSchema,
@@ -38,6 +40,7 @@ import {
   weeklyPlanHistoryQuerySchema,
   weeklyPlanIdSchema,
   weeklyPlanListSchema,
+  weeklyPlanRevisionSchema,
   weeklyPlanSchema,
   type GenerateWeeklyPlan,
   type PlanDecision,
@@ -171,6 +174,30 @@ export class PlansController {
     const planId = parse(weeklyPlanIdSchema, rawId, 'planId must be a UUID')
     const input: PlanDecision = parse(planDecisionSchema, body, 'plan decision is invalid')
     return weeklyPlanSchema.parse(await this.plans.decide(principal.userId, planId, input))
+  }
+
+  @Get(':planId/history/:revision/outcome')
+  @Header('Cache-Control', 'private, no-store')
+  @ApiOperation({ summary: 'Recompute one exact accepted plan revision outcome review' })
+  @ApiParam({ name: 'planId', schema: { type: 'string', format: 'uuid' } })
+  @ApiParam({ name: 'revision', schema: { type: 'integer', minimum: 1 } })
+  @ApiOkResponse({ schema: openApiSchema(planOutcomeReviewSchema) })
+  @ApiBadRequestResponse({ description: 'Plan identifier or revision is invalid.' })
+  @ApiNotFoundResponse({ description: 'Accepted plan revision does not exist for this user.' })
+  async outcome(
+    @CurrentUser() principal: AuthPrincipal,
+    @Param('planId') rawId: string,
+    @Param('revision') rawRevision: string,
+  ) {
+    const planId = parse(weeklyPlanIdSchema, rawId, 'planId must be a UUID')
+    const planRevision = parse(
+      weeklyPlanRevisionSchema,
+      rawRevision,
+      'plan revision must be a positive integer',
+    )
+    return planOutcomeReviewSchema.parse(
+      await this.plans.outcome(principal.userId, planId, planRevision),
+    )
   }
 
   @Get(':planId/history')

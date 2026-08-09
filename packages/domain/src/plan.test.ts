@@ -321,12 +321,15 @@ describe('plan outcome review', () => {
       linkedWorkouts: [],
       recoveryObservations: [],
       recoveryObservationTotal: 0,
+      withdrawnEvidence: { workoutLinkCount: 1, recoveryRecordCount: 1 },
     })
 
     expect(review).toMatchObject({
       followUpState: 'unknown',
       observationWindow: { state: 'closed' },
       adjustments: [],
+      withdrawnEvidence: { workoutLinkCount: 1, recoveryRecordCount: 1 },
     })
+    expect(review.limitations.join(' ')).toContain('这些撤销事实不再构成后续证据')
   })
 })

@@ -34,6 +34,7 @@ import type {
   OnboardingRequest,
   OnboardingResponse,
   PlanDecision,
+  PlanOutcomeReview,
   PlanWorkoutLink,
   PlanWorkoutLinkClosure,
   PrivacyOverview,
@@ -615,6 +616,12 @@ export const decideWeeklyPlan = (planId: string, payload: PlanDecision) =>
 export const getWeeklyPlanHistory = (planId: string, options: RecordListOptions = {}) =>
   authenticatedRequest<WeeklyPlanHistory>(
     recordListPath(`/plans/weekly/${planId}/history`, options),
+    'GET',
+  )
+
+export const getWeeklyPlanOutcome = (planId: string, revision: number) =>
+  authenticatedRequest<PlanOutcomeReview>(
+    `/plans/weekly/${planId}/history/${revision}/outcome`,
     'GET',
   )
 

@@ -639,6 +639,205 @@
         "tags": ["ai explanations"]
       }
     },
+    "/v1/plans/weekly/{planId}/explanation-request": {
+      "get": {
+        "operationId": "AiController_requestStatus",
+        "parameters": [
+          {
+            "name": "planId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "x-idempotency-key",
+            "in": "header",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": { "type": "string", "enum": ["pending"] },
+                        "requestId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "planId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "planRevision": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "exclusiveMinimum": true,
+                          "maximum": 9007199254740991
+                        },
+                        "expiresAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                        }
+                      },
+                      "required": ["status", "requestId", "planId", "planRevision", "expiresAt"],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": { "type": "string", "enum": ["completed"] },
+                        "explanation": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                            },
+                            "planId": {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                            },
+                            "planRevision": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "exclusiveMinimum": true,
+                              "maximum": 9007199254740991
+                            },
+                            "source": {
+                              "type": "string",
+                              "enum": ["model", "fixture", "fallback"]
+                            },
+                            "provider": {
+                              "type": "string",
+                              "enum": ["fixture", "openai", "unavailable"]
+                            },
+                            "model": { "type": "string", "minLength": 1, "maxLength": 120 },
+                            "promptVersion": { "type": "string", "enum": ["plan-explanation-v1"] },
+                            "validatorVersion": {
+                              "type": "string",
+                              "enum": ["plan-explanation-safety-v1", "plan-explanation-safety-v2"]
+                            },
+                            "failureCode": {
+                              "nullable": true,
+                              "type": "string",
+                              "enum": [
+                                "provider_unavailable",
+                                "provider_timeout",
+                                "provider_refusal",
+                                "provider_error",
+                                "invalid_output",
+                                "safety_validation_failed"
+                              ]
+                            },
+                            "content": {
+                              "type": "object",
+                              "properties": {
+                                "headline": { "type": "string", "minLength": 1, "maxLength": 60 },
+                                "overview": { "type": "string", "minLength": 1, "maxLength": 240 },
+                                "highlights": {
+                                  "minItems": 2,
+                                  "maxItems": 4,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "title": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 60
+                                      },
+                                      "detail": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 220
+                                      },
+                                      "evidenceKeys": {
+                                        "minItems": 1,
+                                        "maxItems": 3,
+                                        "type": "array",
+                                        "items": {
+                                          "type": "string",
+                                          "enum": [
+                                            "plan_schedule",
+                                            "plan_experience",
+                                            "plan_recovery",
+                                            "recent_activity",
+                                            "recent_workouts",
+                                            "recent_meals",
+                                            "nutrition_focus"
+                                          ]
+                                        }
+                                      }
+                                    },
+                                    "required": ["title", "detail", "evidenceKeys"],
+                                    "additionalProperties": false
+                                  }
+                                },
+                                "nextStep": { "type": "string", "minLength": 1, "maxLength": 160 }
+                              },
+                              "required": ["headline", "overview", "highlights", "nextStep"],
+                              "additionalProperties": false
+                            },
+                            "safetyNote": {
+                              "type": "string",
+                              "enum": [
+                                "这是对既有计划的辅助解释，不是医疗诊断或处方；计划内容没有被 AI 自动修改。"
+                              ]
+                            },
+                            "createdAt": {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "planId",
+                            "planRevision",
+                            "source",
+                            "provider",
+                            "model",
+                            "promptVersion",
+                            "validatorVersion",
+                            "failureCode",
+                            "content",
+                            "safetyNote",
+                            "createdAt"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": ["status", "explanation"],
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": { "description": "The idempotency key is invalid or missing." },
+          "401": { "description": "Bearer token is missing, invalid, expired or revoked." },
+          "404": {
+            "description": "The exact explanation request does not exist for this plan and user."
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Read one AI explanation run by its original idempotency key",
+        "tags": ["ai explanations"]
+      }
+    },
     "/v1/plans/weekly/{planId}/explanations": {
       "get": {
         "operationId": "AiController_history",
@@ -4212,29 +4411,261 @@
                     "readiness": {
                       "type": "object",
                       "properties": {
+                        "policyVersion": {
+                          "type": "string",
+                          "enum": ["subjective-recovery-state-v1"]
+                        },
+                        "state": {
+                          "type": "string",
+                          "enum": [
+                            "unknown",
+                            "current_only",
+                            "below_baseline",
+                            "near_baseline",
+                            "above_baseline"
+                          ]
+                        },
                         "score": {
                           "nullable": true,
                           "type": "integer",
                           "minimum": 0,
                           "maximum": 100
                         },
+                        "baselineScore": {
+                          "nullable": true,
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 100
+                        },
+                        "changeFromBaseline": {
+                          "nullable": true,
+                          "type": "integer",
+                          "minimum": -100,
+                          "maximum": 100
+                        },
+                        "confidence": {
+                          "type": "string",
+                          "enum": ["insufficient", "low", "moderate"]
+                        },
+                        "consistency": {
+                          "type": "string",
+                          "enum": ["unknown", "aligned", "mixed"]
+                        },
                         "label": { "type": "string", "minLength": 1 },
                         "note": { "type": "string", "minLength": 1 },
+                        "coverage": {
+                          "type": "object",
+                          "properties": {
+                            "recent": {
+                              "type": "object",
+                              "properties": {
+                                "startAt": {
+                                  "type": "string",
+                                  "format": "date-time",
+                                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                },
+                                "endAt": {
+                                  "type": "string",
+                                  "format": "date-time",
+                                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                },
+                                "days": {
+                                  "anyOf": [
+                                    { "type": "number", "enum": [7] },
+                                    { "type": "number", "enum": [28] }
+                                  ]
+                                },
+                                "observationCount": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 116
+                                },
+                                "recordedDays": { "type": "integer", "minimum": 0, "maximum": 29 },
+                                "metricCount": { "type": "integer", "minimum": 0, "maximum": 4 }
+                              },
+                              "required": [
+                                "startAt",
+                                "endAt",
+                                "days",
+                                "observationCount",
+                                "recordedDays",
+                                "metricCount"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "baseline": {
+                              "type": "object",
+                              "properties": {
+                                "startAt": {
+                                  "type": "string",
+                                  "format": "date-time",
+                                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                },
+                                "endAt": {
+                                  "type": "string",
+                                  "format": "date-time",
+                                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                },
+                                "days": {
+                                  "anyOf": [
+                                    { "type": "number", "enum": [7] },
+                                    { "type": "number", "enum": [28] }
+                                  ]
+                                },
+                                "observationCount": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 116
+                                },
+                                "recordedDays": { "type": "integer", "minimum": 0, "maximum": 29 },
+                                "metricCount": { "type": "integer", "minimum": 0, "maximum": 4 }
+                              },
+                              "required": [
+                                "startAt",
+                                "endAt",
+                                "days",
+                                "observationCount",
+                                "recordedDays",
+                                "metricCount"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "excludedObservationCount": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": ["recent", "baseline", "excludedObservationCount"],
+                          "additionalProperties": false
+                        },
                         "factors": {
                           "maxItems": 4,
                           "type": "array",
                           "items": {
                             "type": "object",
                             "properties": {
-                              "label": { "type": "string" },
-                              "value": { "type": "string" }
+                              "metric": {
+                                "type": "string",
+                                "enum": [
+                                  "recovery.energy",
+                                  "recovery.sleep_quality",
+                                  "recovery.stress",
+                                  "recovery.soreness"
+                                ]
+                              },
+                              "label": { "type": "string", "minLength": 1 },
+                              "recentScore": { "type": "integer", "minimum": 0, "maximum": 100 },
+                              "baselineScore": {
+                                "nullable": true,
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 100
+                              },
+                              "changeFromBaseline": {
+                                "nullable": true,
+                                "type": "integer",
+                                "minimum": -100,
+                                "maximum": 100
+                              },
+                              "recentObservationCount": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "exclusiveMinimum": true,
+                                "maximum": 8
+                              },
+                              "baselineObservationCount": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 29
+                              }
                             },
-                            "required": ["label", "value"],
+                            "required": [
+                              "metric",
+                              "label",
+                              "recentScore",
+                              "baselineScore",
+                              "changeFromBaseline",
+                              "recentObservationCount",
+                              "baselineObservationCount"
+                            ],
                             "additionalProperties": false
                           }
+                        },
+                        "evidence": {
+                          "maxItems": 148,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "recordId": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                              },
+                              "revision": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "exclusiveMinimum": true,
+                                "maximum": 9007199254740991
+                              },
+                              "metric": {
+                                "type": "string",
+                                "enum": [
+                                  "recovery.energy",
+                                  "recovery.sleep_quality",
+                                  "recovery.stress",
+                                  "recovery.soreness"
+                                ]
+                              },
+                              "occurredAt": {
+                                "type": "string",
+                                "format": "date-time",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                              },
+                              "sourceKind": {
+                                "type": "string",
+                                "enum": ["manual", "device", "imported", "ai_estimate"]
+                              },
+                              "window": { "type": "string", "enum": ["recent", "baseline"] },
+                              "canonicalValue": { "type": "number", "minimum": 1, "maximum": 5 },
+                              "normalizedScore": { "type": "integer", "minimum": 0, "maximum": 100 }
+                            },
+                            "required": [
+                              "recordId",
+                              "revision",
+                              "metric",
+                              "occurredAt",
+                              "sourceKind",
+                              "window",
+                              "canonicalValue",
+                              "normalizedScore"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "limitations": {
+                          "minItems": 1,
+                          "maxItems": 5,
+                          "type": "array",
+                          "items": { "type": "string", "minLength": 1 }
                         }
                       },
-                      "required": ["score", "label", "note", "factors"],
+                      "required": [
+                        "policyVersion",
+                        "state",
+                        "score",
+                        "baselineScore",
+                        "changeFromBaseline",
+                        "confidence",
+                        "consistency",
+                        "label",
+                        "note",
+                        "coverage",
+                        "factors",
+                        "evidence",
+                        "limitations"
+                      ],
                       "additionalProperties": false
                     },
                     "trends": {
@@ -8153,6 +8584,286 @@
                           "minimum": 0,
                           "maximum": 9007199254740991
                         },
+                        "recoveryState": {
+                          "type": "object",
+                          "properties": {
+                            "policyVersion": {
+                              "type": "string",
+                              "enum": ["subjective-recovery-state-v1"]
+                            },
+                            "state": {
+                              "type": "string",
+                              "enum": [
+                                "unknown",
+                                "current_only",
+                                "below_baseline",
+                                "near_baseline",
+                                "above_baseline"
+                              ]
+                            },
+                            "score": {
+                              "nullable": true,
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 100
+                            },
+                            "baselineScore": {
+                              "nullable": true,
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 100
+                            },
+                            "changeFromBaseline": {
+                              "nullable": true,
+                              "type": "integer",
+                              "minimum": -100,
+                              "maximum": 100
+                            },
+                            "confidence": {
+                              "type": "string",
+                              "enum": ["insufficient", "low", "moderate"]
+                            },
+                            "consistency": {
+                              "type": "string",
+                              "enum": ["unknown", "aligned", "mixed"]
+                            },
+                            "label": { "type": "string", "minLength": 1 },
+                            "note": { "type": "string", "minLength": 1 },
+                            "coverage": {
+                              "type": "object",
+                              "properties": {
+                                "recent": {
+                                  "type": "object",
+                                  "properties": {
+                                    "startAt": {
+                                      "type": "string",
+                                      "format": "date-time",
+                                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                    },
+                                    "endAt": {
+                                      "type": "string",
+                                      "format": "date-time",
+                                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                    },
+                                    "days": {
+                                      "anyOf": [
+                                        { "type": "number", "enum": [7] },
+                                        { "type": "number", "enum": [28] }
+                                      ]
+                                    },
+                                    "observationCount": {
+                                      "type": "integer",
+                                      "minimum": 0,
+                                      "maximum": 116
+                                    },
+                                    "recordedDays": {
+                                      "type": "integer",
+                                      "minimum": 0,
+                                      "maximum": 29
+                                    },
+                                    "metricCount": { "type": "integer", "minimum": 0, "maximum": 4 }
+                                  },
+                                  "required": [
+                                    "startAt",
+                                    "endAt",
+                                    "days",
+                                    "observationCount",
+                                    "recordedDays",
+                                    "metricCount"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                "baseline": {
+                                  "type": "object",
+                                  "properties": {
+                                    "startAt": {
+                                      "type": "string",
+                                      "format": "date-time",
+                                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                    },
+                                    "endAt": {
+                                      "type": "string",
+                                      "format": "date-time",
+                                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                    },
+                                    "days": {
+                                      "anyOf": [
+                                        { "type": "number", "enum": [7] },
+                                        { "type": "number", "enum": [28] }
+                                      ]
+                                    },
+                                    "observationCount": {
+                                      "type": "integer",
+                                      "minimum": 0,
+                                      "maximum": 116
+                                    },
+                                    "recordedDays": {
+                                      "type": "integer",
+                                      "minimum": 0,
+                                      "maximum": 29
+                                    },
+                                    "metricCount": { "type": "integer", "minimum": 0, "maximum": 4 }
+                                  },
+                                  "required": [
+                                    "startAt",
+                                    "endAt",
+                                    "days",
+                                    "observationCount",
+                                    "recordedDays",
+                                    "metricCount"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                "excludedObservationCount": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 9007199254740991
+                                }
+                              },
+                              "required": ["recent", "baseline", "excludedObservationCount"],
+                              "additionalProperties": false
+                            },
+                            "factors": {
+                              "maxItems": 4,
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "metric": {
+                                    "type": "string",
+                                    "enum": [
+                                      "recovery.energy",
+                                      "recovery.sleep_quality",
+                                      "recovery.stress",
+                                      "recovery.soreness"
+                                    ]
+                                  },
+                                  "label": { "type": "string", "minLength": 1 },
+                                  "recentScore": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 100
+                                  },
+                                  "baselineScore": {
+                                    "nullable": true,
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 100
+                                  },
+                                  "changeFromBaseline": {
+                                    "nullable": true,
+                                    "type": "integer",
+                                    "minimum": -100,
+                                    "maximum": 100
+                                  },
+                                  "recentObservationCount": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "exclusiveMinimum": true,
+                                    "maximum": 8
+                                  },
+                                  "baselineObservationCount": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 29
+                                  }
+                                },
+                                "required": [
+                                  "metric",
+                                  "label",
+                                  "recentScore",
+                                  "baselineScore",
+                                  "changeFromBaseline",
+                                  "recentObservationCount",
+                                  "baselineObservationCount"
+                                ],
+                                "additionalProperties": false
+                              }
+                            },
+                            "evidence": {
+                              "maxItems": 148,
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "recordId": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                  },
+                                  "revision": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "exclusiveMinimum": true,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "metric": {
+                                    "type": "string",
+                                    "enum": [
+                                      "recovery.energy",
+                                      "recovery.sleep_quality",
+                                      "recovery.stress",
+                                      "recovery.soreness"
+                                    ]
+                                  },
+                                  "occurredAt": {
+                                    "type": "string",
+                                    "format": "date-time",
+                                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                  },
+                                  "sourceKind": {
+                                    "type": "string",
+                                    "enum": ["manual", "device", "imported", "ai_estimate"]
+                                  },
+                                  "window": { "type": "string", "enum": ["recent", "baseline"] },
+                                  "canonicalValue": {
+                                    "type": "number",
+                                    "minimum": 1,
+                                    "maximum": 5
+                                  },
+                                  "normalizedScore": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 100
+                                  }
+                                },
+                                "required": [
+                                  "recordId",
+                                  "revision",
+                                  "metric",
+                                  "occurredAt",
+                                  "sourceKind",
+                                  "window",
+                                  "canonicalValue",
+                                  "normalizedScore"
+                                ],
+                                "additionalProperties": false
+                              }
+                            },
+                            "limitations": {
+                              "minItems": 1,
+                              "maxItems": 5,
+                              "type": "array",
+                              "items": { "type": "string", "minLength": 1 }
+                            }
+                          },
+                          "required": [
+                            "policyVersion",
+                            "state",
+                            "score",
+                            "baselineScore",
+                            "changeFromBaseline",
+                            "confidence",
+                            "consistency",
+                            "label",
+                            "note",
+                            "coverage",
+                            "factors",
+                            "evidence",
+                            "limitations"
+                          ],
+                          "additionalProperties": false
+                        },
                         "evidencePolicyVersion": {
                           "type": "string",
                           "enum": ["planning-impact-v1"]
@@ -8478,6 +9189,297 @@
                                 "type": "integer",
                                 "minimum": 0,
                                 "maximum": 9007199254740991
+                              },
+                              "recoveryState": {
+                                "type": "object",
+                                "properties": {
+                                  "policyVersion": {
+                                    "type": "string",
+                                    "enum": ["subjective-recovery-state-v1"]
+                                  },
+                                  "state": {
+                                    "type": "string",
+                                    "enum": [
+                                      "unknown",
+                                      "current_only",
+                                      "below_baseline",
+                                      "near_baseline",
+                                      "above_baseline"
+                                    ]
+                                  },
+                                  "score": {
+                                    "nullable": true,
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 100
+                                  },
+                                  "baselineScore": {
+                                    "nullable": true,
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 100
+                                  },
+                                  "changeFromBaseline": {
+                                    "nullable": true,
+                                    "type": "integer",
+                                    "minimum": -100,
+                                    "maximum": 100
+                                  },
+                                  "confidence": {
+                                    "type": "string",
+                                    "enum": ["insufficient", "low", "moderate"]
+                                  },
+                                  "consistency": {
+                                    "type": "string",
+                                    "enum": ["unknown", "aligned", "mixed"]
+                                  },
+                                  "label": { "type": "string", "minLength": 1 },
+                                  "note": { "type": "string", "minLength": 1 },
+                                  "coverage": {
+                                    "type": "object",
+                                    "properties": {
+                                      "recent": {
+                                        "type": "object",
+                                        "properties": {
+                                          "startAt": {
+                                            "type": "string",
+                                            "format": "date-time",
+                                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                          },
+                                          "endAt": {
+                                            "type": "string",
+                                            "format": "date-time",
+                                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                          },
+                                          "days": {
+                                            "anyOf": [
+                                              { "type": "number", "enum": [7] },
+                                              { "type": "number", "enum": [28] }
+                                            ]
+                                          },
+                                          "observationCount": {
+                                            "type": "integer",
+                                            "minimum": 0,
+                                            "maximum": 116
+                                          },
+                                          "recordedDays": {
+                                            "type": "integer",
+                                            "minimum": 0,
+                                            "maximum": 29
+                                          },
+                                          "metricCount": {
+                                            "type": "integer",
+                                            "minimum": 0,
+                                            "maximum": 4
+                                          }
+                                        },
+                                        "required": [
+                                          "startAt",
+                                          "endAt",
+                                          "days",
+                                          "observationCount",
+                                          "recordedDays",
+                                          "metricCount"
+                                        ],
+                                        "additionalProperties": false
+                                      },
+                                      "baseline": {
+                                        "type": "object",
+                                        "properties": {
+                                          "startAt": {
+                                            "type": "string",
+                                            "format": "date-time",
+                                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                          },
+                                          "endAt": {
+                                            "type": "string",
+                                            "format": "date-time",
+                                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                          },
+                                          "days": {
+                                            "anyOf": [
+                                              { "type": "number", "enum": [7] },
+                                              { "type": "number", "enum": [28] }
+                                            ]
+                                          },
+                                          "observationCount": {
+                                            "type": "integer",
+                                            "minimum": 0,
+                                            "maximum": 116
+                                          },
+                                          "recordedDays": {
+                                            "type": "integer",
+                                            "minimum": 0,
+                                            "maximum": 29
+                                          },
+                                          "metricCount": {
+                                            "type": "integer",
+                                            "minimum": 0,
+                                            "maximum": 4
+                                          }
+                                        },
+                                        "required": [
+                                          "startAt",
+                                          "endAt",
+                                          "days",
+                                          "observationCount",
+                                          "recordedDays",
+                                          "metricCount"
+                                        ],
+                                        "additionalProperties": false
+                                      },
+                                      "excludedObservationCount": {
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "maximum": 9007199254740991
+                                      }
+                                    },
+                                    "required": ["recent", "baseline", "excludedObservationCount"],
+                                    "additionalProperties": false
+                                  },
+                                  "factors": {
+                                    "maxItems": 4,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "metric": {
+                                          "type": "string",
+                                          "enum": [
+                                            "recovery.energy",
+                                            "recovery.sleep_quality",
+                                            "recovery.stress",
+                                            "recovery.soreness"
+                                          ]
+                                        },
+                                        "label": { "type": "string", "minLength": 1 },
+                                        "recentScore": {
+                                          "type": "integer",
+                                          "minimum": 0,
+                                          "maximum": 100
+                                        },
+                                        "baselineScore": {
+                                          "nullable": true,
+                                          "type": "integer",
+                                          "minimum": 0,
+                                          "maximum": 100
+                                        },
+                                        "changeFromBaseline": {
+                                          "nullable": true,
+                                          "type": "integer",
+                                          "minimum": -100,
+                                          "maximum": 100
+                                        },
+                                        "recentObservationCount": {
+                                          "type": "integer",
+                                          "minimum": 0,
+                                          "exclusiveMinimum": true,
+                                          "maximum": 8
+                                        },
+                                        "baselineObservationCount": {
+                                          "type": "integer",
+                                          "minimum": 0,
+                                          "maximum": 29
+                                        }
+                                      },
+                                      "required": [
+                                        "metric",
+                                        "label",
+                                        "recentScore",
+                                        "baselineScore",
+                                        "changeFromBaseline",
+                                        "recentObservationCount",
+                                        "baselineObservationCount"
+                                      ],
+                                      "additionalProperties": false
+                                    }
+                                  },
+                                  "evidence": {
+                                    "maxItems": 148,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "recordId": {
+                                          "type": "string",
+                                          "format": "uuid",
+                                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                        },
+                                        "revision": {
+                                          "type": "integer",
+                                          "minimum": 0,
+                                          "exclusiveMinimum": true,
+                                          "maximum": 9007199254740991
+                                        },
+                                        "metric": {
+                                          "type": "string",
+                                          "enum": [
+                                            "recovery.energy",
+                                            "recovery.sleep_quality",
+                                            "recovery.stress",
+                                            "recovery.soreness"
+                                          ]
+                                        },
+                                        "occurredAt": {
+                                          "type": "string",
+                                          "format": "date-time",
+                                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                        },
+                                        "sourceKind": {
+                                          "type": "string",
+                                          "enum": ["manual", "device", "imported", "ai_estimate"]
+                                        },
+                                        "window": {
+                                          "type": "string",
+                                          "enum": ["recent", "baseline"]
+                                        },
+                                        "canonicalValue": {
+                                          "type": "number",
+                                          "minimum": 1,
+                                          "maximum": 5
+                                        },
+                                        "normalizedScore": {
+                                          "type": "integer",
+                                          "minimum": 0,
+                                          "maximum": 100
+                                        }
+                                      },
+                                      "required": [
+                                        "recordId",
+                                        "revision",
+                                        "metric",
+                                        "occurredAt",
+                                        "sourceKind",
+                                        "window",
+                                        "canonicalValue",
+                                        "normalizedScore"
+                                      ],
+                                      "additionalProperties": false
+                                    }
+                                  },
+                                  "limitations": {
+                                    "minItems": 1,
+                                    "maxItems": 5,
+                                    "type": "array",
+                                    "items": { "type": "string", "minLength": 1 }
+                                  }
+                                },
+                                "required": [
+                                  "policyVersion",
+                                  "state",
+                                  "score",
+                                  "baselineScore",
+                                  "changeFromBaseline",
+                                  "confidence",
+                                  "consistency",
+                                  "label",
+                                  "note",
+                                  "coverage",
+                                  "factors",
+                                  "evidence",
+                                  "limitations"
+                                ],
+                                "additionalProperties": false
                               },
                               "evidencePolicyVersion": {
                                 "type": "string",
@@ -8882,6 +9884,668 @@
                               ],
                               "additionalProperties": false
                             }
+                          },
+                          "outcomeReview": {
+                            "nullable": true,
+                            "type": "object",
+                            "properties": {
+                              "policyVersion": {
+                                "type": "string",
+                                "enum": ["plan-outcome-review-v1"]
+                              },
+                              "planId": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                              },
+                              "planRevision": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "exclusiveMinimum": true,
+                                "maximum": 9007199254740991
+                              },
+                              "adoptedAt": {
+                                "type": "string",
+                                "format": "date-time",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                              },
+                              "observationWindow": {
+                                "type": "object",
+                                "properties": {
+                                  "scheduledEndAt": {
+                                    "type": "string",
+                                    "format": "date-time",
+                                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                  },
+                                  "observedThrough": {
+                                    "type": "string",
+                                    "format": "date-time",
+                                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                  },
+                                  "state": { "type": "string", "enum": ["open", "closed"] }
+                                },
+                                "required": ["scheduledEndAt", "observedThrough", "state"],
+                                "additionalProperties": false
+                              },
+                              "planningEvidence": {
+                                "type": "object",
+                                "properties": {
+                                  "onboardingRevision": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "exclusiveMinimum": true,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "dashboardGeneratedAt": {
+                                    "type": "string",
+                                    "format": "date-time",
+                                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                  },
+                                  "readinessScore": {
+                                    "nullable": true,
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 100
+                                  },
+                                  "evidencePolicyVersion": {
+                                    "type": "string",
+                                    "enum": ["planning-impact-v1"]
+                                  },
+                                  "evidenceFingerprint": {
+                                    "type": "string",
+                                    "enum": [
+                                      "planning-impact-v1:readiness-missing",
+                                      "planning-impact-v1:readiness-conservative",
+                                      "planning-impact-v1:readiness-standard"
+                                    ]
+                                  },
+                                  "recoveryState": {
+                                    "nullable": true,
+                                    "type": "object",
+                                    "properties": {
+                                      "policyVersion": {
+                                        "type": "string",
+                                        "enum": ["subjective-recovery-state-v1"]
+                                      },
+                                      "state": {
+                                        "type": "string",
+                                        "enum": [
+                                          "unknown",
+                                          "current_only",
+                                          "below_baseline",
+                                          "near_baseline",
+                                          "above_baseline"
+                                        ]
+                                      },
+                                      "score": {
+                                        "nullable": true,
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "maximum": 100
+                                      },
+                                      "baselineScore": {
+                                        "nullable": true,
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "maximum": 100
+                                      },
+                                      "changeFromBaseline": {
+                                        "nullable": true,
+                                        "type": "integer",
+                                        "minimum": -100,
+                                        "maximum": 100
+                                      },
+                                      "confidence": {
+                                        "type": "string",
+                                        "enum": ["insufficient", "low", "moderate"]
+                                      },
+                                      "consistency": {
+                                        "type": "string",
+                                        "enum": ["unknown", "aligned", "mixed"]
+                                      },
+                                      "label": { "type": "string", "minLength": 1 },
+                                      "note": { "type": "string", "minLength": 1 },
+                                      "coverage": {
+                                        "type": "object",
+                                        "properties": {
+                                          "recent": {
+                                            "type": "object",
+                                            "properties": {
+                                              "startAt": {
+                                                "type": "string",
+                                                "format": "date-time",
+                                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                              },
+                                              "endAt": {
+                                                "type": "string",
+                                                "format": "date-time",
+                                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                              },
+                                              "days": {
+                                                "anyOf": [
+                                                  { "type": "number", "enum": [7] },
+                                                  { "type": "number", "enum": [28] }
+                                                ]
+                                              },
+                                              "observationCount": {
+                                                "type": "integer",
+                                                "minimum": 0,
+                                                "maximum": 116
+                                              },
+                                              "recordedDays": {
+                                                "type": "integer",
+                                                "minimum": 0,
+                                                "maximum": 29
+                                              },
+                                              "metricCount": {
+                                                "type": "integer",
+                                                "minimum": 0,
+                                                "maximum": 4
+                                              }
+                                            },
+                                            "required": [
+                                              "startAt",
+                                              "endAt",
+                                              "days",
+                                              "observationCount",
+                                              "recordedDays",
+                                              "metricCount"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          "baseline": {
+                                            "type": "object",
+                                            "properties": {
+                                              "startAt": {
+                                                "type": "string",
+                                                "format": "date-time",
+                                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                              },
+                                              "endAt": {
+                                                "type": "string",
+                                                "format": "date-time",
+                                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                              },
+                                              "days": {
+                                                "anyOf": [
+                                                  { "type": "number", "enum": [7] },
+                                                  { "type": "number", "enum": [28] }
+                                                ]
+                                              },
+                                              "observationCount": {
+                                                "type": "integer",
+                                                "minimum": 0,
+                                                "maximum": 116
+                                              },
+                                              "recordedDays": {
+                                                "type": "integer",
+                                                "minimum": 0,
+                                                "maximum": 29
+                                              },
+                                              "metricCount": {
+                                                "type": "integer",
+                                                "minimum": 0,
+                                                "maximum": 4
+                                              }
+                                            },
+                                            "required": [
+                                              "startAt",
+                                              "endAt",
+                                              "days",
+                                              "observationCount",
+                                              "recordedDays",
+                                              "metricCount"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          "excludedObservationCount": {
+                                            "type": "integer",
+                                            "minimum": 0,
+                                            "maximum": 9007199254740991
+                                          }
+                                        },
+                                        "required": [
+                                          "recent",
+                                          "baseline",
+                                          "excludedObservationCount"
+                                        ],
+                                        "additionalProperties": false
+                                      },
+                                      "factors": {
+                                        "maxItems": 4,
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "properties": {
+                                            "metric": {
+                                              "type": "string",
+                                              "enum": [
+                                                "recovery.energy",
+                                                "recovery.sleep_quality",
+                                                "recovery.stress",
+                                                "recovery.soreness"
+                                              ]
+                                            },
+                                            "label": { "type": "string", "minLength": 1 },
+                                            "recentScore": {
+                                              "type": "integer",
+                                              "minimum": 0,
+                                              "maximum": 100
+                                            },
+                                            "baselineScore": {
+                                              "nullable": true,
+                                              "type": "integer",
+                                              "minimum": 0,
+                                              "maximum": 100
+                                            },
+                                            "changeFromBaseline": {
+                                              "nullable": true,
+                                              "type": "integer",
+                                              "minimum": -100,
+                                              "maximum": 100
+                                            },
+                                            "recentObservationCount": {
+                                              "type": "integer",
+                                              "minimum": 0,
+                                              "exclusiveMinimum": true,
+                                              "maximum": 8
+                                            },
+                                            "baselineObservationCount": {
+                                              "type": "integer",
+                                              "minimum": 0,
+                                              "maximum": 29
+                                            }
+                                          },
+                                          "required": [
+                                            "metric",
+                                            "label",
+                                            "recentScore",
+                                            "baselineScore",
+                                            "changeFromBaseline",
+                                            "recentObservationCount",
+                                            "baselineObservationCount"
+                                          ],
+                                          "additionalProperties": false
+                                        }
+                                      },
+                                      "evidence": {
+                                        "maxItems": 148,
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "properties": {
+                                            "recordId": {
+                                              "type": "string",
+                                              "format": "uuid",
+                                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                            },
+                                            "revision": {
+                                              "type": "integer",
+                                              "minimum": 0,
+                                              "exclusiveMinimum": true,
+                                              "maximum": 9007199254740991
+                                            },
+                                            "metric": {
+                                              "type": "string",
+                                              "enum": [
+                                                "recovery.energy",
+                                                "recovery.sleep_quality",
+                                                "recovery.stress",
+                                                "recovery.soreness"
+                                              ]
+                                            },
+                                            "occurredAt": {
+                                              "type": "string",
+                                              "format": "date-time",
+                                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                            },
+                                            "sourceKind": {
+                                              "type": "string",
+                                              "enum": [
+                                                "manual",
+                                                "device",
+                                                "imported",
+                                                "ai_estimate"
+                                              ]
+                                            },
+                                            "window": {
+                                              "type": "string",
+                                              "enum": ["recent", "baseline"]
+                                            },
+                                            "canonicalValue": {
+                                              "type": "number",
+                                              "minimum": 1,
+                                              "maximum": 5
+                                            },
+                                            "normalizedScore": {
+                                              "type": "integer",
+                                              "minimum": 0,
+                                              "maximum": 100
+                                            }
+                                          },
+                                          "required": [
+                                            "recordId",
+                                            "revision",
+                                            "metric",
+                                            "occurredAt",
+                                            "sourceKind",
+                                            "window",
+                                            "canonicalValue",
+                                            "normalizedScore"
+                                          ],
+                                          "additionalProperties": false
+                                        }
+                                      },
+                                      "limitations": {
+                                        "minItems": 1,
+                                        "maxItems": 5,
+                                        "type": "array",
+                                        "items": { "type": "string", "minLength": 1 }
+                                      }
+                                    },
+                                    "required": [
+                                      "policyVersion",
+                                      "state",
+                                      "score",
+                                      "baselineScore",
+                                      "changeFromBaseline",
+                                      "confidence",
+                                      "consistency",
+                                      "label",
+                                      "note",
+                                      "coverage",
+                                      "factors",
+                                      "evidence",
+                                      "limitations"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                },
+                                "required": [
+                                  "onboardingRevision",
+                                  "dashboardGeneratedAt",
+                                  "readinessScore",
+                                  "evidencePolicyVersion",
+                                  "evidenceFingerprint",
+                                  "recoveryState"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "adjustments": {
+                                "maxItems": 24,
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "sessionDate": {
+                                      "type": "string",
+                                      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                                    },
+                                    "activityId": {
+                                      "type": "string",
+                                      "minLength": 2,
+                                      "maxLength": 80,
+                                      "pattern": "^[a-z0-9_]+$"
+                                    },
+                                    "role": {
+                                      "type": "string",
+                                      "enum": [
+                                        "warmup",
+                                        "squat",
+                                        "hinge",
+                                        "push",
+                                        "pull",
+                                        "core",
+                                        "cardio",
+                                        "mobility"
+                                      ]
+                                    },
+                                    "before": {
+                                      "type": "object",
+                                      "properties": {
+                                        "id": {
+                                          "type": "string",
+                                          "minLength": 2,
+                                          "maxLength": 80,
+                                          "pattern": "^[a-z0-9_]+$"
+                                        },
+                                        "title": {
+                                          "type": "string",
+                                          "minLength": 1,
+                                          "maxLength": 80
+                                        }
+                                      },
+                                      "required": ["id", "title"],
+                                      "additionalProperties": false
+                                    },
+                                    "adopted": {
+                                      "type": "object",
+                                      "properties": {
+                                        "id": {
+                                          "type": "string",
+                                          "minLength": 2,
+                                          "maxLength": 80,
+                                          "pattern": "^[a-z0-9_]+$"
+                                        },
+                                        "title": {
+                                          "type": "string",
+                                          "minLength": 1,
+                                          "maxLength": 80
+                                        }
+                                      },
+                                      "required": ["id", "title"],
+                                      "additionalProperties": false
+                                    }
+                                  },
+                                  "required": [
+                                    "sessionDate",
+                                    "activityId",
+                                    "role",
+                                    "before",
+                                    "adopted"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              },
+                              "plannedSessionCount": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 7
+                              },
+                              "linkedWorkouts": {
+                                "maxItems": 7,
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "id": {
+                                      "type": "string",
+                                      "format": "uuid",
+                                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                    },
+                                    "userId": {
+                                      "type": "string",
+                                      "format": "uuid",
+                                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                    },
+                                    "planId": {
+                                      "type": "string",
+                                      "format": "uuid",
+                                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                    },
+                                    "planRevision": {
+                                      "type": "integer",
+                                      "minimum": 0,
+                                      "exclusiveMinimum": true,
+                                      "maximum": 9007199254740991
+                                    },
+                                    "sessionDate": {
+                                      "type": "string",
+                                      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                                    },
+                                    "workoutId": {
+                                      "type": "string",
+                                      "format": "uuid",
+                                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                    },
+                                    "workoutRevision": {
+                                      "type": "integer",
+                                      "minimum": 0,
+                                      "exclusiveMinimum": true,
+                                      "maximum": 9007199254740991
+                                    },
+                                    "currentWorkoutRevision": {
+                                      "type": "integer",
+                                      "minimum": 0,
+                                      "exclusiveMinimum": true,
+                                      "maximum": 9007199254740991
+                                    },
+                                    "workoutTitle": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 100
+                                    },
+                                    "workoutStatus": {
+                                      "type": "string",
+                                      "enum": ["completed", "partial"]
+                                    },
+                                    "workoutStartedAt": {
+                                      "type": "string",
+                                      "format": "date-time",
+                                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                    },
+                                    "revision": {
+                                      "type": "integer",
+                                      "minimum": 0,
+                                      "exclusiveMinimum": true,
+                                      "maximum": 9007199254740991
+                                    },
+                                    "linkedAt": {
+                                      "type": "string",
+                                      "format": "date-time",
+                                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                    }
+                                  },
+                                  "required": [
+                                    "id",
+                                    "userId",
+                                    "planId",
+                                    "planRevision",
+                                    "sessionDate",
+                                    "workoutId",
+                                    "workoutRevision",
+                                    "currentWorkoutRevision",
+                                    "workoutTitle",
+                                    "workoutStatus",
+                                    "workoutStartedAt",
+                                    "revision",
+                                    "linkedAt"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              },
+                              "recoveryObservations": {
+                                "maxItems": 100,
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "recordId": {
+                                      "type": "string",
+                                      "format": "uuid",
+                                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                    },
+                                    "revision": {
+                                      "type": "integer",
+                                      "minimum": 0,
+                                      "exclusiveMinimum": true,
+                                      "maximum": 9007199254740991
+                                    },
+                                    "metric": {
+                                      "type": "string",
+                                      "enum": [
+                                        "recovery.energy",
+                                        "recovery.sleep_quality",
+                                        "recovery.stress",
+                                        "recovery.soreness"
+                                      ]
+                                    },
+                                    "canonicalValue": {
+                                      "type": "number",
+                                      "minimum": 1,
+                                      "maximum": 5
+                                    },
+                                    "occurredAt": {
+                                      "type": "string",
+                                      "format": "date-time",
+                                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                    },
+                                    "sourceKind": {
+                                      "type": "string",
+                                      "enum": ["manual", "device", "imported"]
+                                    }
+                                  },
+                                  "required": [
+                                    "recordId",
+                                    "revision",
+                                    "metric",
+                                    "canonicalValue",
+                                    "occurredAt",
+                                    "sourceKind"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              },
+                              "recoveryObservationTotal": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "withdrawnEvidence": {
+                                "type": "object",
+                                "properties": {
+                                  "workoutLinkCount": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "recoveryRecordCount": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  }
+                                },
+                                "required": ["workoutLinkCount", "recoveryRecordCount"],
+                                "additionalProperties": false
+                              },
+                              "followUpState": {
+                                "type": "string",
+                                "enum": ["unknown", "observed"]
+                              },
+                              "limitations": {
+                                "minItems": 2,
+                                "maxItems": 5,
+                                "type": "array",
+                                "items": { "type": "string", "minLength": 1, "maxLength": 240 }
+                              }
+                            },
+                            "required": [
+                              "policyVersion",
+                              "planId",
+                              "planRevision",
+                              "adoptedAt",
+                              "observationWindow",
+                              "planningEvidence",
+                              "adjustments",
+                              "plannedSessionCount",
+                              "linkedWorkouts",
+                              "recoveryObservations",
+                              "recoveryObservationTotal",
+                              "withdrawnEvidence",
+                              "followUpState",
+                              "limitations"
+                            ],
+                            "additionalProperties": false
                           }
                         },
                         "required": [
@@ -8899,7 +10563,8 @@
                           "createdAt",
                           "updatedAt",
                           "freshness",
-                          "sessionLinks"
+                          "sessionLinks",
+                          "outcomeReview"
                         ],
                         "additionalProperties": false
                       }
@@ -9403,6 +11068,286 @@
                           "minimum": 0,
                           "maximum": 9007199254740991
                         },
+                        "recoveryState": {
+                          "type": "object",
+                          "properties": {
+                            "policyVersion": {
+                              "type": "string",
+                              "enum": ["subjective-recovery-state-v1"]
+                            },
+                            "state": {
+                              "type": "string",
+                              "enum": [
+                                "unknown",
+                                "current_only",
+                                "below_baseline",
+                                "near_baseline",
+                                "above_baseline"
+                              ]
+                            },
+                            "score": {
+                              "nullable": true,
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 100
+                            },
+                            "baselineScore": {
+                              "nullable": true,
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 100
+                            },
+                            "changeFromBaseline": {
+                              "nullable": true,
+                              "type": "integer",
+                              "minimum": -100,
+                              "maximum": 100
+                            },
+                            "confidence": {
+                              "type": "string",
+                              "enum": ["insufficient", "low", "moderate"]
+                            },
+                            "consistency": {
+                              "type": "string",
+                              "enum": ["unknown", "aligned", "mixed"]
+                            },
+                            "label": { "type": "string", "minLength": 1 },
+                            "note": { "type": "string", "minLength": 1 },
+                            "coverage": {
+                              "type": "object",
+                              "properties": {
+                                "recent": {
+                                  "type": "object",
+                                  "properties": {
+                                    "startAt": {
+                                      "type": "string",
+                                      "format": "date-time",
+                                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                    },
+                                    "endAt": {
+                                      "type": "string",
+                                      "format": "date-time",
+                                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                    },
+                                    "days": {
+                                      "anyOf": [
+                                        { "type": "number", "enum": [7] },
+                                        { "type": "number", "enum": [28] }
+                                      ]
+                                    },
+                                    "observationCount": {
+                                      "type": "integer",
+                                      "minimum": 0,
+                                      "maximum": 116
+                                    },
+                                    "recordedDays": {
+                                      "type": "integer",
+                                      "minimum": 0,
+                                      "maximum": 29
+                                    },
+                                    "metricCount": { "type": "integer", "minimum": 0, "maximum": 4 }
+                                  },
+                                  "required": [
+                                    "startAt",
+                                    "endAt",
+                                    "days",
+                                    "observationCount",
+                                    "recordedDays",
+                                    "metricCount"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                "baseline": {
+                                  "type": "object",
+                                  "properties": {
+                                    "startAt": {
+                                      "type": "string",
+                                      "format": "date-time",
+                                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                    },
+                                    "endAt": {
+                                      "type": "string",
+                                      "format": "date-time",
+                                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                    },
+                                    "days": {
+                                      "anyOf": [
+                                        { "type": "number", "enum": [7] },
+                                        { "type": "number", "enum": [28] }
+                                      ]
+                                    },
+                                    "observationCount": {
+                                      "type": "integer",
+                                      "minimum": 0,
+                                      "maximum": 116
+                                    },
+                                    "recordedDays": {
+                                      "type": "integer",
+                                      "minimum": 0,
+                                      "maximum": 29
+                                    },
+                                    "metricCount": { "type": "integer", "minimum": 0, "maximum": 4 }
+                                  },
+                                  "required": [
+                                    "startAt",
+                                    "endAt",
+                                    "days",
+                                    "observationCount",
+                                    "recordedDays",
+                                    "metricCount"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                "excludedObservationCount": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 9007199254740991
+                                }
+                              },
+                              "required": ["recent", "baseline", "excludedObservationCount"],
+                              "additionalProperties": false
+                            },
+                            "factors": {
+                              "maxItems": 4,
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "metric": {
+                                    "type": "string",
+                                    "enum": [
+                                      "recovery.energy",
+                                      "recovery.sleep_quality",
+                                      "recovery.stress",
+                                      "recovery.soreness"
+                                    ]
+                                  },
+                                  "label": { "type": "string", "minLength": 1 },
+                                  "recentScore": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 100
+                                  },
+                                  "baselineScore": {
+                                    "nullable": true,
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 100
+                                  },
+                                  "changeFromBaseline": {
+                                    "nullable": true,
+                                    "type": "integer",
+                                    "minimum": -100,
+                                    "maximum": 100
+                                  },
+                                  "recentObservationCount": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "exclusiveMinimum": true,
+                                    "maximum": 8
+                                  },
+                                  "baselineObservationCount": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 29
+                                  }
+                                },
+                                "required": [
+                                  "metric",
+                                  "label",
+                                  "recentScore",
+                                  "baselineScore",
+                                  "changeFromBaseline",
+                                  "recentObservationCount",
+                                  "baselineObservationCount"
+                                ],
+                                "additionalProperties": false
+                              }
+                            },
+                            "evidence": {
+                              "maxItems": 148,
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "recordId": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                  },
+                                  "revision": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "exclusiveMinimum": true,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "metric": {
+                                    "type": "string",
+                                    "enum": [
+                                      "recovery.energy",
+                                      "recovery.sleep_quality",
+                                      "recovery.stress",
+                                      "recovery.soreness"
+                                    ]
+                                  },
+                                  "occurredAt": {
+                                    "type": "string",
+                                    "format": "date-time",
+                                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                  },
+                                  "sourceKind": {
+                                    "type": "string",
+                                    "enum": ["manual", "device", "imported", "ai_estimate"]
+                                  },
+                                  "window": { "type": "string", "enum": ["recent", "baseline"] },
+                                  "canonicalValue": {
+                                    "type": "number",
+                                    "minimum": 1,
+                                    "maximum": 5
+                                  },
+                                  "normalizedScore": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 100
+                                  }
+                                },
+                                "required": [
+                                  "recordId",
+                                  "revision",
+                                  "metric",
+                                  "occurredAt",
+                                  "sourceKind",
+                                  "window",
+                                  "canonicalValue",
+                                  "normalizedScore"
+                                ],
+                                "additionalProperties": false
+                              }
+                            },
+                            "limitations": {
+                              "minItems": 1,
+                              "maxItems": 5,
+                              "type": "array",
+                              "items": { "type": "string", "minLength": 1 }
+                            }
+                          },
+                          "required": [
+                            "policyVersion",
+                            "state",
+                            "score",
+                            "baselineScore",
+                            "changeFromBaseline",
+                            "confidence",
+                            "consistency",
+                            "label",
+                            "note",
+                            "coverage",
+                            "factors",
+                            "evidence",
+                            "limitations"
+                          ],
+                          "additionalProperties": false
+                        },
                         "evidencePolicyVersion": {
                           "type": "string",
                           "enum": ["planning-impact-v1"]
@@ -9490,6 +11435,640 @@
         },
         "security": [{ "bearer": [] }],
         "summary": "Accept, modify or skip a plan with optimistic revision control",
+        "tags": ["plans"]
+      }
+    },
+    "/v1/plans/weekly/{planId}/history/{revision}/outcome": {
+      "get": {
+        "operationId": "PlansController_outcome",
+        "parameters": [
+          {
+            "name": "planId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "revision",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "integer", "minimum": 1 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "policyVersion": { "type": "string", "enum": ["plan-outcome-review-v1"] },
+                    "planId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "planRevision": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "exclusiveMinimum": true,
+                      "maximum": 9007199254740991
+                    },
+                    "adoptedAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "observationWindow": {
+                      "type": "object",
+                      "properties": {
+                        "scheduledEndAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                        },
+                        "observedThrough": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                        },
+                        "state": { "type": "string", "enum": ["open", "closed"] }
+                      },
+                      "required": ["scheduledEndAt", "observedThrough", "state"],
+                      "additionalProperties": false
+                    },
+                    "planningEvidence": {
+                      "type": "object",
+                      "properties": {
+                        "onboardingRevision": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "exclusiveMinimum": true,
+                          "maximum": 9007199254740991
+                        },
+                        "dashboardGeneratedAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                        },
+                        "readinessScore": {
+                          "nullable": true,
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 100
+                        },
+                        "evidencePolicyVersion": {
+                          "type": "string",
+                          "enum": ["planning-impact-v1"]
+                        },
+                        "evidenceFingerprint": {
+                          "type": "string",
+                          "enum": [
+                            "planning-impact-v1:readiness-missing",
+                            "planning-impact-v1:readiness-conservative",
+                            "planning-impact-v1:readiness-standard"
+                          ]
+                        },
+                        "recoveryState": {
+                          "nullable": true,
+                          "type": "object",
+                          "properties": {
+                            "policyVersion": {
+                              "type": "string",
+                              "enum": ["subjective-recovery-state-v1"]
+                            },
+                            "state": {
+                              "type": "string",
+                              "enum": [
+                                "unknown",
+                                "current_only",
+                                "below_baseline",
+                                "near_baseline",
+                                "above_baseline"
+                              ]
+                            },
+                            "score": {
+                              "nullable": true,
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 100
+                            },
+                            "baselineScore": {
+                              "nullable": true,
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 100
+                            },
+                            "changeFromBaseline": {
+                              "nullable": true,
+                              "type": "integer",
+                              "minimum": -100,
+                              "maximum": 100
+                            },
+                            "confidence": {
+                              "type": "string",
+                              "enum": ["insufficient", "low", "moderate"]
+                            },
+                            "consistency": {
+                              "type": "string",
+                              "enum": ["unknown", "aligned", "mixed"]
+                            },
+                            "label": { "type": "string", "minLength": 1 },
+                            "note": { "type": "string", "minLength": 1 },
+                            "coverage": {
+                              "type": "object",
+                              "properties": {
+                                "recent": {
+                                  "type": "object",
+                                  "properties": {
+                                    "startAt": {
+                                      "type": "string",
+                                      "format": "date-time",
+                                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                    },
+                                    "endAt": {
+                                      "type": "string",
+                                      "format": "date-time",
+                                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                    },
+                                    "days": {
+                                      "anyOf": [
+                                        { "type": "number", "enum": [7] },
+                                        { "type": "number", "enum": [28] }
+                                      ]
+                                    },
+                                    "observationCount": {
+                                      "type": "integer",
+                                      "minimum": 0,
+                                      "maximum": 116
+                                    },
+                                    "recordedDays": {
+                                      "type": "integer",
+                                      "minimum": 0,
+                                      "maximum": 29
+                                    },
+                                    "metricCount": { "type": "integer", "minimum": 0, "maximum": 4 }
+                                  },
+                                  "required": [
+                                    "startAt",
+                                    "endAt",
+                                    "days",
+                                    "observationCount",
+                                    "recordedDays",
+                                    "metricCount"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                "baseline": {
+                                  "type": "object",
+                                  "properties": {
+                                    "startAt": {
+                                      "type": "string",
+                                      "format": "date-time",
+                                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                    },
+                                    "endAt": {
+                                      "type": "string",
+                                      "format": "date-time",
+                                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                    },
+                                    "days": {
+                                      "anyOf": [
+                                        { "type": "number", "enum": [7] },
+                                        { "type": "number", "enum": [28] }
+                                      ]
+                                    },
+                                    "observationCount": {
+                                      "type": "integer",
+                                      "minimum": 0,
+                                      "maximum": 116
+                                    },
+                                    "recordedDays": {
+                                      "type": "integer",
+                                      "minimum": 0,
+                                      "maximum": 29
+                                    },
+                                    "metricCount": { "type": "integer", "minimum": 0, "maximum": 4 }
+                                  },
+                                  "required": [
+                                    "startAt",
+                                    "endAt",
+                                    "days",
+                                    "observationCount",
+                                    "recordedDays",
+                                    "metricCount"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                "excludedObservationCount": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 9007199254740991
+                                }
+                              },
+                              "required": ["recent", "baseline", "excludedObservationCount"],
+                              "additionalProperties": false
+                            },
+                            "factors": {
+                              "maxItems": 4,
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "metric": {
+                                    "type": "string",
+                                    "enum": [
+                                      "recovery.energy",
+                                      "recovery.sleep_quality",
+                                      "recovery.stress",
+                                      "recovery.soreness"
+                                    ]
+                                  },
+                                  "label": { "type": "string", "minLength": 1 },
+                                  "recentScore": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 100
+                                  },
+                                  "baselineScore": {
+                                    "nullable": true,
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 100
+                                  },
+                                  "changeFromBaseline": {
+                                    "nullable": true,
+                                    "type": "integer",
+                                    "minimum": -100,
+                                    "maximum": 100
+                                  },
+                                  "recentObservationCount": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "exclusiveMinimum": true,
+                                    "maximum": 8
+                                  },
+                                  "baselineObservationCount": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 29
+                                  }
+                                },
+                                "required": [
+                                  "metric",
+                                  "label",
+                                  "recentScore",
+                                  "baselineScore",
+                                  "changeFromBaseline",
+                                  "recentObservationCount",
+                                  "baselineObservationCount"
+                                ],
+                                "additionalProperties": false
+                              }
+                            },
+                            "evidence": {
+                              "maxItems": 148,
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "recordId": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                  },
+                                  "revision": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "exclusiveMinimum": true,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "metric": {
+                                    "type": "string",
+                                    "enum": [
+                                      "recovery.energy",
+                                      "recovery.sleep_quality",
+                                      "recovery.stress",
+                                      "recovery.soreness"
+                                    ]
+                                  },
+                                  "occurredAt": {
+                                    "type": "string",
+                                    "format": "date-time",
+                                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                  },
+                                  "sourceKind": {
+                                    "type": "string",
+                                    "enum": ["manual", "device", "imported", "ai_estimate"]
+                                  },
+                                  "window": { "type": "string", "enum": ["recent", "baseline"] },
+                                  "canonicalValue": {
+                                    "type": "number",
+                                    "minimum": 1,
+                                    "maximum": 5
+                                  },
+                                  "normalizedScore": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 100
+                                  }
+                                },
+                                "required": [
+                                  "recordId",
+                                  "revision",
+                                  "metric",
+                                  "occurredAt",
+                                  "sourceKind",
+                                  "window",
+                                  "canonicalValue",
+                                  "normalizedScore"
+                                ],
+                                "additionalProperties": false
+                              }
+                            },
+                            "limitations": {
+                              "minItems": 1,
+                              "maxItems": 5,
+                              "type": "array",
+                              "items": { "type": "string", "minLength": 1 }
+                            }
+                          },
+                          "required": [
+                            "policyVersion",
+                            "state",
+                            "score",
+                            "baselineScore",
+                            "changeFromBaseline",
+                            "confidence",
+                            "consistency",
+                            "label",
+                            "note",
+                            "coverage",
+                            "factors",
+                            "evidence",
+                            "limitations"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "onboardingRevision",
+                        "dashboardGeneratedAt",
+                        "readinessScore",
+                        "evidencePolicyVersion",
+                        "evidenceFingerprint",
+                        "recoveryState"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "adjustments": {
+                      "maxItems": 24,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "sessionDate": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+                          "activityId": {
+                            "type": "string",
+                            "minLength": 2,
+                            "maxLength": 80,
+                            "pattern": "^[a-z0-9_]+$"
+                          },
+                          "role": {
+                            "type": "string",
+                            "enum": [
+                              "warmup",
+                              "squat",
+                              "hinge",
+                              "push",
+                              "pull",
+                              "core",
+                              "cardio",
+                              "mobility"
+                            ]
+                          },
+                          "before": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "minLength": 2,
+                                "maxLength": 80,
+                                "pattern": "^[a-z0-9_]+$"
+                              },
+                              "title": { "type": "string", "minLength": 1, "maxLength": 80 }
+                            },
+                            "required": ["id", "title"],
+                            "additionalProperties": false
+                          },
+                          "adopted": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "minLength": 2,
+                                "maxLength": 80,
+                                "pattern": "^[a-z0-9_]+$"
+                              },
+                              "title": { "type": "string", "minLength": 1, "maxLength": 80 }
+                            },
+                            "required": ["id", "title"],
+                            "additionalProperties": false
+                          }
+                        },
+                        "required": ["sessionDate", "activityId", "role", "before", "adopted"],
+                        "additionalProperties": false
+                      }
+                    },
+                    "plannedSessionCount": { "type": "integer", "minimum": 0, "maximum": 7 },
+                    "linkedWorkouts": {
+                      "maxItems": 7,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "userId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "planId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "planRevision": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "exclusiveMinimum": true,
+                            "maximum": 9007199254740991
+                          },
+                          "sessionDate": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+                          "workoutId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "workoutRevision": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "exclusiveMinimum": true,
+                            "maximum": 9007199254740991
+                          },
+                          "currentWorkoutRevision": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "exclusiveMinimum": true,
+                            "maximum": 9007199254740991
+                          },
+                          "workoutTitle": { "type": "string", "minLength": 1, "maxLength": 100 },
+                          "workoutStatus": { "type": "string", "enum": ["completed", "partial"] },
+                          "workoutStartedAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                          },
+                          "revision": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "exclusiveMinimum": true,
+                            "maximum": 9007199254740991
+                          },
+                          "linkedAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "userId",
+                          "planId",
+                          "planRevision",
+                          "sessionDate",
+                          "workoutId",
+                          "workoutRevision",
+                          "currentWorkoutRevision",
+                          "workoutTitle",
+                          "workoutStatus",
+                          "workoutStartedAt",
+                          "revision",
+                          "linkedAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "recoveryObservations": {
+                      "maxItems": 100,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "recordId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "revision": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "exclusiveMinimum": true,
+                            "maximum": 9007199254740991
+                          },
+                          "metric": {
+                            "type": "string",
+                            "enum": [
+                              "recovery.energy",
+                              "recovery.sleep_quality",
+                              "recovery.stress",
+                              "recovery.soreness"
+                            ]
+                          },
+                          "canonicalValue": { "type": "number", "minimum": 1, "maximum": 5 },
+                          "occurredAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                          },
+                          "sourceKind": {
+                            "type": "string",
+                            "enum": ["manual", "device", "imported"]
+                          }
+                        },
+                        "required": [
+                          "recordId",
+                          "revision",
+                          "metric",
+                          "canonicalValue",
+                          "occurredAt",
+                          "sourceKind"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "recoveryObservationTotal": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "withdrawnEvidence": {
+                      "type": "object",
+                      "properties": {
+                        "workoutLinkCount": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "recoveryRecordCount": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": ["workoutLinkCount", "recoveryRecordCount"],
+                      "additionalProperties": false
+                    },
+                    "followUpState": { "type": "string", "enum": ["unknown", "observed"] },
+                    "limitations": {
+                      "minItems": 2,
+                      "maxItems": 5,
+                      "type": "array",
+                      "items": { "type": "string", "minLength": 1, "maxLength": 240 }
+                    }
+                  },
+                  "required": [
+                    "policyVersion",
+                    "planId",
+                    "planRevision",
+                    "adoptedAt",
+                    "observationWindow",
+                    "planningEvidence",
+                    "adjustments",
+                    "plannedSessionCount",
+                    "linkedWorkouts",
+                    "recoveryObservations",
+                    "recoveryObservationTotal",
+                    "withdrawnEvidence",
+                    "followUpState",
+                    "limitations"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": { "description": "Plan identifier or revision is invalid." },
+          "401": { "description": "Bearer token is missing, invalid, expired or revoked." },
+          "404": { "description": "Accepted plan revision does not exist for this user." }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Recompute one exact accepted plan revision outcome review",
         "tags": ["plans"]
       }
     },
@@ -9755,6 +12334,297 @@
                                 "type": "integer",
                                 "minimum": 0,
                                 "maximum": 9007199254740991
+                              },
+                              "recoveryState": {
+                                "type": "object",
+                                "properties": {
+                                  "policyVersion": {
+                                    "type": "string",
+                                    "enum": ["subjective-recovery-state-v1"]
+                                  },
+                                  "state": {
+                                    "type": "string",
+                                    "enum": [
+                                      "unknown",
+                                      "current_only",
+                                      "below_baseline",
+                                      "near_baseline",
+                                      "above_baseline"
+                                    ]
+                                  },
+                                  "score": {
+                                    "nullable": true,
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 100
+                                  },
+                                  "baselineScore": {
+                                    "nullable": true,
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 100
+                                  },
+                                  "changeFromBaseline": {
+                                    "nullable": true,
+                                    "type": "integer",
+                                    "minimum": -100,
+                                    "maximum": 100
+                                  },
+                                  "confidence": {
+                                    "type": "string",
+                                    "enum": ["insufficient", "low", "moderate"]
+                                  },
+                                  "consistency": {
+                                    "type": "string",
+                                    "enum": ["unknown", "aligned", "mixed"]
+                                  },
+                                  "label": { "type": "string", "minLength": 1 },
+                                  "note": { "type": "string", "minLength": 1 },
+                                  "coverage": {
+                                    "type": "object",
+                                    "properties": {
+                                      "recent": {
+                                        "type": "object",
+                                        "properties": {
+                                          "startAt": {
+                                            "type": "string",
+                                            "format": "date-time",
+                                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                          },
+                                          "endAt": {
+                                            "type": "string",
+                                            "format": "date-time",
+                                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                          },
+                                          "days": {
+                                            "anyOf": [
+                                              { "type": "number", "enum": [7] },
+                                              { "type": "number", "enum": [28] }
+                                            ]
+                                          },
+                                          "observationCount": {
+                                            "type": "integer",
+                                            "minimum": 0,
+                                            "maximum": 116
+                                          },
+                                          "recordedDays": {
+                                            "type": "integer",
+                                            "minimum": 0,
+                                            "maximum": 29
+                                          },
+                                          "metricCount": {
+                                            "type": "integer",
+                                            "minimum": 0,
+                                            "maximum": 4
+                                          }
+                                        },
+                                        "required": [
+                                          "startAt",
+                                          "endAt",
+                                          "days",
+                                          "observationCount",
+                                          "recordedDays",
+                                          "metricCount"
+                                        ],
+                                        "additionalProperties": false
+                                      },
+                                      "baseline": {
+                                        "type": "object",
+                                        "properties": {
+                                          "startAt": {
+                                            "type": "string",
+                                            "format": "date-time",
+                                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                          },
+                                          "endAt": {
+                                            "type": "string",
+                                            "format": "date-time",
+                                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                          },
+                                          "days": {
+                                            "anyOf": [
+                                              { "type": "number", "enum": [7] },
+                                              { "type": "number", "enum": [28] }
+                                            ]
+                                          },
+                                          "observationCount": {
+                                            "type": "integer",
+                                            "minimum": 0,
+                                            "maximum": 116
+                                          },
+                                          "recordedDays": {
+                                            "type": "integer",
+                                            "minimum": 0,
+                                            "maximum": 29
+                                          },
+                                          "metricCount": {
+                                            "type": "integer",
+                                            "minimum": 0,
+                                            "maximum": 4
+                                          }
+                                        },
+                                        "required": [
+                                          "startAt",
+                                          "endAt",
+                                          "days",
+                                          "observationCount",
+                                          "recordedDays",
+                                          "metricCount"
+                                        ],
+                                        "additionalProperties": false
+                                      },
+                                      "excludedObservationCount": {
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "maximum": 9007199254740991
+                                      }
+                                    },
+                                    "required": ["recent", "baseline", "excludedObservationCount"],
+                                    "additionalProperties": false
+                                  },
+                                  "factors": {
+                                    "maxItems": 4,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "metric": {
+                                          "type": "string",
+                                          "enum": [
+                                            "recovery.energy",
+                                            "recovery.sleep_quality",
+                                            "recovery.stress",
+                                            "recovery.soreness"
+                                          ]
+                                        },
+                                        "label": { "type": "string", "minLength": 1 },
+                                        "recentScore": {
+                                          "type": "integer",
+                                          "minimum": 0,
+                                          "maximum": 100
+                                        },
+                                        "baselineScore": {
+                                          "nullable": true,
+                                          "type": "integer",
+                                          "minimum": 0,
+                                          "maximum": 100
+                                        },
+                                        "changeFromBaseline": {
+                                          "nullable": true,
+                                          "type": "integer",
+                                          "minimum": -100,
+                                          "maximum": 100
+                                        },
+                                        "recentObservationCount": {
+                                          "type": "integer",
+                                          "minimum": 0,
+                                          "exclusiveMinimum": true,
+                                          "maximum": 8
+                                        },
+                                        "baselineObservationCount": {
+                                          "type": "integer",
+                                          "minimum": 0,
+                                          "maximum": 29
+                                        }
+                                      },
+                                      "required": [
+                                        "metric",
+                                        "label",
+                                        "recentScore",
+                                        "baselineScore",
+                                        "changeFromBaseline",
+                                        "recentObservationCount",
+                                        "baselineObservationCount"
+                                      ],
+                                      "additionalProperties": false
+                                    }
+                                  },
+                                  "evidence": {
+                                    "maxItems": 148,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "recordId": {
+                                          "type": "string",
+                                          "format": "uuid",
+                                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                        },
+                                        "revision": {
+                                          "type": "integer",
+                                          "minimum": 0,
+                                          "exclusiveMinimum": true,
+                                          "maximum": 9007199254740991
+                                        },
+                                        "metric": {
+                                          "type": "string",
+                                          "enum": [
+                                            "recovery.energy",
+                                            "recovery.sleep_quality",
+                                            "recovery.stress",
+                                            "recovery.soreness"
+                                          ]
+                                        },
+                                        "occurredAt": {
+                                          "type": "string",
+                                          "format": "date-time",
+                                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                        },
+                                        "sourceKind": {
+                                          "type": "string",
+                                          "enum": ["manual", "device", "imported", "ai_estimate"]
+                                        },
+                                        "window": {
+                                          "type": "string",
+                                          "enum": ["recent", "baseline"]
+                                        },
+                                        "canonicalValue": {
+                                          "type": "number",
+                                          "minimum": 1,
+                                          "maximum": 5
+                                        },
+                                        "normalizedScore": {
+                                          "type": "integer",
+                                          "minimum": 0,
+                                          "maximum": 100
+                                        }
+                                      },
+                                      "required": [
+                                        "recordId",
+                                        "revision",
+                                        "metric",
+                                        "occurredAt",
+                                        "sourceKind",
+                                        "window",
+                                        "canonicalValue",
+                                        "normalizedScore"
+                                      ],
+                                      "additionalProperties": false
+                                    }
+                                  },
+                                  "limitations": {
+                                    "minItems": 1,
+                                    "maxItems": 5,
+                                    "type": "array",
+                                    "items": { "type": "string", "minLength": 1 }
+                                  }
+                                },
+                                "required": [
+                                  "policyVersion",
+                                  "state",
+                                  "score",
+                                  "baselineScore",
+                                  "changeFromBaseline",
+                                  "confidence",
+                                  "consistency",
+                                  "label",
+                                  "note",
+                                  "coverage",
+                                  "factors",
+                                  "evidence",
+                                  "limitations"
+                                ],
+                                "additionalProperties": false
                               },
                               "evidencePolicyVersion": {
                                 "type": "string",
@@ -10637,6 +13507,93 @@
         },
         "security": [{ "bearer": [] }],
         "summary": "Inspect the authenticated account data inventory and consent state",
+        "tags": ["privacy"]
+      }
+    },
+    "/v1/me/privacy/consents/history": {
+      "get": {
+        "operationId": "PrivacyController_consentHistory",
+        "parameters": [
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "schema": { "type": "string", "minLength": 24, "maxLength": 256 }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": { "type": "integer", "minimum": 1, "maximum": 20, "default": 10 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "maxItems": 20,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "receiptId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "purpose": {
+                            "type": "string",
+                            "enum": [
+                              "terms",
+                              "privacy",
+                              "health_data",
+                              "ai_plan_explanation",
+                              "food_photo_analysis",
+                              "progress_photo_analysis",
+                              "progress_photo_retention"
+                            ]
+                          },
+                          "version": { "type": "string", "minLength": 1, "maxLength": 40 },
+                          "acceptedAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                          },
+                          "revokedAt": {
+                            "nullable": true,
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                          }
+                        },
+                        "required": ["receiptId", "purpose", "version", "acceptedAt", "revokedAt"],
+                        "additionalProperties": false
+                      }
+                    },
+                    "nextCursor": {
+                      "nullable": true,
+                      "type": "string",
+                      "minLength": 24,
+                      "maxLength": 256,
+                      "pattern": "^[A-Za-z0-9_-]+$"
+                    }
+                  },
+                  "required": ["items", "nextCursor"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": { "description": "Pagination limit or owner-bound cursor is invalid." },
+          "401": { "description": "Bearer token is missing, invalid, expired or revoked." }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "List one stable page of authenticated consent receipts",
         "tags": ["privacy"]
       }
     },

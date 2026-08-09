@@ -106,7 +106,9 @@ test('weekly plan supports substitution, modification and acceptance history', a
   await page.setViewportSize({ width: 390, height: 844 })
   const errors = collectBrowserErrors(
     page,
-    (response) => response.status() === 503 && response.url().includes('/history?'),
+    (response) =>
+      response.status() === 503 &&
+      (response.url().includes('/history?') || response.url().includes('/outcome')),
   )
   const accessToken = await seedProfileAndOpenPlans(page)
 
@@ -157,6 +159,37 @@ test('weekly plan supports substitution, modification and acceptance history', a
   await page.screenshot({
     path: 'output/playwright/iteration-008-plans-mobile.png',
   })
+
+  const withdrawnRecovery = await page.request.post(`${apiUrl}/health-records`, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'x-idempotency-key': `record-${crypto.randomUUID()}`,
+    },
+    data: {
+      metric: 'recovery.energy',
+      value: 4,
+      unit: 'score_1_5',
+      source: { kind: 'manual' },
+      status: 'confirmed',
+      occurredAt: new Date().toISOString(),
+      timezone: 'Asia/Shanghai',
+    },
+  })
+  expect(withdrawnRecovery.status()).toBe(201)
+  const withdrawnRecoveryBody = (await withdrawnRecovery.json()) as {
+    id: string
+    revision: number
+  }
+  const deletedRecovery = await page.request.delete(
+    `${apiUrl}/health-records/${withdrawnRecoveryBody.id}`,
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'x-expected-revision': String(withdrawnRecoveryBody.revision),
+      },
+    },
+  )
+  expect(deletedRecovery.status()).toBe(204)
 
   for (let expectedRevision = acceptedPlan.revision; expectedRevision < 11; expectedRevision += 1) {
     const decision = await page.request.put(`${apiUrl}/plans/weekly/${acceptedPlan.id}/decision`, {
@@ -213,6 +246,42 @@ test('weekly plan supports substitution, modification and acceptance history', a
   await expect(page.getByText('已载入全部决定版本')).toBeVisible()
   expect(olderReads).toBe(2)
   expect(explanationWrites).toBe(0)
+
+  let historicalOutcomeReads = 0
+  await page.route(/\/history\/3\/outcome$/, async (route) => {
+    historicalOutcomeReads += 1
+    if (historicalOutcomeReads === 1) {
+      await route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'raw historical outcome outage must stay hidden' }),
+      })
+      return
+    }
+    await route.continue()
+  })
+  const historicalV3 = historyCard
+    .locator('.plan-history')
+    .filter({ hasText: '采用计划' })
+    .filter({ hasText: 'v3' })
+  await historicalV3.getByRole('button', { name: '查看 v3 采用后回看' }).click()
+  await expect(historicalV3.getByText('回看尚未确认')).toBeVisible()
+  await expect(historicalV3).not.toContainText('raw historical outcome outage')
+  const outcomeRetry = historicalV3.getByRole('button', { name: '重试核对 v3' })
+  await expect(outcomeRetry).toBeFocused()
+  await outcomeRetry.click()
+  await expect(historicalV3.getByText('历史采用 v3')).toBeVisible()
+  await expect(historicalV3.getByText('Unknown', { exact: true })).toBeVisible()
+  await expect(historicalV3).toContainText('高脚杯深蹲')
+  await expect(historicalV3).toContainText('1 条已删除恢复记录')
+  await expect(historicalV3).toContainText('撤销项不再算证据')
+  await expect(historicalV3).toContainText('不能证明因果或计划效果')
+  await page.setViewportSize({ width: 390, height: 844 })
+  await historicalV3.scrollIntoViewIfNeeded()
+  await page.screenshot({
+    path: 'output/playwright/iteration-104-historical-plan-outcome-mobile.png',
+  })
+  expect(historicalOutcomeReads).toBe(2)
   expect(errors).toEqual([])
 })
 

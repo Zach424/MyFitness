@@ -1,6 +1,6 @@
 # Weekly plan model
 
-Status: implemented as `deterministic-v1` in iteration 008; bounded record-evidence freshness added in iteration 035; explicit plan-to-workout links added in iteration 036; stable revision-history pagination added in iteration 049; authority-aware plan/association write recovery added in iterations 058–059; revision-bound non-causal outcome review added in iteration 103
+Status: implemented as `deterministic-v1` in iteration 008; bounded record-evidence freshness added in iteration 035; explicit plan-to-workout links added in iteration 036; stable revision-history pagination added in iteration 049; authority-aware plan/association write recovery added in iterations 058–059; revision-bound non-causal outcome review added in iteration 103; owner-scoped exact historical outcome reads added in iteration 104
 
 ## Purpose and boundary
 
@@ -101,18 +101,21 @@ Follow-up evidence is deliberately narrower than a general activity search:
 - a workout must retain an active owner-confirmed link to the exact plan revision, and its occurrence must fall after adoption inside the bounded window;
 - a recovery observation must be current, non-deleted, `confirmed`, non-AI, one of the four subjective recovery metrics and inside the same window;
 - every exposed item retains its aggregate ID/revision, occurrence time and source; up to 100 recovery references are shown while the exact total remains explicit;
-- unlinking or deleting removes an item from the current review, while the underlying closed/revision history remains in owner export and audit data.
+- unlinking or deleting removes an item from the current review, while the underlying closed/revision history remains in owner export and audit data;
+- the projection separately counts closed/deleted workout links and deleted recovery records inside the exact revision window as withdrawn evidence. These counts explain exclusion without restoring content or contributing to `observed`.
 
 `unknown` means no qualifying follow-up evidence is currently visible; it is not converted to no training, no adherence or no effect. `observed` means only that at least one qualifying record exists. The projection never calculates completion, adherence, benefit, causality or a next-plan adjustment. Its seven-day window and self-selected recording coverage remain unvalidated product heuristics, recorded as R-031.
 
-Iteration 103 exposes only the current accepted revision. Older accepted snapshots remain immutable in plan history but do not yet have an independent outcome-review route or client read authority.
+`GET /plans/weekly/:planId/history/:revision/outcome` recomputes one exact immutable `accepted` revision for its authenticated owner. Missing, non-accepted and cross-owner targets are concealed as `404`; responses are `private, no-store`. The endpoint and current-list projection share the same calculator, accepted/generated snapshot selection, current-fact filters and withdrawal counts.
+
+The client grants each accepted history row an independent, in-memory read authority. Initial failure remains unknown and offers an explicit focused retry; a monotonic generation invalidates results after another revision is selected, the plan changes or the page unmounts. It does not poll, persist reviews, replay requests in the background or expose raw service errors.
 
 ## Known limitations
 
 - The rules are explainable but have not been clinically validated or evaluated against user outcomes.
 - Exercise and food choices use a small built-in starter set rather than a licensed, localized catalog.
 - Evidence freshness is intentionally coarse and uses only the current engine's recovery boundary. The outcome review is descriptive and does not adapt workload, adherence or nutrition.
-- Outcome review is available only for the current accepted revision; its seven-day window and actively selected evidence cannot establish plan effect or causal attribution.
+- Outcome review is available for current and exact historical accepted revisions, but its seven-day window, actively selected evidence and withdrawal counts cannot establish plan effect or causal attribution.
 - There is no plan-to-workout draft handoff; users first save an actual workout and then explicitly choose it from the plan.
 - No language model, photo analysis, device data, injury assessment, progressive overload, or adaptive energy model participates in this version.
 

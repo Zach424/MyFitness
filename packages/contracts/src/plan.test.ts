@@ -9,6 +9,7 @@ import {
   planFreshnessSchema,
   planWorkoutLinkSchema,
   weeklyPlanHistoryQuerySchema,
+  weeklyPlanRevisionSchema,
 } from './plan'
 
 describe('weekly plan contract', () => {
@@ -30,6 +31,12 @@ describe('weekly plan contract', () => {
     expect(weeklyPlanHistoryQuerySchema.parse({ limit: '50' })).toEqual({ limit: 50 })
     expect(weeklyPlanHistoryQuerySchema.safeParse({ limit: 51 }).success).toBe(false)
     expect(weeklyPlanHistoryQuerySchema.safeParse({ unexpected: 'value' }).success).toBe(false)
+  })
+
+  it('accepts only positive plan revisions for exact historical reads', () => {
+    expect(weeklyPlanRevisionSchema.parse('3')).toBe(3)
+    expect(weeklyPlanRevisionSchema.safeParse('0').success).toBe(false)
+    expect(weeklyPlanRevisionSchema.safeParse('3.5').success).toBe(false)
   })
 
   it('rejects non-Monday weeks and ambiguous decision payloads', () => {

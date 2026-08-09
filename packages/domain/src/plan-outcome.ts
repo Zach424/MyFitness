@@ -14,6 +14,10 @@ type BuildPlanOutcomeReviewInput = {
   linkedWorkouts: PlanWorkoutLink[]
   recoveryObservations: PlanOutcomeRecoveryObservation[]
   recoveryObservationTotal: number
+  withdrawnEvidence?: {
+    workoutLinkCount: number
+    recoveryRecordCount: number
+  }
 }
 
 const selectedOption = (
@@ -29,6 +33,7 @@ export const buildPlanOutcomeReview = ({
   linkedWorkouts,
   recoveryObservations,
   recoveryObservationTotal,
+  withdrawnEvidence = { workoutLinkCount: 0, recoveryRecordCount: 0 },
 }: BuildPlanOutcomeReviewInput): PlanOutcomeReview => {
   const adoptedAtMs = Date.parse(adoptedAt)
   const scheduledEndAt = new Date(adoptedAtMs + 7 * 24 * 60 * 60 * 1_000).toISOString()
@@ -99,11 +104,17 @@ export const buildPlanOutcomeReview = ({
     linkedWorkouts: windowLinks,
     recoveryObservations: windowRecovery,
     recoveryObservationTotal,
+    withdrawnEvidence,
     followUpState: hasFollowUp ? 'observed' : 'unknown',
     limitations: [
       '训练仅来自你仍保留的明确计划关联；未关联不代表没有训练或没有执行计划。',
       '恢复记录与训练发生在采用之后，只说明时间先后，不能单独证明计划造成了变化。',
       '缺少记录时结果保持 Unknown；本回看不会自动评分、改写身体状态或调整下一份计划。',
+      ...(withdrawnEvidence.workoutLinkCount || withdrawnEvidence.recoveryRecordCount
+        ? [
+            `当前回看已排除 ${withdrawnEvidence.workoutLinkCount} 条已解除训练关联和 ${withdrawnEvidence.recoveryRecordCount} 条已删除恢复记录；这些撤销事实不再构成后续证据。`,
+          ]
+        : []),
       ...(adopted.evidence.recoveryState
         ? []
         : ['这份旧计划没有保存底层恢复状态证据，只能追溯到当时的计划摘要。']),

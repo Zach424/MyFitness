@@ -409,6 +409,12 @@ export const planOutcomeReviewSchema = z
     linkedWorkouts: z.array(planWorkoutLinkSchema).max(7),
     recoveryObservations: z.array(planOutcomeRecoveryObservationSchema).max(100),
     recoveryObservationTotal: z.number().int().min(0),
+    withdrawnEvidence: z
+      .object({
+        workoutLinkCount: z.number().int().min(0),
+        recoveryRecordCount: z.number().int().min(0),
+      })
+      .strict(),
     followUpState: z.enum(planOutcomeFollowUpStates),
     limitations: z.array(z.string().trim().min(1).max(240)).min(2).max(5),
   })
@@ -536,6 +542,7 @@ export const weeklyPlanHistorySchema = z
   .strict()
 export const weeklyPlanHistoryQuerySchema = recordListQuerySchema(20, 50)
 export const weeklyPlanIdSchema = z.string().uuid()
+export const weeklyPlanRevisionSchema = z.coerce.number().int().positive()
 export const planWorkoutLinkIdSchema = z.string().uuid()
 
 export type WeeklyPlanContent = z.infer<typeof weeklyPlanContentSchema>

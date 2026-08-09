@@ -35,6 +35,7 @@ import {
   getAiExplanationHistory,
   getAiExplanationRequestStatus,
   getWeeklyPlanHistory,
+  getWeeklyPlanOutcome,
   linkPlanWorkout,
   listWeeklyPlans,
   listWorkouts,
@@ -98,6 +99,12 @@ type PlanHistorySnapshot = {
   items: WeeklyPlanHistoryItem[]
   nextCursor: string | null
   explanations: AiExplanation[]
+}
+
+type HistoricalOutcomeRead = {
+  revision: number
+  review?: PlanOutcomeReview
+  failed?: true
 }
 
 const weekdayLabels: Record<WeeklyPlan['days'][number]['weekday'], string> = {
@@ -257,6 +264,89 @@ const historyTime = (value: string) =>
     hour12: false,
   }).format(new Date(value))
 
+const OutcomeReviewDetails = ({ review }: { review: PlanOutcomeReview }) => (
+  <>
+    <Text className="outcome-review__window metric">
+      PLAN v{review.planRevision} · 采用于 {historyTime(review.adoptedAt)} · 观察至{' '}
+      {historyTime(review.observationWindow.observedThrough)} ·{' '}
+      {review.observationWindow.state === 'open' ? '开放' : '已结束'}
+    </Text>
+    <View className="outcome-review__chain" aria-label="计划结果证据链">
+      <Text>
+        生成依据 ·{' '}
+        {review.planningEvidence.recoveryState?.state === 'unknown' ||
+        !review.planningEvidence.recoveryState
+          ? '恢复状态 Unknown'
+          : review.planningEvidence.recoveryState.label}{' '}
+        · SCORE {review.planningEvidence.readinessScore ?? '—'} ·{' '}
+        {review.planningEvidence.recoveryState?.evidence.length ?? 0} REFS
+      </Text>
+      <Text>
+        ↓ 你的决定 · 采用 v{review.planRevision} · {review.adjustments.length} 项替代
+      </Text>
+      <Text>
+        ↓ 后续观察 · {review.linkedWorkouts.length} 条明确训练关联 ·{' '}
+        {review.recoveryObservationTotal} 条恢复记录
+      </Text>
+    </View>
+
+    {review.adjustments.length ? (
+      <Text className="outcome-review__evidence">
+        替代：
+        {review.adjustments
+          .map(
+            (item) => `${shortDate(item.sessionDate)} ${item.before.title} → ${item.adopted.title}`,
+          )
+          .join('；')}
+      </Text>
+    ) : null}
+
+    {review.followUpState === 'unknown' ? (
+      <Text className="outcome-review__unknown">
+        当前没有仍确认的训练关联或恢复记录，结果保持 Unknown；缺失不等于“无效果”。
+      </Text>
+    ) : (
+      <View className="outcome-review__evidence">
+        <Text>
+          训练证据：
+          {review.linkedWorkouts.length
+            ? review.linkedWorkouts
+                .map(
+                  (item) =>
+                    `${item.workoutTitle} · PLAN v${item.planRevision} ↔ WORKOUT v${item.workoutRevision}`,
+                )
+                .join('；')
+            : '无'}
+        </Text>
+        <Text>
+          恢复证据：
+          {review.recoveryObservations.length
+            ? review.recoveryObservations
+                .slice(0, 3)
+                .map(
+                  (item) =>
+                    `${recoveryMetricLabels[item.metric]} ${item.canonicalValue}/5 · ${item.recordId.slice(0, 8)} v${item.revision}`,
+                )
+                .join('；')
+            : '无'}
+          {review.recoveryObservationTotal > 3
+            ? `；另有 ${review.recoveryObservationTotal - 3} 条`
+            : ''}
+        </Text>
+      </View>
+    )}
+    {review.withdrawnEvidence.workoutLinkCount || review.withdrawnEvidence.recoveryRecordCount ? (
+      <Text className="outcome-review__withdrawn">
+        已排除：{review.withdrawnEvidence.workoutLinkCount} 条已解除关联 ·{' '}
+        {review.withdrawnEvidence.recoveryRecordCount} 条已删除恢复记录；撤销项不再算证据。
+      </Text>
+    ) : null}
+    <Text className="outcome-review__caution">
+      时间先后不能证明因果或计划效果；不会评分依从性或自动调整计划。
+    </Text>
+  </>
+)
+
 const ActivityCard = ({
   activity,
   disabled,
@@ -320,6 +410,7 @@ const PlansPage = () => {
   const [historyLoadingMore, setHistoryLoadingMore] = useState(false)
   const [historyContinuationFailure, setHistoryContinuationFailure] =
     useState<AggregateHistoryReadFailure>()
+  const [historicalOutcomeRead, setHistoricalOutcomeRead] = useState<HistoricalOutcomeRead>()
   const [aiHistory, setAiHistory] = useState<AiExplanation[]>([])
   const [aiConsent, setAiConsent] = useState(false)
   const [aiLoading, setAiLoading] = useState(false)
@@ -342,6 +433,7 @@ const PlansPage = () => {
   const savedPlanRef = useRef<WeeklyPlan>()
   const freshnessRef = useRef<PlanFreshness>()
   const historyGenerationRef = useRef(0)
+  const historicalOutcomeGenerationRef = useRef(0)
   const refreshInFlight = useRef(false)
   const projectionAcceptedRef = useRef(false)
   const lastProjectionCheck = useRef(0)
@@ -355,6 +447,10 @@ const PlansPage = () => {
     nextSessionLinks: PlanWorkoutLink[] = [],
     nextOutcomeReview: PlanOutcomeReview | null = null,
   ) => {
+    if (savedPlanRef.current?.id !== plan.id) {
+      ++historicalOutcomeGenerationRef.current
+      setHistoricalOutcomeRead(undefined)
+    }
     savedPlanRef.current = plan
     freshnessRef.current = nextFreshness
     setSavedPlan(plan)
@@ -472,6 +568,20 @@ const PlansPage = () => {
     void readOlderPlanHistory()
   }
 
+  const readHistoricalOutcome = async (item: WeeklyPlanHistoryItem) => {
+    const generation = ++historicalOutcomeGenerationRef.current
+    setHistoricalOutcomeRead({ revision: item.revision })
+    try {
+      const review = await getWeeklyPlanOutcome(item.id, item.revision)
+      if (generation !== historicalOutcomeGenerationRef.current) return
+      setHistoricalOutcomeRead({ revision: item.revision, review })
+    } catch {
+      if (generation !== historicalOutcomeGenerationRef.current) return
+      setHistoricalOutcomeRead({ revision: item.revision, failed: true })
+      deferH5Focus(`plan-history-outcome-retry-${item.revision}`, 80)
+    }
+  }
+
   const refreshPlanProjection = async (announce = false, force = false) => {
     const current = savedPlanRef.current
     if ((!current && !projectionAcceptedRef.current) || refreshInFlight.current) return
@@ -583,6 +693,9 @@ const PlansPage = () => {
 
   useEffect(() => {
     void loadInitialPlanSnapshot()
+    return () => {
+      ++historicalOutcomeGenerationRef.current
+    }
   }, [])
 
   useEffect(() => {
@@ -1611,84 +1724,7 @@ const PlansPage = () => {
                         </Text>
                       </View>
                       {outcomeReview ? (
-                        <>
-                          <Text className="outcome-review__window metric">
-                            PLAN v{outcomeReview.planRevision} · 采用于{' '}
-                            {historyTime(outcomeReview.adoptedAt)} · 观察至{' '}
-                            {historyTime(outcomeReview.observationWindow.observedThrough)} ·{' '}
-                            {outcomeReview.observationWindow.state === 'open' ? '开放' : '已结束'}
-                          </Text>
-                          <View className="outcome-review__chain" aria-label="计划结果证据链">
-                            <Text>
-                              生成依据 ·{' '}
-                              {outcomeReview.planningEvidence.recoveryState?.state === 'unknown' ||
-                              !outcomeReview.planningEvidence.recoveryState
-                                ? '恢复状态 Unknown'
-                                : outcomeReview.planningEvidence.recoveryState.label}{' '}
-                              · SCORE {outcomeReview.planningEvidence.readinessScore ?? '—'} ·{' '}
-                              {outcomeReview.planningEvidence.recoveryState?.evidence.length ?? 0}{' '}
-                              REFS
-                            </Text>
-                            <Text>
-                              ↓ 你的决定 · 采用 v{outcomeReview.planRevision} ·{' '}
-                              {outcomeReview.adjustments.length} 项替代
-                            </Text>
-                            <Text>
-                              ↓ 后续观察 · {outcomeReview.linkedWorkouts.length} 条明确训练关联 ·{' '}
-                              {outcomeReview.recoveryObservationTotal} 条恢复记录
-                            </Text>
-                          </View>
-
-                          {outcomeReview.adjustments.length ? (
-                            <Text className="outcome-review__evidence">
-                              替代：
-                              {outcomeReview.adjustments
-                                .map(
-                                  (item) =>
-                                    `${shortDate(item.sessionDate)} ${item.before.title} → ${item.adopted.title}`,
-                                )
-                                .join('；')}
-                            </Text>
-                          ) : null}
-
-                          {outcomeReview.followUpState === 'unknown' ? (
-                            <Text className="outcome-review__unknown">
-                              目前不能判断调整后发生了什么。采用后还没有明确训练关联或已确认恢复记录；没有记录不会被补成“无效果”。
-                            </Text>
-                          ) : (
-                            <View className="outcome-review__evidence">
-                              <Text>
-                                训练证据：
-                                {outcomeReview.linkedWorkouts.length
-                                  ? outcomeReview.linkedWorkouts
-                                      .map(
-                                        (item) =>
-                                          `${item.workoutTitle} · PLAN v${item.planRevision} ↔ WORKOUT v${item.workoutRevision}`,
-                                      )
-                                      .join('；')
-                                  : '无'}
-                              </Text>
-                              <Text>
-                                恢复证据：
-                                {outcomeReview.recoveryObservations.length
-                                  ? outcomeReview.recoveryObservations
-                                      .slice(0, 3)
-                                      .map(
-                                        (item) =>
-                                          `${recoveryMetricLabels[item.metric]} ${item.canonicalValue}/5 · ${item.recordId.slice(0, 8)} v${item.revision}`,
-                                      )
-                                      .join('；')
-                                  : '无'}
-                                {outcomeReview.recoveryObservationTotal > 3
-                                  ? `；另有 ${outcomeReview.recoveryObservationTotal - 3} 条`
-                                  : ''}
-                              </Text>
-                            </View>
-                          )}
-                          <Text className="outcome-review__caution">
-                            时间先后和记录共现不能证明因果或计划效果；本卡不会生成依从性评分，也不会自动调整下一份计划。
-                          </Text>
-                        </>
+                        <OutcomeReviewDetails review={outcomeReview} />
                       ) : (
                         <Text className="plan-aside-card__lead">
                           正在读取与当前采用版本绑定的回看；此前不展示推测结果。
@@ -1879,19 +1915,90 @@ const PlansPage = () => {
                         retryId="plan-history-read-retry"
                         onRetry={retryOlderPlanHistory}
                       />
-                      {history.map((item) => (
-                        <View className="plan-history" key={`${item.revision}-${item.changedAt}`}>
-                          <View>
-                            <Text className="plan-history__action">
-                              {historyLabels[item.action]}
-                            </Text>
-                            <Text className="plan-history__time">
-                              {historyTime(item.changedAt)}
-                            </Text>
+                      {history.map((item) => {
+                        const selectedOutcome =
+                          historicalOutcomeRead?.revision === item.revision
+                            ? historicalOutcomeRead
+                            : undefined
+                        return (
+                          <View className="plan-history" key={`${item.revision}-${item.changedAt}`}>
+                            <View>
+                              <Text className="plan-history__action">
+                                {historyLabels[item.action]}
+                              </Text>
+                              <Text className="plan-history__time">
+                                {historyTime(item.changedAt)}
+                              </Text>
+                            </View>
+                            <View className="plan-history__tools">
+                              <Text className="plan-history__revision metric">
+                                v{item.revision}
+                              </Text>
+                              {item.action === 'accepted' ? (
+                                <Button
+                                  className="plan-history__outcome-trigger"
+                                  {...buttonActivationProps(
+                                    () => void readHistoricalOutcome(item),
+                                    Boolean(
+                                      selectedOutcome &&
+                                      !selectedOutcome.review &&
+                                      !selectedOutcome.failed,
+                                    ),
+                                  )}
+                                  aria-label={`查看 v${item.revision} 采用后回看`}
+                                >
+                                  {selectedOutcome &&
+                                  !selectedOutcome.review &&
+                                  !selectedOutcome.failed
+                                    ? '核对中…'
+                                    : '采用后回看'}
+                                </Button>
+                              ) : null}
+                            </View>
+                            {selectedOutcome ? (
+                              <View className="plan-history__outcome" role="status">
+                                {selectedOutcome.failed ? (
+                                  <View className="plan-history__outcome-failure">
+                                    <Text className="plan-history__outcome-title">
+                                      回看尚未确认
+                                    </Text>
+                                    <Text>读取未确认；成功前不会显示空结果。</Text>
+                                    <Button
+                                      id={`plan-history-outcome-retry-${item.revision}`}
+                                      className="plan-history__outcome-retry"
+                                      {...buttonActivationProps(
+                                        () => void readHistoricalOutcome(item),
+                                      )}
+                                    >
+                                      重试核对 v{item.revision}
+                                    </Button>
+                                  </View>
+                                ) : !selectedOutcome.review ? (
+                                  <Text className="plan-history__outcome-loading">
+                                    正在核对历史 PLAN v{item.revision} 的当前事实…
+                                  </Text>
+                                ) : (
+                                  <>
+                                    <View className="outcome-review__heading">
+                                      <Text className="plan-history__outcome-title">
+                                        历史采用 v{item.revision}
+                                      </Text>
+                                      <Text
+                                        className={`outcome-review__state outcome-review__state--${selectedOutcome.review.followUpState}`}
+                                      >
+                                        {selectedOutcome.review.followUpState === 'observed'
+                                          ? '已有后续记录'
+                                          : 'Unknown'}
+                                      </Text>
+                                    </View>
+                                    <OutcomeReviewDetails review={selectedOutcome.review} />
+                                  </>
+                                )}
+                              </View>
+                            ) : null}
                           </View>
-                          <Text className="plan-history__revision metric">v{item.revision}</Text>
-                        </View>
-                      ))}
+                        )
+                      })}
                       {historyNextCursor ? (
                         <Button
                           {...buttonA11yProps}
