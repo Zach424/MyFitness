@@ -5,7 +5,6 @@ import type {
   AiExplanation,
   PlanDecision,
   PlanFreshness,
-  PlanOutcomeReview,
   PlanWorkoutLink,
   WeeklyPlan,
   WeeklyPlanHistoryItem,
@@ -35,7 +34,6 @@ import {
   getAiExplanationHistory,
   getAiExplanationRequestStatus,
   getWeeklyPlanHistory,
-  getWeeklyPlanOutcome,
   linkPlanWorkout,
   listWeeklyPlans,
   listWorkouts,
@@ -101,12 +99,6 @@ type PlanHistorySnapshot = {
   explanations: AiExplanation[]
 }
 
-type HistoricalOutcomeRead = {
-  revision: number
-  review?: PlanOutcomeReview
-  failed?: true
-}
-
 const weekdayLabels: Record<WeeklyPlan['days'][number]['weekday'], string> = {
   mon: '一',
   tue: '二',
@@ -156,16 +148,6 @@ const aiSourceLabels: Record<AiExplanation['source'], string> = {
   model: 'AI 解释',
   fixture: '本地演示解释',
   fallback: '确定性安全说明',
-}
-
-const recoveryMetricLabels: Record<
-  PlanOutcomeReview['recoveryObservations'][number]['metric'],
-  string
-> = {
-  'recovery.energy': '精力',
-  'recovery.sleep_quality': '睡眠质量',
-  'recovery.stress': '压力',
-  'recovery.soreness': '酸痛感',
 }
 
 const requestKey = () =>
@@ -264,89 +246,6 @@ const historyTime = (value: string) =>
     hour12: false,
   }).format(new Date(value))
 
-const OutcomeReviewDetails = ({ review }: { review: PlanOutcomeReview }) => (
-  <>
-    <Text className="outcome-review__window metric">
-      PLAN v{review.planRevision} · 采用于 {historyTime(review.adoptedAt)} · 观察至{' '}
-      {historyTime(review.observationWindow.observedThrough)} ·{' '}
-      {review.observationWindow.state === 'open' ? '开放' : '已结束'}
-    </Text>
-    <View className="outcome-review__chain" aria-label="计划结果证据链">
-      <Text>
-        生成依据 ·{' '}
-        {review.planningEvidence.recoveryState?.state === 'unknown' ||
-        !review.planningEvidence.recoveryState
-          ? '恢复状态 Unknown'
-          : review.planningEvidence.recoveryState.label}{' '}
-        · SCORE {review.planningEvidence.readinessScore ?? '—'} ·{' '}
-        {review.planningEvidence.recoveryState?.evidence.length ?? 0} REFS
-      </Text>
-      <Text>
-        ↓ 你的决定 · 采用 v{review.planRevision} · {review.adjustments.length} 项替代
-      </Text>
-      <Text>
-        ↓ 后续观察 · {review.linkedWorkouts.length} 条明确训练关联 ·{' '}
-        {review.recoveryObservationTotal} 条恢复记录
-      </Text>
-    </View>
-
-    {review.adjustments.length ? (
-      <Text className="outcome-review__evidence">
-        替代：
-        {review.adjustments
-          .map(
-            (item) => `${shortDate(item.sessionDate)} ${item.before.title} → ${item.adopted.title}`,
-          )
-          .join('；')}
-      </Text>
-    ) : null}
-
-    {review.followUpState === 'unknown' ? (
-      <Text className="outcome-review__unknown">
-        当前没有仍确认的训练关联或恢复记录，结果保持 Unknown；缺失不等于“无效果”。
-      </Text>
-    ) : (
-      <View className="outcome-review__evidence">
-        <Text>
-          训练证据：
-          {review.linkedWorkouts.length
-            ? review.linkedWorkouts
-                .map(
-                  (item) =>
-                    `${item.workoutTitle} · PLAN v${item.planRevision} ↔ WORKOUT v${item.workoutRevision}`,
-                )
-                .join('；')
-            : '无'}
-        </Text>
-        <Text>
-          恢复证据：
-          {review.recoveryObservations.length
-            ? review.recoveryObservations
-                .slice(0, 3)
-                .map(
-                  (item) =>
-                    `${recoveryMetricLabels[item.metric]} ${item.canonicalValue}/5 · ${item.recordId.slice(0, 8)} v${item.revision}`,
-                )
-                .join('；')
-            : '无'}
-          {review.recoveryObservationTotal > 3
-            ? `；另有 ${review.recoveryObservationTotal - 3} 条`
-            : ''}
-        </Text>
-      </View>
-    )}
-    {review.withdrawnEvidence.workoutLinkCount || review.withdrawnEvidence.recoveryRecordCount ? (
-      <Text className="outcome-review__withdrawn">
-        已排除：{review.withdrawnEvidence.workoutLinkCount} 条已解除关联 ·{' '}
-        {review.withdrawnEvidence.recoveryRecordCount} 条已删除恢复记录；撤销项不再算证据。
-      </Text>
-    ) : null}
-    <Text className="outcome-review__caution">
-      时间先后不能证明因果或计划效果；不会评分依从性或自动调整计划。
-    </Text>
-  </>
-)
-
 const ActivityCard = ({
   activity,
   disabled,
@@ -403,14 +302,12 @@ const PlansPage = () => {
   const [draftPlan, setDraftPlan] = useState<WeeklyPlan>()
   const [freshness, setFreshness] = useState<PlanFreshness>()
   const [sessionLinks, setSessionLinks] = useState<PlanWorkoutLink[]>([])
-  const [outcomeReview, setOutcomeReview] = useState<PlanOutcomeReview | null>(null)
   const [workouts, setWorkouts] = useState<Workout[]>([])
   const [history, setHistory] = useState<WeeklyPlanHistoryItem[]>([])
   const [historyNextCursor, setHistoryNextCursor] = useState<string | null>(null)
   const [historyLoadingMore, setHistoryLoadingMore] = useState(false)
   const [historyContinuationFailure, setHistoryContinuationFailure] =
     useState<AggregateHistoryReadFailure>()
-  const [historicalOutcomeRead, setHistoricalOutcomeRead] = useState<HistoricalOutcomeRead>()
   const [aiHistory, setAiHistory] = useState<AiExplanation[]>([])
   const [aiConsent, setAiConsent] = useState(false)
   const [aiLoading, setAiLoading] = useState(false)
@@ -433,7 +330,6 @@ const PlansPage = () => {
   const savedPlanRef = useRef<WeeklyPlan>()
   const freshnessRef = useRef<PlanFreshness>()
   const historyGenerationRef = useRef(0)
-  const historicalOutcomeGenerationRef = useRef(0)
   const refreshInFlight = useRef(false)
   const projectionAcceptedRef = useRef(false)
   const lastProjectionCheck = useRef(0)
@@ -445,19 +341,13 @@ const PlansPage = () => {
     plan: WeeklyPlan,
     nextFreshness: PlanFreshness = currentPlanFreshness(plan),
     nextSessionLinks: PlanWorkoutLink[] = [],
-    nextOutcomeReview: PlanOutcomeReview | null = null,
   ) => {
-    if (savedPlanRef.current?.id !== plan.id) {
-      ++historicalOutcomeGenerationRef.current
-      setHistoricalOutcomeRead(undefined)
-    }
     savedPlanRef.current = plan
     freshnessRef.current = nextFreshness
     setSavedPlan(plan)
     setDraftPlan(plan)
     setFreshness(nextFreshness)
     setSessionLinks(nextSessionLinks)
-    setOutcomeReview(nextOutcomeReview)
     setAiConsent(false)
     projectionAcceptedRef.current = true
     setHasReadSnapshot(true)
@@ -473,10 +363,10 @@ const PlansPage = () => {
     const {
       freshness: nextFreshness,
       sessionLinks: nextSessionLinks,
-      outcomeReview: nextOutcomeReview,
+      outcomeReview: _outcomeReview,
       ...plan
     } = projected
-    setCurrentPlan(plan, nextFreshness, nextSessionLinks, nextOutcomeReview)
+    setCurrentPlan(plan, nextFreshness, nextSessionLinks)
     return plan
   }
 
@@ -493,9 +383,8 @@ const PlansPage = () => {
     message: string,
     nextFreshness: PlanFreshness = currentPlanFreshness(plan),
     nextSessionLinks: PlanWorkoutLink[] = [],
-    nextOutcomeReview: PlanOutcomeReview | null = null,
   ) => {
-    setCurrentPlan(plan, nextFreshness, nextSessionLinks, nextOutcomeReview)
+    setCurrentPlan(plan, nextFreshness, nextSessionLinks)
     try {
       await refreshPlanHistory(plan)
       setReadFailure(undefined)
@@ -568,20 +457,6 @@ const PlansPage = () => {
     void readOlderPlanHistory()
   }
 
-  const readHistoricalOutcome = async (item: WeeklyPlanHistoryItem) => {
-    const generation = ++historicalOutcomeGenerationRef.current
-    setHistoricalOutcomeRead({ revision: item.revision })
-    try {
-      const review = await getWeeklyPlanOutcome(item.id, item.revision)
-      if (generation !== historicalOutcomeGenerationRef.current) return
-      setHistoricalOutcomeRead({ revision: item.revision, review })
-    } catch {
-      if (generation !== historicalOutcomeGenerationRef.current) return
-      setHistoricalOutcomeRead({ revision: item.revision, failed: true })
-      deferH5Focus(`plan-history-outcome-retry-${item.revision}`, 80)
-    }
-  }
-
   const refreshPlanProjection = async (announce = false, force = false) => {
     const current = savedPlanRef.current
     if ((!current && !projectionAcceptedRef.current) || refreshInFlight.current) return
@@ -605,7 +480,7 @@ const PlansPage = () => {
       const {
         freshness: nextFreshness,
         sessionLinks: nextSessionLinks,
-        outcomeReview: nextOutcomeReview,
+        outcomeReview: _outcomeReview,
         ...plan
       } = projected
       const previousFreshness = freshnessRef.current
@@ -616,7 +491,7 @@ const PlansPage = () => {
       if (planChanged || freshnessChanged) {
         const historySnapshot = planChanged ? await readPlanHistorySnapshot(plan) : undefined
         setWorkouts(workoutList.items)
-        setCurrentPlan(plan, nextFreshness, nextSessionLinks, nextOutcomeReview)
+        setCurrentPlan(plan, nextFreshness, nextSessionLinks)
         if (historySnapshot) {
           ++historyGenerationRef.current
           applyPlanHistorySnapshot(historySnapshot)
@@ -626,7 +501,6 @@ const PlansPage = () => {
         freshnessRef.current = nextFreshness
         setFreshness(nextFreshness)
         setSessionLinks(nextSessionLinks)
-        setOutcomeReview(nextOutcomeReview)
         projectionAcceptedRef.current = true
         setHasReadSnapshot(true)
         setReadFailure(undefined)
@@ -671,11 +545,11 @@ const PlansPage = () => {
         const {
           freshness: initialFreshness,
           sessionLinks: initialLinks,
-          outcomeReview: initialOutcomeReview,
+          outcomeReview: _initialOutcomeReview,
           ...plan
         } = latest
         ++historyGenerationRef.current
-        setCurrentPlan(plan, initialFreshness, initialLinks, initialOutcomeReview)
+        setCurrentPlan(plan, initialFreshness, initialLinks)
         applyPlanHistorySnapshot(historySnapshot)
       } else {
         projectionAcceptedRef.current = true
@@ -693,9 +567,6 @@ const PlansPage = () => {
 
   useEffect(() => {
     void loadInitialPlanSnapshot()
-    return () => {
-      ++historicalOutcomeGenerationRef.current
-    }
   }, [])
 
   useEffect(() => {
@@ -752,6 +623,11 @@ const PlansPage = () => {
     void Taro.navigateTo({
       url: `/pages/ai-explanations/index?planId=${encodeURIComponent(savedPlan.id)}`,
     })
+  }
+  const openOutcomeReview = (planId: string, revision: number) => {
+    void Taro.navigateTo({
+      url: `/pages/plan-outcome/index?planId=${encodeURIComponent(planId)}&revision=${revision}`,
+    }).catch(() => setFeedback('暂时无法打开采用后回看，请稍后重试。'))
   }
 
   const generate = async () => {
@@ -866,7 +742,6 @@ const PlansPage = () => {
             : `核对完成：服务端已有 v${projected.revision} 周计划，页面未重复生成。`,
           projected.freshness,
           projected.sessionLinks,
-          projected.outcomeReview,
         )
         return
       }
@@ -902,7 +777,6 @@ const PlansPage = () => {
           }，页面未重复提交。`,
           projected.freshness,
           projected.sessionLinks,
-          projected.outcomeReview,
         )
         return
       }
@@ -1033,7 +907,6 @@ const PlansPage = () => {
         `已载入服务端当前 v${projected.revision}；请重新检查后再作决定。`,
         projected.freshness,
         projected.sessionLinks,
-        projected.outcomeReview,
       )
       return
     }
@@ -1717,19 +1590,20 @@ const PlansPage = () => {
                           <Text className="plans-eyebrow">EVIDENCE → DECISION → FOLLOW-UP</Text>
                           <Text className="plan-aside-card__title">采用后回看</Text>
                         </View>
-                        <Text
-                          className={`outcome-review__state outcome-review__state--${outcomeReview?.followUpState ?? 'unknown'}`}
-                        >
-                          {outcomeReview?.followUpState === 'observed' ? '已有后续记录' : 'Unknown'}
-                        </Text>
+                        <Text className="outcome-review__state">独立读取</Text>
                       </View>
-                      {outcomeReview ? (
-                        <OutcomeReviewDetails review={outcomeReview} />
-                      ) : (
-                        <Text className="plan-aside-card__lead">
-                          正在读取与当前采用版本绑定的回看；此前不展示推测结果。
-                        </Text>
-                      )}
+                      <Text className="plan-aside-card__lead">
+                        进入证据底稿后，才读取当前 v{savedPlan.revision} 的确认来源与撤销计数。
+                      </Text>
+                      <Button
+                        id="current-plan-outcome-open"
+                        className="outcome-review__open"
+                        {...buttonActivationProps(() =>
+                          openOutcomeReview(savedPlan.id, savedPlan.revision),
+                        )}
+                      >
+                        打开当前采用回看
+                      </Button>
                     </View>
                   ) : null}
 
@@ -1916,10 +1790,6 @@ const PlansPage = () => {
                         onRetry={retryOlderPlanHistory}
                       />
                       {history.map((item) => {
-                        const selectedOutcome =
-                          historicalOutcomeRead?.revision === item.revision
-                            ? historicalOutcomeRead
-                            : undefined
                         return (
                           <View className="plan-history" key={`${item.revision}-${item.changedAt}`}>
                             <View>
@@ -1937,65 +1807,15 @@ const PlansPage = () => {
                               {item.action === 'accepted' ? (
                                 <Button
                                   className="plan-history__outcome-trigger"
-                                  {...buttonActivationProps(
-                                    () => void readHistoricalOutcome(item),
-                                    Boolean(
-                                      selectedOutcome &&
-                                      !selectedOutcome.review &&
-                                      !selectedOutcome.failed,
-                                    ),
+                                  {...buttonActivationProps(() =>
+                                    openOutcomeReview(item.id, item.revision),
                                   )}
                                   aria-label={`查看 v${item.revision} 采用后回看`}
                                 >
-                                  {selectedOutcome &&
-                                  !selectedOutcome.review &&
-                                  !selectedOutcome.failed
-                                    ? '核对中…'
-                                    : '采用后回看'}
+                                  采用后回看
                                 </Button>
                               ) : null}
                             </View>
-                            {selectedOutcome ? (
-                              <View className="plan-history__outcome" role="status">
-                                {selectedOutcome.failed ? (
-                                  <View className="plan-history__outcome-failure">
-                                    <Text className="plan-history__outcome-title">
-                                      回看尚未确认
-                                    </Text>
-                                    <Text>读取未确认；成功前不会显示空结果。</Text>
-                                    <Button
-                                      id={`plan-history-outcome-retry-${item.revision}`}
-                                      className="plan-history__outcome-retry"
-                                      {...buttonActivationProps(
-                                        () => void readHistoricalOutcome(item),
-                                      )}
-                                    >
-                                      重试核对 v{item.revision}
-                                    </Button>
-                                  </View>
-                                ) : !selectedOutcome.review ? (
-                                  <Text className="plan-history__outcome-loading">
-                                    正在核对历史 PLAN v{item.revision} 的当前事实…
-                                  </Text>
-                                ) : (
-                                  <>
-                                    <View className="outcome-review__heading">
-                                      <Text className="plan-history__outcome-title">
-                                        历史采用 v{item.revision}
-                                      </Text>
-                                      <Text
-                                        className={`outcome-review__state outcome-review__state--${selectedOutcome.review.followUpState}`}
-                                      >
-                                        {selectedOutcome.review.followUpState === 'observed'
-                                          ? '已有后续记录'
-                                          : 'Unknown'}
-                                      </Text>
-                                    </View>
-                                    <OutcomeReviewDetails review={selectedOutcome.review} />
-                                  </>
-                                )}
-                              </View>
-                            ) : null}
                           </View>
                         )
                       })}

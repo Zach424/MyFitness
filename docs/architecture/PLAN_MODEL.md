@@ -1,6 +1,6 @@
 # Weekly plan model
 
-Status: implemented as `deterministic-v1` in iteration 008; bounded record-evidence freshness added in iteration 035; explicit plan-to-workout links added in iteration 036; stable revision-history pagination added in iteration 049; authority-aware plan/association write recovery added in iterations 058–059; revision-bound non-causal outcome review added in iteration 103; owner-scoped exact historical outcome reads added in iteration 104
+Status: implemented as `deterministic-v1` in iteration 008; bounded record-evidence freshness added in iteration 035; explicit plan-to-workout links added in iteration 036; stable revision-history pagination added in iteration 049; authority-aware plan/association write recovery added in iterations 058–059; revision-bound non-causal outcome review added in iteration 103; owner-scoped exact historical outcome reads added in iteration 104; dedicated outcome read surface added in iteration 105
 
 ## Purpose and boundary
 
@@ -108,7 +108,7 @@ Follow-up evidence is deliberately narrower than a general activity search:
 
 `GET /plans/weekly/:planId/history/:revision/outcome` recomputes one exact immutable `accepted` revision for its authenticated owner. Missing, non-accepted and cross-owner targets are concealed as `404`; responses are `private, no-store`. The endpoint and current-list projection share the same calculator, accepted/generated snapshot selection, current-fact filters and withdrawal counts.
 
-The client grants each accepted history row an independent, in-memory read authority. Initial failure remains unknown and offers an explicit focused retry; a monotonic generation invalidates results after another revision is selected, the plan changes or the page unmounts. It does not poll, persist reviews, replay requests in the background or expose raw service errors.
+The weekly-plan page keeps only lightweight navigation for current and historical accepted revisions; it does not retain a full outcome projection or request state. One dedicated outcome page grants the selected `planId` and positive integer revision a short-lived, in-memory read authority. Invalid parameters do not read, initial failure remains unknown and offers an explicit focused retry, and a monotonic generation invalidates results when retrying or unmounting. It does not poll, persist reviews, replay requests in the background or expose raw service errors. H5 query parameters contain plan identifiers but no health content.
 
 ## Known limitations
 

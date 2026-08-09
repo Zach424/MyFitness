@@ -14,6 +14,7 @@ export default defineAppConfig({
     'pages/nutrition-insights/index',
     'pages/food-catalog/index',
     'pages/plans/index',
+    'pages/plan-outcome/index',
     'pages/ai-explanations/index',
     'pages/privacy/index',
   ],

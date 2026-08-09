@@ -148,13 +148,24 @@ test('weekly plan supports substitution, modification and acceptance history', a
   await expect(page.getByText('v3', { exact: true }).first()).toBeVisible()
   const outcomeReview = page.locator('.outcome-review-card')
   await expect(outcomeReview.getByText('采用后回看')).toBeVisible()
-  await expect(outcomeReview.getByText('Unknown', { exact: true })).toBeVisible()
-  await expect(outcomeReview).toContainText('高脚杯深蹲')
-  await expect(outcomeReview).toContainText('不能证明因果或计划效果')
-  await outcomeReview.scrollIntoViewIfNeeded()
+  await expect(outcomeReview.getByText('独立读取', { exact: true })).toBeVisible()
+  await outcomeReview.getByRole('button', { name: '打开当前采用回看' }).click()
+  await expect(page.getByText('采用以后，留下了哪些记录')).toBeVisible()
+  await expect(page.getByText('Unknown', { exact: true })).toBeVisible()
+  await expect(page.locator('.review-sheet')).toContainText('高脚杯深蹲')
+  await expect(page.locator('.review-sheet')).toContainText('不能证明因果或效果')
+  await page.waitForTimeout(450)
+  await expect(page.getByRole('button', { name: '返回本周计划' })).toBeFocused()
   await page.screenshot({
-    path: 'output/playwright/iteration-103-plan-outcome-unknown-mobile.png',
+    path: 'output/playwright/iteration-105-current-plan-outcome-mobile.png',
   })
+  await page.setViewportSize({ width: 320, height: 844 })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
+    true,
+  )
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.getByRole('button', { name: '返回本周计划' }).click()
+  await expect(page.getByText('本周折页')).toBeVisible()
   await page.locator('.plans-scroll').evaluate((element) => element.scrollTo({ top: 0 }))
   await page.screenshot({
     path: 'output/playwright/iteration-008-plans-mobile.png',
@@ -265,21 +276,20 @@ test('weekly plan supports substitution, modification and acceptance history', a
     .filter({ hasText: '采用计划' })
     .filter({ hasText: 'v3' })
   await historicalV3.getByRole('button', { name: '查看 v3 采用后回看' }).click()
-  await expect(historicalV3.getByText('回看尚未确认')).toBeVisible()
-  await expect(historicalV3).not.toContainText('raw historical outcome outage')
-  const outcomeRetry = historicalV3.getByRole('button', { name: '重试核对 v3' })
+  await expect(page.getByText('回看尚未确认')).toBeVisible()
+  await expect(page.locator('.review-read')).not.toContainText('raw historical outcome outage')
+  const outcomeRetry = page.getByRole('button', { name: '重试核对 v3' })
   await expect(outcomeRetry).toBeFocused()
   await outcomeRetry.click()
-  await expect(historicalV3.getByText('历史采用 v3')).toBeVisible()
-  await expect(historicalV3.getByText('Unknown', { exact: true })).toBeVisible()
-  await expect(historicalV3).toContainText('高脚杯深蹲')
-  await expect(historicalV3).toContainText('1 条已删除恢复记录')
-  await expect(historicalV3).toContainText('撤销项不再算证据')
-  await expect(historicalV3).toContainText('不能证明因果或计划效果')
+  await expect(page.getByText('PLAN v3', { exact: true })).toBeVisible()
+  await expect(page.getByText('Unknown', { exact: true })).toBeVisible()
+  await expect(page.locator('.review-sheet')).toContainText('高脚杯深蹲')
+  await expect(page.locator('.review-sheet')).toContainText('1 条已删除恢复记录')
+  await expect(page.locator('.review-sheet')).toContainText('撤销项不再算证据')
+  await expect(page.locator('.review-sheet')).toContainText('不能证明因果或效果')
   await page.setViewportSize({ width: 390, height: 844 })
-  await historicalV3.scrollIntoViewIfNeeded()
   await page.screenshot({
-    path: 'output/playwright/iteration-104-historical-plan-outcome-mobile.png',
+    path: 'output/playwright/iteration-105-historical-plan-outcome-mobile.png',
   })
   expect(historicalOutcomeReads).toBe(2)
   expect(errors).toEqual([])
@@ -755,14 +765,13 @@ test('user explicitly reconciles a planned session with one actual workout', asy
   ).toBeVisible()
   await expect(page.locator('.week-fold__day--recorded')).toHaveCount(1)
   const observedReview = page.locator('.outcome-review-card')
-  await expect(observedReview.getByText('已有后续记录', { exact: true })).toBeVisible()
-  await expect(observedReview).toContainText('1 条明确训练关联')
-  await expect(observedReview).toContainText('PLAN v2 ↔ WORKOUT v1')
-  await expect(observedReview).toContainText('不能证明因果或计划效果')
-  await observedReview.scrollIntoViewIfNeeded()
-  await page.screenshot({
-    path: 'output/playwright/iteration-103-plan-outcome-observed-mobile.png',
-  })
+  await observedReview.getByRole('button', { name: '打开当前采用回看' }).click()
+  await expect(page.getByText('已有确认记录', { exact: true })).toBeVisible()
+  await expect(page.locator('.review-sheet')).toContainText('1 条训练关联')
+  await expect(page.locator('.review-sheet')).toContainText('PLAN v2 ↔ WORKOUT v1')
+  await expect(page.locator('.review-sheet')).toContainText('不能证明因果或效果')
+  await page.getByRole('button', { name: '返回本周计划' }).click()
+  await expect(page.locator('.session-link-card')).toBeVisible()
   await page.locator('.session-link-card').scrollIntoViewIfNeeded()
   await page.screenshot({ path: 'output/playwright/iteration-036-plan-link-mobile.png' })
 
