@@ -108,7 +108,9 @@ test('weekly plan supports substitution, modification and acceptance history', a
     page,
     (response) =>
       response.status() === 503 &&
-      (response.url().includes('/history?') || response.url().includes('/outcome')),
+      (response.url().includes('/history?') ||
+        response.url().includes('/outcome') ||
+        response.url().includes('/reflection')),
   )
   const accessToken = await seedProfileAndOpenPlans(page)
 
@@ -150,12 +152,63 @@ test('weekly plan supports substitution, modification and acceptance history', a
   await expect(outcomeReview.getByText('采用后回看')).toBeVisible()
   await expect(outcomeReview.getByText('独立读取', { exact: true })).toBeVisible()
   await outcomeReview.getByRole('button', { name: '打开当前采用回看' }).click()
-  await expect(page.getByText('采用以后，留下了哪些记录')).toBeVisible()
+  await expect(page.getByText('采用后记录')).toBeVisible()
   await expect(page.getByText('Unknown', { exact: true })).toBeVisible()
   await expect(page.locator('.review-sheet')).toContainText('高脚杯深蹲')
-  await expect(page.locator('.review-sheet')).toContainText('不能证明因果或效果')
+  await expect(page.locator('.review-sheet')).toContainText('不推断因果')
   await page.waitForTimeout(450)
   await expect(page.getByRole('button', { name: '返回本周计划' })).toBeFocused()
+  const reflectionCard = page.locator('.reflection-card')
+  const firstReflectionWrite = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/history/3/reflection') && response.request().method() === 'PUT',
+  )
+  await reflectionCard.getByRole('button', { name: '安排合适' }).click()
+  expect((await firstReflectionWrite).status()).toBe(200)
+  await expect(reflectionCard).toContainText('本人确认 · 安排合适 · v1')
+  const correction = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/history/3/reflection') && response.request().method() === 'PUT',
+  )
+  await reflectionCard.getByRole('button', { name: '还不能判断' }).click()
+  expect((await correction).status()).toBe(200)
+  await expect(reflectionCard).toContainText('本人确认 · 还不能判断 · v2')
+  await reflectionCard.scrollIntoViewIfNeeded()
+  await page.screenshot({ path: 'output/playwright/iteration-106-plan-reflection-mobile.png' })
+  await reflectionCard.getByRole('button', { name: '删除反思' }).click()
+  await expect(page.getByText('删除反思？')).toBeVisible()
+  const deletion = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/history/3/reflection') && response.request().method() === 'DELETE',
+  )
+  await page.getByText('删除', { exact: true }).last().click()
+  expect((await deletion).status()).toBe(204)
+  await expect(reflectionCard.getByRole('button', { name: '删除反思' })).toHaveCount(0)
+  await page.waitForTimeout(50)
+
+  let reflectionReads = 0
+  await page.route(/\/history\/3\/reflection$/, async (route) => {
+    if (route.request().method() !== 'GET') return route.continue()
+    reflectionReads += 1
+    if (reflectionReads === 1) {
+      await route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'raw reflection outage must stay hidden' }),
+      })
+      return
+    }
+    await route.continue()
+  })
+  await page.reload()
+  await expect(page.getByText('PLAN v3', { exact: true })).toBeVisible()
+  await expect(reflectionCard).toContainText('读取失败；不会显示成未填写')
+  await expect(reflectionCard).not.toContainText('raw reflection outage')
+  const reflectionRetry = reflectionCard.getByRole('button', { name: '重试读取' })
+  await expect(reflectionRetry).toBeFocused()
+  await reflectionRetry.click()
+  await expect(reflectionCard.getByRole('button', { name: '安排合适' })).toBeVisible()
+  expect(reflectionReads).toBe(2)
   await page.screenshot({
     path: 'output/playwright/iteration-105-current-plan-outcome-mobile.png',
   })
@@ -276,7 +329,7 @@ test('weekly plan supports substitution, modification and acceptance history', a
     .filter({ hasText: '采用计划' })
     .filter({ hasText: 'v3' })
   await historicalV3.getByRole('button', { name: '查看 v3 采用后回看' }).click()
-  await expect(page.getByText('回看尚未确认')).toBeVisible()
+  await expect(page.getByText('读取失败', { exact: true })).toBeVisible()
   await expect(page.locator('.review-read')).not.toContainText('raw historical outcome outage')
   const outcomeRetry = page.getByRole('button', { name: '重试核对 v3' })
   await expect(outcomeRetry).toBeFocused()
@@ -284,15 +337,23 @@ test('weekly plan supports substitution, modification and acceptance history', a
   await expect(page.getByText('PLAN v3', { exact: true })).toBeVisible()
   await expect(page.getByText('Unknown', { exact: true })).toBeVisible()
   await expect(page.locator('.review-sheet')).toContainText('高脚杯深蹲')
-  await expect(page.locator('.review-sheet')).toContainText('1 条已删除恢复记录')
-  await expect(page.locator('.review-sheet')).toContainText('撤销项不再算证据')
-  await expect(page.locator('.review-sheet')).toContainText('不能证明因果或效果')
+  await expect(page.locator('.review-sheet')).toContainText('已排除撤销项：训练 0 · 恢复 1')
+  await expect(page.locator('.review-sheet')).toContainText('不推断因果')
   await page.setViewportSize({ width: 390, height: 844 })
   await page.screenshot({
     path: 'output/playwright/iteration-105-historical-plan-outcome-mobile.png',
   })
   expect(historicalOutcomeReads).toBe(2)
-  expect(errors).toEqual([])
+  expect(
+    errors.filter(
+      (error) =>
+        !(
+          error.includes('Request failed: DELETE') &&
+          error.includes('/reflection') &&
+          error.includes('net::ERR_ABORTED')
+        ),
+    ),
+  ).toEqual([])
 })
 
 test('lost generation response reconciles the current week without a second write', async ({
@@ -767,9 +828,9 @@ test('user explicitly reconciles a planned session with one actual workout', asy
   const observedReview = page.locator('.outcome-review-card')
   await observedReview.getByRole('button', { name: '打开当前采用回看' }).click()
   await expect(page.getByText('已有确认记录', { exact: true })).toBeVisible()
-  await expect(page.locator('.review-sheet')).toContainText('1 条训练关联')
+  await expect(page.locator('.review-sheet')).toContainText('03 确认')
   await expect(page.locator('.review-sheet')).toContainText('PLAN v2 ↔ WORKOUT v1')
-  await expect(page.locator('.review-sheet')).toContainText('不能证明因果或效果')
+  await expect(page.locator('.review-sheet')).toContainText('不推断因果')
   await page.getByRole('button', { name: '返回本周计划' }).click()
   await expect(page.locator('.session-link-card')).toBeVisible()
   await page.locator('.session-link-card').scrollIntoViewIfNeeded()

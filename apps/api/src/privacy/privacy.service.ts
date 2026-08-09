@@ -133,11 +133,13 @@ export class PrivacyService {
         UNION ALL
         SELECT 'plans',
                ((SELECT COUNT(*) FROM weekly_plans WHERE user_id = $1)
-                + (SELECT COUNT(*) FROM plan_workout_links WHERE user_id = $1))::text,
+                + (SELECT COUNT(*) FROM plan_workout_links WHERE user_id = $1)
+                + (SELECT COUNT(*) FROM plan_experience_reflections WHERE user_id = $1))::text,
                TRUE,
                GREATEST(
                  (SELECT MAX(updated_at) FROM weekly_plans WHERE user_id = $1),
-                 (SELECT MAX(COALESCE(unlinked_at, linked_at)) FROM plan_workout_links WHERE user_id = $1)
+                 (SELECT MAX(COALESCE(unlinked_at, linked_at)) FROM plan_workout_links WHERE user_id = $1),
+                 (SELECT MAX(updated_at) FROM plan_experience_reflections WHERE user_id = $1)
                )
         UNION ALL
         SELECT 'ai_outputs', COUNT(*)::text, FALSE, MAX(created_at)
@@ -440,13 +442,21 @@ export class PrivacyService {
                SELECT jsonb_agg((to_jsonb(history) - 'user_id' - 'plan_id') ORDER BY history.revision)
                FROM weekly_plan_revisions AS history WHERE history.plan_id = plan.id
              ), '[]'::jsonb),
-             'workout_links', COALESCE((
-               SELECT jsonb_agg(
-                 (to_jsonb(link) - 'user_id' - 'plan_id') ORDER BY link.linked_at
-               )
-               FROM plan_workout_links AS link WHERE link.plan_id = plan.id
-             ), '[]'::jsonb)
-           )
+              'workout_links', COALESCE((
+                SELECT jsonb_agg(
+                  (to_jsonb(link) - 'user_id' - 'plan_id') ORDER BY link.linked_at
+                )
+                FROM plan_workout_links AS link WHERE link.plan_id = plan.id
+              ), '[]'::jsonb),
+              'experience_reflections', COALESCE((
+                SELECT jsonb_agg(
+                  (to_jsonb(reflection) - 'user_id' - 'plan_id')
+                  ORDER BY reflection.plan_revision
+                )
+                FROM plan_experience_reflections AS reflection
+                WHERE reflection.plan_id = plan.id
+              ), '[]'::jsonb)
+            )
          ) AS payload
          FROM (
            SELECT id, week_start, timezone, engine_version, status, payload,

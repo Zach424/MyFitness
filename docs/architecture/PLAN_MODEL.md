@@ -94,7 +94,7 @@ Real local browser/API fault injection commits one link and one user closure bef
 
 Newly generated plans preserve the complete `subjective-recovery-state-v1` snapshot that produced their planning readiness projection. The snapshot includes temporal windows, personal baseline, coverage, confidence, consistency and exact health-record evidence references. The shared contract checks that the persisted state projects to the same nullable readiness score and planning-impact fingerprint. Historical payloads without this field remain readable and are labelled as legacy summaries; the API does not reconstruct them from later records.
 
-For a current `accepted` aggregate, `GET /plans/weekly` adds a non-persisted `plan-outcome-review-v1` projection. Its start is the immutable `changed_at` of the exact accepted revision; its scheduled end is exactly seven days later; `observedThrough` is the earlier of that end and the current read time. The read model compares the accepted snapshot with the closest preceding `generated` snapshot by stable activity ID to expose adopted substitutions. It does not infer motivation from notes.
+For an exact `accepted` aggregate, `GET /plans/weekly/:planId/history/:revision/outcome` computes a non-persisted `plan-outcome-review-v1` projection. The weekly list intentionally carries only navigation metadata and does not calculate or embed this projection. Its start is the immutable `changed_at` of the exact accepted revision; its scheduled end is exactly seven days later; `observedThrough` is the earlier of that end and the current read time. The read model compares the accepted snapshot with the closest preceding `generated` snapshot by stable activity ID to expose adopted substitutions. It does not infer motivation from notes.
 
 Follow-up evidence is deliberately narrower than a general activity search:
 
@@ -110,12 +110,21 @@ Follow-up evidence is deliberately narrower than a general activity search:
 
 The weekly-plan page keeps only lightweight navigation for current and historical accepted revisions; it does not retain a full outcome projection or request state. One dedicated outcome page grants the selected `planId` and positive integer revision a short-lived, in-memory read authority. Invalid parameters do not read, initial failure remains unknown and offers an explicit focused retry, and a monotonic generation invalidates results when retrying or unmounting. It does not poll, persist reviews, replay requests in the background or expose raw service errors. H5 query parameters contain plan identifiers but no health content.
 
+## User-confirmed plan experience
+
+`plan_experience_reflections` stores at most one current reflection for an authenticated owner, plan UUID and exact accepted revision. Its value is one of `easier_than_expected`, `about_right`, `not_right_for_me` or `not_sure_yet`; the server fixes the source to `user_confirmed`. No note, AI value, outcome direction or automatic plan input is accepted.
+
+`GET/PUT/DELETE /plans/weekly/:planId/history/:revision/reflection` conceals missing, non-accepted and cross-owner targets as `404`. GET returns an object envelope whose `reflection` is nullable, so a confirmed absence is distinct from an empty transport response. PUT requires `expectedRevision=0` for creation or the exact current revision for correction; a transaction and row lock increment the revision. Correction replaces the previous subjective value rather than retaining an immutable content history. DELETE requires the exact current revision and removes the row.
+
+The dedicated outcome page reads the system outcome and user reflection under separate in-memory authorities. A failed reflection read never becomes an unfilled state and cannot hide a successfully read outcome. The four choices create or correct on explicit activation; deletion requires confirmation. Current reflections participate in privacy inventory and portable export, while owner deletion cascades them. They do not change outcome `unknown`/`observed`, prove adherence/effect/causality, invoke AI or adapt later plans.
+
 ## Known limitations
 
 - The rules are explainable but have not been clinically validated or evaluated against user outcomes.
 - Exercise and food choices use a small built-in starter set rather than a licensed, localized catalog.
 - Evidence freshness is intentionally coarse and uses only the current engine's recovery boundary. The outcome review is descriptive and does not adapt workload, adherence or nutrition.
 - Outcome review is available for current and exact historical accepted revisions, but its seven-day window, actively selected evidence and withdrawal counts cannot establish plan effect or causal attribution.
+- A four-choice user reflection is a current self-report, not an effect measure. Correction does not preserve prior subjective content, and the choice set still requires user research.
 - There is no plan-to-workout draft handoff; users first save an actual workout and then explicitly choose it from the plan.
 - No language model, photo analysis, device data, injury assessment, progressive overload, or adaptive energy model participates in this version.
 

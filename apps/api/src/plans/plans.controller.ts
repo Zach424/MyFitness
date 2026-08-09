@@ -19,6 +19,7 @@ import {
   ApiCreatedResponse,
   ApiHeader,
   ApiNotFoundResponse,
+  ApiNoContentResponse,
   ApiOkResponse,
   ApiOperation,
   ApiParam,
@@ -32,6 +33,8 @@ import {
   generateWeeklyPlanSchema,
   idempotencyKeySchema,
   planDecisionSchema,
+  planExperienceReflectionSchema,
+  planExperienceReflectionReadSchema,
   planOutcomeReviewSchema,
   planWorkoutLinkIdSchema,
   planWorkoutLinkClosureSchema,
@@ -42,9 +45,11 @@ import {
   weeklyPlanListSchema,
   weeklyPlanRevisionSchema,
   weeklyPlanSchema,
+  writePlanExperienceReflectionSchema,
   type GenerateWeeklyPlan,
   type PlanDecision,
   type CreatePlanWorkoutLink,
+  type WritePlanExperienceReflection,
 } from '@myfitness/contracts'
 import * as z from 'zod'
 
@@ -198,6 +203,88 @@ export class PlansController {
     return planOutcomeReviewSchema.parse(
       await this.plans.outcome(principal.userId, planId, planRevision),
     )
+  }
+
+  @Get(':planId/history/:revision/reflection')
+  @Header('Cache-Control', 'private, no-store')
+  @ApiOperation({ summary: 'Read one user-confirmed reflection for an accepted plan revision' })
+  @ApiParam({ name: 'planId', schema: { type: 'string', format: 'uuid' } })
+  @ApiParam({ name: 'revision', schema: { type: 'integer', minimum: 1 } })
+  @ApiOkResponse({ schema: openApiSchema(planExperienceReflectionReadSchema) })
+  @ApiNotFoundResponse({ description: 'Accepted plan revision does not exist for this user.' })
+  async reflection(
+    @CurrentUser() principal: AuthPrincipal,
+    @Param('planId') rawId: string,
+    @Param('revision') rawRevision: string,
+  ) {
+    const planId = parse(weeklyPlanIdSchema, rawId, 'planId must be a UUID')
+    const planRevision = parse(
+      weeklyPlanRevisionSchema,
+      rawRevision,
+      'plan revision must be a positive integer',
+    )
+    const reflection = await this.plans.reflection(principal.userId, planId, planRevision)
+    return planExperienceReflectionReadSchema.parse({ planId, planRevision, reflection })
+  }
+
+  @Put(':planId/history/:revision/reflection')
+  @Header('Cache-Control', 'private, no-store')
+  @ApiOperation({ summary: 'Create or correct one user-confirmed plan experience reflection' })
+  @ApiParam({ name: 'planId', schema: { type: 'string', format: 'uuid' } })
+  @ApiParam({ name: 'revision', schema: { type: 'integer', minimum: 1 } })
+  @ApiBody({ schema: openApiSchema(writePlanExperienceReflectionSchema) })
+  @ApiOkResponse({ schema: openApiSchema(planExperienceReflectionSchema) })
+  @ApiConflictResponse({ description: 'Expected reflection revision does not match.' })
+  @ApiNotFoundResponse({ description: 'Accepted plan revision does not exist for this user.' })
+  async writeReflection(
+    @CurrentUser() principal: AuthPrincipal,
+    @Param('planId') rawId: string,
+    @Param('revision') rawRevision: string,
+    @Body() body: unknown,
+  ) {
+    const planId = parse(weeklyPlanIdSchema, rawId, 'planId must be a UUID')
+    const planRevision = parse(
+      weeklyPlanRevisionSchema,
+      rawRevision,
+      'plan revision must be a positive integer',
+    )
+    const input: WritePlanExperienceReflection = parse(
+      writePlanExperienceReflectionSchema,
+      body,
+      'plan experience reflection is invalid',
+    )
+    return planExperienceReflectionSchema.parse(
+      await this.plans.writeReflection(principal.userId, planId, planRevision, input),
+    )
+  }
+
+  @Delete(':planId/history/:revision/reflection')
+  @HttpCode(204)
+  @ApiOperation({ summary: 'Delete one user-confirmed plan experience reflection' })
+  @ApiParam({ name: 'planId', schema: { type: 'string', format: 'uuid' } })
+  @ApiParam({ name: 'revision', schema: { type: 'integer', minimum: 1 } })
+  @ApiHeader({ name: 'x-expected-revision', required: true })
+  @ApiNoContentResponse({ description: 'Reflection content was deleted.' })
+  @ApiConflictResponse({ description: 'Expected reflection revision does not match.' })
+  @ApiNotFoundResponse({ description: 'Accepted plan revision or reflection does not exist.' })
+  async deleteReflection(
+    @CurrentUser() principal: AuthPrincipal,
+    @Param('planId') rawId: string,
+    @Param('revision') rawRevision: string,
+    @Headers('x-expected-revision') rawExpectedRevision: string | undefined,
+  ) {
+    const planId = parse(weeklyPlanIdSchema, rawId, 'planId must be a UUID')
+    const planRevision = parse(
+      weeklyPlanRevisionSchema,
+      rawRevision,
+      'plan revision must be a positive integer',
+    )
+    const expectedRevision = parse(
+      expectedRevisionHeaderSchema,
+      rawExpectedRevision,
+      'x-expected-revision is invalid or missing',
+    )
+    await this.plans.deleteReflection(principal.userId, planId, planRevision, expectedRevision)
   }
 
   @Get(':planId/history')

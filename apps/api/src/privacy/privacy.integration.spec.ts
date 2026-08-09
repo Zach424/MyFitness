@@ -90,6 +90,26 @@ describe('privacy ownership API with PostgreSQL and private media', () => {
       })
       .expect(201)
 
+  const createPlanReflection = async (token: string) => {
+    const generated = await request(app.getHttpServer())
+      .post('/v1/plans/weekly')
+      .set('Authorization', `Bearer ${token}`)
+      .set('x-idempotency-key', `privacy-plan-${randomUUID()}`)
+      .send({ weekStart: '2026-08-24' })
+      .expect(201)
+    const accepted = await request(app.getHttpServer())
+      .put(`/v1/plans/weekly/${generated.body.id}/decision`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ decision: 'accepted', expectedRevision: generated.body.revision, selections: [] })
+      .expect(200)
+    const reflection = await request(app.getHttpServer())
+      .put(`/v1/plans/weekly/${generated.body.id}/history/${accepted.body.revision}/reflection`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ experience: 'about_right', expectedRevision: 0 })
+      .expect(200)
+    return { planId: generated.body.id as string, reflectionId: reflection.body.id as string }
+  }
+
   const createDeletionIntent = async (token: string) => {
     const response = await request(app.getHttpServer())
       .post('/v1/me/privacy/account-deletion-intents')
@@ -161,6 +181,7 @@ describe('privacy ownership API with PostgreSQL and private media', () => {
   it('inventories owned data and exports history plus active sanitized media without secrets', async () => {
     const { token, userId } = await createUser()
     await createHealthRecord(token)
+    const plan = await createPlanReflection(token)
     const photo = await createPhoto(token, userId)
 
     const overview = await request(app.getHttpServer())
@@ -174,6 +195,9 @@ describe('privacy ownership API with PostgreSQL and private media', () => {
         (item: { category: string }) => item.category === 'health_records',
       ),
     ).toMatchObject({ recordCount: 1, includesHistory: true })
+    expect(
+      overview.body.inventory.find((item: { category: string }) => item.category === 'plans'),
+    ).toMatchObject({ recordCount: 2, includesHistory: true })
 
     const exported = await request(app.getHttpServer())
       .get('/v1/me/privacy/export')
@@ -186,6 +210,15 @@ describe('privacy ownership API with PostgreSQL and private media', () => {
       data: {
         healthRecords: unknown[]
         healthRecordRevisions: unknown[]
+        weeklyPlans: Array<{
+          id: string
+          experience_reflections: Array<{
+            id: string
+            experience: string
+            source: string
+            user_id?: string
+          }>
+        }>
         foodPhotoAnalyses: Array<{ media?: { encoding?: string; data?: string } }>
         progressPhotos: unknown[]
       }
@@ -193,6 +226,19 @@ describe('privacy ownership API with PostgreSQL and private media', () => {
     expect(payload.schemaVersion).toBe('myfitness-portable-export-v4')
     expect(payload.data.healthRecords).toHaveLength(1)
     expect(payload.data.healthRecordRevisions).toHaveLength(1)
+    expect(payload.data.weeklyPlans).toEqual([
+      expect.objectContaining({
+        id: plan.planId,
+        experience_reflections: [
+          expect.objectContaining({
+            id: plan.reflectionId,
+            experience: 'about_right',
+            source: 'user_confirmed',
+          }),
+        ],
+      }),
+    ])
+    expect(payload.data.weeklyPlans[0]?.experience_reflections[0]).not.toHaveProperty('user_id')
     expect(payload.data.foodPhotoAnalyses[0]?.media).toMatchObject({ encoding: 'base64' })
     expect(payload.data.foodPhotoAnalyses[0]?.media?.data?.length).toBeGreaterThan(20)
     expect(payload.data.progressPhotos).toEqual([])
@@ -345,6 +391,7 @@ describe('privacy ownership API with PostgreSQL and private media', () => {
   it('requires deliberate confirmation, erases the account graph and invalidates its session', async () => {
     const { token, userId } = await createUser()
     await createHealthRecord(token)
+    await createPlanReflection(token)
     const photo = await createPhoto(token, userId)
     const intent = await createDeletionIntent(token)
 
@@ -418,14 +465,25 @@ describe('privacy ownership API with PostgreSQL and private media', () => {
       .get('/v1/me/privacy')
       .set('Authorization', `Bearer ${token}`)
       .expect(401)
-    const remaining = await pool.query<{ users: string; records: string; consents: string }>(
+    const remaining = await pool.query<{
+      users: string
+      records: string
+      consents: string
+      reflections: string
+    }>(
       `SELECT
          (SELECT COUNT(*) FROM users WHERE id = $1)::text AS users,
          (SELECT COUNT(*) FROM health_records WHERE user_id = $1)::text AS records,
-         (SELECT COUNT(*) FROM consent_events WHERE user_id = $1)::text AS consents`,
+         (SELECT COUNT(*) FROM consent_events WHERE user_id = $1)::text AS consents,
+         (SELECT COUNT(*) FROM plan_experience_reflections WHERE user_id = $1)::text AS reflections`,
       [userId],
     )
-    expect(remaining.rows[0]).toEqual({ users: '0', records: '0', consents: '0' })
+    expect(remaining.rows[0]).toEqual({
+      users: '0',
+      records: '0',
+      consents: '0',
+      reflections: '0',
+    })
     const receipt = await pool.query<{ scope_version: string }>(
       'SELECT scope_version FROM privacy_erasure_receipts WHERE receipt_id = $1',
       [deleted.body.receiptId],

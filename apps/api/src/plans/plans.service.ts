@@ -12,6 +12,7 @@ import type {
   GenerateWeeklyPlan,
   PlanDecision,
   OnboardingResponse,
+  PlanExperienceReflection,
   PlanFreshness,
   PlanOutcomeRecoveryObservation,
   PlanOutcomeReview,
@@ -20,6 +21,7 @@ import type {
   WeeklyPlanContent,
   WeeklyPlanHistoryItem,
   WeeklyPlanHistoryQuery,
+  WritePlanExperienceReflection,
 } from '@myfitness/contracts'
 import {
   normalizePersistedPlanEvidence,
@@ -114,6 +116,18 @@ type PlanOutcomeWithdrawalRow = {
   recovery_record_count: string
 }
 
+type PlanExperienceReflectionRow = {
+  id: string
+  user_id: string
+  plan_id: string
+  plan_revision: number
+  experience: PlanExperienceReflection['experience']
+  source: PlanExperienceReflection['source']
+  revision: number
+  created_at: Date
+  updated_at: Date
+}
+
 const localDate = (value: string | Date) => {
   if (typeof value === 'string') return value.slice(0, 10)
   const pad = (part: number) => String(part).padStart(2, '0')
@@ -161,6 +175,19 @@ const mapPlanWorkoutLink = (row: PlanWorkoutLinkRow): PlanWorkoutLink => ({
   linkedAt: row.linked_at.toISOString(),
 })
 
+const mapPlanExperienceReflection = (
+  row: PlanExperienceReflectionRow,
+): PlanExperienceReflection => ({
+  id: row.id,
+  planId: row.plan_id,
+  planRevision: row.plan_revision,
+  experience: row.experience,
+  source: row.source,
+  revision: row.revision,
+  createdAt: row.created_at.toISOString(),
+  updatedAt: row.updated_at.toISOString(),
+})
+
 const loadActivePlanWorkoutLinks = async (
   executor: QueryExecutor,
   userId: string,
@@ -186,46 +213,27 @@ const loadActivePlanWorkoutLinks = async (
   return result.rows.map(mapPlanWorkoutLink)
 }
 
-const loadPlanOutcomeReviews = async (
+const outcomeKey = (planId: string, planRevision: number) => `${planId}:${planRevision}`
+
+const assertAcceptedPlanRevision = async (
   executor: QueryExecutor,
   userId: string,
-  plans: WeeklyPlan[],
-  linksByPlan: Map<string, PlanWorkoutLink[]>,
-  now: Date,
+  planId: string,
+  planRevision: number,
 ) => {
-  const acceptedIds = plans.filter((plan) => plan.status === 'accepted').map((plan) => plan.id)
-  if (!acceptedIds.length) return new Map<string, PlanOutcomeReview>()
-
-  const contexts = await executor.query<PlanOutcomeContextRow>(
-    `
-      SELECT adopted.plan_id, adopted.revision AS plan_revision,
-             adopted.snapshot, adopted.changed_at AS adopted_at,
-             baseline.snapshot AS baseline_snapshot
-      FROM weekly_plan_revisions AS adopted
-      JOIN weekly_plans AS current
-        ON current.id = adopted.plan_id AND current.user_id = adopted.user_id
-      JOIN LATERAL (
-        SELECT generated.snapshot
-        FROM weekly_plan_revisions AS generated
-        WHERE generated.plan_id = adopted.plan_id
-          AND generated.user_id = adopted.user_id
-          AND generated.action = 'generated'
-          AND generated.revision <= adopted.revision
-        ORDER BY generated.revision DESC
-        LIMIT 1
-      ) AS baseline ON TRUE
-      WHERE adopted.user_id = $1
-        AND adopted.plan_id = ANY($2::uuid[])
-        AND adopted.action = 'accepted'
-        AND adopted.revision = current.revision
-        AND current.status = 'accepted'
-    `,
-    [userId, acceptedIds],
+  const accepted = await executor.query<{ revision: number }>(
+    `SELECT accepted.revision
+     FROM weekly_plan_revisions AS accepted
+     JOIN weekly_plans AS owned
+       ON owned.id = accepted.plan_id AND owned.user_id = accepted.user_id
+     WHERE accepted.user_id = $1
+       AND accepted.plan_id = $2
+       AND accepted.revision = $3
+       AND accepted.action = 'accepted'`,
+    [userId, planId, planRevision],
   )
-  return projectPlanOutcomeReviews(executor, userId, contexts.rows, linksByPlan, now)
+  if (!accepted.rows[0]) throw new NotFoundException('accepted weekly plan revision not found')
 }
-
-const outcomeKey = (planId: string, planRevision: number) => `${planId}:${planRevision}`
 
 const projectPlanOutcomeReviews = async (
   executor: QueryExecutor,
@@ -627,13 +635,6 @@ export class PlansService {
       current.push(link)
       linksByPlan.set(link.planId, current)
     }
-    const outcomeReviews = await loadPlanOutcomeReviews(
-      this.database,
-      userId,
-      plans,
-      linksByPlan,
-      new Date(),
-    )
     let profile: OnboardingResponse | undefined
     try {
       profile = await this.onboarding.get(userId)
@@ -652,7 +653,6 @@ export class PlansService {
           ...plan,
           freshness: projectFreshness(plan, profile, currentReadinessScore, checkedAt),
           sessionLinks: linksByPlan.get(plan.id) ?? [],
-          outcomeReview: outcomeReviews.get(outcomeKey(plan.id, plan.revision)) ?? null,
         }
       }),
     }
@@ -926,6 +926,89 @@ export class PlansService {
     const review = reviews.get(outcomeKey(planId, planRevision))
     if (!review) throw new NotFoundException('accepted weekly plan revision not found')
     return review
+  }
+
+  async reflection(
+    userId: string,
+    planId: string,
+    planRevision: number,
+  ): Promise<PlanExperienceReflection | null> {
+    await assertAcceptedPlanRevision(this.database, userId, planId, planRevision)
+    const result = await this.database.query<PlanExperienceReflectionRow>(
+      `SELECT * FROM plan_experience_reflections
+       WHERE user_id = $1 AND plan_id = $2 AND plan_revision = $3`,
+      [userId, planId, planRevision],
+    )
+    return result.rows[0] ? mapPlanExperienceReflection(result.rows[0]) : null
+  }
+
+  async writeReflection(
+    userId: string,
+    planId: string,
+    planRevision: number,
+    input: WritePlanExperienceReflection,
+  ): Promise<PlanExperienceReflection> {
+    return this.database.withTransaction(async (client) => {
+      await assertAcceptedPlanRevision(client, userId, planId, planRevision)
+      const current = await client.query<PlanExperienceReflectionRow>(
+        `SELECT * FROM plan_experience_reflections
+         WHERE user_id = $1 AND plan_id = $2 AND plan_revision = $3
+         FOR UPDATE`,
+        [userId, planId, planRevision],
+      )
+      const existing = current.rows[0]
+      if (!existing) {
+        if (input.expectedRevision !== 0) {
+          throw new ConflictException('plan experience reflection revision does not match')
+        }
+        const created = await client.query<PlanExperienceReflectionRow>(
+          `INSERT INTO plan_experience_reflections
+             (id, user_id, plan_id, plan_revision, experience, source, revision)
+           VALUES ($1, $2, $3, $4, $5, 'user_confirmed', 1)
+           RETURNING *`,
+          [randomUUID(), userId, planId, planRevision, input.experience],
+        )
+        return mapPlanExperienceReflection(created.rows[0]!)
+      }
+      if (existing.revision !== input.expectedRevision) {
+        throw new ConflictException('plan experience reflection revision does not match')
+      }
+      const updated = await client.query<PlanExperienceReflectionRow>(
+        `UPDATE plan_experience_reflections
+         SET experience = $1, revision = revision + 1, updated_at = NOW()
+         WHERE id = $2 AND user_id = $3 AND revision = $4
+         RETURNING *`,
+        [input.experience, existing.id, userId, input.expectedRevision],
+      )
+      return mapPlanExperienceReflection(updated.rows[0]!)
+    })
+  }
+
+  async deleteReflection(
+    userId: string,
+    planId: string,
+    planRevision: number,
+    expectedRevision: number,
+  ): Promise<void> {
+    await this.database.withTransaction(async (client) => {
+      await assertAcceptedPlanRevision(client, userId, planId, planRevision)
+      const deleted = await client.query<{ id: string }>(
+        `DELETE FROM plan_experience_reflections
+         WHERE user_id = $1 AND plan_id = $2 AND plan_revision = $3 AND revision = $4
+         RETURNING id`,
+        [userId, planId, planRevision, expectedRevision],
+      )
+      if (deleted.rows[0]) return
+      const current = await client.query<{ revision: number }>(
+        `SELECT revision FROM plan_experience_reflections
+         WHERE user_id = $1 AND plan_id = $2 AND plan_revision = $3`,
+        [userId, planId, planRevision],
+      )
+      if (current.rows[0]) {
+        throw new ConflictException('plan experience reflection revision does not match')
+      }
+      throw new NotFoundException('plan experience reflection not found')
+    })
   }
 
   async history(userId: string, planId: string, query: WeeklyPlanHistoryQuery = { limit: 20 }) {

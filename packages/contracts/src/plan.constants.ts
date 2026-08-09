@@ -37,6 +37,13 @@ export const planEvidenceChangeReasons = [
 export const planOutcomeReviewPolicyVersion = 'plan-outcome-review-v1' as const
 export const planOutcomeFollowUpStates = ['unknown', 'observed'] as const
 export const planOutcomeWindowStates = ['open', 'closed'] as const
+export const planExperienceChoices = [
+  'easier_than_expected',
+  'about_right',
+  'not_right_for_me',
+  'not_sure_yet',
+] as const
+export const planExperienceReflectionSource = 'user_confirmed' as const
 
 export type PlanReadinessBand = (typeof planReadinessBands)[number]
 export type PlanEvidenceFingerprint = (typeof planEvidenceFingerprints)[number]

@@ -436,7 +436,13 @@ describe('weekly plan API with PostgreSQL', () => {
       .get('/v1/plans/weekly')
       .set('Authorization', `Bearer ${outcomeToken}`)
       .expect(200)
-    const review = list.body.items[0].outcomeReview
+    expect(list.body.items[0]).not.toHaveProperty('outcomeReview')
+    const activeReview = await request(app.getHttpServer())
+      .get(`/v1/plans/weekly/${generated.body.id}/history/${accepted.body.revision}/outcome`)
+      .set('Authorization', `Bearer ${outcomeToken}`)
+      .expect('Cache-Control', 'private, no-store')
+      .expect(200)
+    const review = activeReview.body
     expect(review).toMatchObject({
       policyVersion: 'plan-outcome-review-v1',
       planId: generated.body.id,
@@ -489,7 +495,7 @@ describe('weekly plan API with PostgreSQL', () => {
       .get('/v1/plans/weekly')
       .set('Authorization', `Bearer ${outcomeToken}`)
       .expect(200)
-    expect(noCurrentReview.body.items[0].outcomeReview).toBeNull()
+    expect(noCurrentReview.body.items[0]).not.toHaveProperty('outcomeReview')
 
     const historicalReview = await request(app.getHttpServer())
       .get(`/v1/plans/weekly/${generated.body.id}/history/${accepted.body.revision}/outcome`)
@@ -516,6 +522,85 @@ describe('weekly plan API with PostgreSQL', () => {
       .get(`/v1/plans/weekly/${generated.body.id}/history/${modified.body.revision}/outcome`)
       .set('Authorization', `Bearer ${outcomeToken}`)
       .expect(404)
+  })
+
+  it('creates, corrects and deletes only an owner-confirmed exact accepted reflection', async () => {
+    const reflectionToken = await createSession(`plans-reflection-${randomUUID()}`)
+    const outsiderToken = await createSession(`plans-reflection-outsider-${randomUUID()}`)
+    await request(app.getHttpServer())
+      .put('/v1/me/onboarding')
+      .set('Authorization', `Bearer ${reflectionToken}`)
+      .send(onboarding())
+      .expect(200)
+    const generated = await request(app.getHttpServer())
+      .post('/v1/plans/weekly')
+      .set('Authorization', `Bearer ${reflectionToken}`)
+      .set('x-idempotency-key', `plan-${randomUUID()}`)
+      .send({ weekStart: '2026-08-17' })
+      .expect(201)
+    const accepted = await request(app.getHttpServer())
+      .put(`/v1/plans/weekly/${generated.body.id}/decision`)
+      .set('Authorization', `Bearer ${reflectionToken}`)
+      .send({ decision: 'accepted', expectedRevision: generated.body.revision, selections: [] })
+      .expect(200)
+    const path = `/v1/plans/weekly/${generated.body.id}/history/${accepted.body.revision}/reflection`
+
+    await request(app.getHttpServer())
+      .get(path)
+      .set('Authorization', `Bearer ${reflectionToken}`)
+      .expect('Cache-Control', 'private, no-store')
+      .expect(200)
+      .expect({ planId: generated.body.id, planRevision: accepted.body.revision, reflection: null })
+    const created = await request(app.getHttpServer())
+      .put(path)
+      .set('Authorization', `Bearer ${reflectionToken}`)
+      .send({ experience: 'about_right', expectedRevision: 0 })
+      .expect('Cache-Control', 'private, no-store')
+      .expect(200)
+    expect(created.body).toMatchObject({
+      planId: generated.body.id,
+      planRevision: accepted.body.revision,
+      experience: 'about_right',
+      source: 'user_confirmed',
+      revision: 1,
+    })
+
+    await request(app.getHttpServer())
+      .put(path)
+      .set('Authorization', `Bearer ${reflectionToken}`)
+      .send({ experience: 'easier_than_expected', expectedRevision: 0 })
+      .expect(409)
+    await request(app.getHttpServer())
+      .get(path)
+      .set('Authorization', `Bearer ${outsiderToken}`)
+      .expect(404)
+    await request(app.getHttpServer())
+      .put(`/v1/plans/weekly/${generated.body.id}/history/${generated.body.revision}/reflection`)
+      .set('Authorization', `Bearer ${reflectionToken}`)
+      .send({ experience: 'not_sure_yet', expectedRevision: 0 })
+      .expect(404)
+
+    const corrected = await request(app.getHttpServer())
+      .put(path)
+      .set('Authorization', `Bearer ${reflectionToken}`)
+      .send({ experience: 'not_sure_yet', expectedRevision: created.body.revision })
+      .expect(200)
+    expect(corrected.body).toMatchObject({ experience: 'not_sure_yet', revision: 2 })
+    await request(app.getHttpServer())
+      .delete(path)
+      .set('Authorization', `Bearer ${reflectionToken}`)
+      .set('x-expected-revision', '1')
+      .expect(409)
+    await request(app.getHttpServer())
+      .delete(path)
+      .set('Authorization', `Bearer ${reflectionToken}`)
+      .set('x-expected-revision', String(corrected.body.revision))
+      .expect(204)
+    await request(app.getHttpServer())
+      .get(path)
+      .set('Authorization', `Bearer ${reflectionToken}`)
+      .expect(200)
+      .expect({ planId: generated.body.id, planRevision: accepted.body.revision, reflection: null })
   })
 
   it('links only explicit owner-selected current revisions and preserves closure history', async () => {

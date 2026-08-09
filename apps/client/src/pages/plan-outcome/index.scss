@@ -48,7 +48,7 @@
 .review-copy,
 .review-sheet__title,
 .review-window,
-.review-step__title,
+.review-fact,
 .review-withdrawn,
 .review-boundary,
 .review-read__title,
@@ -60,7 +60,6 @@
   margin-top: 7px;
   font-size: clamp(29px, 9vw, 46px);
   font-weight: 800;
-  letter-spacing: -0.055em;
   line-height: 1.08;
 }
 
@@ -72,11 +71,49 @@
 }
 
 .review-sheet,
-.review-read {
+.review-read,
+.reflection-card {
   padding: 18px;
   border: 1px solid var(--color-line);
   border-radius: var(--radius-card);
   background: var(--color-paper);
+}
+
+.reflection-card {
+  margin-top: 14px;
+}
+
+.reflection-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.reflection-option,
+.reflection-remove {
+  min-height: 44px;
+  margin: 0;
+  border-radius: 9px;
+  font-size: 9px;
+}
+
+.reflection-option {
+  border: 1px solid var(--color-line);
+  color: var(--color-ink);
+  background: var(--color-mist);
+}
+
+.reflection-option--selected {
+  border-color: var(--color-mineral);
+  color: var(--color-paper);
+  background: var(--color-mineral);
+}
+
+.reflection-remove {
+  margin-top: 6px;
+  color: var(--color-warning);
+  background: transparent;
 }
 
 .review-sheet__title {
@@ -112,54 +149,16 @@
   font-size: 8px;
 }
 
-.review-rail {
+.review-facts {
   margin-top: 18px;
 }
 
-.review-step {
-  position: relative;
-  display: grid;
-  grid-template-columns: 30px minmax(0, 1fr);
-  gap: 11px;
-  padding-bottom: 20px;
-}
-
-.review-step::after {
-  position: absolute;
-  top: 27px;
-  bottom: 0;
-  left: 14px;
-  width: 1px;
-  background: var(--color-line);
-  content: '';
-}
-
-.review-step--last {
-  padding-bottom: 0;
-}
-
-.review-step--last::after {
-  display: none;
-}
-
-.review-step__no {
-  z-index: 1;
-  display: grid;
-  width: 30px;
-  height: 30px;
-  place-items: center;
-  border: 1px solid var(--color-mineral);
-  border-radius: 50%;
+.review-fact {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--color-line);
   color: var(--color-mineral);
-  background: var(--color-paper);
   font-size: 8px;
-}
-
-.review-step__title {
-  margin-top: 4px;
-  font-size: 14px;
-  font-weight: 750;
-  line-height: 1.4;
+  line-height: 1.65;
 }
 
 .review-withdrawn {
@@ -204,16 +203,4 @@
   padding: 18px 4px 0;
   border: 0;
   text-align: center;
-}
-
-@media (max-width: 340px) {
-  .review-shell {
-    width: min(100% - 20px, 820px);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .review-page * {
-    transition-duration: 0.01ms !important;
-  }
 }

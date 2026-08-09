@@ -34,6 +34,8 @@ import type {
   OnboardingRequest,
   OnboardingResponse,
   PlanDecision,
+  PlanExperienceReflection,
+  PlanExperienceReflectionRead,
   PlanOutcomeReview,
   PlanWorkoutLink,
   PlanWorkoutLinkClosure,
@@ -59,6 +61,7 @@ import type {
   WeeklyPlan,
   WeeklyPlanHistory,
   WeeklyPlanListItem,
+  WritePlanExperienceReflection,
   Workout,
   WorkoutHistory,
   WorkoutList,
@@ -624,6 +627,35 @@ export const getWeeklyPlanOutcome = (planId: string, revision: number) =>
     `/plans/weekly/${planId}/history/${revision}/outcome`,
     'GET',
   )
+
+const planReflectionPath = (planId: string, revision: number) =>
+  `/plans/weekly/${planId}/history/${revision}/reflection`
+
+export const getPlanExperienceReflection = (planId: string, revision: number) =>
+  authenticatedRequest<PlanExperienceReflectionRead>(
+    planReflectionPath(planId, revision),
+    'GET',
+  ).then((result) => result.reflection)
+
+export const writePlanExperienceReflection = (
+  planId: string,
+  revision: number,
+  payload: WritePlanExperienceReflection,
+) =>
+  authenticatedRequest<PlanExperienceReflection>(
+    planReflectionPath(planId, revision),
+    'PUT',
+    payload,
+  )
+
+export const deletePlanExperienceReflection = (
+  planId: string,
+  revision: number,
+  expectedRevision: number,
+) =>
+  authenticatedRequest<void>(planReflectionPath(planId, revision), 'DELETE', undefined, {
+    'x-expected-revision': String(expectedRevision),
+  })
 
 export const generateAiExplanation = (
   planId: string,

@@ -11,6 +11,8 @@ import {
   planEvidenceFingerprint,
   planEvidenceFingerprints,
   planEvidencePolicyVersion,
+  planExperienceChoices,
+  planExperienceReflectionSource,
   planIntensityLevels,
   planOutcomeFollowUpStates,
   planOutcomeReviewPolicyVersion,
@@ -354,8 +356,37 @@ export const planFreshnessSchema = z.discriminatedUnion('state', [
 export const weeklyPlanListItemSchema = weeklyPlanSchema.safeExtend({
   freshness: planFreshnessSchema,
   sessionLinks: z.array(planWorkoutLinkSchema),
-  outcomeReview: z.lazy(() => planOutcomeReviewSchema).nullable(),
 })
+
+export const planExperienceChoiceSchema = z.enum(planExperienceChoices)
+
+export const planExperienceReflectionSchema = z
+  .object({
+    id: z.string().uuid(),
+    planId: z.string().uuid(),
+    planRevision: z.number().int().positive(),
+    experience: planExperienceChoiceSchema,
+    source: z.literal(planExperienceReflectionSource),
+    revision: z.number().int().positive(),
+    createdAt: z.string().datetime({ offset: true }),
+    updatedAt: z.string().datetime({ offset: true }),
+  })
+  .strict()
+
+export const planExperienceReflectionReadSchema = z
+  .object({
+    planId: z.string().uuid(),
+    planRevision: z.number().int().positive(),
+    reflection: planExperienceReflectionSchema.nullable(),
+  })
+  .strict()
+
+export const writePlanExperienceReflectionSchema = z
+  .object({
+    experience: planExperienceChoiceSchema,
+    expectedRevision: z.number().int().min(0),
+  })
+  .strict()
 
 export const planOutcomeAdjustmentSchema = z
   .object({
@@ -553,6 +584,10 @@ export type PlanWorkoutLinkClosure = z.infer<typeof planWorkoutLinkClosureSchema
 export type PlanOutcomeAdjustment = z.infer<typeof planOutcomeAdjustmentSchema>
 export type PlanOutcomeRecoveryObservation = z.infer<typeof planOutcomeRecoveryObservationSchema>
 export type PlanOutcomeReview = z.infer<typeof planOutcomeReviewSchema>
+export type PlanExperienceChoice = z.infer<typeof planExperienceChoiceSchema>
+export type PlanExperienceReflection = z.infer<typeof planExperienceReflectionSchema>
+export type PlanExperienceReflectionRead = z.infer<typeof planExperienceReflectionReadSchema>
+export type WritePlanExperienceReflection = z.infer<typeof writePlanExperienceReflectionSchema>
 export type PlanFreshness = z.infer<typeof planFreshnessSchema>
 export type WeeklyPlanListItem = z.infer<typeof weeklyPlanListItemSchema>
 export type GenerateWeeklyPlan = z.infer<typeof generateWeeklyPlanSchema>

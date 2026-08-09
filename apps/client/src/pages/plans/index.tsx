@@ -360,12 +360,7 @@ const PlansPage = () => {
   }
 
   const applyProjectedPlan = (projected: WeeklyPlanListItem) => {
-    const {
-      freshness: nextFreshness,
-      sessionLinks: nextSessionLinks,
-      outcomeReview: _outcomeReview,
-      ...plan
-    } = projected
+    const { freshness: nextFreshness, sessionLinks: nextSessionLinks, ...plan } = projected
     setCurrentPlan(plan, nextFreshness, nextSessionLinks)
     return plan
   }
@@ -477,12 +472,7 @@ const PlansPage = () => {
         if (announce) setFeedback('已向服务端复核：当前账户仍没有本周计划。')
         return
       }
-      const {
-        freshness: nextFreshness,
-        sessionLinks: nextSessionLinks,
-        outcomeReview: _outcomeReview,
-        ...plan
-      } = projected
+      const { freshness: nextFreshness, sessionLinks: nextSessionLinks, ...plan } = projected
       const previousFreshness = freshnessRef.current
       const planChanged = !current || plan.id !== current.id || plan.revision !== current.revision
       const freshnessChanged =
@@ -542,12 +532,7 @@ const PlansPage = () => {
       setWorkouts(workoutList.items)
       lastProjectionCheck.current = Date.now()
       if (latest && historySnapshot) {
-        const {
-          freshness: initialFreshness,
-          sessionLinks: initialLinks,
-          outcomeReview: _initialOutcomeReview,
-          ...plan
-        } = latest
+        const { freshness: initialFreshness, sessionLinks: initialLinks, ...plan } = latest
         ++historyGenerationRef.current
         setCurrentPlan(plan, initialFreshness, initialLinks)
         applyPlanHistorySnapshot(historySnapshot)

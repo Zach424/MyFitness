@@ -5,11 +5,13 @@ import {
   generateWeeklyPlanSchema,
   normalizePersistedPlanEvidence,
   planDecisionSchema,
+  planExperienceReflectionSchema,
   planEvidenceSchema,
   planFreshnessSchema,
   planWorkoutLinkSchema,
   weeklyPlanHistoryQuerySchema,
   weeklyPlanRevisionSchema,
+  writePlanExperienceReflectionSchema,
 } from './plan'
 
 describe('weekly plan contract', () => {
@@ -37,6 +39,33 @@ describe('weekly plan contract', () => {
     expect(weeklyPlanRevisionSchema.parse('3')).toBe(3)
     expect(weeklyPlanRevisionSchema.safeParse('0').success).toBe(false)
     expect(weeklyPlanRevisionSchema.safeParse('3.5').success).toBe(false)
+  })
+
+  it('keeps plan experience subjective, user-confirmed and revision-bound', () => {
+    expect(
+      writePlanExperienceReflectionSchema.parse({
+        experience: 'about_right',
+        expectedRevision: 0,
+      }),
+    ).toEqual({ experience: 'about_right', expectedRevision: 0 })
+    expect(
+      writePlanExperienceReflectionSchema.safeParse({
+        experience: 'effective',
+        expectedRevision: 0,
+      }).success,
+    ).toBe(false)
+    expect(
+      planExperienceReflectionSchema.parse({
+        id: 'e20576d5-5bed-4878-8b45-898152fb4f60',
+        planId: 'af310f2e-e4ac-4aec-9e0f-d6658f430b09',
+        planRevision: 3,
+        experience: 'not_sure_yet',
+        source: 'user_confirmed',
+        revision: 2,
+        createdAt: '2026-08-10T00:00:00.000Z',
+        updatedAt: '2026-08-10T01:00:00.000Z',
+      }).source,
+    ).toBe('user_confirmed')
   })
 
   it('rejects non-Monday weeks and ambiguous decision payloads', () => {
