@@ -398,19 +398,18 @@ describe('exercise insight projection', () => {
       occurred_at: new Date(at.getTime() + 3_600_000),
       name: '未来动作名称',
     }
+    const sevenDayWindow = {
+      days: 7,
+      session_count: '2',
+      completed_set_count: '4',
+      total_reps: '40',
+      volume_kg: '480.252',
+      active_seconds: '0',
+      distance_meters: '0',
+    }
     const insight = buildExerciseInsight(
       'goblet_squat',
-      [
-        {
-          days: 7,
-          session_count: '2',
-          completed_set_count: '4',
-          total_reps: '40',
-          volume_kg: '480.252',
-          active_seconds: '0',
-          distance_meters: '0',
-        },
-      ],
+      [sevenDayWindow],
       [futurePoint, ...points],
       'Asia/Shanghai',
       at,
@@ -440,6 +439,38 @@ describe('exercise insight projection', () => {
       workoutId: futurePoint.workout_id,
       identity: { name: '未来动作名称' },
     })
+    const reorderedWindows = buildExerciseInsight(
+      'goblet_squat',
+      [{ ...sevenDayWindow, days: 90, session_count: '9' }, sevenDayWindow],
+      [],
+      'Asia/Shanghai',
+      at,
+    )
+    expect(
+      reorderedWindows.windows.map(({ days, sessionCount }) => ({ days, sessionCount })),
+    ).toEqual([
+      { days: 7, sessionCount: 2 },
+      { days: 30, sessionCount: 0 },
+      { days: 90, sessionCount: 9 },
+    ])
+    expect(() =>
+      buildExerciseInsight(
+        'goblet_squat',
+        [sevenDayWindow, { ...sevenDayWindow }],
+        [],
+        'Asia/Shanghai',
+        at,
+      ),
+    ).toThrow('insight window rows must use unique 7/30/90 day identities')
+    expect(() =>
+      buildExerciseInsight(
+        'goblet_squat',
+        [{ ...sevenDayWindow, days: 14 }],
+        [],
+        'Asia/Shanghai',
+        at,
+      ),
+    ).toThrow('insight window rows must use unique 7/30/90 day identities')
     expect(() => buildExerciseInsight('goblet_squat', [], [], 'Invalid/Timezone', at)).toThrow(
       'insight timezone must be a valid IANA timezone',
     )
@@ -573,18 +604,17 @@ describe('health insight projection', () => {
       occurred_at: new Date(at.getTime() + 3_600_000),
       canonical_unit: 'cm' as const,
     }
+    const sevenDayWindow = {
+      days: 7,
+      record_count: '2',
+      recorded_days: '2',
+      minimum: '69',
+      maximum: '70',
+      average: '69.5',
+    }
     const insight = buildHealthInsight(
       'body.weight',
-      [
-        {
-          days: 7,
-          record_count: '2',
-          recorded_days: '2',
-          minimum: '69',
-          maximum: '70',
-          average: '69.5',
-        },
-      ],
+      [sevenDayWindow],
       [futurePoint, ...points],
       'Asia/Shanghai',
       at,
@@ -602,6 +632,25 @@ describe('health insight projection', () => {
       source: { kind: 'device', metadata: { deviceName: 'Local scale' } },
     })
     expect(insight.hasMore).toBe(true)
+
+    expect(() =>
+      buildHealthInsight(
+        'body.weight',
+        [sevenDayWindow, { ...sevenDayWindow }],
+        [],
+        'Asia/Shanghai',
+        at,
+      ),
+    ).toThrow('insight window rows must use unique 7/30/90 day identities')
+    expect(() =>
+      buildHealthInsight(
+        'body.weight',
+        [{ ...sevenDayWindow, days: 365 }],
+        [],
+        'Asia/Shanghai',
+        at,
+      ),
+    ).toThrow('insight window rows must use unique 7/30/90 day identities')
 
     expect(() =>
       buildHealthInsight(

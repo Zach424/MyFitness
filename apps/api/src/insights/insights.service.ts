@@ -207,6 +207,17 @@ const assertValidInsightPointRowTimes = (rows: Array<{ occurred_at: Date }>) => 
   }
 }
 
+const assertInsightWindowRowIdentities = (rows: Array<{ days: number }>) => {
+  const allowedDays = new Set([7, 30, 90])
+  const seenDays = new Set<number>()
+  for (const row of rows) {
+    if (!allowedDays.has(row.days) || seenDays.has(row.days)) {
+      throw new Error('insight window rows must use unique 7/30/90 day identities')
+    }
+    seenDays.add(row.days)
+  }
+}
+
 const assertInsightPointRowOrder = (rows: Array<{ occurred_at: Date }>) => {
   for (let index = 1; index < rows.length; index += 1) {
     if (rows[index]!.occurred_at.getTime() > rows[index - 1]!.occurred_at.getTime()) {
@@ -290,6 +301,7 @@ export const buildExerciseInsight = (
 ): ExerciseInsight => {
   assertValidInsightReferenceTime(at)
   assertValidInsightTimezone(timezone, at)
+  assertInsightWindowRowIdentities(windowRows)
   assertValidInsightPointRowTimes(pointRows)
   assertInsightPointRowOrder(pointRows)
   assertUniqueInsightPointRowIds(pointRows, (row) => row.workout_id)
@@ -432,6 +444,7 @@ export const buildHealthInsight = (
 ): HealthInsight => {
   assertValidInsightReferenceTime(at)
   assertValidInsightTimezone(timezone, at)
+  assertInsightWindowRowIdentities(windowRows)
   assertValidInsightPointRowTimes(pointRows)
   assertInsightPointRowOrder(pointRows)
   assertUniqueInsightPointRowIds(pointRows, (row) => row.record_id)
