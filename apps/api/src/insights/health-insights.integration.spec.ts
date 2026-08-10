@@ -116,6 +116,16 @@ describe('health insight API with PostgreSQL', () => {
     ])
     expect(initial.body.series).toHaveLength(2)
     expect(initial.body.windows[2].recordCount).toBe(initial.body.series.length)
+    const canonicalValues = initial.body.series.map(
+      (point: { canonicalValue: number }) => point.canonicalValue,
+    )
+    expect(initial.body.windows[2].statistics).toEqual({
+      minimum: Math.min(...canonicalValues),
+      maximum: Math.max(...canonicalValues),
+      average:
+        canonicalValues.reduce((total: number, value: number) => total + value, 0) /
+        canonicalValues.length,
+    })
     expect(initial.body.series[0]).toMatchObject({
       recordId: recent.body.id,
       metric: 'body.weight',

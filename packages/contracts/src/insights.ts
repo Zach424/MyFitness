@@ -539,6 +539,53 @@ const validateHealthInsightWindowPointReceipt = (
   }
 }
 
+const validateHealthInsightWindowPointStatisticsReceipt = (
+  insight: {
+    windows: Array<{
+      days: number
+      recordCount: number
+      statistics: { minimum: number | null; maximum: number | null; average: number | null }
+    }>
+    series: Array<{ canonicalValue: number }>
+  },
+  ctx: z.RefinementCtx,
+) => {
+  const windowIndex = insight.windows.findIndex((window) => window.days === 90)
+  if (windowIndex < 0) return
+  const window = insight.windows[windowIndex]!
+  if (
+    window.recordCount === 0 ||
+    window.recordCount > 180 ||
+    insight.series.length !== window.recordCount
+  ) {
+    return
+  }
+
+  const values = insight.series.map((point) => point.canonicalValue)
+  const derived = {
+    minimum: Math.min(...values),
+    maximum: Math.max(...values),
+    average: values.reduce((total, value) => total + value, 0) / values.length,
+  }
+  const sumAbs = values.reduce((total, value) => total + Math.abs(value), 0)
+  for (const field of ['minimum', 'maximum', 'average'] as const) {
+    const windowStatistic = window.statistics[field]
+    if (windowStatistic === null) continue
+    const floatingTolerance =
+      Number.EPSILON *
+      Math.max(1, Math.abs(windowStatistic), sumAbs, Math.abs(derived[field])) *
+      (values.length + 2) *
+      4
+    if (Math.abs(windowStatistic - derived[field]) > 0.00005 + floatingTolerance) {
+      ctx.addIssue({
+        code: 'custom',
+        message: `90-day health ${field} must match complete canonical points within rounding tolerance`,
+        path: ['windows', windowIndex, 'statistics', field],
+      })
+    }
+  }
+}
+
 const validateExerciseInsightWindowPointReceipt = (
   insight: {
     windows: Array<{ days: number; sessionCount: number }>
@@ -1036,6 +1083,7 @@ export const healthInsightSchema = z
     })
     validateInsightTruncationReceipt(insight, ctx)
     validateHealthInsightWindowPointReceipt(insight, ctx)
+    validateHealthInsightWindowPointStatisticsReceipt(insight, ctx)
     validateInsightOccurrenceBoundary(insight, ctx)
   })
 

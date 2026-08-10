@@ -875,8 +875,20 @@ describe('health insight contract', () => {
       ...parsed,
       windows: parsed.windows.map((window, index) => ({
         ...window,
-        statistics: { ...sharedWideStatistics, average: [70, 71, 69][index]! },
+        recordCount: 2,
+        statistics: { minimum: 69, maximum: 70, average: [69.9, 69.1, 69.5][index]! },
       })),
+      series: [
+        parsed.series[0]!,
+        {
+          ...parsed.series[0]!,
+          recordId: '00000000-0000-4000-8000-000000000002',
+          occurredAt: '2026-08-05T09:00:00.000Z',
+          canonicalValue: 69,
+          displayValue: 69,
+          displayUnit: 'kg',
+        },
+      ],
     })
     expect(nonMonotonicAverages.success).toBe(true)
     const unsupportedHasMore = healthInsightSchema.safeParse({ ...parsed, hasMore: true })
@@ -910,6 +922,104 @@ describe('health insight contract', () => {
         }),
       )
     }
+    const completeTwoPointInsight = healthInsightSchema.parse({
+      ...parsed,
+      windows: parsed.windows.map((window) => ({
+        ...window,
+        recordCount: 2,
+        recordedDays: 1,
+        statistics: { minimum: 69, maximum: 70, average: 69.5 },
+      })),
+      series: [
+        parsed.series[0]!,
+        {
+          ...parsed.series[0]!,
+          recordId: '00000000-0000-4000-8000-000000000002',
+          occurredAt: '2026-08-05T09:00:00.000Z',
+          canonicalValue: 69,
+          displayValue: 69,
+          displayUnit: 'kg',
+        },
+      ],
+    })
+    expect(
+      healthInsightSchema.safeParse({
+        ...completeTwoPointInsight,
+        windows: completeTwoPointInsight.windows.map((window, index) =>
+          index === 2
+            ? {
+                ...window,
+                statistics: { ...window.statistics, average: 69.50004 },
+              }
+            : window,
+        ),
+      }).success,
+    ).toBe(true)
+    for (const [field, value] of [
+      ['minimum', 68.9],
+      ['maximum', 70.1],
+      ['average', 69.6],
+    ] as const) {
+      const mismatchedStatistics = healthInsightSchema.safeParse({
+        ...completeTwoPointInsight,
+        windows: completeTwoPointInsight.windows.map((window, index) =>
+          index === 2
+            ? {
+                ...window,
+                statistics: { ...window.statistics, [field]: value },
+              }
+            : window,
+        ),
+      })
+      expect(mismatchedStatistics.success).toBe(false)
+      if (!mismatchedStatistics.success) {
+        expect(mismatchedStatistics.error.issues).toContainEqual(
+          expect.objectContaining({
+            message: `90-day health ${field} must match complete canonical points within rounding tolerance`,
+            path: ['windows', 2, 'statistics', field],
+          }),
+        )
+      }
+    }
+    expect(
+      healthInsightSchema.safeParse({
+        ...completeTwoPointInsight,
+        windows: completeTwoPointInsight.windows.map((window) => ({
+          ...window,
+          statistics: { minimum: -4, maximum: -2, average: -3 },
+        })),
+        series: completeTwoPointInsight.series.map((point, index) => ({
+          ...point,
+          canonicalValue: index === 0 ? -2 : -4,
+          displayValue: index === 0 ? -2 : -4,
+          displayUnit: 'kg',
+        })),
+      }).success,
+    ).toBe(true)
+    const truncatedSeries = Array.from({ length: 180 }, (_, index) => ({
+      ...parsed.series[0]!,
+      recordId: `00000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
+      occurredAt: new Date(Date.parse('2026-08-05T10:00:00.000Z') - index * 60_000).toISOString(),
+      canonicalValue: 70,
+      displayValue: 70,
+      displayUnit: 'kg' as const,
+    }))
+    expect(
+      healthInsightSchema.safeParse({
+        ...parsed,
+        windows: parsed.windows.map((window, index) =>
+          index === 2
+            ? {
+                ...window,
+                recordCount: 181,
+                statistics: { minimum: 60, maximum: 80, average: 65 },
+              }
+            : window,
+        ),
+        series: truncatedSeries,
+        hasMore: true,
+      }).success,
+    ).toBe(true)
     const staleCanonicalUnit = healthInsightSchema.safeParse({
       ...parsed,
       canonicalUnit: 'cm',

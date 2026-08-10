@@ -975,6 +975,7 @@ describe('health insight projection', () => {
     const exactNinetyDayWindow = {
       ...ninetyDayWindow,
       record_count: '180',
+      average: '69.0055555555555556',
     }
     const exactPrefix = buildHealthInsight(
       'body.weight',
@@ -1134,5 +1135,61 @@ describe('health insight projection', () => {
     expect(() =>
       buildHealthInsight('body.weight', [], excessivePoints, 'Asia/Shanghai', at),
     ).toThrow('insight point rows cannot exceed the 181-row truncation receipt')
+  })
+
+  it('reconciles complete health point statistics without imposing value ranges', () => {
+    const at = new Date('2026-08-05T12:00:00.000Z')
+    const points = [70, 69].map((value, index) => ({
+      record_id: `00000000-0000-4000-800${index}-000000000001`,
+      metric: 'body.weight' as const,
+      record_revision: 1,
+      occurred_at: new Date(at.getTime() - index * 3_600_000),
+      timezone: 'Asia/Shanghai',
+      canonical_value: String(value),
+      canonical_unit: 'kg' as const,
+      display_value: String(value),
+      display_unit: 'kg' as const,
+      source_kind: 'manual' as const,
+      source_metadata: {},
+    }))
+    const completeWindow = {
+      days: 90,
+      record_count: '2',
+      recorded_days: '1',
+      minimum: '69',
+      maximum: '70',
+      average: '69.5',
+    }
+
+    expect(
+      buildHealthInsight('body.weight', [completeWindow], points, 'Asia/Shanghai', at).windows[2]
+        .statistics,
+    ).toEqual({ minimum: 69, maximum: 70, average: 69.5 })
+    for (const statistics of [{ minimum: '68.9' }, { maximum: '70.1' }, { average: '69.6' }]) {
+      expect(() =>
+        buildHealthInsight(
+          'body.weight',
+          [{ ...completeWindow, ...statistics }],
+          points,
+          'Asia/Shanghai',
+          at,
+        ),
+      ).toThrow('health insight 90-day window must match complete point statistics')
+    }
+
+    const negativePoints = points.map((point, index) => ({
+      ...point,
+      canonical_value: index === 0 ? '-2' : '-4',
+      display_value: index === 0 ? '-2' : '-4',
+    }))
+    expect(
+      buildHealthInsight(
+        'body.weight',
+        [{ ...completeWindow, minimum: '-4', maximum: '-2', average: '-3' }],
+        negativePoints,
+        'Asia/Shanghai',
+        at,
+      ).windows[2].statistics,
+    ).toEqual({ minimum: -4, maximum: -2, average: -3 })
   })
 })

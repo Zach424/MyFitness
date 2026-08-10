@@ -539,6 +539,44 @@ const assertHealthPointWindowTruncationReceipt = (
   }
 }
 
+const sourceHealthStatisticMatches = (expected: string, values: number[], derived: number) => {
+  const expectedNumber = Number(expected)
+  const sumAbs = values.reduce((total, value) => total + Math.abs(value), 0)
+  const floatingTolerance =
+    Number.EPSILON *
+    Math.max(1, Math.abs(expectedNumber), sumAbs, Math.abs(derived)) *
+    (values.length + 2) *
+    4
+  return Math.abs(expectedNumber - derived) <= floatingTolerance
+}
+
+const assertHealthWindowPointStatisticsReceipt = (
+  windowRows: HealthWindowRow[],
+  eligiblePointRows: HealthPointRow[],
+) => {
+  const window = windowRows.find((row) => row.days === 90)
+  const recordCount = Number(window?.record_count ?? 0)
+  if (recordCount === 0 || recordCount > 180) return
+
+  const values = eligiblePointRows.map((row) => Number(row.canonical_value))
+  const minimum = Math.min(...values)
+  const maximum = Math.max(...values)
+  const average = values.reduce((total, value) => total + value, 0) / values.length
+  if (
+    window?.minimum === null ||
+    window?.minimum === undefined ||
+    window.maximum === null ||
+    window.maximum === undefined ||
+    window.average === null ||
+    window.average === undefined ||
+    !sourceHealthStatisticMatches(window.minimum, values, minimum) ||
+    !sourceHealthStatisticMatches(window.maximum, values, maximum) ||
+    !sourceHealthStatisticMatches(window.average, values, average)
+  ) {
+    throw new Error('health insight 90-day window must match complete point statistics')
+  }
+}
+
 const shiftLocalDate = (localDate: string, days: number) => {
   const [year, month, day] = localDate.split('-').map(Number)
   return new Date(Date.UTC(year!, month! - 1, day! + days)).toISOString().slice(0, 10)
@@ -806,6 +844,7 @@ export const buildHealthInsight = (
   const eligiblePointRows = pointRows.filter((row) => row.occurred_at.getTime() <= at.getTime())
   assertInsightPointRowTruncationReceipt(eligiblePointRows)
   assertHealthPointWindowTruncationReceipt(windowRows, eligiblePointRows)
+  assertHealthWindowPointStatisticsReceipt(windowRows, eligiblePointRows)
   assertHealthPointCanonicalUnitConsistency(eligiblePointRows)
   const series = eligiblePointRows.slice(0, 180).map((row) => healthPoint(row, timezone))
   return {
