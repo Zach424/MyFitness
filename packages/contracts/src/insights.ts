@@ -1,7 +1,12 @@
 import * as z from 'zod'
 
 import { exerciseEquipmentSchema, exerciseTrackingModeSchema } from './exercise-catalog'
-import { metricCodeSchema, recordSourceSchema, unitCodeSchema } from './health-record'
+import {
+  metricCodeSchema,
+  metricUnitDefinitions,
+  recordSourceSchema,
+  unitCodeSchema,
+} from './health-record'
 import { personalStateLedgerSchema } from './personal-state'
 import { recoveryStateEstimateSchema } from './recovery-state'
 import { exerciseCategorySchema, exerciseKeySchema } from './workout'
@@ -713,7 +718,7 @@ export const healthInsightWindowSchema = z
     }
   })
 
-const healthInsightRecordTimezoneSchema = z
+export const healthInsightRecordTimezoneSchema = z
   .string()
   .trim()
   .min(1)
@@ -730,7 +735,7 @@ const healthInsightRecordTimezoneSchema = z
     { message: 'recordTimezone must be a valid IANA time zone' },
   )
 
-const confirmedHealthInsightSourceSchema = recordSourceSchema.refine(
+export const confirmedHealthInsightSourceSchema = recordSourceSchema.refine(
   (source) => source.kind !== 'ai_estimate',
   {
     message: 'health insight points require confirmed non-AI sources',
@@ -769,6 +774,23 @@ export const healthInsightSchema = z
     validateInsightPointLocalDates(insight, ctx)
     validateInsightPointOrder(insight, ctx)
     validateUniqueInsightPointIds(insight.series, (point) => point.recordId, 'recordId', ctx)
+    const metricUnits = metricUnitDefinitions[insight.metric]
+    insight.series.forEach((point, index) => {
+      if (point.canonicalUnit !== metricUnits.canonicalUnit) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'health insight canonicalUnit must match the metric definition',
+          path: ['series', index, 'canonicalUnit'],
+        })
+      }
+      if (!(metricUnits.allowedUnits as readonly string[]).includes(point.displayUnit)) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'health insight displayUnit must be allowed for the metric',
+          path: ['series', index, 'displayUnit'],
+        })
+      }
+    })
     const canonicalUnit = insight.series[0]?.canonicalUnit ?? null
     if (insight.canonicalUnit !== canonicalUnit) {
       ctx.addIssue({

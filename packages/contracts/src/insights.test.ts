@@ -527,6 +527,39 @@ describe('health insight contract', () => {
         }),
       )
     }
+    const wrongMetricCanonicalUnit = healthInsightSchema.safeParse({
+      ...parsed,
+      canonicalUnit: 'cm',
+      series: [
+        {
+          ...parsed.series[0]!,
+          canonicalUnit: 'cm',
+          displayUnit: 'cm',
+        },
+      ],
+    })
+    expect(wrongMetricCanonicalUnit.success).toBe(false)
+    if (!wrongMetricCanonicalUnit.success) {
+      expect(wrongMetricCanonicalUnit.error.issues).toContainEqual(
+        expect.objectContaining({
+          message: 'health insight canonicalUnit must match the metric definition',
+          path: ['series', 0, 'canonicalUnit'],
+        }),
+      )
+    }
+    const wrongMetricDisplayUnit = healthInsightSchema.safeParse({
+      ...parsed,
+      series: [{ ...parsed.series[0]!, displayUnit: 'hour' }],
+    })
+    expect(wrongMetricDisplayUnit.success).toBe(false)
+    if (!wrongMetricDisplayUnit.success) {
+      expect(wrongMetricDisplayUnit.error.issues).toContainEqual(
+        expect.objectContaining({
+          message: 'health insight displayUnit must be allowed for the metric',
+          path: ['series', 0, 'displayUnit'],
+        }),
+      )
+    }
     const missingRecordedDay = healthInsightSchema.safeParse({
       ...parsed,
       windows: parsed.windows.map((window, index) =>

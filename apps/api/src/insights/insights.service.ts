@@ -23,13 +23,14 @@ import type {
   UnitCode,
 } from '@myfitness/contracts'
 import {
+  confirmedHealthInsightSourceSchema,
   exerciseInsightIdentitySchema,
-  healthInsightPointSchema,
+  healthInsightRecordTimezoneSchema,
   personalStateLedgerPolicyVersion,
-  recordSourceSchema,
   subjectiveRecoveryMetrics,
+  unitCodeSchema,
 } from '@myfitness/contracts'
-import { estimateSubjectiveRecoveryState } from '@myfitness/domain'
+import { estimateSubjectiveRecoveryState, metricDefinitions } from '@myfitness/domain'
 
 import { DatabaseService } from '../database/database.service'
 
@@ -588,17 +589,34 @@ const healthPoint = (row: HealthPointRow, timezone: string): HealthInsightPoint 
   }
 }
 
-const assertValidHealthPointRowProvenance = (rows: HealthPointRow[], timezone: string) => {
+const assertValidHealthPointRowProvenance = (rows: HealthPointRow[]) => {
   if (
     rows.some(
       (row) =>
-        !recordSourceSchema.safeParse({
+        !confirmedHealthInsightSourceSchema.safeParse({
           kind: row.source_kind,
           metadata: row.source_metadata,
-        }).success || !healthInsightPointSchema.safeParse(healthPoint(row, timezone)).success,
+        }).success ||
+        !healthInsightRecordTimezoneSchema.safeParse(row.timezone).success ||
+        !unitCodeSchema.safeParse(row.canonical_unit).success ||
+        !unitCodeSchema.safeParse(row.display_unit).success,
     )
   ) {
     throw new Error('health insight point rows must have valid provenance snapshots')
+  }
+}
+
+const assertHealthPointMetricUnits = (metric: MetricCode, rows: HealthPointRow[]) => {
+  const definition = metricDefinitions[metric]
+  if (
+    !definition ||
+    rows.some(
+      (row) =>
+        row.canonical_unit !== definition.canonicalUnit ||
+        !definition.allowedUnits.includes(row.display_unit),
+    )
+  ) {
+    throw new Error('health insight point rows must use units allowed for the metric')
   }
 }
 
@@ -617,7 +635,8 @@ export const buildHealthInsight = (
   assertValidInsightPointRowTimes(pointRows)
   assertHealthPointRowNumbers(pointRows)
   assertValidInsightPointRowIds(pointRows, (row) => row.record_id)
-  assertValidHealthPointRowProvenance(pointRows, timezone)
+  assertValidHealthPointRowProvenance(pointRows)
+  assertHealthPointMetricUnits(metric, pointRows)
   assertInsightPointRowOrder(pointRows)
   assertUniqueInsightPointRowIds(pointRows, (row) => row.record_id)
   const eligiblePointRows = pointRows.filter((row) => row.occurred_at.getTime() <= at.getTime())

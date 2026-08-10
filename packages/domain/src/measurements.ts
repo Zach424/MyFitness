@@ -1,4 +1,4 @@
-import type { MetricCode, UnitCode } from '@myfitness/contracts'
+import { metricUnitDefinitions, type MetricCode, type UnitCode } from '@myfitness/contracts'
 
 type MetricDefinition = {
   canonicalUnit: UnitCode
@@ -9,51 +9,44 @@ type MetricDefinition = {
 }
 
 export const metricDefinitions: Record<MetricCode, MetricDefinition> = {
-  'body.weight': { canonicalUnit: 'kg', allowedUnits: ['kg', 'lb'], min: 20, max: 500 },
-  'body.waist': { canonicalUnit: 'cm', allowedUnits: ['cm', 'in'], min: 30, max: 300 },
+  'body.weight': { ...metricUnitDefinitions['body.weight'], min: 20, max: 500 },
+  'body.waist': { ...metricUnitDefinitions['body.waist'], min: 30, max: 300 },
   'body.body_fat': {
-    canonicalUnit: 'percent',
-    allowedUnits: ['percent'],
+    ...metricUnitDefinitions['body.body_fat'],
     min: 1,
     max: 75,
   },
   'body.resting_heart_rate': {
-    canonicalUnit: 'bpm',
-    allowedUnits: ['bpm'],
+    ...metricUnitDefinitions['body.resting_heart_rate'],
     min: 25,
     max: 250,
     integer: true,
   },
   'recovery.sleep_duration': {
-    canonicalUnit: 'minute',
-    allowedUnits: ['minute', 'hour'],
+    ...metricUnitDefinitions['recovery.sleep_duration'],
     min: 0,
     max: 1_440,
   },
   'recovery.sleep_quality': {
-    canonicalUnit: 'score_1_5',
-    allowedUnits: ['score_1_5'],
+    ...metricUnitDefinitions['recovery.sleep_quality'],
     min: 1,
     max: 5,
     integer: true,
   },
   'recovery.soreness': {
-    canonicalUnit: 'score_1_5',
-    allowedUnits: ['score_1_5'],
+    ...metricUnitDefinitions['recovery.soreness'],
     min: 1,
     max: 5,
     integer: true,
   },
   'recovery.energy': {
-    canonicalUnit: 'score_1_5',
-    allowedUnits: ['score_1_5'],
+    ...metricUnitDefinitions['recovery.energy'],
     min: 1,
     max: 5,
     integer: true,
   },
   'recovery.stress': {
-    canonicalUnit: 'score_1_5',
-    allowedUnits: ['score_1_5'],
+    ...metricUnitDefinitions['recovery.stress'],
     min: 1,
     max: 5,
     integer: true,

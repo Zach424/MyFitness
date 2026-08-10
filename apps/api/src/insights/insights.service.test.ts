@@ -679,7 +679,7 @@ describe('health insight projection', () => {
       ...points[0]!,
       record_id: '00000000-0000-4000-9000-000000000002',
       occurred_at: new Date(at.getTime() + 3_600_000),
-      canonical_unit: 'cm' as const,
+      canonical_unit: 'kg' as const,
     }
     const sevenDayWindow = {
       days: 7,
@@ -783,15 +783,14 @@ describe('health insight projection', () => {
       ),
     ).toThrow('insight window rows must use unique 7/30/90 day identities')
 
-    expect(() =>
-      buildHealthInsight(
-        'body.weight',
-        [],
-        [futurePoint, ...points.slice(0, 180)],
-        'Asia/Shanghai',
-        new Date(at.getTime() + 2 * 3_600_000),
-      ),
-    ).toThrow('health insight point rows must share one canonical unit')
+    const advanced = buildHealthInsight(
+      'body.weight',
+      [],
+      [futurePoint, ...points.slice(0, 180)],
+      'Asia/Shanghai',
+      new Date(at.getTime() + 2 * 3_600_000),
+    )
+    expect(advanced.series[0]?.recordId).toBe(futurePoint.record_id)
     expect(() => buildHealthInsight('body.weight', [], [], 'Invalid/Timezone', at)).toThrow(
       'insight timezone must be a valid IANA timezone',
     )
@@ -867,7 +866,14 @@ describe('health insight projection', () => {
     ]
     expect(() =>
       buildHealthInsight('body.weight', [], hiddenMixedUnitPoints, 'Asia/Shanghai', at),
-    ).toThrow('health insight point rows must share one canonical unit')
+    ).toThrow('health insight point rows must use units allowed for the metric')
+    const hiddenWrongDisplayUnitPoints = [
+      ...points.slice(0, 180),
+      { ...points[180]!, display_unit: 'hour' as const },
+    ]
+    expect(() =>
+      buildHealthInsight('body.weight', [], hiddenWrongDisplayUnitPoints, 'Asia/Shanghai', at),
+    ).toThrow('health insight point rows must use units allowed for the metric')
     const excessivePoints = [
       ...points,
       {
