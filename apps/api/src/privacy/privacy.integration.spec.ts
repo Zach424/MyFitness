@@ -6,11 +6,12 @@ import {
   consentVersions,
   foodPhotoConsentVersion,
   maximumPrivacyExportBytes,
+  privacyExportTooLargeCode,
 } from '@myfitness/contracts'
 import { Pool } from 'pg'
 import sharp from 'sharp'
 import request from 'supertest'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
 import { createApplication } from '../bootstrap'
 import { getRuntimeConfig } from '../config'
@@ -19,6 +20,7 @@ import { PhotoStorageService } from '../nutrition/photo-storage.service'
 import { DataOperationsService } from '../operations/data-operations.service'
 import { ObjectStorageService } from '../operations/object-storage.service'
 import { ErasureLedgerService } from './erasure-ledger.service'
+import * as portableExportArtifact from './portable-export-artifact'
 
 describe('privacy ownership API with PostgreSQL and private media', () => {
   const config = getRuntimeConfig()
@@ -258,6 +260,36 @@ describe('privacy ownership API with PostgreSQL and private media', () => {
       .delete(`/v1/nutrition/photo-candidates/${photo.photoId}`)
       .set('Authorization', `Bearer ${token}`)
       .expect(204)
+  })
+
+  it('rejects an oversized metadata floor before reading private media objects', async () => {
+    const { token, userId } = await createUser()
+    await createPhoto(token, userId)
+    const read = vi.spyOn(storage, 'read')
+    const exactAssertion = portableExportArtifact.assertPortableExportWithinLimit
+    const floorGate = vi
+      .spyOn(portableExportArtifact, 'assertPortableExportWithinLimit')
+      .mockImplementation((payload) => exactAssertion(payload, 1))
+
+    try {
+      const refused = await request(app.getHttpServer())
+        .get('/v1/me/privacy/export')
+        .set('Authorization', `Bearer ${token}`)
+        .expect(413)
+
+      expect(refused.body).toMatchObject({
+        statusCode: 413,
+        code: privacyExportTooLargeCode,
+        maximumBytes: 1,
+      })
+      expect(refused.body).not.toHaveProperty('data')
+      expect(floorGate).toHaveBeenCalledTimes(1)
+      expect(floorGate.mock.calls[0]?.[0].data.foodPhotoAnalyses[0]).toMatchObject({ media: null })
+      expect(read).not.toHaveBeenCalled()
+    } finally {
+      floorGate.mockRestore()
+      read.mockRestore()
+    }
   })
 
   it('pages owner consent receipts without turning history into current authorization', async () => {

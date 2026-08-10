@@ -6,7 +6,11 @@ import {
 } from '@myfitness/contracts'
 import { describe, expect, it } from 'vitest'
 
-import { serializePortableExport } from './portable-export-artifact'
+import {
+  assertPortableExportWithinLimit,
+  portableExportByteLength,
+  serializePortableExport,
+} from './portable-export-artifact'
 
 const fixture = (): PrivacyExport =>
   privacyExportSchema.parse({
@@ -38,6 +42,10 @@ describe('portable export server artifact', () => {
     const unrestricted = serializePortableExport(fixture(), Number.MAX_SAFE_INTEGER)
     expect(unrestricted.at(-1)).toBe(10)
     expect(unrestricted.toString('utf8')).toContain('衡迹用户')
+    expect(portableExportByteLength(fixture())).toBe(unrestricted.byteLength)
+    expect(assertPortableExportWithinLimit(fixture(), unrestricted.byteLength)).toBe(
+      unrestricted.byteLength,
+    )
     expect(serializePortableExport(fixture(), unrestricted.byteLength)).toEqual(unrestricted)
   })
 
@@ -59,5 +67,26 @@ describe('portable export server artifact', () => {
       expect(exception.getResponse()).not.toHaveProperty('payload')
       expect(exception.getResponse()).not.toHaveProperty('data')
     }
+  })
+
+  it('proves the null-media snapshot is a byte lower bound for every final media outcome', () => {
+    const withMedia = (media: Record<string, unknown> | null) => {
+      const payload = fixture()
+      payload.data.foodPhotoAnalyses = [{ id: 'photo-1', media }]
+      return payload
+    }
+    const minimum = withMedia(null)
+
+    expect(portableExportByteLength(withMedia({ unavailable: true }))).toBeGreaterThan(
+      portableExportByteLength(minimum),
+    )
+    expect(
+      portableExportByteLength(
+        withMedia({ contentType: 'image/jpeg', encoding: 'base64', data: 'YWJj' }),
+      ),
+    ).toBeGreaterThan(portableExportByteLength(minimum))
+    expect(() =>
+      assertPortableExportWithinLimit(minimum, portableExportByteLength(minimum) - 1),
+    ).toThrowError(HttpException)
   })
 })

@@ -36,6 +36,7 @@ import { DataOperationsService } from '../operations/data-operations.service'
 import { ProgressPhotosService } from '../progress-photos/progress-photos.service'
 import { ErasureLedgerService } from './erasure-ledger.service'
 import { decodeConsentReceiptCursor, encodeConsentReceiptCursor } from './consent-receipt-cursor'
+import { assertPortableExportWithinLimit } from './portable-export-artifact'
 
 type InventoryRow = QueryResultRow & {
   category: PrivacyInventoryItem['category']
@@ -490,6 +491,54 @@ export class PrivacyService {
          ) AS photo`,
         [userId],
       )
+      const progressRows = await client.query<
+        QueryResultRow & {
+          id: string
+          storage_key: string | null
+          payload: Record<string, unknown>
+        }
+      >(
+        `SELECT id, storage_key, (to_jsonb(photo) - 'storage_key') AS payload FROM (
+           SELECT id, status, view, retention_mode, captured_at, timezone,
+                  quality_method_version, quality, width, height, byte_size, content_type,
+                  upload_expires_at, retention_expires_at, media_deletion_status,
+                  analysis_revoked_at, created_at, completed_at, deleted_at, storage_key
+           FROM progress_photos WHERE user_id = $1 ORDER BY captured_at, created_at
+         ) AS photo`,
+        [userId],
+      )
+
+      const generatedAt = new Date().toISOString()
+      const exportDataWithoutPhotos = {
+        account,
+        identities,
+        profile: profileRows[0] ?? null,
+        goal: goalRows[0] ?? null,
+        consentEvents,
+        healthRecords,
+        healthRecordRevisions,
+        exerciseCatalog,
+        foodCatalog,
+        workouts,
+        nutritionMeals,
+        nutritionFavorites,
+        weeklyPlans,
+        aiExplanationRuns,
+      }
+      const minimumPayload = privacyExportSchema.parse(
+        jsonSafe({
+          schemaVersion: privacyExportSchemaVersion,
+          generatedAt,
+          accountId: userId,
+          data: {
+            ...exportDataWithoutPhotos,
+            foodPhotoAnalyses: photoRows.rows.map((photo) => ({ ...photo.payload, media: null })),
+            progressPhotos: progressRows.rows.map((photo) => ({ ...photo.payload, media: null })),
+          },
+        }),
+      )
+      assertPortableExportWithinLimit(minimumPayload)
+
       const foodPhotoAnalyses: Array<Record<string, unknown>> = []
       for (const photo of photoRows.rows) {
         let media: Record<string, unknown> | null = null
@@ -509,22 +558,6 @@ export class PrivacyService {
         foodPhotoAnalyses.push({ ...photo.payload, media })
       }
 
-      const progressRows = await client.query<
-        QueryResultRow & {
-          id: string
-          storage_key: string | null
-          payload: Record<string, unknown>
-        }
-      >(
-        `SELECT id, storage_key, (to_jsonb(photo) - 'storage_key') AS payload FROM (
-           SELECT id, status, view, retention_mode, captured_at, timezone,
-                  quality_method_version, quality, width, height, byte_size, content_type,
-                  upload_expires_at, retention_expires_at, media_deletion_status,
-                  analysis_revoked_at, created_at, completed_at, deleted_at, storage_key
-           FROM progress_photos WHERE user_id = $1 ORDER BY captured_at, created_at
-         ) AS photo`,
-        [userId],
-      )
       const progressPhotos: Array<Record<string, unknown>> = []
       for (const photo of progressRows.rows) {
         let media: Record<string, unknown> | null = null
@@ -546,23 +579,10 @@ export class PrivacyService {
 
       return {
         schemaVersion: privacyExportSchemaVersion,
-        generatedAt: new Date().toISOString(),
+        generatedAt,
         accountId: userId,
         data: {
-          account,
-          identities,
-          profile: profileRows[0] ?? null,
-          goal: goalRows[0] ?? null,
-          consentEvents,
-          healthRecords,
-          healthRecordRevisions,
-          exerciseCatalog,
-          foodCatalog,
-          workouts,
-          nutritionMeals,
-          nutritionFavorites,
-          weeklyPlans,
-          aiExplanationRuns,
+          ...exportDataWithoutPhotos,
           foodPhotoAnalyses,
           progressPhotos,
         },
