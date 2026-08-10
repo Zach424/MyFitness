@@ -586,6 +586,34 @@ const validateHealthInsightWindowPointStatisticsReceipt = (
   }
 }
 
+const validateHealthInsightWindowPointRecordedDaysReceipt = (
+  insight: {
+    windows: Array<{ days: number; recordCount: number; recordedDays: number }>
+    series: Array<{ localDate: string }>
+  },
+  ctx: z.RefinementCtx,
+) => {
+  const windowIndex = insight.windows.findIndex((window) => window.days === 90)
+  if (windowIndex < 0) return
+  const window = insight.windows[windowIndex]!
+  if (
+    window.recordCount === 0 ||
+    window.recordCount > 180 ||
+    insight.series.length !== window.recordCount
+  ) {
+    return
+  }
+
+  const recordedDays = new Set(insight.series.map((point) => point.localDate)).size
+  if (window.recordedDays !== recordedDays) {
+    ctx.addIssue({
+      code: 'custom',
+      message: '90-day recordedDays must match the complete health point local-date set',
+      path: ['windows', windowIndex, 'recordedDays'],
+    })
+  }
+}
+
 const validateExerciseInsightWindowPointReceipt = (
   insight: {
     windows: Array<{ days: number; sessionCount: number }>
@@ -1084,6 +1112,7 @@ export const healthInsightSchema = z
     validateInsightTruncationReceipt(insight, ctx)
     validateHealthInsightWindowPointReceipt(insight, ctx)
     validateHealthInsightWindowPointStatisticsReceipt(insight, ctx)
+    validateHealthInsightWindowPointRecordedDaysReceipt(insight, ctx)
     validateInsightOccurrenceBoundary(insight, ctx)
   })
 

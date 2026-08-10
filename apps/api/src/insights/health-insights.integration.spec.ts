@@ -126,6 +126,9 @@ describe('health insight API with PostgreSQL', () => {
         canonicalValues.reduce((total: number, value: number) => total + value, 0) /
         canonicalValues.length,
     })
+    expect(initial.body.windows[2].recordedDays).toBe(
+      new Set(initial.body.series.map((point: { localDate: string }) => point.localDate)).size,
+    )
     expect(initial.body.series[0]).toMatchObject({
       recordId: recent.body.id,
       metric: 'body.weight',

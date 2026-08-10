@@ -924,6 +924,8 @@ describe('health insight contract', () => {
     }
     const completeTwoPointInsight = healthInsightSchema.parse({
       ...parsed,
+      generatedAt: '2026-11-01T07:00:00.000Z',
+      timezone: 'America/New_York',
       windows: parsed.windows.map((window) => ({
         ...window,
         recordCount: 2,
@@ -931,17 +933,37 @@ describe('health insight contract', () => {
         statistics: { minimum: 69, maximum: 70, average: 69.5 },
       })),
       series: [
-        parsed.series[0]!,
+        {
+          ...parsed.series[0]!,
+          occurredAt: '2026-11-01T06:30:00.000Z',
+          localDate: '2026-11-01',
+        },
         {
           ...parsed.series[0]!,
           recordId: '00000000-0000-4000-8000-000000000002',
-          occurredAt: '2026-08-05T09:00:00.000Z',
+          occurredAt: '2026-11-01T05:30:00.000Z',
+          localDate: '2026-11-01',
           canonicalValue: 69,
           displayValue: 69,
           displayUnit: 'kg',
         },
       ],
     })
+    const mismatchedRecordedDays = healthInsightSchema.safeParse({
+      ...completeTwoPointInsight,
+      windows: completeTwoPointInsight.windows.map((window, index) =>
+        index === 2 ? { ...window, recordedDays: 2 } : window,
+      ),
+    })
+    expect(mismatchedRecordedDays.success).toBe(false)
+    if (!mismatchedRecordedDays.success) {
+      expect(mismatchedRecordedDays.error.issues).toContainEqual(
+        expect.objectContaining({
+          message: '90-day recordedDays must match the complete health point local-date set',
+          path: ['windows', 2, 'recordedDays'],
+        }),
+      )
+    }
     expect(
       healthInsightSchema.safeParse({
         ...completeTwoPointInsight,

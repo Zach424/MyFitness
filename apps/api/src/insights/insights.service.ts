@@ -184,17 +184,23 @@ const round = (value: number, precision = 1) => {
   return Math.round((value + Number.EPSILON) * factor) / factor
 }
 
-const localDay = (date: Date, timezone: string) => {
-  const parts = new Intl.DateTimeFormat('en-US', {
+const createLocalDayFormatter = (timezone: string) =>
+  new Intl.DateTimeFormat('en-US', {
     timeZone: timezone,
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
-  }).formatToParts(date)
+  })
+
+const formatLocalDay = (date: Date, formatter: Intl.DateTimeFormat) => {
+  const parts = formatter.formatToParts(date)
   const part = (type: Intl.DateTimeFormatPartTypes) =>
     parts.find((candidate) => candidate.type === type)!.value
   return `${part('year')}-${part('month')}-${part('day')}`
 }
+
+const localDay = (date: Date, timezone: string) =>
+  formatLocalDay(date, createLocalDayFormatter(timezone))
 
 const assertValidInsightTimezone = (timezone: string, at: Date) => {
   try {
@@ -577,6 +583,23 @@ const assertHealthWindowPointStatisticsReceipt = (
   }
 }
 
+const assertHealthWindowPointRecordedDaysReceipt = (
+  windowRows: HealthWindowRow[],
+  eligiblePointRows: HealthPointRow[],
+  timezone: string,
+) => {
+  const window = windowRows.find((row) => row.days === 90)
+  const recordCount = Number(window?.record_count ?? 0)
+  if (recordCount === 0 || recordCount > 180) return
+
+  const formatter = createLocalDayFormatter(timezone)
+  const recordedDays = new Set(eligiblePointRows.map((row) => formatter.format(row.occurred_at)))
+    .size
+  if (Number(window?.recorded_days ?? 0) !== recordedDays) {
+    throw new Error('health insight 90-day window must match complete point recorded days')
+  }
+}
+
 const shiftLocalDate = (localDate: string, days: number) => {
   const [year, month, day] = localDate.split('-').map(Number)
   return new Date(Date.UTC(year!, month! - 1, day! + days)).toISOString().slice(0, 10)
@@ -746,14 +769,14 @@ const healthWindow = (days: 7 | 30 | 90, row?: HealthWindowRow): HealthInsightWi
   },
 })
 
-const healthPoint = (row: HealthPointRow, timezone: string): HealthInsightPoint => {
+const healthPoint = (row: HealthPointRow, formatter: Intl.DateTimeFormat): HealthInsightPoint => {
   const metadata = row.source_metadata ?? {}
   return {
     recordId: row.record_id,
     metric: row.metric,
     recordRevision: row.record_revision,
     occurredAt: row.occurred_at.toISOString(),
-    localDate: localDay(row.occurred_at, timezone),
+    localDate: formatLocalDay(row.occurred_at, formatter),
     recordTimezone: row.timezone,
     canonicalValue: Number(row.canonical_value),
     canonicalUnit: row.canonical_unit,
@@ -845,8 +868,10 @@ export const buildHealthInsight = (
   assertInsightPointRowTruncationReceipt(eligiblePointRows)
   assertHealthPointWindowTruncationReceipt(windowRows, eligiblePointRows)
   assertHealthWindowPointStatisticsReceipt(windowRows, eligiblePointRows)
+  assertHealthWindowPointRecordedDaysReceipt(windowRows, eligiblePointRows, timezone)
   assertHealthPointCanonicalUnitConsistency(eligiblePointRows)
-  const series = eligiblePointRows.slice(0, 180).map((row) => healthPoint(row, timezone))
+  const localDayFormatter = createLocalDayFormatter(timezone)
+  const series = eligiblePointRows.slice(0, 180).map((row) => healthPoint(row, localDayFormatter))
   return {
     generatedAt: at.toISOString(),
     timezone,

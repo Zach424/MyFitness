@@ -1138,12 +1138,13 @@ describe('health insight projection', () => {
   })
 
   it('reconciles complete health point statistics without imposing value ranges', () => {
-    const at = new Date('2026-08-05T12:00:00.000Z')
+    const at = new Date('2026-11-01T07:00:00.000Z')
+    const occurredAt = [new Date('2026-11-01T06:30:00.000Z'), new Date('2026-11-01T05:30:00.000Z')]
     const points = [70, 69].map((value, index) => ({
       record_id: `00000000-0000-4000-800${index}-000000000001`,
       metric: 'body.weight' as const,
       record_revision: 1,
-      occurred_at: new Date(at.getTime() - index * 3_600_000),
+      occurred_at: occurredAt[index]!,
       timezone: 'Asia/Shanghai',
       canonical_value: String(value),
       canonical_unit: 'kg' as const,
@@ -1165,6 +1166,10 @@ describe('health insight projection', () => {
       buildHealthInsight('body.weight', [completeWindow], points, 'Asia/Shanghai', at).windows[2]
         .statistics,
     ).toEqual({ minimum: 69, maximum: 70, average: 69.5 })
+    expect(
+      buildHealthInsight('body.weight', [completeWindow], points, 'America/New_York', at).windows[2]
+        .recordedDays,
+    ).toBe(1)
     for (const statistics of [{ minimum: '68.9' }, { maximum: '70.1' }, { average: '69.6' }]) {
       expect(() =>
         buildHealthInsight(
@@ -1176,6 +1181,15 @@ describe('health insight projection', () => {
         ),
       ).toThrow('health insight 90-day window must match complete point statistics')
     }
+    expect(() =>
+      buildHealthInsight(
+        'body.weight',
+        [{ ...completeWindow, recorded_days: '2' }],
+        points,
+        'America/New_York',
+        at,
+      ),
+    ).toThrow('health insight 90-day window must match complete point recorded days')
 
     const negativePoints = points.map((point, index) => ({
       ...point,
