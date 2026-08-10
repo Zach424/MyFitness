@@ -348,6 +348,15 @@ const assertInsightPointRowOrder = (rows: Array<{ occurred_at: Date }>) => {
   }
 }
 
+const aggregateUuidPattern =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+const assertValidInsightPointRowIds = <Row>(rows: Row[], idOf: (row: Row) => string) => {
+  if (rows.some((row) => !aggregateUuidPattern.test(idOf(row)))) {
+    throw new Error('insight point rows must have valid aggregate UUIDs')
+  }
+}
+
 const assertUniqueInsightPointRowIds = <Row>(rows: Row[], idOf: (row: Row) => string) => {
   const seen = new Set<string>()
   rows.forEach((row) => {
@@ -429,6 +438,7 @@ export const buildExerciseInsight = (
   assertValidInsightPointRowTimes(pointRows)
   assertExercisePointRowNumbers(pointRows)
   assertExercisePointRowRelationships(pointRows)
+  assertValidInsightPointRowIds(pointRows, (row) => row.workout_id)
   assertInsightPointRowOrder(pointRows)
   assertUniqueInsightPointRowIds(pointRows, (row) => row.workout_id)
   const eligiblePointRows = pointRows.filter((row) => row.occurred_at.getTime() <= at.getTime())
@@ -575,6 +585,7 @@ export const buildHealthInsight = (
   assertHealthWindowRowRelationships(windowRows)
   assertValidInsightPointRowTimes(pointRows)
   assertHealthPointRowNumbers(pointRows)
+  assertValidInsightPointRowIds(pointRows, (row) => row.record_id)
   assertInsightPointRowOrder(pointRows)
   assertUniqueInsightPointRowIds(pointRows, (row) => row.record_id)
   const eligiblePointRows = pointRows.filter((row) => row.occurred_at.getTime() <= at.getTime())

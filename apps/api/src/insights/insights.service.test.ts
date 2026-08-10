@@ -528,6 +528,13 @@ describe('exercise insight projection', () => {
     expect(() =>
       buildExerciseInsight('goblet_squat', [], hiddenInconsistentSetPoints, 'Asia/Shanghai', at),
     ).toThrow('exercise insight point rows must have consistent aggregate relationships')
+    const hiddenInvalidIdPoints = [
+      ...points.slice(0, 180),
+      { ...points[180]!, workout_id: 'not-a-workout-uuid' },
+    ]
+    expect(() =>
+      buildExerciseInsight('goblet_squat', [], hiddenInvalidIdPoints, 'Asia/Shanghai', at),
+    ).toThrow('insight point rows must have valid aggregate UUIDs')
     expect(() =>
       buildExerciseInsight(
         'goblet_squat',
@@ -787,6 +794,13 @@ describe('health insight projection', () => {
     expect(() =>
       buildHealthInsight('body.weight', [], hiddenInvalidNumericPoints, 'Asia/Shanghai', at),
     ).toThrow('health insight point rows must have valid numeric values')
+    const hiddenInvalidIdPoints = [
+      ...points.slice(0, 180),
+      { ...points[180]!, record_id: 'not-a-record-uuid' },
+    ]
+    expect(() =>
+      buildHealthInsight('body.weight', [], hiddenInvalidIdPoints, 'Asia/Shanghai', at),
+    ).toThrow('insight point rows must have valid aggregate UUIDs')
     expect(() =>
       buildHealthInsight(
         'body.weight',
