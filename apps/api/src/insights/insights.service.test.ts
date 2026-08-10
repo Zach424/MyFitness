@@ -26,6 +26,26 @@ describe('history calendar projection', () => {
       new Date('2026-08-05T12:00:00.000Z'),
     )
 
+    expect(() =>
+      buildHistoryCalendar(rows, 'Asia/Shanghai', new Date('2026-08-04T12:00:00.000Z')),
+    ).toThrow('history calendar rows must cover the reference local-date range')
+    expect(() =>
+      buildHistoryCalendar(
+        rows.map((row, index) =>
+          index === 12 ? { ...row, local_date: rows[13]!.local_date } : row,
+        ),
+        'Asia/Shanghai',
+        new Date('2026-08-05T12:00:00.000Z'),
+      ),
+    ).toThrow('history calendar rows must cover the reference local-date range')
+    expect(() =>
+      buildHistoryCalendar(
+        [...rows].reverse(),
+        'Asia/Shanghai',
+        new Date('2026-08-05T12:00:00.000Z'),
+      ),
+    ).toThrow('history calendar rows must cover the reference local-date range')
+
     expect(calendar).toMatchObject({ startDate: '2026-07-09', endDate: '2026-08-05' })
     expect(calendar.series[0]).toMatchObject({ hasRecords: false })
     expect(calendar.series[26]).toMatchObject({ hasRecords: true, workoutCount: 1 })

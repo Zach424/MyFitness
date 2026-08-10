@@ -408,6 +408,13 @@ export const buildHistoryCalendar = (
   timezone: string,
   at = new Date(),
 ): HistoryCalendar => {
+  const expectedDates = expectedLocalDateSeries(at, timezone, 28)
+  if (
+    rows.length !== expectedDates.length ||
+    rows.some((row, index) => row.local_date !== expectedDates[index])
+  ) {
+    throw new Error('history calendar rows must cover the reference local-date range')
+  }
   const series = rows.map(historyCalendarDay)
   return {
     generatedAt: at.toISOString(),

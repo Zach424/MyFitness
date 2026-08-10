@@ -47,6 +47,36 @@ describe('history calendar contract', () => {
         series: days.map((day, index) => (index === 0 ? { ...day, hasRecords: true } : day)),
       }).success,
     ).toBe(false)
+
+    const earlierReference = historyCalendarSchema.safeParse({
+      generatedAt: '2026-08-04T12:00:00.000Z',
+      timezone: 'Asia/Shanghai',
+      startDate: '2026-07-09',
+      endDate: '2026-08-05',
+      series: days,
+    })
+    expect(earlierReference.success).toBe(false)
+    if (!earlierReference.success) {
+      expect(earlierReference.error.issues).toContainEqual(
+        expect.objectContaining({ path: ['series', 0, 'localDate'] }),
+      )
+    }
+
+    const missingAndRepeatedDate = historyCalendarSchema.safeParse({
+      generatedAt: '2026-08-05T12:00:00.000Z',
+      timezone: 'Asia/Shanghai',
+      startDate: '2026-07-09',
+      endDate: '2026-08-05',
+      series: days.map((day, index) =>
+        index === 12 ? { ...day, localDate: days[13]!.localDate } : day,
+      ),
+    })
+    expect(missingAndRepeatedDate.success).toBe(false)
+    if (!missingAndRepeatedDate.success) {
+      expect(missingAndRepeatedDate.error.issues).toContainEqual(
+        expect.objectContaining({ path: ['series', 12, 'localDate'] }),
+      )
+    }
   })
 })
 

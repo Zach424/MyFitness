@@ -128,6 +128,28 @@ export const dashboardQuerySchema = z
     }
   })
 
+const localDateInTimezone = (instant: Date, timezone: string) => {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(instant)
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((candidate) => candidate.type === type)!.value
+  return `${part('year')}-${part('month')}-${part('day')}`
+}
+
+const shiftLocalDate = (localDate: string, days: number) => {
+  const [year, month, day] = localDate.split('-').map(Number)
+  return new Date(Date.UTC(year!, month! - 1, day! + days)).toISOString().slice(0, 10)
+}
+
+const expectedLocalDateSeries = (instant: Date, timezone: string, length: number) => {
+  const endDate = localDateInTimezone(instant, timezone)
+  return Array.from({ length }, (_, index) => shiftLocalDate(endDate, index - length + 1))
+}
+
 export const historyCalendarDaySchema = z
   .object({
     localDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -154,18 +176,40 @@ export const historyCalendarSchema = z
   })
   .strict()
   .superRefine((calendar, ctx) => {
-    if (calendar.series[0]?.localDate !== calendar.startDate) {
-      ctx.addIssue({ code: 'custom', message: 'startDate must match the first calendar day' })
+    let expectedDates: string[]
+    try {
+      expectedDates = expectedLocalDateSeries(new Date(calendar.generatedAt), calendar.timezone, 28)
+    } catch {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'timezone must resolve the generatedAt local date',
+        path: ['timezone'],
+      })
+      return
     }
-    if (calendar.series.at(-1)?.localDate !== calendar.endDate) {
-      ctx.addIssue({ code: 'custom', message: 'endDate must match the final calendar day' })
+    const dateMismatchIndex = calendar.series.findIndex(
+      (day, index) => day.localDate !== expectedDates[index],
+    )
+    if (dateMismatchIndex >= 0) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'calendar series must cover 28 consecutive reference local dates',
+        path: ['series', dateMismatchIndex, 'localDate'],
+      })
     }
-    if (
-      calendar.series.some(
-        (day, index) => index > 0 && day.localDate <= (calendar.series[index - 1]?.localDate ?? ''),
-      )
-    ) {
-      ctx.addIssue({ code: 'custom', message: 'calendar days must be strictly ascending' })
+    if (calendar.startDate !== expectedDates[0]) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'startDate must match the reference local-date range',
+        path: ['startDate'],
+      })
+    }
+    if (calendar.endDate !== expectedDates.at(-1)) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'endDate must match the reference local-date range',
+        path: ['endDate'],
+      })
     }
   })
 
@@ -330,23 +374,6 @@ export const nutritionInsightWindowSchema = z
     }
   })
 
-const localDateInTimezone = (instant: Date, timezone: string) => {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: timezone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(instant)
-  const part = (type: Intl.DateTimeFormatPartTypes) =>
-    parts.find((candidate) => candidate.type === type)!.value
-  return `${part('year')}-${part('month')}-${part('day')}`
-}
-
-const shiftLocalDate = (localDate: string, days: number) => {
-  const [year, month, day] = localDate.split('-').map(Number)
-  return new Date(Date.UTC(year!, month! - 1, day! + days)).toISOString().slice(0, 10)
-}
-
 const roundNutritionTotal = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100
 
 const expectedNutritionWindow = (
@@ -406,9 +433,9 @@ export const nutritionInsightSchema = z
   })
   .strict()
   .superRefine((insight, ctx) => {
-    let endDate: string
+    let expectedDates: string[]
     try {
-      endDate = localDateInTimezone(new Date(insight.generatedAt), insight.timezone)
+      expectedDates = expectedLocalDateSeries(new Date(insight.generatedAt), insight.timezone, 90)
     } catch {
       ctx.addIssue({
         code: 'custom',
@@ -417,9 +444,6 @@ export const nutritionInsightSchema = z
       })
       return
     }
-    const expectedDates = Array.from({ length: 90 }, (_, index) =>
-      shiftLocalDate(endDate, index - 89),
-    )
     const dateMismatchIndex = insight.series.findIndex(
       (day, index) => day.localDate !== expectedDates[index],
     )
