@@ -127,6 +127,32 @@ describe('exercise insight contract', () => {
     })
 
     expect(parsed.series[0]).toMatchObject({ completedSetCount: 2, totalSetCount: 3 })
+    const staleIdentity = exerciseInsightSchema.safeParse({
+      ...parsed,
+      identity: { ...parsed.identity!, name: '旧动作名称' },
+    })
+    expect(staleIdentity.success).toBe(false)
+    if (!staleIdentity.success) {
+      expect(staleIdentity.error.issues).toContainEqual(
+        expect.objectContaining({
+          message: 'exercise identity must match the latest insight point',
+          path: ['identity'],
+        }),
+      )
+    }
+    const identityWithoutSeries = exerciseInsightSchema.safeParse({ ...parsed, series: [] })
+    expect(identityWithoutSeries.success).toBe(false)
+    if (!identityWithoutSeries.success) {
+      expect(identityWithoutSeries.error.issues).toContainEqual(
+        expect.objectContaining({
+          message: 'exercise identity must match the latest insight point',
+          path: ['identity'],
+        }),
+      )
+    }
+    expect(exerciseInsightSchema.safeParse({ ...parsed, identity: null, series: [] }).success).toBe(
+      true,
+    )
     const swappedWindows = exerciseInsightSchema.safeParse({
       ...parsed,
       windows: [parsed.windows[1]!, parsed.windows[0]!, parsed.windows[2]!],
@@ -379,6 +405,53 @@ describe('health insight contract', () => {
     })
 
     expect(parsed.series[0]).toMatchObject({ canonicalUnit: 'kg', displayUnit: 'lb' })
+    const staleCanonicalUnit = healthInsightSchema.safeParse({
+      ...parsed,
+      canonicalUnit: 'cm',
+    })
+    expect(staleCanonicalUnit.success).toBe(false)
+    if (!staleCanonicalUnit.success) {
+      expect(staleCanonicalUnit.error.issues).toContainEqual(
+        expect.objectContaining({
+          message: 'canonicalUnit must match the latest health insight point',
+          path: ['canonicalUnit'],
+        }),
+      )
+    }
+    const mixedCanonicalUnits = healthInsightSchema.safeParse({
+      ...parsed,
+      series: [
+        parsed.series[0]!,
+        {
+          ...parsed.series[0]!,
+          recordId: '00000000-0000-4000-8000-000000000002',
+          occurredAt: '2026-08-05T09:00:00.000Z',
+          canonicalUnit: 'cm' as const,
+        },
+      ],
+    })
+    expect(mixedCanonicalUnits.success).toBe(false)
+    if (!mixedCanonicalUnits.success) {
+      expect(mixedCanonicalUnits.error.issues).toContainEqual(
+        expect.objectContaining({
+          message: 'health insight points must share one canonicalUnit',
+          path: ['series', 1, 'canonicalUnit'],
+        }),
+      )
+    }
+    const canonicalUnitWithoutSeries = healthInsightSchema.safeParse({ ...parsed, series: [] })
+    expect(canonicalUnitWithoutSeries.success).toBe(false)
+    if (!canonicalUnitWithoutSeries.success) {
+      expect(canonicalUnitWithoutSeries.error.issues).toContainEqual(
+        expect.objectContaining({
+          message: 'canonicalUnit must match the latest health insight point',
+          path: ['canonicalUnit'],
+        }),
+      )
+    }
+    expect(
+      healthInsightSchema.safeParse({ ...parsed, canonicalUnit: null, series: [] }).success,
+    ).toBe(true)
     const repeatedWindow = healthInsightSchema.safeParse({
       ...parsed,
       windows: parsed.windows.map((window, index) =>

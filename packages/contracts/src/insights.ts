@@ -371,6 +371,39 @@ const validateUniqueInsightPointIds = <Point>(
   })
 }
 
+const exerciseInsightIdentityMatches = (
+  actual: z.infer<typeof exerciseInsightIdentitySchema> | null,
+  expected: z.infer<typeof exerciseInsightIdentitySchema> | null,
+) => {
+  if (actual === null || expected === null) {
+    return actual === expected
+  }
+  return (
+    actual.name === expected.name &&
+    actual.category === expected.category &&
+    actual.trackingMode === expected.trackingMode &&
+    actual.equipmentNotes === expected.equipmentNotes &&
+    actual.equipment.length === expected.equipment.length &&
+    actual.equipment.every((item, index) => item === expected.equipment[index])
+  )
+}
+
+const validateExerciseInsightIdentity = (
+  insight: {
+    identity: z.infer<typeof exerciseInsightIdentitySchema> | null
+    series: Array<{ identity: z.infer<typeof exerciseInsightIdentitySchema> }>
+  },
+  ctx: z.RefinementCtx,
+) => {
+  if (!exerciseInsightIdentityMatches(insight.identity, insight.series[0]?.identity ?? null)) {
+    ctx.addIssue({
+      code: 'custom',
+      message: 'exercise identity must match the latest insight point',
+      path: ['identity'],
+    })
+  }
+}
+
 export const exerciseInsightSchema = z
   .object({
     generatedAt: z.string().datetime({ offset: true }),
@@ -387,6 +420,7 @@ export const exerciseInsightSchema = z
     validateInsightPointLocalDates(insight, ctx)
     validateInsightPointOrder(insight, ctx)
     validateUniqueInsightPointIds(insight.series, (point) => point.workoutId, 'workoutId', ctx)
+    validateExerciseInsightIdentity(insight, ctx)
     validateInsightOccurrenceBoundary(insight, ctx)
   })
 
@@ -638,6 +672,23 @@ export const healthInsightSchema = z
     validateInsightPointLocalDates(insight, ctx)
     validateInsightPointOrder(insight, ctx)
     validateUniqueInsightPointIds(insight.series, (point) => point.recordId, 'recordId', ctx)
+    const canonicalUnit = insight.series[0]?.canonicalUnit ?? null
+    if (insight.canonicalUnit !== canonicalUnit) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'canonicalUnit must match the latest health insight point',
+        path: ['canonicalUnit'],
+      })
+    }
+    insight.series.forEach((point, index) => {
+      if (point.canonicalUnit !== canonicalUnit) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'health insight points must share one canonicalUnit',
+          path: ['series', index, 'canonicalUnit'],
+        })
+      }
+    })
     validateInsightOccurrenceBoundary(insight, ctx)
   })
 

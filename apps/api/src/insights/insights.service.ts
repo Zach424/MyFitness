@@ -214,6 +214,13 @@ const assertUniqueInsightPointRowIds = <Row>(rows: Row[], idOf: (row: Row) => st
   })
 }
 
+const assertHealthPointCanonicalUnitConsistency = (rows: HealthPointRow[]) => {
+  const canonicalUnit = rows[0]?.canonical_unit
+  if (rows.some((row) => row.canonical_unit !== canonicalUnit)) {
+    throw new Error('health insight point rows must share one canonical unit')
+  }
+}
+
 const shiftLocalDate = (localDate: string, days: number) => {
   const [year, month, day] = localDate.split('-').map(Number)
   return new Date(Date.UTC(year!, month! - 1, day! + days)).toISOString().slice(0, 10)
@@ -406,6 +413,7 @@ export const buildHealthInsight = (
   assertInsightPointRowOrder(pointRows)
   assertUniqueInsightPointRowIds(pointRows, (row) => row.record_id)
   const eligiblePointRows = pointRows.filter((row) => row.occurred_at.getTime() <= at.getTime())
+  assertHealthPointCanonicalUnitConsistency(eligiblePointRows)
   const series = eligiblePointRows.slice(0, 180).map((row) => healthPoint(row, timezone))
   return {
     generatedAt: at.toISOString(),

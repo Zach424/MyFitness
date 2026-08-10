@@ -582,15 +582,15 @@ describe('health insight projection', () => {
     })
     expect(insight.hasMore).toBe(true)
 
-    const advanced = buildHealthInsight(
-      'body.weight',
-      [],
-      [futurePoint, ...points],
-      'Asia/Shanghai',
-      new Date(at.getTime() + 2 * 3_600_000),
-    )
-    expect(advanced.canonicalUnit).toBe('cm')
-    expect(advanced.series[0]).toMatchObject({ recordId: futurePoint.record_id })
+    expect(() =>
+      buildHealthInsight(
+        'body.weight',
+        [],
+        [futurePoint, ...points],
+        'Asia/Shanghai',
+        new Date(at.getTime() + 2 * 3_600_000),
+      ),
+    ).toThrow('health insight point rows must share one canonical unit')
     expect(() => buildHealthInsight('body.weight', [], [], 'Invalid/Timezone', at)).toThrow(
       'insight timezone must be a valid IANA timezone',
     )
@@ -608,5 +608,12 @@ describe('health insight projection', () => {
     expect(() =>
       buildHealthInsight('body.weight', [], hiddenDuplicatePoints, 'Asia/Shanghai', at),
     ).toThrow('insight point rows must have unique aggregate ids')
+    const hiddenMixedUnitPoints = [
+      ...points.slice(0, 180),
+      { ...points[180]!, canonical_unit: 'cm' as const },
+    ]
+    expect(() =>
+      buildHealthInsight('body.weight', [], hiddenMixedUnitPoints, 'Asia/Shanghai', at),
+    ).toThrow('health insight point rows must share one canonical unit')
   })
 })

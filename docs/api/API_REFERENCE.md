@@ -261,7 +261,7 @@
 | `GET /v1/insights/exercises/{exerciseKey}` | path stable key   | 动作身份、固定窗口、完成组汇总、最多 180 点         | 400、401 |
 | `GET /v1/insights/nutrition`               | 无                | 连续 90 日与由序列重算的 7/30/90 营养窗口           | 400、401 |
 
-契约不变量：窗口必须严格按 `[7,30,90]`；点不得晚于 generatedAt；本地日期必须与 occurredAt 在响应时区中一致；动作/健康点按 occurredAt 非递增且聚合 UUID 唯一，相同时刻允许、重复身份不去重；空证据保持 null 而非零。
+契约不变量：窗口必须严格按 `[7,30,90]`；点不得晚于 generatedAt；本地日期必须与 occurredAt 在响应时区中一致；动作/健康点按 occurredAt 非递增且聚合 UUID 唯一，相同时刻允许、重复身份不去重；动作顶层 `identity` 与首点快照一致，健康顶层和全部点使用首点 `canonicalUnit`，空序列时两个摘要均为 `null`；空证据保持 null 而非零。
 
 ## 11. 周计划与回看接口
 
