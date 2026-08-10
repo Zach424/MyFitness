@@ -24,7 +24,9 @@ import type {
 } from '@myfitness/contracts'
 import {
   exerciseInsightIdentitySchema,
+  healthInsightPointSchema,
   personalStateLedgerPolicyVersion,
+  recordSourceSchema,
   subjectiveRecoveryMetrics,
 } from '@myfitness/contracts'
 import { estimateSubjectiveRecoveryState } from '@myfitness/domain'
@@ -586,6 +588,20 @@ const healthPoint = (row: HealthPointRow, timezone: string): HealthInsightPoint 
   }
 }
 
+const assertValidHealthPointRowProvenance = (rows: HealthPointRow[], timezone: string) => {
+  if (
+    rows.some(
+      (row) =>
+        !recordSourceSchema.safeParse({
+          kind: row.source_kind,
+          metadata: row.source_metadata,
+        }).success || !healthInsightPointSchema.safeParse(healthPoint(row, timezone)).success,
+    )
+  ) {
+    throw new Error('health insight point rows must have valid provenance snapshots')
+  }
+}
+
 export const buildHealthInsight = (
   metric: MetricCode,
   windowRows: HealthWindowRow[],
@@ -601,6 +617,7 @@ export const buildHealthInsight = (
   assertValidInsightPointRowTimes(pointRows)
   assertHealthPointRowNumbers(pointRows)
   assertValidInsightPointRowIds(pointRows, (row) => row.record_id)
+  assertValidHealthPointRowProvenance(pointRows, timezone)
   assertInsightPointRowOrder(pointRows)
   assertUniqueInsightPointRowIds(pointRows, (row) => row.record_id)
   const eligiblePointRows = pointRows.filter((row) => row.occurred_at.getTime() <= at.getTime())

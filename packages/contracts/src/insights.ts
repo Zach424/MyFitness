@@ -713,18 +713,43 @@ export const healthInsightWindowSchema = z
     }
   })
 
+const healthInsightRecordTimezoneSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(64)
+  .refine(
+    (timezone) => {
+      try {
+        localDateInTimezone(new Date(0), timezone)
+        return true
+      } catch {
+        return false
+      }
+    },
+    { message: 'recordTimezone must be a valid IANA time zone' },
+  )
+
+const confirmedHealthInsightSourceSchema = recordSourceSchema.refine(
+  (source) => source.kind !== 'ai_estimate',
+  {
+    message: 'health insight points require confirmed non-AI sources',
+    path: ['kind'],
+  },
+)
+
 export const healthInsightPointSchema = z
   .object({
     recordId: z.string().uuid(),
     recordRevision: z.number().int().positive(),
     occurredAt: z.string().datetime({ offset: true }),
     localDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-    recordTimezone: z.string().trim().min(1).max(64),
+    recordTimezone: healthInsightRecordTimezoneSchema,
     canonicalValue: z.number().finite(),
     canonicalUnit: unitCodeSchema,
     displayValue: z.number().finite(),
     displayUnit: unitCodeSchema,
-    source: recordSourceSchema,
+    source: confirmedHealthInsightSourceSchema,
   })
   .strict()
 

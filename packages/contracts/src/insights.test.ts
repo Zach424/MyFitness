@@ -493,6 +493,40 @@ describe('health insight contract', () => {
     })
 
     expect(parsed.series[0]).toMatchObject({ canonicalUnit: 'kg', displayUnit: 'lb' })
+    const invalidRecordTimezone = healthInsightSchema.safeParse({
+      ...parsed,
+      series: [{ ...parsed.series[0]!, recordTimezone: 'Invalid/Timezone' }],
+    })
+    expect(invalidRecordTimezone.success).toBe(false)
+    if (!invalidRecordTimezone.success) {
+      expect(invalidRecordTimezone.error.issues).toContainEqual(
+        expect.objectContaining({
+          message: 'recordTimezone must be a valid IANA time zone',
+          path: ['series', 0, 'recordTimezone'],
+        }),
+      )
+    }
+    const aiEstimateSource = healthInsightSchema.safeParse({
+      ...parsed,
+      series: [
+        {
+          ...parsed.series[0]!,
+          source: {
+            kind: 'ai_estimate',
+            metadata: { modelVersion: 'fixture', promptVersion: 'fixture' },
+          },
+        },
+      ],
+    })
+    expect(aiEstimateSource.success).toBe(false)
+    if (!aiEstimateSource.success) {
+      expect(aiEstimateSource.error.issues).toContainEqual(
+        expect.objectContaining({
+          message: 'health insight points require confirmed non-AI sources',
+          path: ['series', 0, 'source', 'kind'],
+        }),
+      )
+    }
     const missingRecordedDay = healthInsightSchema.safeParse({
       ...parsed,
       windows: parsed.windows.map((window, index) =>

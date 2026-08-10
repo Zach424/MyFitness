@@ -818,6 +818,26 @@ describe('health insight projection', () => {
     expect(() =>
       buildHealthInsight('body.weight', [], hiddenInvalidIdPoints, 'Asia/Shanghai', at),
     ).toThrow('insight point rows must have valid aggregate UUIDs')
+    const hiddenInvalidProvenance = (overrides: Partial<(typeof points)[number]>) => [
+      ...points.slice(0, 180),
+      { ...points[180]!, ...overrides },
+    ]
+    for (const invalidProvenance of [
+      hiddenInvalidProvenance({ canonical_unit: 'unknown' as never }),
+      hiddenInvalidProvenance({ display_unit: 'unknown' as never }),
+      hiddenInvalidProvenance({ source_kind: 'unknown' as never }),
+      hiddenInvalidProvenance({ source_kind: 'ai_estimate' as never }),
+      hiddenInvalidProvenance({ source_metadata: { provider: ' ' } as never }),
+      hiddenInvalidProvenance({ source_metadata: { provider: 'p'.repeat(81) } as never }),
+      hiddenInvalidProvenance({ source_metadata: { unexpected: 'value' } as never }),
+      hiddenInvalidProvenance({ source_metadata: [] as never }),
+      hiddenInvalidProvenance({ source_metadata: null as never }),
+      hiddenInvalidProvenance({ timezone: 'Invalid/Timezone' }),
+    ]) {
+      expect(() =>
+        buildHealthInsight('body.weight', [], invalidProvenance, 'Asia/Shanghai', at),
+      ).toThrow('health insight point rows must have valid provenance snapshots')
+    }
     expect(() =>
       buildHealthInsight(
         'body.weight',
