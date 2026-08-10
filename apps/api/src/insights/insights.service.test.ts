@@ -432,7 +432,7 @@ describe('exercise insight projection', () => {
     const advanced = buildExerciseInsight(
       'goblet_squat',
       [],
-      [futurePoint, ...points],
+      [futurePoint, ...points.slice(0, 180)],
       'Asia/Shanghai',
       new Date(at.getTime() + 2 * 3_600_000),
     )
@@ -457,6 +457,17 @@ describe('exercise insight projection', () => {
     expect(() =>
       buildExerciseInsight('goblet_squat', [], hiddenDuplicatePoints, 'Asia/Shanghai', at),
     ).toThrow('insight point rows must have unique aggregate ids')
+    const excessivePoints = [
+      ...points,
+      {
+        ...points[180]!,
+        workout_id: '00000000-0000-4000-8181-000000000001',
+        occurred_at: new Date(points[180]!.occurred_at.getTime() - 3_600_000),
+      },
+    ]
+    expect(() =>
+      buildExerciseInsight('goblet_squat', [], excessivePoints, 'Asia/Shanghai', at),
+    ).toThrow('insight point rows cannot exceed the 181-row truncation receipt')
   })
 })
 
@@ -586,7 +597,7 @@ describe('health insight projection', () => {
       buildHealthInsight(
         'body.weight',
         [],
-        [futurePoint, ...points],
+        [futurePoint, ...points.slice(0, 180)],
         'Asia/Shanghai',
         new Date(at.getTime() + 2 * 3_600_000),
       ),
@@ -615,5 +626,16 @@ describe('health insight projection', () => {
     expect(() =>
       buildHealthInsight('body.weight', [], hiddenMixedUnitPoints, 'Asia/Shanghai', at),
     ).toThrow('health insight point rows must share one canonical unit')
+    const excessivePoints = [
+      ...points,
+      {
+        ...points[180]!,
+        record_id: '00000000-0000-4000-8181-000000000001',
+        occurred_at: new Date(points[180]!.occurred_at.getTime() - 3_600_000),
+      },
+    ]
+    expect(() =>
+      buildHealthInsight('body.weight', [], excessivePoints, 'Asia/Shanghai', at),
+    ).toThrow('insight point rows cannot exceed the 181-row truncation receipt')
   })
 })

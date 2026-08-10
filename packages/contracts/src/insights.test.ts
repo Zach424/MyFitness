@@ -127,6 +127,23 @@ describe('exercise insight contract', () => {
     })
 
     expect(parsed.series[0]).toMatchObject({ completedSetCount: 2, totalSetCount: 3 })
+    const unsupportedHasMore = exerciseInsightSchema.safeParse({ ...parsed, hasMore: true })
+    expect(unsupportedHasMore.success).toBe(false)
+    if (!unsupportedHasMore.success) {
+      expect(unsupportedHasMore.error.issues).toContainEqual(
+        expect.objectContaining({
+          message: 'hasMore requires a full 180-point public prefix',
+          path: ['hasMore'],
+        }),
+      )
+    }
+    const fullSeries = Array.from({ length: 180 }, (_, index) => ({
+      ...parsed.series[0]!,
+      workoutId: `00000000-0000-4000-${String(8_000 + index).padStart(4, '0')}-000000000001`,
+    }))
+    expect(
+      exerciseInsightSchema.safeParse({ ...parsed, series: fullSeries, hasMore: true }).success,
+    ).toBe(true)
     const staleIdentity = exerciseInsightSchema.safeParse({
       ...parsed,
       identity: { ...parsed.identity!, name: '旧动作名称' },
@@ -405,6 +422,16 @@ describe('health insight contract', () => {
     })
 
     expect(parsed.series[0]).toMatchObject({ canonicalUnit: 'kg', displayUnit: 'lb' })
+    const unsupportedHasMore = healthInsightSchema.safeParse({ ...parsed, hasMore: true })
+    expect(unsupportedHasMore.success).toBe(false)
+    if (!unsupportedHasMore.success) {
+      expect(unsupportedHasMore.error.issues).toContainEqual(
+        expect.objectContaining({
+          message: 'hasMore requires a full 180-point public prefix',
+          path: ['hasMore'],
+        }),
+      )
+    }
     const staleCanonicalUnit = healthInsightSchema.safeParse({
       ...parsed,
       canonicalUnit: 'cm',

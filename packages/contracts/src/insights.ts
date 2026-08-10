@@ -404,6 +404,19 @@ const validateExerciseInsightIdentity = (
   }
 }
 
+const validateInsightTruncationReceipt = (
+  insight: { series: unknown[]; hasMore: boolean },
+  ctx: z.RefinementCtx,
+) => {
+  if (insight.hasMore && insight.series.length !== 180) {
+    ctx.addIssue({
+      code: 'custom',
+      message: 'hasMore requires a full 180-point public prefix',
+      path: ['hasMore'],
+    })
+  }
+}
+
 export const exerciseInsightSchema = z
   .object({
     generatedAt: z.string().datetime({ offset: true }),
@@ -421,6 +434,7 @@ export const exerciseInsightSchema = z
     validateInsightPointOrder(insight, ctx)
     validateUniqueInsightPointIds(insight.series, (point) => point.workoutId, 'workoutId', ctx)
     validateExerciseInsightIdentity(insight, ctx)
+    validateInsightTruncationReceipt(insight, ctx)
     validateInsightOccurrenceBoundary(insight, ctx)
   })
 
@@ -689,6 +703,7 @@ export const healthInsightSchema = z
         })
       }
     })
+    validateInsightTruncationReceipt(insight, ctx)
     validateInsightOccurrenceBoundary(insight, ctx)
   })
 

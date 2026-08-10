@@ -221,6 +221,12 @@ const assertHealthPointCanonicalUnitConsistency = (rows: HealthPointRow[]) => {
   }
 }
 
+const assertInsightPointRowTruncationReceipt = (rows: unknown[]) => {
+  if (rows.length > 181) {
+    throw new Error('insight point rows cannot exceed the 181-row truncation receipt')
+  }
+}
+
 const shiftLocalDate = (localDate: string, days: number) => {
   const [year, month, day] = localDate.split('-').map(Number)
   return new Date(Date.UTC(year!, month! - 1, day! + days)).toISOString().slice(0, 10)
@@ -274,6 +280,7 @@ export const buildExerciseInsight = (
   assertInsightPointRowOrder(pointRows)
   assertUniqueInsightPointRowIds(pointRows, (row) => row.workout_id)
   const eligiblePointRows = pointRows.filter((row) => row.occurred_at.getTime() <= at.getTime())
+  assertInsightPointRowTruncationReceipt(eligiblePointRows)
   const series = eligiblePointRows.slice(0, 180).map((row) => exercisePoint(row, timezone))
   return {
     generatedAt: at.toISOString(),
@@ -413,6 +420,7 @@ export const buildHealthInsight = (
   assertInsightPointRowOrder(pointRows)
   assertUniqueInsightPointRowIds(pointRows, (row) => row.record_id)
   const eligiblePointRows = pointRows.filter((row) => row.occurred_at.getTime() <= at.getTime())
+  assertInsightPointRowTruncationReceipt(eligiblePointRows)
   assertHealthPointCanonicalUnitConsistency(eligiblePointRows)
   const series = eligiblePointRows.slice(0, 180).map((row) => healthPoint(row, timezone))
   return {
