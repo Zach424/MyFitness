@@ -566,6 +566,54 @@ const validateExerciseInsightWindowPointReceipt = (
   }
 }
 
+const validateExerciseInsightWindowPointAggregateReceipt = (
+  insight: {
+    windows: Array<z.infer<typeof exerciseInsightWindowSchema>>
+    series: Array<z.infer<typeof exerciseInsightPointSchema>>
+  },
+  ctx: z.RefinementCtx,
+) => {
+  const windowIndex = insight.windows.findIndex((window) => window.days === 90)
+  if (windowIndex < 0) return
+  const window = insight.windows[windowIndex]!
+  if (window.sessionCount > 180 || insight.series.length !== window.sessionCount) return
+
+  const integerFields = ['completedSetCount', 'totalReps'] as const
+  integerFields.forEach((field) => {
+    const pointTotal = insight.series.reduce((total, point) => total + BigInt(point[field]), 0n)
+    if (pointTotal !== BigInt(window[field])) {
+      ctx.addIssue({
+        code: 'custom',
+        message: `90-day ${field} must match the complete exercise point aggregate`,
+        path: ['windows', windowIndex, field],
+      })
+    }
+  })
+
+  const roundedFields = [
+    ['volumeKg', 2],
+    ['activeMinutes', 1],
+    ['distanceKm', 2],
+  ] as const
+  roundedFields.forEach(([field, precision]) => {
+    const pointTotal = insight.series.reduce((total, point) => total + point[field], 0)
+    const roundingUnit = 10 ** -precision
+    const quantizationTolerance = ((insight.series.length + 1) * roundingUnit) / 2
+    const floatingTolerance =
+      Number.EPSILON *
+      Math.max(1, Math.abs(window[field]), Math.abs(pointTotal)) *
+      (insight.series.length + 2) *
+      4
+    if (Math.abs(window[field] - pointTotal) > quantizationTolerance + floatingTolerance) {
+      ctx.addIssue({
+        code: 'custom',
+        message: `90-day ${field} must match complete exercise points within rounding tolerance`,
+        path: ['windows', windowIndex, field],
+      })
+    }
+  })
+}
+
 export const exerciseInsightSchema = z
   .object({
     generatedAt: z.string().datetime({ offset: true }),
@@ -586,6 +634,7 @@ export const exerciseInsightSchema = z
     validateExerciseInsightIdentity(insight, ctx)
     validateInsightTruncationReceipt(insight, ctx)
     validateExerciseInsightWindowPointReceipt(insight, ctx)
+    validateExerciseInsightWindowPointAggregateReceipt(insight, ctx)
     validateInsightOccurrenceBoundary(insight, ctx)
   })
 

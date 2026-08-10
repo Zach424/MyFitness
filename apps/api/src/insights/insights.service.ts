@@ -485,6 +485,49 @@ const assertExercisePointWindowTruncationReceipt = (
   }
 }
 
+const sourceDecimalSumMatches = (expected: string, values: string[]) => {
+  const expectedNumber = Number(expected)
+  const sum = values.reduce((total, value) => total + Number(value), 0)
+  const floatingTolerance =
+    Number.EPSILON * Math.max(1, Math.abs(expectedNumber), Math.abs(sum)) * (values.length + 2) * 4
+  return Math.abs(expectedNumber - sum) <= floatingTolerance
+}
+
+const assertExerciseWindowPointAggregateReceipt = (
+  windowRows: ExerciseWindowRow[],
+  eligiblePointRows: ExercisePointRow[],
+) => {
+  const window = windowRows.find((row) => row.days === 90)
+  const sessionCount = Number(window?.session_count ?? 0)
+  if (sessionCount > 180) return
+
+  const expectedCompletedSets = BigInt(window?.completed_set_count ?? '0')
+  const completedSets = eligiblePointRows.reduce(
+    (total, row) => total + BigInt(row.completed_set_count),
+    0n,
+  )
+  const expectedTotalReps = BigInt(window?.total_reps ?? '0')
+  const totalReps = eligiblePointRows.reduce((total, row) => total + BigInt(row.total_reps), 0n)
+  if (
+    completedSets !== expectedCompletedSets ||
+    totalReps !== expectedTotalReps ||
+    !sourceDecimalSumMatches(
+      window?.volume_kg ?? '0',
+      eligiblePointRows.map((row) => row.volume_kg),
+    ) ||
+    !sourceDecimalSumMatches(
+      window?.active_seconds ?? '0',
+      eligiblePointRows.map((row) => row.active_seconds),
+    ) ||
+    !sourceDecimalSumMatches(
+      window?.distance_meters ?? '0',
+      eligiblePointRows.map((row) => row.distance_meters),
+    )
+  ) {
+    throw new Error('exercise insight 90-day window must match complete point aggregates')
+  }
+}
+
 const assertHealthPointWindowTruncationReceipt = (
   windowRows: HealthWindowRow[],
   eligiblePointRows: HealthPointRow[],
@@ -555,6 +598,7 @@ export const buildExerciseInsight = (
   const eligiblePointRows = pointRows.filter((row) => row.occurred_at.getTime() <= at.getTime())
   assertInsightPointRowTruncationReceipt(eligiblePointRows)
   assertExercisePointWindowTruncationReceipt(windowRows, eligiblePointRows)
+  assertExerciseWindowPointAggregateReceipt(windowRows, eligiblePointRows)
   const series = eligiblePointRows.slice(0, 180).map((row) => exercisePoint(row, timezone))
   return {
     generatedAt: at.toISOString(),

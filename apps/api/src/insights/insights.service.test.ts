@@ -389,8 +389,8 @@ describe('exercise insight projection', () => {
       total_set_count: '3',
       total_reps: '20',
       volume_kg: '240.126',
-      active_seconds: '0',
-      distance_meters: '0',
+      active_seconds: '100',
+      distance_meters: '100',
     }))
     const futurePoint = {
       ...points[0]!,
@@ -425,7 +425,7 @@ describe('exercise insight projection', () => {
       total_reps: '3620',
       volume_kg: '43462.806',
       active_seconds: '18100',
-      distance_meters: '10000',
+      distance_meters: '18100',
     }
     const emptyNinetyDayWindow = {
       ...ninetyDayWindow,
@@ -435,6 +435,12 @@ describe('exercise insight projection', () => {
       volume_kg: '0',
       active_seconds: '0',
       distance_meters: '0',
+    }
+    const completeTwoSessionWindow = {
+      ...sevenDayWindow,
+      days: 90,
+      active_seconds: '200',
+      distance_meters: '200',
     }
     const insight = buildExerciseInsight(
       'goblet_squat',
@@ -481,6 +487,39 @@ describe('exercise insight projection', () => {
       activeMinutes: 0,
       distanceKm: 0,
     })
+
+    const completeTwoSessionInsight = buildExerciseInsight(
+      'goblet_squat',
+      [completeTwoSessionWindow],
+      points.slice(0, 2),
+      'Asia/Shanghai',
+      at,
+    )
+    expect(completeTwoSessionInsight.windows[2]).toMatchObject({
+      sessionCount: 2,
+      completedSetCount: 4,
+      totalReps: 40,
+      volumeKg: 480.25,
+      activeMinutes: 3.3,
+      distanceKm: 0.2,
+    })
+    for (const [field, value] of [
+      ['completed_set_count', '5'],
+      ['total_reps', '41'],
+      ['volume_kg', '480.253'],
+      ['active_seconds', '201'],
+      ['distance_meters', '201'],
+    ] as const) {
+      expect(() =>
+        buildExerciseInsight(
+          'goblet_squat',
+          [{ ...completeTwoSessionWindow, [field]: value }],
+          points.slice(0, 2),
+          'Asia/Shanghai',
+          at,
+        ),
+      ).toThrow('exercise insight 90-day window must match complete point aggregates')
+    }
 
     const advanced = buildExerciseInsight(
       'goblet_squat',

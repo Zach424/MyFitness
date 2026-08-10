@@ -119,8 +119,8 @@ describe('exercise insight contract', () => {
           totalSetCount: 3,
           totalReps: 20,
           volumeKg: 240,
-          activeMinutes: 0,
-          distanceKm: 0,
+          activeMinutes: 10,
+          distanceKm: 1,
         },
       ],
       hasMore: false,
@@ -204,8 +204,59 @@ describe('exercise insight contract', () => {
           activeMinutes: 0,
           distanceKm: 0,
         })),
+        series: [
+          {
+            ...parsed.series[0]!,
+            completedSetCount: 1,
+            totalReps: 0,
+            volumeKg: 0,
+            activeMinutes: 0,
+            distanceKm: 0,
+          },
+        ],
       }).success,
     ).toBe(true)
+    for (const [field, value] of [
+      ['completedSetCount', 3],
+      ['totalReps', 21],
+    ] as const) {
+      const mismatchedIntegerAggregate = exerciseInsightSchema.safeParse({
+        ...parsed,
+        windows: parsed.windows.map((window, index) =>
+          index === 2 ? { ...window, [field]: value } : window,
+        ),
+      })
+      expect(mismatchedIntegerAggregate.success).toBe(false)
+      if (!mismatchedIntegerAggregate.success) {
+        expect(mismatchedIntegerAggregate.error.issues).toContainEqual(
+          expect.objectContaining({
+            message: `90-day ${field} must match the complete exercise point aggregate`,
+            path: ['windows', 2, field],
+          }),
+        )
+      }
+    }
+    for (const [field, value] of [
+      ['volumeKg', 250],
+      ['activeMinutes', 11],
+      ['distanceKm', 2],
+    ] as const) {
+      const mismatchedRoundedAggregate = exerciseInsightSchema.safeParse({
+        ...parsed,
+        windows: parsed.windows.map((window, index) =>
+          index === 2 ? { ...window, [field]: value } : window,
+        ),
+      })
+      expect(mismatchedRoundedAggregate.success).toBe(false)
+      if (!mismatchedRoundedAggregate.success) {
+        expect(mismatchedRoundedAggregate.error.issues).toContainEqual(
+          expect.objectContaining({
+            message: `90-day ${field} must match complete exercise points within rounding tolerance`,
+            path: ['windows', 2, field],
+          }),
+        )
+      }
+    }
     const impossibleWindowCounts = exerciseInsightSchema.safeParse({
       ...parsed,
       windows: parsed.windows.map((window, index) =>
@@ -449,13 +500,31 @@ describe('exercise insight contract', () => {
       exerciseInsightSchema.safeParse({
         ...parsed,
         windows: parsed.windows.map((window, index) =>
-          index === 2 ? { ...window, sessionCount: 2 } : window,
+          index === 2
+            ? {
+                ...window,
+                sessionCount: 2,
+                completedSetCount: 4,
+                totalReps: 40,
+                volumeKg: 480.25,
+                activeMinutes: 10.1,
+                distanceKm: 1.01,
+              }
+            : window,
         ),
         series: [
-          parsed.series[0]!,
+          {
+            ...parsed.series[0]!,
+            volumeKg: 240.13,
+            activeMinutes: 5.1,
+            distanceKm: 0.51,
+          },
           {
             ...parsed.series[0]!,
             workoutId: '00000000-0000-4000-8000-000000000002',
+            volumeKg: 240.13,
+            activeMinutes: 5.1,
+            distanceKm: 0.51,
           },
         ],
       }).success,
