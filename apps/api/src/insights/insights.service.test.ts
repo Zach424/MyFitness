@@ -448,6 +448,16 @@ describe('nutrition insight projection', () => {
       nutrients: { energyKcal: 1220.13, fiberG: 4.5 },
     })
     expect(insight.windows[1]).toMatchObject({ days: 30, recordedDays: 2 })
+    expect(() =>
+      buildNutritionInsight(rows, 'Asia/Shanghai', new Date('2026-08-04T12:00:00.000Z')),
+    ).toThrow('nutrition insight rows must cover the reference local-date range')
+    expect(() =>
+      buildNutritionInsight(
+        [...rows].reverse(),
+        'Asia/Shanghai',
+        new Date('2026-08-05T12:00:00.000Z'),
+      ),
+    ).toThrow('nutrition insight rows must cover the reference local-date range')
   })
 })
 

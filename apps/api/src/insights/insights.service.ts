@@ -187,6 +187,16 @@ const localDay = (date: Date, timezone: string) => {
   return `${part('year')}-${part('month')}-${part('day')}`
 }
 
+const shiftLocalDate = (localDate: string, days: number) => {
+  const [year, month, day] = localDate.split('-').map(Number)
+  return new Date(Date.UTC(year!, month! - 1, day! + days)).toISOString().slice(0, 10)
+}
+
+const expectedLocalDateSeries = (at: Date, timezone: string, length: number) => {
+  const endDate = localDay(at, timezone)
+  return Array.from({ length }, (_, index) => shiftLocalDate(endDate, index - length + 1))
+}
+
 const timeValue = (value: Date) => value.getTime()
 
 const exerciseWindow = (days: 7 | 30 | 90, row?: ExerciseWindowRow): ExerciseInsightWindow => ({
@@ -309,6 +319,13 @@ export const buildNutritionInsight = (
   timezone: string,
   at = new Date(),
 ): NutritionInsight => {
+  const expectedDates = expectedLocalDateSeries(at, timezone, 90)
+  if (
+    rows.length !== expectedDates.length ||
+    rows.some((row, index) => row.local_date !== expectedDates[index])
+  ) {
+    throw new Error('nutrition insight rows must cover the reference local-date range')
+  }
   const series = rows.map(nutritionDay)
   return {
     generatedAt: at.toISOString(),

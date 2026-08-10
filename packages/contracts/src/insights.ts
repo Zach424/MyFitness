@@ -330,6 +330,73 @@ export const nutritionInsightWindowSchema = z
     }
   })
 
+const localDateInTimezone = (instant: Date, timezone: string) => {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(instant)
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((candidate) => candidate.type === type)!.value
+  return `${part('year')}-${part('month')}-${part('day')}`
+}
+
+const shiftLocalDate = (localDate: string, days: number) => {
+  const [year, month, day] = localDate.split('-').map(Number)
+  return new Date(Date.UTC(year!, month! - 1, day! + days)).toISOString().slice(0, 10)
+}
+
+const roundNutritionTotal = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100
+
+const expectedNutritionWindow = (
+  series: Array<z.infer<typeof nutritionInsightDaySchema>>,
+  days: 7 | 30 | 90,
+) => {
+  const selected = series.slice(-days)
+  const recordedDays = selected.filter((day) => day.hasEvidence).length
+  const sum = (nutrient: keyof z.infer<typeof nutritionInsightNutrientsSchema>) => {
+    const values = selected.flatMap((day) => {
+      const value = day.nutrients[nutrient]
+      return value === null ? [] : [value]
+    })
+    return values.length
+      ? roundNutritionTotal(values.reduce((total, value) => total + value, 0))
+      : null
+  }
+  return {
+    days,
+    recordedDays,
+    missingDays: days - recordedDays,
+    mealCount: selected.reduce((total, day) => total + day.mealCount, 0),
+    itemCount: selected.reduce((total, day) => total + day.itemCount, 0),
+    fiberKnownItemCount: selected.reduce((total, day) => total + day.fiberKnownItemCount, 0),
+    nutrients: {
+      energyKcal: sum('energyKcal'),
+      proteinG: sum('proteinG'),
+      carbohydrateG: sum('carbohydrateG'),
+      fatG: sum('fatG'),
+      fiberG: sum('fiberG'),
+    },
+  }
+}
+
+const nutritionWindowMatches = (
+  actual: z.infer<typeof nutritionInsightWindowSchema>,
+  expected: ReturnType<typeof expectedNutritionWindow>,
+) =>
+  actual.days === expected.days &&
+  actual.recordedDays === expected.recordedDays &&
+  actual.missingDays === expected.missingDays &&
+  actual.mealCount === expected.mealCount &&
+  actual.itemCount === expected.itemCount &&
+  actual.fiberKnownItemCount === expected.fiberKnownItemCount &&
+  actual.nutrients.energyKcal === expected.nutrients.energyKcal &&
+  actual.nutrients.proteinG === expected.nutrients.proteinG &&
+  actual.nutrients.carbohydrateG === expected.nutrients.carbohydrateG &&
+  actual.nutrients.fatG === expected.nutrients.fatG &&
+  actual.nutrients.fiberG === expected.nutrients.fiberG
+
 export const nutritionInsightSchema = z
   .object({
     generatedAt: z.string().datetime({ offset: true }),
@@ -338,6 +405,43 @@ export const nutritionInsightSchema = z
     series: z.array(nutritionInsightDaySchema).length(90),
   })
   .strict()
+  .superRefine((insight, ctx) => {
+    let endDate: string
+    try {
+      endDate = localDateInTimezone(new Date(insight.generatedAt), insight.timezone)
+    } catch {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'timezone must resolve the generatedAt local date',
+        path: ['timezone'],
+      })
+      return
+    }
+    const expectedDates = Array.from({ length: 90 }, (_, index) =>
+      shiftLocalDate(endDate, index - 89),
+    )
+    const dateMismatchIndex = insight.series.findIndex(
+      (day, index) => day.localDate !== expectedDates[index],
+    )
+    if (dateMismatchIndex >= 0) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'nutrition series must cover 90 consecutive reference local dates',
+        path: ['series', dateMismatchIndex, 'localDate'],
+      })
+    }
+    ;([7, 30, 90] as const).forEach((days, index) => {
+      const window = insight.windows[index]
+      const expected = expectedNutritionWindow(insight.series, days)
+      if (!window || !nutritionWindowMatches(window, expected)) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'nutrition windows must be derived from the accepted date series',
+          path: ['windows', index],
+        })
+      }
+    })
+  })
 
 export const nutritionInsightQuerySchema = dashboardQuerySchema
 

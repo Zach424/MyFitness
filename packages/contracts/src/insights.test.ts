@@ -129,7 +129,7 @@ describe('exercise insight contract', () => {
 
 describe('nutrition insight contract', () => {
   const missingDay = (index: number) => ({
-    localDate: `2026-07-${String(index + 1).padStart(2, '0')}`,
+    localDate: new Date(Date.UTC(2026, 6, 2 + index)).toISOString().slice(0, 10),
     hasEvidence: false,
     mealCount: 0,
     itemCount: 0,
@@ -182,6 +182,38 @@ describe('nutrition insight contract', () => {
 
     expect(parsed.series[0]?.nutrients.energyKcal).toBeNull()
     expect(parsed.series[89]).toMatchObject({ fiberKnownItemCount: 2, itemCount: 3 })
+
+    const futureDate = nutritionInsightSchema.safeParse({
+      ...parsed,
+      series: parsed.series.map((day, index) =>
+        index === 89 ? { ...day, localDate: '2026-09-30' } : day,
+      ),
+    })
+    expect(futureDate.success).toBe(false)
+    if (!futureDate.success) {
+      expect(futureDate.error.issues).toContainEqual(
+        expect.objectContaining({
+          message: 'nutrition series must cover 90 consecutive reference local dates',
+          path: ['series', 89, 'localDate'],
+        }),
+      )
+    }
+
+    const inventedWindow = nutritionInsightSchema.safeParse({
+      ...parsed,
+      windows: parsed.windows.map((window, index) =>
+        index === 0 ? { ...window, mealCount: window.mealCount + 1 } : window,
+      ),
+    })
+    expect(inventedWindow.success).toBe(false)
+    if (!inventedWindow.success) {
+      expect(inventedWindow.error.issues).toContainEqual(
+        expect.objectContaining({
+          message: 'nutrition windows must be derived from the accepted date series',
+          path: ['windows', 0],
+        }),
+      )
+    }
   })
 
   it('rejects zero-filled missing days and invented fiber totals', () => {
