@@ -195,6 +195,18 @@ const assertValidInsightTimezone = (timezone: string, at: Date) => {
   }
 }
 
+const assertValidInsightReferenceTime = (at: Date) => {
+  if (!Number.isFinite(at.getTime())) {
+    throw new Error('insight reference time must be a valid Date')
+  }
+}
+
+const assertValidInsightPointRowTimes = (rows: Array<{ occurred_at: Date }>) => {
+  if (rows.some((row) => !Number.isFinite(row.occurred_at.getTime()))) {
+    throw new Error('insight point rows must have valid occurred_at values')
+  }
+}
+
 const assertInsightPointRowOrder = (rows: Array<{ occurred_at: Date }>) => {
   for (let index = 1; index < rows.length; index += 1) {
     if (rows[index]!.occurred_at.getTime() > rows[index - 1]!.occurred_at.getTime()) {
@@ -276,7 +288,9 @@ export const buildExerciseInsight = (
   timezone: string,
   at = new Date(),
 ): ExerciseInsight => {
+  assertValidInsightReferenceTime(at)
   assertValidInsightTimezone(timezone, at)
+  assertValidInsightPointRowTimes(pointRows)
   assertInsightPointRowOrder(pointRows)
   assertUniqueInsightPointRowIds(pointRows, (row) => row.workout_id)
   const eligiblePointRows = pointRows.filter((row) => row.occurred_at.getTime() <= at.getTime())
@@ -416,7 +430,9 @@ export const buildHealthInsight = (
   timezone: string,
   at = new Date(),
 ): HealthInsight => {
+  assertValidInsightReferenceTime(at)
   assertValidInsightTimezone(timezone, at)
+  assertValidInsightPointRowTimes(pointRows)
   assertInsightPointRowOrder(pointRows)
   assertUniqueInsightPointRowIds(pointRows, (row) => row.record_id)
   const eligiblePointRows = pointRows.filter((row) => row.occurred_at.getTime() <= at.getTime())

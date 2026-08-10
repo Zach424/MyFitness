@@ -443,6 +443,16 @@ describe('exercise insight projection', () => {
     expect(() => buildExerciseInsight('goblet_squat', [], [], 'Invalid/Timezone', at)).toThrow(
       'insight timezone must be a valid IANA timezone',
     )
+    expect(() =>
+      buildExerciseInsight('goblet_squat', [], [], 'Asia/Shanghai', new Date('invalid')),
+    ).toThrow('insight reference time must be a valid Date')
+    const hiddenInvalidTimePoints = [
+      ...points.slice(0, 180),
+      { ...points[180]!, occurred_at: new Date('invalid') },
+    ]
+    expect(() =>
+      buildExerciseInsight('goblet_squat', [], hiddenInvalidTimePoints, 'Asia/Shanghai', at),
+    ).toThrow('insight point rows must have valid occurred_at values')
     const hiddenAscendingPoints = [
       ...points.slice(0, 180),
       { ...points[180]!, occurred_at: points[0]!.occurred_at },
@@ -605,6 +615,15 @@ describe('health insight projection', () => {
     expect(() => buildHealthInsight('body.weight', [], [], 'Invalid/Timezone', at)).toThrow(
       'insight timezone must be a valid IANA timezone',
     )
+    expect(() =>
+      buildHealthInsight(
+        'body.weight',
+        [],
+        [{ ...futurePoint, occurred_at: new Date('invalid') }, ...points.slice(0, 180)],
+        'Asia/Shanghai',
+        at,
+      ),
+    ).toThrow('insight point rows must have valid occurred_at values')
     const hiddenAscendingPoints = [
       ...points.slice(0, 180),
       { ...points[180]!, occurred_at: points[0]!.occurred_at },
