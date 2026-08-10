@@ -62,11 +62,47 @@ export const chineseDocumentationPolicy = {
       path: 'docs/product/RISK_REGISTER.md',
       headings: ['# 产品风险登记册'],
       requiredTokens: [
-        '最后审阅：2026-08-05，第 043 轮',
+        '最后审阅：2026-08-11，第 143 轮',
+        '全表复核结论：30 项开放风险全部保持开放，严重度为 20 项高、10 项中',
         '当前控制 / 下一门禁',
         '产品级风险只有在具名的发布证据存在后才能关闭。',
       ],
       forbiddenTokens: ['| High', '| Medium', '| Low'],
+      riskInventory: {
+        orderedIds: [
+          'R-002',
+          'R-003',
+          'R-004',
+          'R-005',
+          'R-006',
+          'R-007',
+          'R-008',
+          'R-009',
+          'R-010',
+          'R-011',
+          'R-012',
+          'R-013',
+          'R-014',
+          'R-015',
+          'R-016',
+          'R-017',
+          'R-019',
+          'R-020',
+          'R-021',
+          'R-022',
+          'R-023',
+          'R-024',
+          'R-025',
+          'R-026',
+          'R-027',
+          'R-028',
+          'R-029',
+          'R-030',
+          'R-031',
+          'R-032',
+        ],
+        severityCounts: { 高: 20, 中: 10 },
+      },
       minimumHanShare: 0.72,
       rejectEnglishOnlyNarrativeLines: true,
     },
@@ -200,6 +236,33 @@ export const measureChineseNarrative = (text) => {
   }
 }
 
+export const measureRiskInventory = (text) => {
+  const rows = text
+    .split(/\r?\n/)
+    .filter((line) => /^\|\s*R-\d{3}\s*\|/.test(line))
+    .map((line) =>
+      line
+        .split('|')
+        .slice(1, -1)
+        .map((cell) => cell.trim()),
+    )
+
+  const malformed = rows.find(
+    (cells) => cells.length !== 4 || !['高', '中', '低'].includes(cells[2]),
+  )
+  if (malformed) {
+    fail(`风险登记行格式或严重度无效：${malformed.join(' | ')}`)
+  }
+
+  return {
+    orderedIds: rows.map((cells) => cells[0]),
+    severityCounts: rows.reduce((counts, cells) => {
+      counts[cells[2]] = (counts[cells[2]] ?? 0) + 1
+      return counts
+    }, {}),
+  }
+}
+
 const numberedMarkdownFiles = async (root, series) => {
   const directory = resolve(root, series.directory)
   const entries = await readdir(directory, { withFileTypes: true })
@@ -237,6 +300,28 @@ const verifyActiveDocument = async (root, document) => {
   if (forbiddenTokens.length > 0) {
     fail(`${document.path} 仍包含禁用正文标记：${forbiddenTokens.join('；')}`)
   }
+  let riskInventory
+  if (document.riskInventory) {
+    riskInventory = measureRiskInventory(text)
+    const expectedIds = document.riskInventory.orderedIds
+    if (riskInventory.orderedIds.join(',') !== expectedIds.join(',')) {
+      fail(
+        `${document.path} 开放风险编号或顺序漂移：${riskInventory.orderedIds.join('、')}；预期 ${expectedIds.join('、')}`,
+      )
+    }
+    for (const [severity, expected] of Object.entries(document.riskInventory.severityCounts)) {
+      const actual = riskInventory.severityCounts[severity] ?? 0
+      if (actual !== expected) {
+        fail(`${document.path} ${severity}风险数量漂移：${actual}；预期 ${expected}`)
+      }
+    }
+    const unexpectedSeverities = Object.keys(riskInventory.severityCounts).filter(
+      (severity) => !(severity in document.riskInventory.severityCounts),
+    )
+    if (unexpectedSeverities.length > 0) {
+      fail(`${document.path} 出现未登记的风险严重度：${unexpectedSeverities.join('、')}`)
+    }
+  }
   const measurement = measureChineseNarrative(text)
   if (document.minimumHanShare && measurement.hanShare < document.minimumHanShare) {
     fail(
@@ -256,6 +341,7 @@ const verifyActiveDocument = async (root, document) => {
   return {
     path: document.path,
     headings: document.headings.length,
+    ...(riskInventory ? { riskInventory } : {}),
     ...measurement,
     englishOnlyNarrativeLines: englishOnlyNarrativeLines.length,
   }

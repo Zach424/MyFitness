@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   findEnglishOnlyNarrativeLines,
   measureChineseNarrative,
+  measureRiskInventory,
   verifyChineseDocumentation,
 } from './docs-language-policy.mjs'
 
@@ -163,5 +164,40 @@ describe('中文文档策略', () => {
     }
 
     await expect(verifyChineseDocumentation(root, strictPolicy)).rejects.toThrow('禁用正文标记')
+  })
+
+  it('统计风险编号顺序与严重度库存', () => {
+    expect(
+      measureRiskInventory(
+        '| ID | 风险 | 等级 | 当前控制 / 下一门禁 |\n| --- | --- | --- | --- |\n| R-002 | 甲 | 高 | 控制甲 |\n| R-004 | 乙 | 中 | 控制乙 |\n',
+      ),
+    ).toEqual({ orderedIds: ['R-002', 'R-004'], severityCounts: { 高: 1, 中: 1 } })
+  })
+
+  it('拒绝风险编号、顺序或严重度库存漂移', async () => {
+    const root = await fixture(
+      '# 第 090 轮：中文记录\n\n日期：2026-08-05\n\n状态：已完成\n\n这是一段用于验证权威记录语言约束的中文正文，确保中文字符数量足够。\n',
+    )
+    await writeFile(
+      resolve(root, 'docs', 'active.md'),
+      '# 项目状态\n\n## 当前状态\n\n| ID | 风险 | 等级 | 当前控制 / 下一门禁 |\n| --- | --- | --- | --- |\n| R-003 | 乙 | 中 | 控制乙 |\n| R-002 | 甲 | 高 | 控制甲 |\n',
+    )
+    const strictPolicy = {
+      ...policy,
+      activeDocuments: [
+        {
+          path: 'docs/active.md',
+          headings: ['# 项目状态', '## 当前状态'],
+          riskInventory: {
+            orderedIds: ['R-002', 'R-003'],
+            severityCounts: { 高: 1, 中: 1 },
+          },
+        },
+      ],
+    }
+
+    await expect(verifyChineseDocumentation(root, strictPolicy)).rejects.toThrow(
+      '开放风险编号或顺序漂移',
+    )
   })
 })
