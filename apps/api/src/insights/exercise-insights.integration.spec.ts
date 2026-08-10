@@ -83,6 +83,42 @@ describe('exercise insight API with PostgreSQL', () => {
     await app.close()
   })
 
+  it('keeps fixed-hour boundaries stable across PostgreSQL session timezones and DST', async () => {
+    const client = await pool.connect()
+    try {
+      await client.query("SET TIME ZONE 'America/New_York'")
+      const result = await client.query<{
+        label: string
+        days: number
+        reference_at: Date
+        absolute_boundary: Date
+        calendar_boundary: Date
+      }>(`
+        WITH samples(label, reference_at) AS (
+          VALUES
+            ('spring', '2026-03-08T08:00:00Z'::timestamptz),
+            ('fall', '2026-11-01T08:00:00Z'::timestamptz)
+        ), windows(days) AS (VALUES (7), (30), (90))
+        SELECT label, windows.days, reference_at,
+          reference_at - windows.days * INTERVAL '24 hours' AS absolute_boundary,
+          reference_at - make_interval(days => windows.days) AS calendar_boundary
+        FROM samples CROSS JOIN windows
+        ORDER BY label, windows.days
+      `)
+
+      expect(result.rows).toHaveLength(6)
+      for (const row of result.rows) {
+        expect(row.absolute_boundary.toISOString()).toBe(
+          new Date(row.reference_at.getTime() - row.days * 86_400_000).toISOString(),
+        )
+        expect(row.calendar_boundary.toISOString()).not.toBe(row.absolute_boundary.toISOString())
+      }
+    } finally {
+      await client.query('RESET TIME ZONE')
+      client.release()
+    }
+  })
+
   it('isolates a stable key, uses completed sets, and recomputes corrections and deletion', async () => {
     const recent = await createWorkout(
       workout('trend_lunge', '2026-08-04T02:00:00.000Z', [

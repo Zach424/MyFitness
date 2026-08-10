@@ -1344,7 +1344,7 @@ export class InsightsService {
             ON w.user_id = $1
             AND w.deleted_at IS NULL
             AND w.started_at <= $3
-            AND w.started_at >= $3::timestamptz - make_interval(days => windows.days)
+            AND w.started_at >= $3::timestamptz - windows.days * INTERVAL '24 hours'
           LEFT JOIN workout_exercises e
             ON e.workout_id = w.id AND e.exercise_key = $2
           LEFT JOIN workout_sets s
@@ -1377,7 +1377,7 @@ export class InsightsService {
           WHERE w.user_id = $1
             AND w.deleted_at IS NULL
             AND w.started_at <= $3
-            AND w.started_at >= $3::timestamptz - INTERVAL '90 days'
+            AND w.started_at >= $3::timestamptz - INTERVAL '2160 hours'
           GROUP BY w.id
           HAVING COUNT(s.id) FILTER (WHERE s.completed) > 0
           ORDER BY w.started_at DESC, w.created_at DESC, w.id DESC
@@ -1447,7 +1447,7 @@ export class InsightsService {
             AND records.status = 'confirmed'
             AND records.deleted_at IS NULL
             AND records.occurred_at <= $4
-            AND records.occurred_at >= $4::timestamptz - make_interval(days => windows.days)
+            AND records.occurred_at >= $4::timestamptz - windows.days * INTERVAL '24 hours'
           GROUP BY windows.days
           ORDER BY windows.days
         `,
@@ -1464,7 +1464,7 @@ export class InsightsService {
             AND status = 'confirmed'
             AND deleted_at IS NULL
             AND occurred_at <= $3
-            AND occurred_at >= $3::timestamptz - INTERVAL '90 days'
+            AND occurred_at >= $3::timestamptz - INTERVAL '2160 hours'
           ORDER BY occurred_at DESC, created_at DESC, id DESC
           LIMIT 181
         `,

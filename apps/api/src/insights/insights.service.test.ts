@@ -373,6 +373,36 @@ describe('dashboard aggregation', () => {
   })
 })
 
+describe('insight absolute SQL windows', () => {
+  it('uses fixed-hour lower bounds for exercise and health queries', async () => {
+    const calls: Array<{ text: string; values: unknown[] }> = []
+    const database = {
+      query: vi.fn(async (text: string, values: unknown[] = []) => {
+        calls.push({ text, values })
+        return { rows: [] }
+      }),
+    }
+    const service = new InsightsService(database as never)
+    const at = new Date('2026-11-01T08:00:00.000Z')
+    const userId = '00000000-0000-4000-8000-000000000041'
+
+    await service.exercise(userId, 'goblet_squat', 'America/New_York', at)
+    await service.health(userId, 'body.weight', 'America/New_York', at)
+
+    expect(calls).toHaveLength(4)
+    for (const call of [calls[0]!, calls[2]!]) {
+      expect(call.text).toContain("windows.days * INTERVAL '24 hours'")
+      expect(call.text).not.toContain('make_interval(days')
+      expect(call.values.at(-1)).toBe(at)
+    }
+    for (const call of [calls[1]!, calls[3]!]) {
+      expect(call.text).toContain("INTERVAL '2160 hours'")
+      expect(call.text).not.toContain("INTERVAL '90 days'")
+      expect(call.values.at(-1)).toBe(at)
+    }
+  })
+})
+
 describe('exercise insight projection', () => {
   it('maps bounded completed-set rows without replacing snapshot history', () => {
     const at = new Date('2026-08-05T12:00:00.000Z')

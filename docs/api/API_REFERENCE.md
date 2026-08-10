@@ -271,6 +271,8 @@
 
 动作短窗口子集收据：当 90 日 `sessionCount <= 180` 且点数/完整聚合收据成立时，来源按 `started_at >= at - days` 从完整训练点集筛出 7 日和 30 日子集，响应按 `generatedAt` 与公开点 `occurredAt` 重建相同子集。每个短窗口的 `sessionCount`、`completedSetCount` 和 `totalReps` 必须精确等于子集计数/求和；来源负荷、活动秒数和距离只容纳十进制转浮点后的有界 IEEE 误差，响应负荷、活动分钟和距离按子集点数分别使用 `(点数+1)×半个显示单位` 加浮点误差的上界。边界时刻包含，边界前 1 ms 排除，空子集保持全零；`sessionCount > 180` 时全部跳过，不从截断前缀推断短窗口。
 
+动作/健康窗口 SQL 时间语义：7/30/90 日窗口下界使用 `at - windows.days * INTERVAL '24 hours'`，90 日点下界使用 `at - INTERVAL '2160 hours'`；四个查询都保留 `<= at` 上界。显式小时区间不随 PostgreSQL 会话时区或 DST 改变，必须与共享契约的 `generatedAt - days×86_400_000` 一致。响应 `timezone` 只参与本地日期与健康记录日投影，不把绝对窗口改成当地日历日。
+
 ## 11. 周计划与回看接口
 
 | 方法与路径                                                       | 参数                                   | 功能与成功响应                                | 失败                    |
