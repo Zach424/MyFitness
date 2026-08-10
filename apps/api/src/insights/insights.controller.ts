@@ -1,4 +1,4 @@
-import { BadRequestException, Controller, Get, Param, Query } from '@nestjs/common'
+import { BadRequestException, Controller, Get, Header, Param, Query } from '@nestjs/common'
 import { ApiBadRequestResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger'
 import {
   dashboardQuerySchema,
@@ -28,6 +28,7 @@ export class InsightsController {
   constructor(private readonly insights: InsightsService) {}
 
   @Get('dashboard')
+  @Header('Cache-Control', 'private, no-store')
   @ApiOperation({ summary: 'Aggregate confirmed evidence for Today and 7/30/90-day trends' })
   @ApiOkResponse({ schema: openApiSchema(dashboardSchema) })
   @ApiBadRequestResponse({ description: 'Timezone or reference timestamp is invalid.' })

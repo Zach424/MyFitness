@@ -53,6 +53,47 @@ const dashboard: Dashboard = {
     limitations: ['主观恢复摘要不是医学或生理恢复结论。'],
   },
   trends: [sevenDayTrend, { ...sevenDayTrend, days: 30 }, { ...sevenDayTrend, days: 90 }],
+  personalState: {
+    policyVersion: 'personal-state-ledger-v1',
+    generatedAt: '2026-08-06T08:00:00.000Z',
+    confirmedRecovery: null,
+    observedWindow: {
+      kind: 'recording_window',
+      knowledgeClass: 'observed',
+      authority: 'dashboard.trends[days=7]',
+      window: {
+        startAt: '2026-07-30T08:00:00.000Z',
+        endAt: '2026-08-06T08:00:00.000Z',
+        days: 7,
+      },
+      activeDays: 4,
+      measurementCount: 5,
+      workoutCount: 2,
+      mealCount: 9,
+      freshness: {
+        asOf: '2026-08-06T08:00:00.000Z',
+        validUntil: null,
+        invalidatedBy: ['source_record_changed', 'time_advanced'],
+      },
+    },
+    recoveryEstimate: {
+      kind: 'recovery_state',
+      knowledgeClass: 'unknown',
+      authority: 'dashboard.readiness',
+      evidencePolicyVersion: 'subjective-recovery-state-v1',
+      state: 'unknown',
+      confidence: 'insufficient',
+      consistency: 'unknown',
+      label: '主观恢复证据不足',
+      evidenceCount: 0,
+      freshness: {
+        asOf: '2026-08-06T08:00:00.000Z',
+        validUntil: null,
+        invalidatedBy: ['source_record_changed', 'time_advanced'],
+      },
+    },
+    planExperience: null,
+  },
 }
 
 const plan = {
@@ -92,6 +133,11 @@ describe('coach workbench presentation model', () => {
     const snapshot = buildCoachSnapshot(dashboard, [plan])
 
     expect(snapshot.trend).toMatchObject({ activeDays: 4, workoutCount: 2, mealCount: 9 })
+    expect(snapshot.personalState).toMatchObject({
+      observedWindow: { knowledgeClass: 'observed', activeDays: 4 },
+      recoveryEstimate: { knowledgeClass: 'unknown' },
+      planExperience: null,
+    })
     expect(snapshot.plan).toMatchObject({
       plannedSessions: 3,
       recordedSessions: 1,

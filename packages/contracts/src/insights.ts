@@ -2,6 +2,7 @@ import * as z from 'zod'
 
 import { exerciseEquipmentSchema, exerciseTrackingModeSchema } from './exercise-catalog'
 import { metricCodeSchema, recordSourceSchema, unitCodeSchema } from './health-record'
+import { personalStateLedgerSchema } from './personal-state'
 import { recoveryStateEstimateSchema } from './recovery-state'
 import { exerciseCategorySchema, exerciseKeySchema } from './workout'
 
@@ -46,8 +47,55 @@ export const dashboardSchema = z
       .strict(),
     readiness: readinessSummarySchema,
     trends: z.array(trendWindowSchema).length(3),
+    personalState: personalStateLedgerSchema,
   })
   .strict()
+  .superRefine((dashboard, ctx) => {
+    const ledger = dashboard.personalState
+    const trend = dashboard.trends.find((candidate) => candidate.days === 7)
+    const expectedSources = ['manual', 'device', 'imported'].filter((kind) =>
+      dashboard.readiness.evidence.some((evidence) => evidence.sourceKind === kind),
+    )
+    const expectedLatestEvidenceAt = dashboard.readiness.evidence.reduce<string | null>(
+      (latest, evidence) =>
+        latest === null || Date.parse(evidence.occurredAt) > Date.parse(latest)
+          ? evidence.occurredAt
+          : latest,
+      null,
+    )
+    const ledgerMismatch =
+      ledger.generatedAt !== dashboard.generatedAt ||
+      ledger.observedWindow.window.endAt !== dashboard.generatedAt ||
+      ledger.observedWindow.freshness.asOf !== dashboard.generatedAt ||
+      ledger.recoveryEstimate.freshness.asOf !== dashboard.generatedAt ||
+      (ledger.planExperience !== null &&
+        (ledger.planExperience.freshness.asOf !== dashboard.generatedAt ||
+          Date.parse(ledger.planExperience.updatedAt) > Date.parse(dashboard.generatedAt))) ||
+      ledger.recoveryEstimate.state !== dashboard.readiness.state ||
+      ledger.recoveryEstimate.confidence !== dashboard.readiness.confidence ||
+      ledger.recoveryEstimate.consistency !== dashboard.readiness.consistency ||
+      ledger.recoveryEstimate.label !== dashboard.readiness.label ||
+      ledger.recoveryEstimate.evidenceCount !== dashboard.readiness.evidence.length ||
+      !trend ||
+      ledger.observedWindow.activeDays !== trend.activeDays ||
+      ledger.observedWindow.measurementCount !== trend.measurementCount ||
+      ledger.observedWindow.workoutCount !== trend.workoutCount ||
+      ledger.observedWindow.mealCount !== trend.mealCount
+    const confirmedMismatch = expectedLatestEvidenceAt
+      ? !ledger.confirmedRecovery ||
+        ledger.confirmedRecovery.observationCount !== dashboard.readiness.evidence.length ||
+        ledger.confirmedRecovery.latestEvidenceAt !== expectedLatestEvidenceAt ||
+        ledger.confirmedRecovery.sourceKinds.join(',') !== expectedSources.join(',') ||
+        ledger.confirmedRecovery.freshness.asOf !== dashboard.generatedAt
+      : ledger.confirmedRecovery !== null
+    if (ledgerMismatch || confirmedMismatch) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'personal state ledger must match its dashboard authorities',
+        path: ['personalState'],
+      })
+    }
+  })
 
 export const dashboardQuerySchema = z
   .object({

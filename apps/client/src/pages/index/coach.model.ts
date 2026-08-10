@@ -18,6 +18,7 @@ export type CoachSnapshot = {
   generatedAt: string
   localDate: string
   trend: TrendWindow
+  personalState: Dashboard['personalState']
   plan?: CoachPlanSummary
 }
 
@@ -52,6 +53,7 @@ export const buildCoachSnapshot = (
       generatedAt: dashboard.generatedAt,
       localDate: dashboard.today.date,
       trend,
+      personalState: dashboard.personalState,
     }
   }
 
@@ -68,6 +70,7 @@ export const buildCoachSnapshot = (
     generatedAt: dashboard.generatedAt,
     localDate: dashboard.today.date,
     trend,
+    personalState: dashboard.personalState,
     plan: {
       plan: currentPlan,
       plannedSessions: plannedDays.size,

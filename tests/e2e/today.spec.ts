@@ -130,7 +130,12 @@ test('Coach orders confirmed evidence before plan and AI without inventing an em
   await expect(page.getByText('今天还没有已确认记录')).toBeVisible()
 
   await page.getByRole('button', { name: '教练', exact: true }).click()
-  await expect(page.getByText('过去 7 天，实际发生了什么')).toBeVisible()
+  await expect(page.getByText('系统知道什么，也说明为什么。')).toBeVisible()
+  await expect(page.getByText('本人确认 · 当前暂无')).toBeVisible()
+  await expect(page.getByText('确认恢复记录 · 当前未引用')).toBeVisible()
+  await expect(page.getByText('系统观察 · 恢复 0 · 训练 0 · 餐次 0')).toBeVisible()
+  await expect(page.getByText('估计 · 证据不足 · 0 条证据')).toBeVisible()
+  await expect(page.getByText(/无保证有效期/)).toBeVisible()
   await expect(page.getByText('本周还没有计划折页')).toBeVisible()
   await expect(page.getByRole('button', { name: '建立本周计划' })).toBeVisible()
   await expect(page.getByRole('button', { name: '查看 AI 边注档案' })).toHaveCount(0)

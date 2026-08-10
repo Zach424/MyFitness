@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { dashboardSchema } from '@myfitness/contracts'
 
 import {
   buildDashboard,
@@ -80,6 +81,13 @@ describe('dashboard aggregation', () => {
           revision: 1,
         },
       ],
+      planExperience: {
+        plan_id: '00000000-0000-4000-8000-000000000005',
+        plan_revision: 3,
+        experience: 'about_right',
+        revision: 2,
+        updated_at: new Date('2026-07-18T11:00:00.000Z'),
+      },
     } as InsightRows
 
     const dashboard = buildDashboard(rows, 'Asia/Shanghai', at)
@@ -108,11 +116,64 @@ describe('dashboard aggregation', () => {
       workoutVolumeKg: 360,
       energyKcal: 393,
     })
+    expect(dashboard.personalState).toMatchObject({
+      policyVersion: 'personal-state-ledger-v1',
+      confirmedRecovery: {
+        knowledgeClass: 'confirmed',
+        observationCount: 2,
+        latestEvidenceAt: '2026-07-18T00:00:00.000Z',
+        sourceKinds: ['manual'],
+      },
+      observedWindow: {
+        knowledgeClass: 'observed',
+        activeDays: 2,
+        measurementCount: 2,
+        workoutCount: 1,
+        mealCount: 1,
+      },
+      recoveryEstimate: {
+        knowledgeClass: 'estimated',
+        state: 'current_only',
+        confidence: 'low',
+        evidenceCount: 2,
+      },
+      planExperience: {
+        knowledgeClass: 'user_confirmed',
+        planRevision: 3,
+        experience: 'about_right',
+        reflectionRevision: 2,
+      },
+    })
+    expect(dashboardSchema.parse(dashboard)).toEqual(dashboard)
+    expect(
+      dashboardSchema.safeParse({
+        ...dashboard,
+        personalState: {
+          ...dashboard.personalState,
+          recoveryEstimate: {
+            ...dashboard.personalState.recoveryEstimate,
+            knowledgeClass: 'unknown',
+          },
+        },
+      }).success,
+    ).toBe(false)
+    expect(
+      dashboardSchema.safeParse({
+        ...dashboard,
+        personalState: {
+          ...dashboard.personalState,
+          planExperience: {
+            ...dashboard.personalState.planExperience!,
+            updatedAt: '2026-07-18T13:00:00.000Z',
+          },
+        },
+      }).success,
+    ).toBe(false)
   })
 
   it('does not invent readiness when recovery evidence is absent', () => {
     const dashboard = buildDashboard(
-      { health: [], workouts: [], meals: [] },
+      { health: [], workouts: [], meals: [], planExperience: null },
       'Asia/Shanghai',
       new Date('2026-07-18T12:00:00.000Z'),
     )
@@ -123,6 +184,12 @@ describe('dashboard aggregation', () => {
       consistency: 'unknown',
     })
     expect(dashboard.today.items).toEqual([])
+    expect(dashboard.personalState).toMatchObject({
+      confirmedRecovery: null,
+      recoveryEstimate: { knowledgeClass: 'unknown', evidenceCount: 0 },
+      planExperience: null,
+    })
+    expect(dashboardSchema.parse(dashboard)).toEqual(dashboard)
   })
 })
 

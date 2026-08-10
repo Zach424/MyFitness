@@ -13,13 +13,16 @@ import type {
   NutritionInsight,
   NutritionInsightDay,
   NutritionInsightWindow,
+  PersonalStateInvalidationReason,
+  PersonalStateLedger,
+  PlanExperienceChoice,
   RecordSource,
   SubjectiveRecoveryMetric,
   TodayEvidence,
   TrendWindow,
   UnitCode,
 } from '@myfitness/contracts'
-import { subjectiveRecoveryMetrics } from '@myfitness/contracts'
+import { personalStateLedgerPolicyVersion, subjectiveRecoveryMetrics } from '@myfitness/contracts'
 import { estimateSubjectiveRecoveryState } from '@myfitness/domain'
 
 import { DatabaseService } from '../database/database.service'
@@ -56,10 +59,19 @@ type MealRow = {
   revision: number
 }
 
+type PlanExperienceRow = {
+  plan_id: string
+  plan_revision: number
+  experience: PlanExperienceChoice
+  revision: number
+  updated_at: Date
+}
+
 export type InsightRows = {
   health: HealthRow[]
   workouts: WorkoutRow[]
   meals: MealRow[]
+  planExperience: PlanExperienceRow | null
 }
 
 type ExerciseWindowRow = {
@@ -460,12 +472,86 @@ export const buildDashboard = (rows: InsightRows, timezone: string, at = new Dat
     }
   })
 
+  const freshness = (
+    invalidatedBy: PersonalStateInvalidationReason[],
+  ): PersonalStateLedger['observedWindow']['freshness'] => ({
+    asOf: at.toISOString(),
+    validUntil: null,
+    invalidatedBy,
+  })
+  const latestRecoveryEvidence = readiness.evidence.reduce<
+    (typeof readiness.evidence)[number] | null
+  >(
+    (latest, evidence) => (!latest || evidence.occurredAt > latest.occurredAt ? evidence : latest),
+    null,
+  )
+  const sourceKinds = (['manual', 'device', 'imported'] as const).filter((kind) =>
+    readiness.evidence.some((evidence) => evidence.sourceKind === kind),
+  )
+  const observed = trends[0]!
+  const personalState: PersonalStateLedger = {
+    policyVersion: personalStateLedgerPolicyVersion,
+    generatedAt: at.toISOString(),
+    confirmedRecovery: latestRecoveryEvidence
+      ? {
+          kind: 'confirmed_recovery_evidence',
+          knowledgeClass: 'confirmed',
+          authority: 'dashboard.readiness.evidence',
+          observationCount: readiness.evidence.length,
+          latestEvidenceAt: latestRecoveryEvidence.occurredAt,
+          sourceKinds,
+          freshness: freshness(['source_record_changed', 'time_advanced']),
+        }
+      : null,
+    observedWindow: {
+      kind: 'recording_window',
+      knowledgeClass: 'observed',
+      authority: 'dashboard.trends[days=7]',
+      window: {
+        startAt: new Date(at.getTime() - 7 * 86_400_000).toISOString(),
+        endAt: at.toISOString(),
+        days: 7,
+      },
+      activeDays: observed.activeDays,
+      measurementCount: observed.measurementCount,
+      workoutCount: observed.workoutCount,
+      mealCount: observed.mealCount,
+      freshness: freshness(['source_record_changed', 'time_advanced']),
+    },
+    recoveryEstimate: {
+      kind: 'recovery_state',
+      knowledgeClass: readiness.state === 'unknown' ? 'unknown' : 'estimated',
+      authority: 'dashboard.readiness',
+      evidencePolicyVersion: readiness.policyVersion,
+      state: readiness.state,
+      confidence: readiness.confidence,
+      consistency: readiness.consistency,
+      label: readiness.label,
+      evidenceCount: readiness.evidence.length,
+      freshness: freshness(['source_record_changed', 'time_advanced']),
+    },
+    planExperience: rows.planExperience
+      ? {
+          kind: 'plan_experience',
+          knowledgeClass: 'user_confirmed',
+          authority: 'plan_experience_reflection',
+          planId: rows.planExperience.plan_id,
+          planRevision: rows.planExperience.plan_revision,
+          experience: rows.planExperience.experience,
+          reflectionRevision: rows.planExperience.revision,
+          updatedAt: rows.planExperience.updated_at.toISOString(),
+          freshness: freshness(['plan_reflection_changed']),
+        }
+      : null,
+  }
+
   return {
     generatedAt: at.toISOString(),
     timezone,
     today: { date: today, items: evidence },
     readiness,
     trends,
+    personalState,
   }
 }
 
@@ -475,7 +561,7 @@ export class InsightsService {
 
   async dashboard(userId: string, timezone: string, at = new Date()) {
     const since = new Date(at.getTime() - 91 * 86_400_000)
-    const [health, workouts, meals] = await Promise.all([
+    const [health, workouts, meals, planExperience] = await Promise.all([
       this.database.query<HealthRow>(
         `
           SELECT id, metric, display_value, display_unit, canonical_value, occurred_at, revision,
@@ -516,9 +602,31 @@ export class InsightsService {
         `,
         [userId, since],
       ),
+      this.database.query<PlanExperienceRow>(
+        `
+          SELECT reflection.plan_id, reflection.plan_revision, reflection.experience,
+            reflection.revision, reflection.updated_at
+          FROM plan_experience_reflections AS reflection
+          JOIN weekly_plan_revisions AS accepted
+            ON accepted.plan_id = reflection.plan_id
+           AND accepted.user_id = reflection.user_id
+           AND accepted.revision = reflection.plan_revision
+           AND accepted.action = 'accepted'
+          WHERE reflection.user_id = $1
+            AND reflection.updated_at <= $2
+          ORDER BY reflection.updated_at DESC, reflection.id DESC
+          LIMIT 1
+        `,
+        [userId, at],
+      ),
     ])
     return buildDashboard(
-      { health: health.rows, workouts: workouts.rows, meals: meals.rows },
+      {
+        health: health.rows,
+        workouts: workouts.rows,
+        meals: meals.rows,
+        planExperience: planExperience.rows[0] ?? null,
+      },
       timezone,
       at,
     )

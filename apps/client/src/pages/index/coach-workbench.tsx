@@ -2,6 +2,7 @@ import { Button, Text, View } from '@tarojs/components'
 import Taro from '@tarojs/taro'
 
 import { buttonActivationProps } from '../../lib/accessibility'
+import { planExperienceLabel } from '../../lib/plan-experience'
 import type { TodayReadFailureKind, TodayReadPhase } from './today-read.model'
 import type { CoachSnapshot } from './coach.model'
 import './coach-workbench.scss'
@@ -34,6 +35,39 @@ const formatCheckedAt = (value: string) =>
     hour12: false,
   }).format(new Date(value))
 
+const confidenceLabels = {
+  insufficient: '证据不足',
+  low: '低置信',
+  moderate: '中等置信',
+} as const
+
+const personalStateCards = (state: CoachSnapshot['personalState']) => {
+  const { planExperience, confirmedRecovery, observedWindow, recoveryEstimate } = state
+
+  return [
+    [
+      planExperience ? planExperienceLabel(planExperience.experience) : '尚未保存',
+      planExperience
+        ? `本人确认 · PLAN v${planExperience.planRevision} · 反思 v${planExperience.reflectionRevision}`
+        : '本人确认 · 当前暂无',
+    ],
+    [
+      `${confirmedRecovery?.observationCount ?? 0} 条`,
+      confirmedRecovery
+        ? `确认恢复记录 · 最近 ${formatCheckedAt(confirmedRecovery.latestEvidenceAt)}`
+        : '确认恢复记录 · 当前未引用',
+    ],
+    [
+      `${observedWindow.activeDays} / 7 天`,
+      `系统观察 · 恢复 ${observedWindow.measurementCount} · 训练 ${observedWindow.workoutCount} · 餐次 ${observedWindow.mealCount}`,
+    ],
+    [
+      recoveryEstimate.label,
+      `估计 · ${confidenceLabels[recoveryEstimate.confidence]} · ${recoveryEstimate.evidenceCount} 条证据`,
+    ],
+  ]
+}
+
 type CoachWorkbenchProps = {
   snapshot?: CoachSnapshot
   phase: TodayReadPhase
@@ -52,6 +86,7 @@ export const CoachWorkbench = ({
   onClose,
 }: CoachWorkbenchProps) => {
   const plan = snapshot?.plan
+  const stateCards = snapshot ? personalStateCards(snapshot.personalState) : []
   const status = failure ? failureCopy[failure] : undefined
   const openPlan = () => void Taro.navigateTo({ url: '/pages/plans/index' })
   const openAiLedger = () => {
@@ -131,26 +166,19 @@ export const CoachWorkbench = ({
               记
             </View>
             <View className="coach-stage__content">
-              <Text className="coach-stage__eyebrow">01 / 已确认记录</Text>
-              <Text className="coach-stage__title">过去 7 天，实际发生了什么</Text>
-              <Text className="coach-stage__copy">
-                只计算已确认、未删除的当前记录；有记录天数不是达标率，也不评价自律。
-              </Text>
+              <Text className="coach-stage__eyebrow">01 / 个人状态证据账本</Text>
+              <Text className="coach-stage__title">系统知道什么，也说明为什么。</Text>
               <View className="coach-evidence-grid">
-                {[
-                  ['有记录天数', `${snapshot.trend.activeDays} / 7 天`],
-                  ['身体与恢复', `${snapshot.trend.measurementCount} 条`],
-                  ['训练', `${snapshot.trend.workoutCount} 次`],
-                  ['活动时间', `${Math.round(snapshot.trend.activeMinutes)} 分钟`],
-                  ['餐次', `${snapshot.trend.mealCount} 餐`],
-                  ['训练量', `${Math.round(snapshot.trend.workoutVolumeKg)} kg`],
-                ].map(([label, value]) => (
+                {stateCards.map(([label, value]) => (
                   <View className="coach-evidence" key={label}>
-                    <Text className="coach-evidence__value metric">{value}</Text>
-                    <Text className="coach-evidence__label">{label}</Text>
+                    <Text className="coach-evidence__value metric">{label}</Text>
+                    <Text className="coach-evidence__label">{value}</Text>
                   </View>
                 ))}
               </View>
+              <Text className="coach-stage__copy">
+                快照无保证有效期；记录、时间或反思变化后请更新。
+              </Text>
             </View>
           </View>
 

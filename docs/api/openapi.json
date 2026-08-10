@@ -4720,9 +4720,355 @@
                         ],
                         "additionalProperties": false
                       }
+                    },
+                    "personalState": {
+                      "type": "object",
+                      "properties": {
+                        "policyVersion": { "type": "string", "enum": ["personal-state-ledger-v1"] },
+                        "generatedAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                        },
+                        "confirmedRecovery": {
+                          "nullable": true,
+                          "type": "object",
+                          "properties": {
+                            "kind": { "type": "string", "enum": ["confirmed_recovery_evidence"] },
+                            "knowledgeClass": { "type": "string", "enum": ["confirmed"] },
+                            "authority": {
+                              "type": "string",
+                              "enum": ["dashboard.readiness.evidence"]
+                            },
+                            "observationCount": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "exclusiveMinimum": true,
+                              "maximum": 148
+                            },
+                            "latestEvidenceAt": {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                            },
+                            "sourceKinds": {
+                              "minItems": 1,
+                              "maxItems": 3,
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "enum": ["manual", "device", "imported"]
+                              }
+                            },
+                            "freshness": {
+                              "type": "object",
+                              "properties": {
+                                "asOf": {
+                                  "type": "string",
+                                  "format": "date-time",
+                                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                },
+                                "validUntil": {
+                                  "type": "string",
+                                  "nullable": true,
+                                  "enum": [null]
+                                },
+                                "invalidatedBy": {
+                                  "minItems": 1,
+                                  "maxItems": 2,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "enum": [
+                                      "source_record_changed",
+                                      "time_advanced",
+                                      "plan_reflection_changed"
+                                    ]
+                                  }
+                                }
+                              },
+                              "required": ["asOf", "validUntil", "invalidatedBy"],
+                              "additionalProperties": false
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "knowledgeClass",
+                            "authority",
+                            "observationCount",
+                            "latestEvidenceAt",
+                            "sourceKinds",
+                            "freshness"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "observedWindow": {
+                          "type": "object",
+                          "properties": {
+                            "kind": { "type": "string", "enum": ["recording_window"] },
+                            "knowledgeClass": { "type": "string", "enum": ["observed"] },
+                            "authority": { "type": "string", "enum": ["dashboard.trends[days=7]"] },
+                            "window": {
+                              "type": "object",
+                              "properties": {
+                                "startAt": {
+                                  "type": "string",
+                                  "format": "date-time",
+                                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                },
+                                "endAt": {
+                                  "type": "string",
+                                  "format": "date-time",
+                                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                },
+                                "days": { "type": "number", "enum": [7] }
+                              },
+                              "required": ["startAt", "endAt", "days"],
+                              "additionalProperties": false
+                            },
+                            "activeDays": { "type": "integer", "minimum": 0, "maximum": 7 },
+                            "measurementCount": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "workoutCount": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "mealCount": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "freshness": {
+                              "type": "object",
+                              "properties": {
+                                "asOf": {
+                                  "type": "string",
+                                  "format": "date-time",
+                                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                },
+                                "validUntil": {
+                                  "type": "string",
+                                  "nullable": true,
+                                  "enum": [null]
+                                },
+                                "invalidatedBy": {
+                                  "minItems": 1,
+                                  "maxItems": 2,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "enum": [
+                                      "source_record_changed",
+                                      "time_advanced",
+                                      "plan_reflection_changed"
+                                    ]
+                                  }
+                                }
+                              },
+                              "required": ["asOf", "validUntil", "invalidatedBy"],
+                              "additionalProperties": false
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "knowledgeClass",
+                            "authority",
+                            "window",
+                            "activeDays",
+                            "measurementCount",
+                            "workoutCount",
+                            "mealCount",
+                            "freshness"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "recoveryEstimate": {
+                          "type": "object",
+                          "properties": {
+                            "kind": { "type": "string", "enum": ["recovery_state"] },
+                            "knowledgeClass": {
+                              "type": "string",
+                              "enum": ["estimated", "unknown"]
+                            },
+                            "authority": { "type": "string", "enum": ["dashboard.readiness"] },
+                            "evidencePolicyVersion": {
+                              "type": "string",
+                              "enum": ["subjective-recovery-state-v1"]
+                            },
+                            "state": {
+                              "type": "string",
+                              "enum": [
+                                "unknown",
+                                "current_only",
+                                "below_baseline",
+                                "near_baseline",
+                                "above_baseline"
+                              ]
+                            },
+                            "confidence": {
+                              "type": "string",
+                              "enum": ["insufficient", "low", "moderate"]
+                            },
+                            "consistency": {
+                              "type": "string",
+                              "enum": ["unknown", "aligned", "mixed"]
+                            },
+                            "label": { "type": "string", "minLength": 1 },
+                            "evidenceCount": { "type": "integer", "minimum": 0, "maximum": 148 },
+                            "freshness": {
+                              "type": "object",
+                              "properties": {
+                                "asOf": {
+                                  "type": "string",
+                                  "format": "date-time",
+                                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                },
+                                "validUntil": {
+                                  "type": "string",
+                                  "nullable": true,
+                                  "enum": [null]
+                                },
+                                "invalidatedBy": {
+                                  "minItems": 1,
+                                  "maxItems": 2,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "enum": [
+                                      "source_record_changed",
+                                      "time_advanced",
+                                      "plan_reflection_changed"
+                                    ]
+                                  }
+                                }
+                              },
+                              "required": ["asOf", "validUntil", "invalidatedBy"],
+                              "additionalProperties": false
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "knowledgeClass",
+                            "authority",
+                            "evidencePolicyVersion",
+                            "state",
+                            "confidence",
+                            "consistency",
+                            "label",
+                            "evidenceCount",
+                            "freshness"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "planExperience": {
+                          "nullable": true,
+                          "type": "object",
+                          "properties": {
+                            "kind": { "type": "string", "enum": ["plan_experience"] },
+                            "knowledgeClass": { "type": "string", "enum": ["user_confirmed"] },
+                            "authority": {
+                              "type": "string",
+                              "enum": ["plan_experience_reflection"]
+                            },
+                            "planId": {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                            },
+                            "planRevision": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "exclusiveMinimum": true,
+                              "maximum": 9007199254740991
+                            },
+                            "experience": {
+                              "type": "string",
+                              "enum": [
+                                "easier_than_expected",
+                                "about_right",
+                                "not_right_for_me",
+                                "not_sure_yet"
+                              ]
+                            },
+                            "reflectionRevision": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "exclusiveMinimum": true,
+                              "maximum": 9007199254740991
+                            },
+                            "updatedAt": {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                            },
+                            "freshness": {
+                              "type": "object",
+                              "properties": {
+                                "asOf": {
+                                  "type": "string",
+                                  "format": "date-time",
+                                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                },
+                                "validUntil": {
+                                  "type": "string",
+                                  "nullable": true,
+                                  "enum": [null]
+                                },
+                                "invalidatedBy": {
+                                  "minItems": 1,
+                                  "maxItems": 2,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "enum": [
+                                      "source_record_changed",
+                                      "time_advanced",
+                                      "plan_reflection_changed"
+                                    ]
+                                  }
+                                }
+                              },
+                              "required": ["asOf", "validUntil", "invalidatedBy"],
+                              "additionalProperties": false
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "knowledgeClass",
+                            "authority",
+                            "planId",
+                            "planRevision",
+                            "experience",
+                            "reflectionRevision",
+                            "updatedAt",
+                            "freshness"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "policyVersion",
+                        "generatedAt",
+                        "confirmedRecovery",
+                        "observedWindow",
+                        "recoveryEstimate",
+                        "planExperience"
+                      ],
+                      "additionalProperties": false
                     }
                   },
-                  "required": ["generatedAt", "timezone", "today", "readiness", "trends"],
+                  "required": [
+                    "generatedAt",
+                    "timezone",
+                    "today",
+                    "readiness",
+                    "trends",
+                    "personalState"
+                  ],
                   "additionalProperties": false
                 }
               }

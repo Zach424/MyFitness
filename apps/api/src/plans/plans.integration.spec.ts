@@ -564,6 +564,32 @@ describe('weekly plan API with PostgreSQL', () => {
       source: 'user_confirmed',
       revision: 1,
     })
+    const beforeReflection = new Date(Date.parse(created.body.updatedAt) - 1).toISOString()
+    const historicalLedger = await request(app.getHttpServer())
+      .get(
+        `/v1/insights/dashboard?timezone=Asia%2FShanghai&at=${encodeURIComponent(beforeReflection)}`,
+      )
+      .set('Authorization', `Bearer ${reflectionToken}`)
+      .expect(200)
+    expect(historicalLedger.body.personalState.planExperience).toBeNull()
+    const firstLedger = await request(app.getHttpServer())
+      .get('/v1/insights/dashboard?timezone=Asia%2FShanghai')
+      .set('Authorization', `Bearer ${reflectionToken}`)
+      .expect('Cache-Control', 'private, no-store')
+      .expect(200)
+    expect(firstLedger.body.personalState.planExperience).toMatchObject({
+      knowledgeClass: 'user_confirmed',
+      planId: generated.body.id,
+      planRevision: accepted.body.revision,
+      experience: 'about_right',
+      reflectionRevision: 1,
+      freshness: { validUntil: null, invalidatedBy: ['plan_reflection_changed'] },
+    })
+    const outsiderLedger = await request(app.getHttpServer())
+      .get('/v1/insights/dashboard?timezone=Asia%2FShanghai')
+      .set('Authorization', `Bearer ${outsiderToken}`)
+      .expect(200)
+    expect(outsiderLedger.body.personalState.planExperience).toBeNull()
 
     await request(app.getHttpServer())
       .put(path)
@@ -586,6 +612,14 @@ describe('weekly plan API with PostgreSQL', () => {
       .send({ experience: 'not_sure_yet', expectedRevision: created.body.revision })
       .expect(200)
     expect(corrected.body).toMatchObject({ experience: 'not_sure_yet', revision: 2 })
+    const correctedLedger = await request(app.getHttpServer())
+      .get('/v1/insights/dashboard?timezone=Asia%2FShanghai')
+      .set('Authorization', `Bearer ${reflectionToken}`)
+      .expect(200)
+    expect(correctedLedger.body.personalState.planExperience).toMatchObject({
+      experience: 'not_sure_yet',
+      reflectionRevision: 2,
+    })
     await request(app.getHttpServer())
       .delete(path)
       .set('Authorization', `Bearer ${reflectionToken}`)
@@ -601,6 +635,11 @@ describe('weekly plan API with PostgreSQL', () => {
       .set('Authorization', `Bearer ${reflectionToken}`)
       .expect(200)
       .expect({ planId: generated.body.id, planRevision: accepted.body.revision, reflection: null })
+    const deletedLedger = await request(app.getHttpServer())
+      .get('/v1/insights/dashboard?timezone=Asia%2FShanghai')
+      .set('Authorization', `Bearer ${reflectionToken}`)
+      .expect(200)
+    expect(deletedLedger.body.personalState.planExperience).toBeNull()
   })
 
   it('links only explicit owner-selected current revisions and preserves closure history', async () => {

@@ -14,17 +14,11 @@ import {
   getWeeklyPlanOutcome,
   writePlanExperienceReflection,
 } from '../../lib/api'
+import { planExperienceChoices, planExperienceLabel } from '../../lib/plan-experience'
 import './index.scss'
 
 type Phase = 'loading' | 'ready' | 'failed' | 'invalid'
 type ReflectionPhase = 'loading' | 'ready' | 'failed'
-
-const experienceChoices: Array<[PlanExperienceChoice, string]> = [
-  ['easier_than_expected', '比预期轻松'],
-  ['about_right', '安排合适'],
-  ['not_right_for_me', '不适合我'],
-  ['not_sure_yet', '还不能判断'],
-]
 
 const metric = {
   'recovery.energy': '精力',
@@ -247,13 +241,12 @@ const PlanOutcomePage = () => {
                 <>
                   {reflection ? (
                     <Text className="review-window metric">
-                      本人确认 ·{' '}
-                      {experienceChoices.find(([value]) => value === reflection.experience)?.[1]} ·
-                      v{reflection.revision}
+                      本人确认 · {planExperienceLabel(reflection.experience)} · v
+                      {reflection.revision}
                     </Text>
                   ) : null}
                   <View className="reflection-options" aria-label="体验">
-                    {experienceChoices.map(([value, label]) => (
+                    {planExperienceChoices.map(([value, label]) => (
                       <Button
                         className={`reflection-option ${reflection?.experience === value ? 'reflection-option--selected' : ''}`}
                         key={value}
