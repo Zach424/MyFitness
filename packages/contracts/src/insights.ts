@@ -747,6 +747,7 @@ export const confirmedHealthInsightSourceSchema = recordSourceSchema.refine(
 export const healthInsightPointSchema = z
   .object({
     recordId: z.string().uuid(),
+    metric: metricCodeSchema,
     recordRevision: z.number().int().positive(),
     occurredAt: z.string().datetime({ offset: true }),
     localDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -777,6 +778,13 @@ export const healthInsightSchema = z
     validateUniqueInsightPointIds(insight.series, (point) => point.recordId, 'recordId', ctx)
     const metricUnits = metricUnitDefinitions[insight.metric]
     insight.series.forEach((point, index) => {
+      if (point.metric !== insight.metric) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'health insight point metric must match the requested metric',
+          path: ['series', index, 'metric'],
+        })
+      }
       const canonicalUnitMatches = point.canonicalUnit === metricUnits.canonicalUnit
       const displayUnitAllowed = (metricUnits.allowedUnits as readonly string[]).includes(
         point.displayUnit,

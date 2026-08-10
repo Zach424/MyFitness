@@ -665,6 +665,7 @@ describe('health insight projection', () => {
     const at = new Date('2026-08-05T12:00:00.000Z')
     const points = Array.from({ length: 181 }, (_, index) => ({
       record_id: `00000000-0000-4000-${String(8_000 + index).padStart(4, '0')}-000000000001`,
+      metric: 'body.weight' as const,
       record_revision: index === 0 ? 2 : 1,
       occurred_at: new Date(at.getTime() - index * 3_600_000),
       timezone: 'America/New_York',
@@ -874,6 +875,22 @@ describe('health insight projection', () => {
     expect(() =>
       buildHealthInsight('body.weight', [], hiddenWrongDisplayUnitPoints, 'Asia/Shanghai', at),
     ).toThrow('health insight point rows must use units allowed for the metric')
+    const hiddenWrongMetricPoints = [
+      ...points.slice(0, 180),
+      { ...points[180]!, metric: 'recovery.energy' as const },
+    ]
+    expect(() =>
+      buildHealthInsight('body.weight', [], hiddenWrongMetricPoints, 'Asia/Shanghai', at),
+    ).toThrow('health insight point rows must match the requested metric')
+    expect(() =>
+      buildHealthInsight(
+        'body.weight',
+        [],
+        [{ ...futurePoint, metric: 'recovery.energy' as const }, ...points.slice(0, 180)],
+        'Asia/Shanghai',
+        at,
+      ),
+    ).toThrow('health insight point rows must match the requested metric')
     const hiddenInconsistentConversionPoints = [
       ...points.slice(0, 180),
       {

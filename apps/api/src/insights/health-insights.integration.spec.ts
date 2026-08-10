@@ -117,6 +117,7 @@ describe('health insight API with PostgreSQL', () => {
     expect(initial.body.series).toHaveLength(2)
     expect(initial.body.series[0]).toMatchObject({
       recordId: recent.body.id,
+      metric: 'body.weight',
       localDate: '2025-08-05',
       canonicalValue: 70,
       canonicalUnit: 'kg',

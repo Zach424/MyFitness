@@ -478,6 +478,7 @@ describe('health insight contract', () => {
       series: [
         {
           recordId: '00000000-0000-4000-8000-000000000001',
+          metric: 'body.weight',
           recordRevision: 2,
           occurredAt: '2026-08-05T10:00:00.000Z',
           localDate: '2026-08-05',
@@ -493,6 +494,19 @@ describe('health insight contract', () => {
     })
 
     expect(parsed.series[0]).toMatchObject({ canonicalUnit: 'kg', displayUnit: 'lb' })
+    const wrongPointMetric = healthInsightSchema.safeParse({
+      ...parsed,
+      series: [{ ...parsed.series[0]!, metric: 'recovery.energy' }],
+    })
+    expect(wrongPointMetric.success).toBe(false)
+    if (!wrongPointMetric.success) {
+      expect(wrongPointMetric.error.issues).toContainEqual(
+        expect.objectContaining({
+          message: 'health insight point metric must match the requested metric',
+          path: ['series', 0, 'metric'],
+        }),
+      )
+    }
     const invalidRecordTimezone = healthInsightSchema.safeParse({
       ...parsed,
       series: [{ ...parsed.series[0]!, recordTimezone: 'Invalid/Timezone' }],

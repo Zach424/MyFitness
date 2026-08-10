@@ -132,6 +132,7 @@ type HealthWindowRow = {
 
 type HealthPointRow = {
   record_id: string
+  metric: MetricCode
   record_revision: number
   occurred_at: Date
   timezone: string
@@ -575,6 +576,7 @@ const healthPoint = (row: HealthPointRow, timezone: string): HealthInsightPoint 
   const metadata = row.source_metadata ?? {}
   return {
     recordId: row.record_id,
+    metric: row.metric,
     recordRevision: row.record_revision,
     occurredAt: row.occurred_at.toISOString(),
     localDate: localDay(row.occurred_at, timezone),
@@ -621,6 +623,12 @@ const assertHealthPointMetricUnits = (metric: MetricCode, rows: HealthPointRow[]
   }
 }
 
+const assertHealthPointMetricIdentities = (metric: MetricCode, rows: HealthPointRow[]) => {
+  if (rows.some((row) => row.metric !== metric)) {
+    throw new Error('health insight point rows must match the requested metric')
+  }
+}
+
 const assertHealthPointMeasurementConversions = (rows: HealthPointRow[]) => {
   if (
     rows.some(
@@ -652,6 +660,7 @@ export const buildHealthInsight = (
   assertValidInsightPointRowTimes(pointRows)
   assertHealthPointRowNumbers(pointRows)
   assertValidInsightPointRowIds(pointRows, (row) => row.record_id)
+  assertHealthPointMetricIdentities(metric, pointRows)
   assertValidHealthPointRowProvenance(pointRows)
   assertHealthPointMetricUnits(metric, pointRows)
   assertHealthPointMeasurementConversions(pointRows)
@@ -1148,7 +1157,7 @@ export class InsightsService {
       ),
       this.database.query<HealthPointRow>(
         `
-          SELECT id AS record_id, revision AS record_revision, occurred_at, timezone,
+          SELECT id AS record_id, metric, revision AS record_revision, occurred_at, timezone,
             canonical_value, canonical_unit, display_value, display_unit,
             source_kind, source_metadata
           FROM health_records
