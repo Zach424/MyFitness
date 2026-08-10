@@ -8,13 +8,13 @@ Schema：`myfitness-documentation-migration-index/v1`
 
 本索引把仍需中文化的专题文档、历史迭代档案和早期架构决策划成可复核批次。它只登记迁移范围和顺序，不改写历史结论，也不把“已登记”冒充“已翻译”。每个批次仍须逐份保留链接目标、行内代码、代码块、数字证据和当时语义，并在单独迭代中完成验证、归档和提交。
 
-受保护活跃文档：7 份。
+受保护活跃文档：10 份。
 
 待迁移总量：191 份（专题 17 份，历史 174 份）。
 
 ## 已受门禁保护的范围
 
-- 七份活跃权威文档由 `myfitness-chinese-documentation/v2` 检查中文标题、正文占比和纯英文叙述行：项目状态、[产品简报](product/PRODUCT_BRIEF.md)、[产品风险登记册](product/RISK_REGISTER.md)、交付路线图、架构基线、用户身份运行手册与本索引。
+- 十份活跃权威文档由 `myfitness-chinese-documentation/v2` 检查中文标题、正文占比和纯英文叙述行：项目状态、[产品简报](product/PRODUCT_BRIEF.md)、[已实现产品需求文档](product/IMPLEMENTED_PRD.md)、[产品风险登记册](product/RISK_REGISTER.md)、交付路线图、架构基线、[数据库设计文档](architecture/DATABASE_DESIGN.md)、[接口参考文档](api/API_REFERENCE.md)、用户身份运行手册与本索引。
 - 第 090 轮起的迭代档案和 ADR-0085 起的架构决策由同一门禁检查中文元数据与正文比例；后续编号自动进入受保护序列。
 - [中文项目记录规范](DOCUMENTATION_LANGUAGE_POLICY.md)解释术语、保真要求和人工审阅边界，作为治理文档单独归类。
 

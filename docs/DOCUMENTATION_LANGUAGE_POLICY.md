@@ -17,8 +17,8 @@ MyFitness / 衡迹的项目状态、迭代档案、架构决策和面向维护�
 
 `pnpm docs:check-language` 执行无第三方运行时依赖的 `myfitness-chinese-documentation/v2` 检查：
 
-- 七份活跃权威文档必须保留约定的中文一级、二级导航标题；产品风险登记册还必须保留审阅元数据、控制职责和关闭条件标记，且风险等级不得恢复为英文；
-- `docs/PROJECT_STATUS.md`、`docs/product/PRODUCT_BRIEF.md`、`docs/product/RISK_REGISTER.md`、`docs/product/ROADMAP.md`、`docs/architecture/ARCHITECTURE.md`、`docs/operations/USER_IDENTITY_RUNBOOK.md` 和 `docs/DOCUMENTATION_MIGRATION_INDEX.md` 排除代码与链接后的中文占比均不得低于 72%，且不得存在包含三个及以上英文单词而完全没有汉字的纯英文叙述行；围栏代码块不参与逐行判断；
+- 十份活跃权威文档必须保留约定的中文一级、二级导航标题；产品风险登记册还必须保留审阅元数据、控制职责和关闭条件标记，且风险等级不得恢复为英文；
+- `docs/PROJECT_STATUS.md`、`docs/product/PRODUCT_BRIEF.md`、`docs/product/IMPLEMENTED_PRD.md`、`docs/product/RISK_REGISTER.md`、`docs/product/ROADMAP.md`、`docs/architecture/ARCHITECTURE.md`、`docs/operations/USER_IDENTITY_RUNBOOK.md` 和 `docs/DOCUMENTATION_MIGRATION_INDEX.md` 排除代码与链接后的中文占比均不得低于 72%；由于接口字段、枚举、路径和数据库列名必须保真，[接口参考文档](api/API_REFERENCE.md)使用不低于 60% 的专用阈值，[数据库设计文档](architecture/DATABASE_DESIGN.md)使用不低于 65% 的专用阈值。全部十份文档均不得存在包含三个及以上英文单词而完全没有汉字的纯英文叙述行；围栏代码块不参与逐行判断；
 - 第 090 轮起的迭代档案和 ADR-0085 起的架构决策必须使用包含中文的一级标题、`日期：YYYY-MM-DD` 与中文 `状态：` 字段；
 - 排除代码块、行内代码、链接目标和 URL 后，每份受检记录至少包含 200 个汉字，且汉字在汉字与拉丁字母总量中的占比不得低于 60%；
 - CI 在格式检查后执行相同命令，任何新记录语言回退都会失败关闭。
@@ -61,8 +61,11 @@ MyFitness / 衡迹的项目状态、迭代档案、架构决策和面向维护�
 - [项目状态](PROJECT_STATUS.md)
 - [交付路线图](product/ROADMAP.md)
 - [产品简报](product/PRODUCT_BRIEF.md)
+- [已实现产品需求文档](product/IMPLEMENTED_PRD.md)
 - [产品风险登记册](product/RISK_REGISTER.md)
 - [架构基线](architecture/ARCHITECTURE.md)
+- [数据库设计文档](architecture/DATABASE_DESIGN.md)
+- [接口参考文档](api/API_REFERENCE.md)
 - [ADR-0086](architecture/decisions/0086-chinese-documentation-governance.md)
 - [中文文档迁移索引](DOCUMENTATION_MIGRATION_INDEX.md)
 - [仓库工作约定](../AGENTS.md)

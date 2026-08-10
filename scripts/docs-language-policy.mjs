@@ -47,6 +47,18 @@ export const chineseDocumentationPolicy = {
       rejectEnglishOnlyNarrativeLines: true,
     },
     {
+      path: 'docs/product/IMPLEMENTED_PRD.md',
+      headings: [
+        '# 衡迹已实现产品需求文档',
+        '## 1. 文档目的',
+        '## 4. 信息架构与页面入口',
+        '## 5. 全局交互规则',
+        '## 22. 全局异常状态矩阵',
+      ],
+      minimumHanShare: 0.72,
+      rejectEnglishOnlyNarrativeLines: true,
+    },
+    {
       path: 'docs/product/RISK_REGISTER.md',
       headings: ['# 产品风险登记册'],
       requiredTokens: [
@@ -72,6 +84,30 @@ export const chineseDocumentationPolicy = {
         '## 初始本地与生产目标',
       ],
       minimumHanShare: 0.72,
+      rejectEnglishOnlyNarrativeLines: true,
+    },
+    {
+      path: 'docs/architecture/DATABASE_DESIGN.md',
+      headings: [
+        '# 衡迹数据库设计文档',
+        '## 1. 文档范围与实测基线',
+        '## 3. 领域关系总览',
+        '## 4. 当前表清单与本地行数',
+        '## 18. 关键索引策略',
+      ],
+      minimumHanShare: 0.65,
+      rejectEnglishOnlyNarrativeLines: true,
+    },
+    {
+      path: 'docs/api/API_REFERENCE.md',
+      headings: [
+        '# 衡迹接口参考文档',
+        '## 1. 范围与契约来源',
+        '## 2. 通用约定',
+        '## 3. 核心请求与响应模型',
+        '## 16. 系统接口',
+      ],
+      minimumHanShare: 0.6,
       rejectEnglishOnlyNarrativeLines: true,
     },
     {
