@@ -492,6 +492,33 @@ const validateHealthInsightWindowPointReceipt = (
   }
 }
 
+const validateExerciseInsightWindowPointReceipt = (
+  insight: {
+    windows: Array<{ days: number; sessionCount: number }>
+    series: unknown[]
+    hasMore: boolean
+  },
+  ctx: z.RefinementCtx,
+) => {
+  const windowIndex = insight.windows.findIndex((window) => window.days === 90)
+  if (windowIndex < 0) return
+  const sessionCount = insight.windows[windowIndex]!.sessionCount
+  if (insight.series.length !== Math.min(sessionCount, 180)) {
+    ctx.addIssue({
+      code: 'custom',
+      message: '90-day sessionCount must match the public exercise point prefix',
+      path: ['windows', windowIndex, 'sessionCount'],
+    })
+  }
+  if (insight.hasMore !== sessionCount > 180) {
+    ctx.addIssue({
+      code: 'custom',
+      message: 'hasMore must match the 90-day exercise session count',
+      path: ['hasMore'],
+    })
+  }
+}
+
 export const exerciseInsightSchema = z
   .object({
     generatedAt: z.string().datetime({ offset: true }),
@@ -510,6 +537,7 @@ export const exerciseInsightSchema = z
     validateUniqueInsightPointIds(insight.series, (point) => point.workoutId, 'workoutId', ctx)
     validateExerciseInsightIdentity(insight, ctx)
     validateInsightTruncationReceipt(insight, ctx)
+    validateExerciseInsightWindowPointReceipt(insight, ctx)
     validateInsightOccurrenceBoundary(insight, ctx)
   })
 

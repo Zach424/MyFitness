@@ -126,6 +126,7 @@ describe('exercise insight API with PostgreSQL', () => {
       expect.objectContaining({ days: 90, sessionCount: 2, totalReps: 15, volumeKg: 200 }),
     ])
     expect(initial.body.series).toHaveLength(2)
+    expect(initial.body.windows[2].sessionCount).toBe(initial.body.series.length)
     expect(initial.body.series[0]).toMatchObject({
       workoutId: recent.body.id,
       completedSetCount: 1,

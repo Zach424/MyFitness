@@ -435,6 +435,17 @@ const assertInsightPointRowTruncationReceipt = (rows: unknown[]) => {
   }
 }
 
+const assertExercisePointWindowTruncationReceipt = (
+  windowRows: ExerciseWindowRow[],
+  eligiblePointRows: ExercisePointRow[],
+) => {
+  const sessionCount = Number(windowRows.find((row) => row.days === 90)?.session_count ?? 0)
+  const expectedPointRows = sessionCount > 180 ? 181 : sessionCount
+  if (eligiblePointRows.length !== expectedPointRows) {
+    throw new Error('exercise insight 90-day window must match the point truncation receipt')
+  }
+}
+
 const assertHealthPointWindowTruncationReceipt = (
   windowRows: HealthWindowRow[],
   eligiblePointRows: HealthPointRow[],
@@ -503,6 +514,7 @@ export const buildExerciseInsight = (
   assertUniqueInsightPointRowIds(pointRows, (row) => row.workout_id)
   const eligiblePointRows = pointRows.filter((row) => row.occurred_at.getTime() <= at.getTime())
   assertInsightPointRowTruncationReceipt(eligiblePointRows)
+  assertExercisePointWindowTruncationReceipt(windowRows, eligiblePointRows)
   const series = eligiblePointRows.slice(0, 180).map((row) => exercisePoint(row, timezone))
   return {
     generatedAt: at.toISOString(),

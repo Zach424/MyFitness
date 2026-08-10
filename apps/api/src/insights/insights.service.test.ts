@@ -407,9 +407,17 @@ describe('exercise insight projection', () => {
       active_seconds: '0',
       distance_meters: '0',
     }
+    const ninetyDayWindow = {
+      ...sevenDayWindow,
+      days: 90,
+      session_count: '181',
+      completed_set_count: '362',
+      total_reps: '3620',
+      volume_kg: '43462.806',
+    }
     const insight = buildExerciseInsight(
       'goblet_squat',
-      [sevenDayWindow],
+      [sevenDayWindow, ninetyDayWindow],
       [futurePoint, ...points],
       'Asia/Shanghai',
       at,
@@ -430,7 +438,7 @@ describe('exercise insight projection', () => {
 
     const advanced = buildExerciseInsight(
       'goblet_squat',
-      [],
+      [ninetyDayWindow],
       [futurePoint, ...points.slice(0, 180)],
       'Asia/Shanghai',
       new Date(at.getTime() + 2 * 3_600_000),
@@ -445,7 +453,7 @@ describe('exercise insight projection', () => {
         { ...sevenDayWindow, days: 90, session_count: '9', completed_set_count: '9' },
         sevenDayWindow,
       ],
-      [],
+      points.slice(0, 9),
       'Asia/Shanghai',
       at,
     )
@@ -456,6 +464,24 @@ describe('exercise insight projection', () => {
       { days: 30, sessionCount: 0 },
       { days: 90, sessionCount: 9 },
     ])
+    expect(() =>
+      buildExerciseInsight(
+        'goblet_squat',
+        [{ ...ninetyDayWindow, session_count: '180' }],
+        points,
+        'Asia/Shanghai',
+        at,
+      ),
+    ).toThrow('exercise insight 90-day window must match the point truncation receipt')
+    expect(() =>
+      buildExerciseInsight(
+        'goblet_squat',
+        [ninetyDayWindow],
+        points.slice(0, 180),
+        'Asia/Shanghai',
+        at,
+      ),
+    ).toThrow('exercise insight 90-day window must match the point truncation receipt')
     expect(() =>
       buildExerciseInsight(
         'goblet_squat',

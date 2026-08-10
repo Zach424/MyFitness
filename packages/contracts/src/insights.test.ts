@@ -212,9 +212,47 @@ describe('exercise insight contract', () => {
       ...parsed.series[0]!,
       workoutId: `00000000-0000-4000-${String(8_000 + index).padStart(4, '0')}-000000000001`,
     }))
+    const truncatedWindows = parsed.windows.map((window, index) =>
+      index === 2 ? { ...window, sessionCount: 181, completedSetCount: 181 } : window,
+    )
     expect(
-      exerciseInsightSchema.safeParse({ ...parsed, series: fullSeries, hasMore: true }).success,
+      exerciseInsightSchema.safeParse({
+        ...parsed,
+        windows: truncatedWindows,
+        series: fullSeries,
+        hasMore: true,
+      }).success,
     ).toBe(true)
+    const overstatedSessionCount = exerciseInsightSchema.safeParse({
+      ...parsed,
+      windows: parsed.windows.map((window, index) =>
+        index === 2 ? { ...window, sessionCount: 2 } : window,
+      ),
+    })
+    expect(overstatedSessionCount.success).toBe(false)
+    if (!overstatedSessionCount.success) {
+      expect(overstatedSessionCount.error.issues).toContainEqual(
+        expect.objectContaining({
+          message: '90-day sessionCount must match the public exercise point prefix',
+          path: ['windows', 2, 'sessionCount'],
+        }),
+      )
+    }
+    const understatedMoreFlag = exerciseInsightSchema.safeParse({
+      ...parsed,
+      windows: truncatedWindows,
+      series: fullSeries,
+      hasMore: false,
+    })
+    expect(understatedMoreFlag.success).toBe(false)
+    if (!understatedMoreFlag.success) {
+      expect(understatedMoreFlag.error.issues).toContainEqual(
+        expect.objectContaining({
+          message: 'hasMore must match the 90-day exercise session count',
+          path: ['hasMore'],
+        }),
+      )
+    }
     const staleIdentity = exerciseInsightSchema.safeParse({
       ...parsed,
       identity: { ...parsed.identity!, name: '旧动作名称' },
@@ -238,9 +276,23 @@ describe('exercise insight contract', () => {
         }),
       )
     }
-    expect(exerciseInsightSchema.safeParse({ ...parsed, identity: null, series: [] }).success).toBe(
-      true,
-    )
+    const emptyWindows = parsed.windows.map((window) => ({
+      ...window,
+      sessionCount: 0,
+      completedSetCount: 0,
+      totalReps: 0,
+      volumeKg: 0,
+      activeMinutes: 0,
+      distanceKm: 0,
+    }))
+    expect(
+      exerciseInsightSchema.safeParse({
+        ...parsed,
+        identity: null,
+        windows: emptyWindows,
+        series: [],
+      }).success,
+    ).toBe(true)
     const swappedWindows = exerciseInsightSchema.safeParse({
       ...parsed,
       windows: [parsed.windows[1]!, parsed.windows[0]!, parsed.windows[2]!],
@@ -317,6 +369,9 @@ describe('exercise insight contract', () => {
     expect(
       exerciseInsightSchema.safeParse({
         ...parsed,
+        windows: parsed.windows.map((window, index) =>
+          index === 2 ? { ...window, sessionCount: 2 } : window,
+        ),
         series: [
           parsed.series[0]!,
           {
