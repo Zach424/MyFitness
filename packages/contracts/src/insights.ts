@@ -35,6 +35,24 @@ export const trendWindowSchema = z
   })
   .strict()
 
+const fixedInsightWindowDays = [7, 30, 90] as const
+
+const validateFixedInsightWindowDays = (
+  windows: Array<{ days: number }>,
+  path: 'trends' | 'windows',
+  ctx: z.RefinementCtx,
+) => {
+  windows.forEach((window, index) => {
+    if (window.days !== fixedInsightWindowDays[index]) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'insight windows must use the fixed 7/30/90 order',
+        path: [path, index, 'days'],
+      })
+    }
+  })
+}
+
 const localDateInTimezone = (instant: Date, timezone: string) => {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: timezone,
@@ -75,6 +93,7 @@ export const dashboardSchema = z
   .superRefine((dashboard, ctx) => {
     const ledger = dashboard.personalState
     const referenceTime = Date.parse(dashboard.generatedAt)
+    validateFixedInsightWindowDays(dashboard.trends, 'trends', ctx)
     let expectedTodayDate: string | null = null
     try {
       expectedTodayDate = localDateInTimezone(new Date(dashboard.generatedAt), dashboard.timezone)
@@ -296,7 +315,10 @@ export const exerciseInsightSchema = z
     hasMore: z.boolean(),
   })
   .strict()
-  .superRefine(validateInsightOccurrenceBoundary)
+  .superRefine((insight, ctx) => {
+    validateFixedInsightWindowDays(insight.windows, 'windows', ctx)
+    validateInsightOccurrenceBoundary(insight, ctx)
+  })
 
 export const exerciseInsightQuerySchema = dashboardQuerySchema
 
@@ -541,7 +563,10 @@ export const healthInsightSchema = z
     hasMore: z.boolean(),
   })
   .strict()
-  .superRefine(validateInsightOccurrenceBoundary)
+  .superRefine((insight, ctx) => {
+    validateFixedInsightWindowDays(insight.windows, 'windows', ctx)
+    validateInsightOccurrenceBoundary(insight, ctx)
+  })
 
 export const healthInsightQuerySchema = dashboardQuerySchema
 

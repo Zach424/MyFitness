@@ -166,6 +166,21 @@ describe('dashboard aggregation', () => {
       },
     })
     expect(dashboardSchema.parse(dashboard)).toEqual(dashboard)
+    const repeatedTrendWindow = dashboardSchema.safeParse({
+      ...dashboard,
+      trends: dashboard.trends.map((window, index) =>
+        index === 1 ? { ...window, days: 7 as const } : window,
+      ),
+    })
+    expect(repeatedTrendWindow.success).toBe(false)
+    if (!repeatedTrendWindow.success) {
+      expect(repeatedTrendWindow.error.issues).toContainEqual(
+        expect.objectContaining({
+          message: 'insight windows must use the fixed 7/30/90 order',
+          path: ['trends', 1, 'days'],
+        }),
+      )
+    }
     const wrongTodayDate = dashboardSchema.safeParse({
       ...dashboard,
       today: { ...dashboard.today, date: '2026-07-17' },

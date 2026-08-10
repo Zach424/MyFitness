@@ -127,6 +127,19 @@ describe('exercise insight contract', () => {
     })
 
     expect(parsed.series[0]).toMatchObject({ completedSetCount: 2, totalSetCount: 3 })
+    const swappedWindows = exerciseInsightSchema.safeParse({
+      ...parsed,
+      windows: [parsed.windows[1]!, parsed.windows[0]!, parsed.windows[2]!],
+    })
+    expect(swappedWindows.success).toBe(false)
+    if (!swappedWindows.success) {
+      expect(swappedWindows.error.issues).toContainEqual(
+        expect.objectContaining({
+          message: 'insight windows must use the fixed 7/30/90 order',
+          path: ['windows', 0, 'days'],
+        }),
+      )
+    }
     const futurePoint = exerciseInsightSchema.safeParse({
       ...parsed,
       series: [{ ...parsed.series[0]!, occurredAt: '2026-08-05T13:00:00.000Z' }],
@@ -294,6 +307,21 @@ describe('health insight contract', () => {
     })
 
     expect(parsed.series[0]).toMatchObject({ canonicalUnit: 'kg', displayUnit: 'lb' })
+    const repeatedWindow = healthInsightSchema.safeParse({
+      ...parsed,
+      windows: parsed.windows.map((window, index) =>
+        index === 2 ? { ...window, days: 30 as const } : window,
+      ),
+    })
+    expect(repeatedWindow.success).toBe(false)
+    if (!repeatedWindow.success) {
+      expect(repeatedWindow.error.issues).toContainEqual(
+        expect.objectContaining({
+          message: 'insight windows must use the fixed 7/30/90 order',
+          path: ['windows', 2, 'days'],
+        }),
+      )
+    }
     const futurePoint = healthInsightSchema.safeParse({
       ...parsed,
       series: [{ ...parsed.series[0]!, occurredAt: '2026-08-05T13:00:00.000Z' }],
