@@ -166,6 +166,23 @@ describe('dashboard aggregation', () => {
       },
     })
     expect(dashboardSchema.parse(dashboard)).toEqual(dashboard)
+    const wrongTodayDate = dashboardSchema.safeParse({
+      ...dashboard,
+      today: { ...dashboard.today, date: '2026-07-17' },
+    })
+    expect(wrongTodayDate.success).toBe(false)
+    if (!wrongTodayDate.success) {
+      expect(wrongTodayDate.error.issues).toContainEqual(
+        expect.objectContaining({ path: ['today', 'date'] }),
+      )
+    }
+    const invalidTimezone = dashboardSchema.safeParse({ ...dashboard, timezone: 'Not/A_Zone' })
+    expect(invalidTimezone.success).toBe(false)
+    if (!invalidTimezone.success) {
+      expect(invalidTimezone.error.issues).toContainEqual(
+        expect.objectContaining({ path: ['timezone'] }),
+      )
+    }
     expect(
       dashboardSchema.safeParse({
         ...dashboard,
@@ -196,8 +213,9 @@ describe('dashboard aggregation', () => {
     const dashboard = buildDashboard(
       { health: [], workouts: [], meals: [], planExperience: null },
       'Asia/Shanghai',
-      new Date('2026-07-18T12:00:00.000Z'),
+      new Date('2026-07-17T16:30:00.000Z'),
     )
+    expect(dashboard.today.date).toBe('2026-07-18')
     expect(dashboard.readiness.score).toBeNull()
     expect(dashboard.readiness).toMatchObject({
       state: 'unknown',

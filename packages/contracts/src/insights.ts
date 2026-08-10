@@ -35,10 +35,32 @@ export const trendWindowSchema = z
   })
   .strict()
 
+const localDateInTimezone = (instant: Date, timezone: string) => {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(instant)
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((candidate) => candidate.type === type)!.value
+  return `${part('year')}-${part('month')}-${part('day')}`
+}
+
+const shiftLocalDate = (localDate: string, days: number) => {
+  const [year, month, day] = localDate.split('-').map(Number)
+  return new Date(Date.UTC(year!, month! - 1, day! + days)).toISOString().slice(0, 10)
+}
+
+const expectedLocalDateSeries = (instant: Date, timezone: string, length: number) => {
+  const endDate = localDateInTimezone(instant, timezone)
+  return Array.from({ length }, (_, index) => shiftLocalDate(endDate, index - length + 1))
+}
+
 export const dashboardSchema = z
   .object({
     generatedAt: z.string().datetime({ offset: true }),
-    timezone: z.string(),
+    timezone: z.string().trim().min(1).max(64),
     today: z
       .object({
         date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -53,6 +75,23 @@ export const dashboardSchema = z
   .superRefine((dashboard, ctx) => {
     const ledger = dashboard.personalState
     const referenceTime = Date.parse(dashboard.generatedAt)
+    let expectedTodayDate: string | null = null
+    try {
+      expectedTodayDate = localDateInTimezone(new Date(dashboard.generatedAt), dashboard.timezone)
+    } catch {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'timezone must resolve the generatedAt local date',
+        path: ['timezone'],
+      })
+    }
+    if (expectedTodayDate !== null && dashboard.today.date !== expectedTodayDate) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'today.date must match the generatedAt local date',
+        path: ['today', 'date'],
+      })
+    }
     const trend = dashboard.trends.find((candidate) => candidate.days === 7)
     const expectedSources = ['manual', 'device', 'imported'].filter((kind) =>
       dashboard.readiness.evidence.some((evidence) => evidence.sourceKind === kind),
@@ -127,28 +166,6 @@ export const dashboardQuerySchema = z
       })
     }
   })
-
-const localDateInTimezone = (instant: Date, timezone: string) => {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: timezone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(instant)
-  const part = (type: Intl.DateTimeFormatPartTypes) =>
-    parts.find((candidate) => candidate.type === type)!.value
-  return `${part('year')}-${part('month')}-${part('day')}`
-}
-
-const shiftLocalDate = (localDate: string, days: number) => {
-  const [year, month, day] = localDate.split('-').map(Number)
-  return new Date(Date.UTC(year!, month! - 1, day! + days)).toISOString().slice(0, 10)
-}
-
-const expectedLocalDateSeries = (instant: Date, timezone: string, length: number) => {
-  const endDate = localDateInTimezone(instant, timezone)
-  return Array.from({ length }, (_, index) => shiftLocalDate(endDate, index - length + 1))
-}
 
 export const historyCalendarDaySchema = z
   .object({
