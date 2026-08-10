@@ -617,6 +617,65 @@ describe('health insight contract', () => {
         }),
       )
     }
+    const sharedWideStatistics = { minimum: 68, maximum: 72, average: 70 }
+    for (const { windows, message, path } of [
+      {
+        windows: parsed.windows.map((window, index) =>
+          index === 1
+            ? {
+                ...window,
+                recordCount: 0,
+                recordedDays: 0,
+                statistics: { minimum: null, maximum: null, average: null },
+              }
+            : window,
+        ),
+        message: 'health window recordCount must not decrease as days increase',
+        path: ['windows', 1, 'recordCount'],
+      },
+      {
+        windows: parsed.windows.map((window, index) => ({
+          ...window,
+          recordCount: 2,
+          recordedDays: index === 1 ? 1 : 2,
+          statistics: sharedWideStatistics,
+        })),
+        message: 'health window recordedDays must not decrease as days increase',
+        path: ['windows', 1, 'recordedDays'],
+      },
+      {
+        windows: parsed.windows.map((window, index) => ({
+          ...window,
+          statistics:
+            index === 1 ? { minimum: 69, maximum: 72, average: 70 } : sharedWideStatistics,
+        })),
+        message: 'health window minimum cannot increase as days increase',
+        path: ['windows', 1, 'statistics', 'minimum'],
+      },
+      {
+        windows: parsed.windows.map((window, index) => ({
+          ...window,
+          statistics:
+            index === 1 ? { minimum: 68, maximum: 71, average: 70 } : sharedWideStatistics,
+        })),
+        message: 'health window maximum cannot decrease as days increase',
+        path: ['windows', 1, 'statistics', 'maximum'],
+      },
+    ]) {
+      const result = healthInsightSchema.safeParse({ ...parsed, windows })
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error.issues).toContainEqual(expect.objectContaining({ message, path }))
+      }
+    }
+    const nonMonotonicAverages = healthInsightSchema.safeParse({
+      ...parsed,
+      windows: parsed.windows.map((window, index) => ({
+        ...window,
+        statistics: { ...sharedWideStatistics, average: [70, 71, 69][index]! },
+      })),
+    })
+    expect(nonMonotonicAverages.success).toBe(true)
     const unsupportedHasMore = healthInsightSchema.safeParse({ ...parsed, hasMore: true })
     expect(unsupportedHasMore.success).toBe(false)
     if (!unsupportedHasMore.success) {

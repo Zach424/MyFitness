@@ -350,6 +350,35 @@ const assertHealthWindowRowRelationships = (rows: HealthWindowRow[]) => {
   }
 }
 
+const assertHealthWindowRowMonotonicity = (rows: HealthWindowRow[]) => {
+  const windows = ([7, 30, 90] as const).map((days) => {
+    const row = rows.find((candidate) => candidate.days === days)
+    return {
+      recordCount: Number(row?.record_count ?? 0),
+      recordedDays: Number(row?.recorded_days ?? 0),
+      minimum: row?.minimum === null || row?.minimum === undefined ? null : Number(row.minimum),
+      maximum: row?.maximum === null || row?.maximum === undefined ? null : Number(row.maximum),
+    }
+  })
+
+  for (let index = 1; index < windows.length; index += 1) {
+    const shorter = windows[index - 1]!
+    const longer = windows[index]!
+    if (
+      longer.recordCount < shorter.recordCount ||
+      longer.recordedDays < shorter.recordedDays ||
+      (shorter.recordCount > 0 &&
+        (longer.minimum === null ||
+          shorter.minimum === null ||
+          longer.minimum > shorter.minimum)) ||
+      (shorter.recordCount > 0 &&
+        (longer.maximum === null || shorter.maximum === null || longer.maximum < shorter.maximum))
+    ) {
+      throw new Error('health insight window rows must preserve nested-set monotonicity')
+    }
+  }
+}
+
 const assertHealthPointRowNumbers = (rows: HealthPointRow[]) => {
   if (
     rows.some(
@@ -668,6 +697,7 @@ export const buildHealthInsight = (
   assertInsightWindowRowIdentities(windowRows)
   assertHealthWindowRowNumbers(windowRows)
   assertHealthWindowRowRelationships(windowRows)
+  assertHealthWindowRowMonotonicity(windowRows)
   assertValidInsightPointRowTimes(pointRows)
   assertHealthPointRowNumbers(pointRows)
   assertValidInsightPointRowIds(pointRows, (row) => row.record_id)

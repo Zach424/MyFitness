@@ -695,11 +695,18 @@ describe('health insight projection', () => {
       days: 90,
       record_count: '181',
       recorded_days: '8',
-      average: '69.0055',
+      average: '69.2',
+    }
+    const thirtyDayWindow = {
+      ...sevenDayWindow,
+      days: 30,
+      record_count: '180',
+      recorded_days: '8',
+      average: '69.9',
     }
     const insight = buildHealthInsight(
       'body.weight',
-      [sevenDayWindow, ninetyDayWindow],
+      [sevenDayWindow, thirtyDayWindow, ninetyDayWindow],
       [futurePoint, ...points],
       'Asia/Shanghai',
       at,
@@ -707,7 +714,7 @@ describe('health insight projection', () => {
 
     expect(insight.canonicalUnit).toBe('kg')
     expect(insight.windows[0]).toMatchObject({ recordCount: 2, statistics: { average: 69.5 } })
-    expect(insight.windows[1]).toMatchObject({ recordCount: 0, statistics: { average: null } })
+    expect(insight.windows[1]).toMatchObject({ recordCount: 180, statistics: { average: 69.9 } })
     expect(insight.windows[2]).toMatchObject({ recordCount: 181 })
     expect(insight.series).toHaveLength(180)
     expect(insight.series[0]).toMatchObject({
@@ -791,6 +798,20 @@ describe('health insight projection', () => {
         at,
       ),
     ).toThrow('insight window rows must use unique 7/30/90 day identities')
+    for (const invalidWindows of [
+      [
+        sevenDayWindow,
+        { ...thirtyDayWindow, record_count: '1', recorded_days: '1' },
+        ninetyDayWindow,
+      ],
+      [sevenDayWindow, { ...thirtyDayWindow, recorded_days: '1' }, ninetyDayWindow],
+      [sevenDayWindow, { ...thirtyDayWindow, minimum: '69.5', average: '69.9' }, ninetyDayWindow],
+      [sevenDayWindow, { ...thirtyDayWindow, maximum: '69.5', average: '69.25' }, ninetyDayWindow],
+    ]) {
+      expect(() =>
+        buildHealthInsight('body.weight', invalidWindows, [], 'Asia/Shanghai', at),
+      ).toThrow('health insight window rows must preserve nested-set monotonicity')
+    }
 
     const advanced = buildHealthInsight(
       'body.weight',

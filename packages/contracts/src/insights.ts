@@ -746,6 +746,50 @@ export const healthInsightWindowSchema = z
     }
   })
 
+const validateHealthInsightWindowMonotonicity = (
+  windows: Array<z.infer<typeof healthInsightWindowSchema>>,
+  ctx: z.RefinementCtx,
+) => {
+  for (let index = 1; index < windows.length; index += 1) {
+    const shorter = windows[index - 1]!
+    const longer = windows[index]!
+    if (longer.recordCount < shorter.recordCount) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'health window recordCount must not decrease as days increase',
+        path: ['windows', index, 'recordCount'],
+      })
+    }
+    if (longer.recordedDays < shorter.recordedDays) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'health window recordedDays must not decrease as days increase',
+        path: ['windows', index, 'recordedDays'],
+      })
+    }
+    if (
+      shorter.statistics.minimum !== null &&
+      (longer.statistics.minimum === null || longer.statistics.minimum > shorter.statistics.minimum)
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'health window minimum cannot increase as days increase',
+        path: ['windows', index, 'statistics', 'minimum'],
+      })
+    }
+    if (
+      shorter.statistics.maximum !== null &&
+      (longer.statistics.maximum === null || longer.statistics.maximum < shorter.statistics.maximum)
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'health window maximum cannot decrease as days increase',
+        path: ['windows', index, 'statistics', 'maximum'],
+      })
+    }
+  }
+}
+
 export const healthInsightRecordTimezoneSchema = z
   .string()
   .trim()
@@ -800,6 +844,7 @@ export const healthInsightSchema = z
   .strict()
   .superRefine((insight, ctx) => {
     validateFixedInsightWindowDays(insight.windows, 'windows', ctx)
+    validateHealthInsightWindowMonotonicity(insight.windows, ctx)
     validateInsightPointLocalDates(insight, ctx)
     validateInsightPointOrder(insight, ctx)
     validateUniqueInsightPointIds(insight.series, (point) => point.recordId, 'recordId', ctx)
