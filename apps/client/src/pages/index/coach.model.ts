@@ -1,9 +1,4 @@
-import type {
-  Dashboard,
-  PlanFreshness,
-  TrendWindow,
-  WeeklyPlanListItem,
-} from '@myfitness/contracts'
+import type { Dashboard, PlanFreshness, WeeklyPlanListItem } from '@myfitness/contracts'
 
 export type CoachPlanSummary = {
   plan: WeeklyPlanListItem
@@ -15,11 +10,22 @@ export type CoachPlanSummary = {
 }
 
 export type CoachSnapshot = {
-  generatedAt: string
   localDate: string
-  trend: TrendWindow
   personalState: Dashboard['personalState']
   plan?: CoachPlanSummary
+}
+
+export type PersonalStateSource = 'plan' | 'records' | 'history'
+
+export const personalStateSourceUrl = (
+  source: PersonalStateSource,
+  state: Dashboard['personalState'],
+) => {
+  if (source !== 'plan') return `/pages/${source}/index`
+  const reflection = state.planExperience
+  return reflection
+    ? `/pages/plan-outcome/index?planId=${encodeURIComponent(reflection.planId)}&revision=${reflection.planRevision}`
+    : '/pages/plans/index'
 }
 
 const planStatusLabels: Record<WeeklyPlanListItem['status'], string> = {
@@ -44,15 +50,10 @@ export const buildCoachSnapshot = (
   dashboard: Dashboard,
   plans: WeeklyPlanListItem[],
 ): CoachSnapshot => {
-  const trend = dashboard.trends.find((candidate) => candidate.days === 7)
-  if (!trend) throw new Error('dashboard is missing the seven-day evidence window')
-
   const currentPlan = currentWeekPlan(plans, dashboard.today.date)
   if (!currentPlan) {
     return {
-      generatedAt: dashboard.generatedAt,
       localDate: dashboard.today.date,
-      trend,
       personalState: dashboard.personalState,
     }
   }
@@ -67,9 +68,7 @@ export const buildCoachSnapshot = (
   )
 
   return {
-    generatedAt: dashboard.generatedAt,
     localDate: dashboard.today.date,
-    trend,
     personalState: dashboard.personalState,
     plan: {
       plan: currentPlan,

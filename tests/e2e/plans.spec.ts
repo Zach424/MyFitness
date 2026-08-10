@@ -201,7 +201,7 @@ test('weekly plan supports substitution, modification and acceptance history', a
     await route.continue()
   })
   await page.reload()
-  await expect(page.getByText('PLAN v3', { exact: true })).toBeVisible()
+  await expect(page.locator('.review-mark').filter({ hasText: /^PLAN v3$/ })).toBeVisible()
   await expect(reflectionCard).toContainText('读取失败；不会显示成未填写')
   await expect(reflectionCard).not.toContainText('raw reflection outage')
   const reflectionRetry = reflectionCard.getByRole('button', { name: '重试读取' })

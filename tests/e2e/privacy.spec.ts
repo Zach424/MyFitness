@@ -115,7 +115,13 @@ const seedAccount = async (
   await beforeOpen?.()
   await page.getByRole('button', { name: '我的', exact: true }).click()
   await expect(page.getByText('你提供什么，由你决定。')).toBeVisible()
+  const privacySnapshot = beforeOpen
+    ? undefined
+    : page.waitForResponse(
+        (response) => response.url().endsWith('/v1/me/privacy') && response.status() === 200,
+      )
   await page.getByRole('button', { name: '打开数据保管台账' }).click()
+  await privacySnapshot
   await expect(page.getByText('把数据带走，也能彻底离开。')).toBeVisible()
   return session
 }
@@ -507,7 +513,11 @@ test('consent receipt history retains authority across initial, refresh and cont
      FROM generate_series(1, 12) AS series`,
     [session.userId],
   )
+  const privacyReload = page.waitForResponse(
+    (response) => response.url().endsWith('/v1/me/privacy') && response.status() === 200,
+  )
   await page.reload()
+  await privacyReload
 
   await page.route(
     '**/v1/me/privacy/consents/history?limit=10',

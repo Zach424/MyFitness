@@ -1,7 +1,7 @@
 import type { Dashboard, WeeklyPlanListItem } from '@myfitness/contracts'
 import { describe, expect, it } from 'vitest'
 
-import { buildCoachSnapshot, currentWeekPlan } from './coach.model'
+import { buildCoachSnapshot, currentWeekPlan, personalStateSourceUrl } from './coach.model'
 
 const sevenDayTrend = {
   days: 7 as const,
@@ -132,7 +132,6 @@ describe('coach workbench presentation model', () => {
   it('summarizes confirmed evidence and only current-revision explicit links', () => {
     const snapshot = buildCoachSnapshot(dashboard, [plan])
 
-    expect(snapshot.trend).toMatchObject({ activeDays: 4, workoutCount: 2, mealCount: 9 })
     expect(snapshot.personalState).toMatchObject({
       observedWindow: { knowledgeClass: 'observed', activeDays: 4 },
       recoveryEstimate: { knowledgeClass: 'unknown' },
@@ -146,5 +145,28 @@ describe('coach workbench presentation model', () => {
       freshnessLabel: '依据仍是当前版本',
     })
     expect(buildCoachSnapshot(dashboard, []).plan).toBeUndefined()
+    expect(personalStateSourceUrl('records', dashboard.personalState)).toBe('/pages/records/index')
+    expect(personalStateSourceUrl('history', dashboard.personalState)).toBe('/pages/history/index')
+    expect(personalStateSourceUrl('plan', dashboard.personalState)).toBe('/pages/plans/index')
+    expect(
+      personalStateSourceUrl('plan', {
+        ...dashboard.personalState,
+        planExperience: {
+          kind: 'plan_experience',
+          knowledgeClass: 'user_confirmed',
+          authority: 'plan_experience_reflection',
+          planId: plan.id,
+          planRevision: plan.revision,
+          experience: 'about_right',
+          reflectionRevision: 1,
+          updatedAt: dashboard.generatedAt,
+          freshness: {
+            asOf: dashboard.generatedAt,
+            validUntil: null,
+            invalidatedBy: ['plan_reflection_changed'],
+          },
+        },
+      }),
+    ).toBe(`/pages/plan-outcome/index?planId=${plan.id}&revision=${plan.revision}`)
   })
 })

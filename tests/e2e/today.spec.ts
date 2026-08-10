@@ -126,16 +126,20 @@ test('Coach orders confirmed evidence before plan and AI without inventing an em
 }) => {
   await page.setViewportSize({ width: 320, height: 844 })
   const errors = browserErrors(page)
+  let dashboardReads = 0
+  page.on('request', (request) => {
+    if (request.url().includes('/v1/insights/dashboard')) dashboardReads += 1
+  })
   await page.goto('/')
   await expect(page.getByText('今天还没有已确认记录')).toBeVisible()
 
   await page.getByRole('button', { name: '教练', exact: true }).click()
-  await expect(page.getByText('系统知道什么，也说明为什么。')).toBeVisible()
+  await expect(page.getByText('选择卡片检查来源。')).toBeVisible()
   await expect(page.getByText('本人确认 · 当前暂无')).toBeVisible()
   await expect(page.getByText('确认恢复记录 · 当前未引用')).toBeVisible()
   await expect(page.getByText('系统观察 · 恢复 0 · 训练 0 · 餐次 0')).toBeVisible()
   await expect(page.getByText('估计 · 证据不足 · 0 条证据')).toBeVisible()
-  await expect(page.getByText(/无保证有效期/)).toBeVisible()
+  await expect(page.getByText(/无有效期保证/)).toBeVisible()
   await expect(page.getByText('本周还没有计划折页')).toBeVisible()
   await expect(page.getByRole('button', { name: '建立本周计划' })).toBeVisible()
   await expect(page.getByRole('button', { name: '查看 AI 边注档案' })).toHaveCount(0)
@@ -154,6 +158,12 @@ test('Coach orders confirmed evidence before plan and AI without inventing an em
     path: 'output/playwright/iteration-096-coach-mobile.png',
     fullPage: true,
   })
+
+  await page.getByRole('button', { name: /系统观察.*检查来源/ }).press('Enter')
+  await expect(page).toHaveURL(/#\/pages\/history\/index/)
+  await page.goBack()
+  await expect(page.getByText('选择卡片检查来源。')).toBeVisible()
+  await expect.poll(() => dashboardReads).toBeGreaterThan(1)
 
   await page.setViewportSize({ width: 1280, height: 900 })
   const desktopHeader = await page.evaluate(() => {
