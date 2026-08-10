@@ -22,6 +22,7 @@ import {
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
+  ApiPayloadTooLargeResponse,
   ApiProduces,
   ApiQuery,
   ApiTags,
@@ -35,6 +36,8 @@ import {
   consentReceiptHistoryQuerySchema,
   consentReceiptHistorySchema,
   privacyOverviewSchema,
+  privacyExportContentType,
+  privacyExportTooLargeResponseSchema,
   revocableConsentPurposeSchema,
   erasureReceiptTokenSchema,
   type AccountDeletionRequest,
@@ -49,6 +52,7 @@ import type { AuthPrincipal } from '../auth/auth.types'
 import { openApiSchema } from '../openapi-schema'
 import { RateLimit } from '../operations/rate-limit.decorator'
 import { rateLimitPolicies } from '../operations/rate-limit.policies'
+import { serializePortableExport } from './portable-export-artifact'
 import { PrivacyService } from './privacy.service'
 
 const parseBody = <T>(schema: ZodType<T>, body: unknown, message: string) => {
@@ -108,14 +112,20 @@ export class PrivacyController {
   @ApiOperation({ summary: 'Download a versioned portable JSON export without session secrets' })
   @ApiProduces('application/json')
   @ApiOkResponse({ description: 'Versioned JSON attachment containing account-owned data.' })
+  @ApiPayloadTooLargeResponse({
+    description: 'The synchronous portable export exceeds the shared 50 MiB byte boundary.',
+    schema: openApiSchema(privacyExportTooLargeResponseSchema),
+  })
   @Header('Cache-Control', 'no-store, private')
   @Header('Pragma', 'no-cache')
   @Header('X-Content-Type-Options', 'nosniff')
   async portableExport(@CurrentUser() principal: AuthPrincipal) {
     const payload = await this.privacy.portableExport(principal.userId)
-    return new StreamableFile(Buffer.from(`${JSON.stringify(payload, null, 2)}\n`), {
-      type: 'application/json; charset=utf-8',
+    const artifact = serializePortableExport(payload)
+    return new StreamableFile(artifact, {
+      type: `${privacyExportContentType}; charset=utf-8`,
       disposition: 'attachment; filename="myfitness-export.json"',
+      length: artifact.byteLength,
     })
   }
 

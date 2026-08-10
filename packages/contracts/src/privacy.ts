@@ -3,10 +3,12 @@ import * as z from 'zod'
 import {
   accountDeletionConfirmationPhrase,
   consentPurposes,
+  maximumPrivacyExportBytes,
   privacyDataCategories,
   privacyErasureScopeVersion,
   privacyExportContentType,
   privacyExportSchemaVersion,
+  privacyExportTooLargeCode,
   revocableConsentPurposes,
 } from './privacy.constants'
 import { recordPageCursorSchema } from './pagination'
@@ -175,6 +177,15 @@ export const privacyExportSchema = z
   })
   .strict()
 
+export const privacyExportTooLargeResponseSchema = z
+  .object({
+    statusCode: z.literal(413),
+    code: z.literal(privacyExportTooLargeCode),
+    message: z.string().min(1),
+    maximumBytes: z.literal(maximumPrivacyExportBytes),
+  })
+  .strict()
+
 export type PrivacyOverview = z.infer<typeof privacyOverviewSchema>
 export type PrivacyDataCategory = z.infer<typeof privacyDataCategorySchema>
 export type PrivacyInventoryItem = z.infer<typeof privacyInventoryItemSchema>
@@ -190,3 +201,4 @@ export type AccountDeletionRequest = z.infer<typeof accountDeletionRequestSchema
 export type AccountDeletionResult = z.infer<typeof accountDeletionResultSchema>
 export type ErasureReceiptStatus = z.infer<typeof erasureReceiptStatusSchema>
 export type PrivacyExport = z.infer<typeof privacyExportSchema>
+export type PrivacyExportTooLargeResponse = z.infer<typeof privacyExportTooLargeResponseSchema>

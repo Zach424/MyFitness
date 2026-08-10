@@ -5,6 +5,7 @@ import {
   accountDeletionConfirmationPhrase,
   consentVersions,
   foodPhotoConsentVersion,
+  maximumPrivacyExportBytes,
 } from '@myfitness/contracts'
 import { Pool } from 'pg'
 import sharp from 'sharp'
@@ -205,6 +206,12 @@ describe('privacy ownership API with PostgreSQL and private media', () => {
       .expect(200)
     expect(exported.headers['cache-control']).toContain('no-store')
     expect(exported.headers['content-disposition']).toContain('myfitness-export.json')
+    expect(Number(exported.headers['content-length'])).toBe(
+      Buffer.byteLength(exported.text, 'utf8'),
+    )
+    expect(Number(exported.headers['content-length'])).toBeLessThanOrEqual(
+      maximumPrivacyExportBytes,
+    )
     const payload = JSON.parse(exported.text) as {
       schemaVersion: string
       data: {

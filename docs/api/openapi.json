@@ -13561,7 +13561,25 @@
         "parameters": [],
         "responses": {
           "200": { "description": "Versioned JSON attachment containing account-owned data." },
-          "401": { "description": "Bearer token is missing, invalid, expired or revoked." }
+          "401": { "description": "Bearer token is missing, invalid, expired or revoked." },
+          "413": {
+            "description": "The synchronous portable export exceeds the shared 50 MiB byte boundary.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": { "type": "number", "enum": [413] },
+                    "code": { "type": "string", "enum": ["portable_export_too_large"] },
+                    "message": { "type": "string", "minLength": 1 },
+                    "maximumBytes": { "type": "number", "enum": [52428800] }
+                  },
+                  "required": ["statusCode", "code", "message", "maximumBytes"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
         },
         "security": [{ "bearer": [] }],
         "summary": "Download a versioned portable JSON export without session secrets",

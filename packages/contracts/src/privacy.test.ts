@@ -8,12 +8,30 @@ import {
   consentRevocationRequestSchema,
   consentReceiptHistoryQuerySchema,
   consentReceiptHistorySchema,
+  maximumPrivacyExportBytes,
   privacyDataCategories,
+  privacyExportTooLargeCode,
+  privacyExportTooLargeResponseSchema,
   privacyOverviewSchema,
   revocableConsentPurposeSchema,
 } from './privacy'
 
 describe('privacy contracts', () => {
+  it('shares one exact synchronous-export byte limit and 413 receipt', () => {
+    expect(maximumPrivacyExportBytes).toBe(50 * 1024 * 1024)
+    expect(
+      privacyExportTooLargeResponseSchema.parse({
+        statusCode: 413,
+        code: privacyExportTooLargeCode,
+        message: '同步数据副本超过 50 MiB 上限。',
+        maximumBytes: maximumPrivacyExportBytes,
+      }),
+    ).toMatchObject({
+      code: 'portable_export_too_large',
+      maximumBytes: 52_428_800,
+    })
+  })
+
   it('keeps optional revocation narrower than required service consent', () => {
     expect(revocableConsentPurposeSchema.parse('ai_plan_explanation')).toBe('ai_plan_explanation')
     expect(revocableConsentPurposeSchema.parse('food_photo_analysis')).toBe('food_photo_analysis')

@@ -1,4 +1,5 @@
 import {
+  maximumPrivacyExportBytes,
   privacyExportContentType,
   privacyExportSchemaVersion,
 } from '@myfitness/contracts/privacy.constants'
@@ -11,8 +12,6 @@ export type PrivacyExportVerification = {
   generatedAt: string
   byteLength: number
 }
-
-export const maximumPrivacyExportBytes = 50 * 1024 * 1024
 
 const dataKeys = [
   'account',
