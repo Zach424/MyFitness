@@ -351,6 +351,26 @@ const validateInsightPointOrder = (
   }
 }
 
+const validateUniqueInsightPointIds = <Point>(
+  series: Point[],
+  idOf: (point: Point) => string,
+  pathField: 'workoutId' | 'recordId',
+  ctx: z.RefinementCtx,
+) => {
+  const seen = new Set<string>()
+  series.forEach((point, index) => {
+    const id = idOf(point)
+    if (seen.has(id)) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'insight points must have unique aggregate identities',
+        path: ['series', index, pathField],
+      })
+    }
+    seen.add(id)
+  })
+}
+
 export const exerciseInsightSchema = z
   .object({
     generatedAt: z.string().datetime({ offset: true }),
@@ -366,6 +386,7 @@ export const exerciseInsightSchema = z
     validateFixedInsightWindowDays(insight.windows, 'windows', ctx)
     validateInsightPointLocalDates(insight, ctx)
     validateInsightPointOrder(insight, ctx)
+    validateUniqueInsightPointIds(insight.series, (point) => point.workoutId, 'workoutId', ctx)
     validateInsightOccurrenceBoundary(insight, ctx)
   })
 
@@ -616,6 +637,7 @@ export const healthInsightSchema = z
     validateFixedInsightWindowDays(insight.windows, 'windows', ctx)
     validateInsightPointLocalDates(insight, ctx)
     validateInsightPointOrder(insight, ctx)
+    validateUniqueInsightPointIds(insight.series, (point) => point.recordId, 'recordId', ctx)
     validateInsightOccurrenceBoundary(insight, ctx)
   })
 

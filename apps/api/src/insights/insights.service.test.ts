@@ -450,6 +450,13 @@ describe('exercise insight projection', () => {
     expect(() =>
       buildExerciseInsight('goblet_squat', [], hiddenAscendingPoints, 'Asia/Shanghai', at),
     ).toThrow('insight point rows must be ordered by occurred_at descending')
+    const hiddenDuplicatePoints = [
+      ...points.slice(0, 180),
+      { ...points[180]!, workout_id: points[0]!.workout_id },
+    ]
+    expect(() =>
+      buildExerciseInsight('goblet_squat', [], hiddenDuplicatePoints, 'Asia/Shanghai', at),
+    ).toThrow('insight point rows must have unique aggregate ids')
   })
 })
 
@@ -594,5 +601,12 @@ describe('health insight projection', () => {
     expect(() =>
       buildHealthInsight('body.weight', [], hiddenAscendingPoints, 'Asia/Shanghai', at),
     ).toThrow('insight point rows must be ordered by occurred_at descending')
+    const hiddenDuplicatePoints = [
+      ...points.slice(0, 180),
+      { ...points[180]!, record_id: points[0]!.record_id },
+    ]
+    expect(() =>
+      buildHealthInsight('body.weight', [], hiddenDuplicatePoints, 'Asia/Shanghai', at),
+    ).toThrow('insight point rows must have unique aggregate ids')
   })
 })

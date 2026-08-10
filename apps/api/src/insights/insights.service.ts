@@ -203,6 +203,17 @@ const assertInsightPointRowOrder = (rows: Array<{ occurred_at: Date }>) => {
   }
 }
 
+const assertUniqueInsightPointRowIds = <Row>(rows: Row[], idOf: (row: Row) => string) => {
+  const seen = new Set<string>()
+  rows.forEach((row) => {
+    const id = idOf(row)
+    if (seen.has(id)) {
+      throw new Error('insight point rows must have unique aggregate ids')
+    }
+    seen.add(id)
+  })
+}
+
 const shiftLocalDate = (localDate: string, days: number) => {
   const [year, month, day] = localDate.split('-').map(Number)
   return new Date(Date.UTC(year!, month! - 1, day! + days)).toISOString().slice(0, 10)
@@ -254,6 +265,7 @@ export const buildExerciseInsight = (
 ): ExerciseInsight => {
   assertValidInsightTimezone(timezone, at)
   assertInsightPointRowOrder(pointRows)
+  assertUniqueInsightPointRowIds(pointRows, (row) => row.workout_id)
   const eligiblePointRows = pointRows.filter((row) => row.occurred_at.getTime() <= at.getTime())
   const series = eligiblePointRows.slice(0, 180).map((row) => exercisePoint(row, timezone))
   return {
@@ -392,6 +404,7 @@ export const buildHealthInsight = (
 ): HealthInsight => {
   assertValidInsightTimezone(timezone, at)
   assertInsightPointRowOrder(pointRows)
+  assertUniqueInsightPointRowIds(pointRows, (row) => row.record_id)
   const eligiblePointRows = pointRows.filter((row) => row.occurred_at.getTime() <= at.getTime())
   const series = eligiblePointRows.slice(0, 180).map((row) => healthPoint(row, timezone))
   return {

@@ -187,6 +187,19 @@ describe('exercise insight contract', () => {
         }),
       )
     }
+    const duplicateWorkout = exerciseInsightSchema.safeParse({
+      ...parsed,
+      series: [parsed.series[0]!, { ...parsed.series[0]!, occurredAt: '2026-08-05T09:00:00.000Z' }],
+    })
+    expect(duplicateWorkout.success).toBe(false)
+    if (!duplicateWorkout.success) {
+      expect(duplicateWorkout.error.issues).toContainEqual(
+        expect.objectContaining({
+          message: 'insight points must have unique aggregate identities',
+          path: ['series', 1, 'workoutId'],
+        }),
+      )
+    }
     expect(
       exerciseInsightSchema.safeParse({
         ...parsed,
@@ -417,6 +430,19 @@ describe('health insight contract', () => {
         expect.objectContaining({
           message: 'insight points must be ordered by occurredAt descending',
           path: ['series', 1, 'occurredAt'],
+        }),
+      )
+    }
+    const duplicateRecord = healthInsightSchema.safeParse({
+      ...parsed,
+      series: [parsed.series[0]!, { ...parsed.series[0]!, occurredAt: '2026-08-05T09:00:00.000Z' }],
+    })
+    expect(duplicateRecord.success).toBe(false)
+    if (!duplicateRecord.success) {
+      expect(duplicateRecord.error.issues).toContainEqual(
+        expect.objectContaining({
+          message: 'insight points must have unique aggregate identities',
+          path: ['series', 1, 'recordId'],
         }),
       )
     }
