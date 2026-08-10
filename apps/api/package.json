@@ -10,6 +10,7 @@
     "build": "tsc -p tsconfig.build.json",
     "db:migrate": "ts-node src/database/migrate.ts",
     "openapi:generate": "ts-node src/scripts/generate-openapi.ts",
+    "ops:measure-portable-export": "ts-node src/scripts/measure-portable-export.ts",
     "ops:verify-backup-restore": "ts-node src/scripts/verify-backup-restore.ts",
     "ops:verify-production-config": "ts-node src/scripts/verify-production-config.ts",
     "preopenapi:generate": "pnpm --filter @myfitness/contracts build && pnpm --filter @myfitness/domain build",

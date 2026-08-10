@@ -113,7 +113,7 @@ The client retains the bearer receipt secret across reloads until explicit local
 
 - Production identity, account recovery and linked-account deletion are not implemented.
 - A real local `pg_dump → pg_restore → ledger replay` drill passes, but production backup schedule/retention, independent ledger replication, HMAC-secret recovery and isolated restore ownership are not configured.
-- 完整数据库行、非媒体 JavaScript 对象图和格式化初始下界字符串仍在 API 内存中生成；越界的当前媒体 Buffer 也必须先读取，正常请求还会生成全部 base64 和最终字符串。服务端已能在媒体读取前拒绝“初始下界超限”的请求，并在某个真实媒体展开后于 base64 和后续读取前拒绝，但这不是流式或异步加密归档；小程序真机下载、读取和保存行为也尚未演练。
+- 完整数据库行、非媒体 JavaScript 对象图和格式化初始下界字符串仍在 API 内存中生成；越界的当前媒体 Buffer 也必须先读取，正常请求还会生成全部 base64 和最终字符串。服务端已能在媒体读取前拒绝“初始下界超限”的请求，并在某个真实媒体展开后于 base64 和后续读取前拒绝，但这不是流式或异步加密归档。无媒体本地夹具在 65,000 条时生成 49,168,658 字节并伴随约 349.16 MiB RSS 前后快照增长，70,000 条返回固定 413；测量包含整个 Node/Nest 进程且受 GC 影响，只证明 R-013 压力，不代表生产容量。小程序真机下载、读取和保存行为也尚未演练。
 - Retained progress photos increase that export/custody burden; capture-quality checks do not establish posture, composition or health outcomes.
 - Receipt status recovery is secret-gated and tested across response loss/reload, but client secure-storage and final token-retention policy are not yet approved.
 - Expiring drafts are minimized and owner-scoped, but H5/Mini Program application-storage encryption, shared-device semantics and operating-system backup behavior still require closed-beta review.

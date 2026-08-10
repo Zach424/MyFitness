@@ -25,6 +25,7 @@
     "format:check": "prettier --check .",
     "preview:h5": "node scripts/serve-h5.mjs",
     "ops:verify-backup-restore": "pnpm --filter @myfitness/api ops:verify-backup-restore",
+    "ops:measure-portable-export": "pnpm --filter @myfitness/api ops:measure-portable-export",
     "ops:verify-production-config": "pnpm --filter @myfitness/api ops:verify-production-config",
     "deploy:verify": "node scripts/verify-deployment.mjs",
     "deploy:smoke": "node scripts/run-deployment-smoke.mjs",
