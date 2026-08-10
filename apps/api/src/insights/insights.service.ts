@@ -226,7 +226,8 @@ export const buildExerciseInsight = (
   timezone: string,
   at = new Date(),
 ): ExerciseInsight => {
-  const series = pointRows.slice(0, 180).map((row) => exercisePoint(row, timezone))
+  const eligiblePointRows = pointRows.filter((row) => row.occurred_at.getTime() <= at.getTime())
+  const series = eligiblePointRows.slice(0, 180).map((row) => exercisePoint(row, timezone))
   return {
     generatedAt: at.toISOString(),
     timezone,
@@ -239,7 +240,7 @@ export const buildExerciseInsight = (
       ),
     ),
     series,
-    hasMore: pointRows.length > 180,
+    hasMore: eligiblePointRows.length > 180,
   }
 }
 
@@ -354,7 +355,8 @@ export const buildHealthInsight = (
   timezone: string,
   at = new Date(),
 ): HealthInsight => {
-  const series = pointRows.slice(0, 180).map((row) => healthPoint(row, timezone))
+  const eligiblePointRows = pointRows.filter((row) => row.occurred_at.getTime() <= at.getTime())
+  const series = eligiblePointRows.slice(0, 180).map((row) => healthPoint(row, timezone))
   return {
     generatedAt: at.toISOString(),
     timezone,
@@ -367,7 +369,7 @@ export const buildHealthInsight = (
       ),
     ),
     series,
-    hasMore: pointRows.length > 180,
+    hasMore: eligiblePointRows.length > 180,
   }
 }
 

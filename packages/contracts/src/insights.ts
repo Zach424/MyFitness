@@ -208,6 +208,22 @@ export const exerciseInsightPointSchema = exerciseInsightMetricsSchema
   })
   .strict()
 
+const validateInsightOccurrenceBoundary = (
+  insight: { generatedAt: string; series: Array<{ occurredAt: string }> },
+  ctx: z.RefinementCtx,
+) => {
+  const referenceTime = Date.parse(insight.generatedAt)
+  insight.series.forEach((point, index) => {
+    if (Date.parse(point.occurredAt) > referenceTime) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'insight point cannot occur after generatedAt',
+        path: ['series', index, 'occurredAt'],
+      })
+    }
+  })
+}
+
 export const exerciseInsightSchema = z
   .object({
     generatedAt: z.string().datetime({ offset: true }),
@@ -219,6 +235,7 @@ export const exerciseInsightSchema = z
     hasMore: z.boolean(),
   })
   .strict()
+  .superRefine(validateInsightOccurrenceBoundary)
 
 export const exerciseInsightQuerySchema = dashboardQuerySchema
 
@@ -379,6 +396,7 @@ export const healthInsightSchema = z
     hasMore: z.boolean(),
   })
   .strict()
+  .superRefine(validateInsightOccurrenceBoundary)
 
 export const healthInsightQuerySchema = dashboardQuerySchema
 

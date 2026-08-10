@@ -339,6 +339,12 @@ describe('exercise insight projection', () => {
       active_seconds: '0',
       distance_meters: '0',
     }))
+    const futurePoint = {
+      ...points[0]!,
+      workout_id: '00000000-0000-4000-9000-000000000001',
+      occurred_at: new Date(at.getTime() + 3_600_000),
+      name: '未来动作名称',
+    }
     const insight = buildExerciseInsight(
       'goblet_squat',
       [
@@ -352,7 +358,7 @@ describe('exercise insight projection', () => {
           distance_meters: '0',
         },
       ],
-      points,
+      [futurePoint, ...points],
       'Asia/Shanghai',
       at,
     )
@@ -369,6 +375,18 @@ describe('exercise insight projection', () => {
       volumeKg: 240.13,
     })
     expect(insight.hasMore).toBe(true)
+
+    const advanced = buildExerciseInsight(
+      'goblet_squat',
+      [],
+      [futurePoint, ...points],
+      'Asia/Shanghai',
+      new Date(at.getTime() + 2 * 3_600_000),
+    )
+    expect(advanced.series[0]).toMatchObject({
+      workoutId: futurePoint.workout_id,
+      identity: { name: '未来动作名称' },
+    })
   })
 })
 
@@ -448,6 +466,12 @@ describe('health insight projection', () => {
       source_kind: 'device' as const,
       source_metadata: { deviceName: 'Local scale' },
     }))
+    const futurePoint = {
+      ...points[0]!,
+      record_id: '00000000-0000-4000-9000-000000000002',
+      occurred_at: new Date(at.getTime() + 3_600_000),
+      canonical_unit: 'cm' as const,
+    }
     const insight = buildHealthInsight(
       'body.weight',
       [
@@ -460,7 +484,7 @@ describe('health insight projection', () => {
           average: '69.5',
         },
       ],
-      points,
+      [futurePoint, ...points],
       'Asia/Shanghai',
       at,
     )
@@ -477,5 +501,15 @@ describe('health insight projection', () => {
       source: { kind: 'device', metadata: { deviceName: 'Local scale' } },
     })
     expect(insight.hasMore).toBe(true)
+
+    const advanced = buildHealthInsight(
+      'body.weight',
+      [],
+      [futurePoint, ...points],
+      'Asia/Shanghai',
+      new Date(at.getTime() + 2 * 3_600_000),
+    )
+    expect(advanced.canonicalUnit).toBe('cm')
+    expect(advanced.series[0]).toMatchObject({ recordId: futurePoint.record_id })
   })
 })

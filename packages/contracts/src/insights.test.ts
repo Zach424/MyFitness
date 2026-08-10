@@ -97,6 +97,19 @@ describe('exercise insight contract', () => {
     })
 
     expect(parsed.series[0]).toMatchObject({ completedSetCount: 2, totalSetCount: 3 })
+    const futurePoint = exerciseInsightSchema.safeParse({
+      ...parsed,
+      series: [{ ...parsed.series[0]!, occurredAt: '2026-08-05T13:00:00.000Z' }],
+    })
+    expect(futurePoint.success).toBe(false)
+    if (!futurePoint.success) {
+      expect(futurePoint.error.issues).toContainEqual(
+        expect.objectContaining({
+          message: 'insight point cannot occur after generatedAt',
+          path: ['series', 0, 'occurredAt'],
+        }),
+      )
+    }
   })
 
   it('rejects display names as unstable exercise keys', () => {
@@ -219,6 +232,19 @@ describe('health insight contract', () => {
     })
 
     expect(parsed.series[0]).toMatchObject({ canonicalUnit: 'kg', displayUnit: 'lb' })
+    const futurePoint = healthInsightSchema.safeParse({
+      ...parsed,
+      series: [{ ...parsed.series[0]!, occurredAt: '2026-08-05T13:00:00.000Z' }],
+    })
+    expect(futurePoint.success).toBe(false)
+    if (!futurePoint.success) {
+      expect(futurePoint.error.issues).toContainEqual(
+        expect.objectContaining({
+          message: 'insight point cannot occur after generatedAt',
+          path: ['series', 0, 'occurredAt'],
+        }),
+      )
+    }
   })
 
   it('rejects invented statistics for an empty metric', () => {
