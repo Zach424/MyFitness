@@ -440,6 +440,9 @@ describe('exercise insight projection', () => {
       workoutId: futurePoint.workout_id,
       identity: { name: '未来动作名称' },
     })
+    expect(() => buildExerciseInsight('goblet_squat', [], [], 'Invalid/Timezone', at)).toThrow(
+      'insight timezone must be a valid IANA timezone',
+    )
   })
 })
 
@@ -574,5 +577,8 @@ describe('health insight projection', () => {
     )
     expect(advanced.canonicalUnit).toBe('cm')
     expect(advanced.series[0]).toMatchObject({ recordId: futurePoint.record_id })
+    expect(() => buildHealthInsight('body.weight', [], [], 'Invalid/Timezone', at)).toThrow(
+      'insight timezone must be a valid IANA timezone',
+    )
   })
 })

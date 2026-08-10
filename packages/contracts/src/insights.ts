@@ -304,6 +304,35 @@ const validateInsightOccurrenceBoundary = (
   })
 }
 
+const validateInsightPointLocalDates = (
+  insight: {
+    generatedAt: string
+    timezone: string
+    series: Array<{ occurredAt: string; localDate: string }>
+  },
+  ctx: z.RefinementCtx,
+) => {
+  try {
+    localDateInTimezone(new Date(insight.generatedAt), insight.timezone)
+  } catch {
+    ctx.addIssue({
+      code: 'custom',
+      message: 'timezone must resolve insight point local dates',
+      path: ['timezone'],
+    })
+    return
+  }
+  insight.series.forEach((point, index) => {
+    if (point.localDate !== localDateInTimezone(new Date(point.occurredAt), insight.timezone)) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'insight point localDate must match occurredAt in the response timezone',
+        path: ['series', index, 'localDate'],
+      })
+    }
+  })
+}
+
 export const exerciseInsightSchema = z
   .object({
     generatedAt: z.string().datetime({ offset: true }),
@@ -317,6 +346,7 @@ export const exerciseInsightSchema = z
   .strict()
   .superRefine((insight, ctx) => {
     validateFixedInsightWindowDays(insight.windows, 'windows', ctx)
+    validateInsightPointLocalDates(insight, ctx)
     validateInsightOccurrenceBoundary(insight, ctx)
   })
 
@@ -565,6 +595,7 @@ export const healthInsightSchema = z
   .strict()
   .superRefine((insight, ctx) => {
     validateFixedInsightWindowDays(insight.windows, 'windows', ctx)
+    validateInsightPointLocalDates(insight, ctx)
     validateInsightOccurrenceBoundary(insight, ctx)
   })
 

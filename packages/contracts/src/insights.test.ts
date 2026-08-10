@@ -140,6 +140,33 @@ describe('exercise insight contract', () => {
         }),
       )
     }
+    const wrongLocalDate = exerciseInsightSchema.safeParse({
+      ...parsed,
+      series: [{ ...parsed.series[0]!, localDate: '2026-08-04' }],
+    })
+    expect(wrongLocalDate.success).toBe(false)
+    if (!wrongLocalDate.success) {
+      expect(wrongLocalDate.error.issues).toContainEqual(
+        expect.objectContaining({
+          message: 'insight point localDate must match occurredAt in the response timezone',
+          path: ['series', 0, 'localDate'],
+        }),
+      )
+    }
+    const invalidTimezone = exerciseInsightSchema.safeParse({
+      ...parsed,
+      timezone: 'Invalid/Timezone',
+      series: [],
+    })
+    expect(invalidTimezone.success).toBe(false)
+    if (!invalidTimezone.success) {
+      expect(invalidTimezone.error.issues).toContainEqual(
+        expect.objectContaining({
+          message: 'timezone must resolve insight point local dates',
+          path: ['timezone'],
+        }),
+      )
+    }
     const futurePoint = exerciseInsightSchema.safeParse({
       ...parsed,
       series: [{ ...parsed.series[0]!, occurredAt: '2026-08-05T13:00:00.000Z' }],
@@ -319,6 +346,25 @@ describe('health insight contract', () => {
         expect.objectContaining({
           message: 'insight windows must use the fixed 7/30/90 order',
           path: ['windows', 2, 'days'],
+        }),
+      )
+    }
+    const recordTimezoneDate = healthInsightSchema.safeParse({
+      ...parsed,
+      series: [
+        {
+          ...parsed.series[0]!,
+          occurredAt: '2026-08-05T02:00:00.000Z',
+          localDate: '2026-08-04',
+        },
+      ],
+    })
+    expect(recordTimezoneDate.success).toBe(false)
+    if (!recordTimezoneDate.success) {
+      expect(recordTimezoneDate.error.issues).toContainEqual(
+        expect.objectContaining({
+          message: 'insight point localDate must match occurredAt in the response timezone',
+          path: ['series', 0, 'localDate'],
         }),
       )
     }

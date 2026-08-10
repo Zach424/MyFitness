@@ -187,6 +187,14 @@ const localDay = (date: Date, timezone: string) => {
   return `${part('year')}-${part('month')}-${part('day')}`
 }
 
+const assertValidInsightTimezone = (timezone: string, at: Date) => {
+  try {
+    localDay(at, timezone)
+  } catch {
+    throw new Error('insight timezone must be a valid IANA timezone')
+  }
+}
+
 const shiftLocalDate = (localDate: string, days: number) => {
   const [year, month, day] = localDate.split('-').map(Number)
   return new Date(Date.UTC(year!, month! - 1, day! + days)).toISOString().slice(0, 10)
@@ -236,6 +244,7 @@ export const buildExerciseInsight = (
   timezone: string,
   at = new Date(),
 ): ExerciseInsight => {
+  assertValidInsightTimezone(timezone, at)
   const eligiblePointRows = pointRows.filter((row) => row.occurred_at.getTime() <= at.getTime())
   const series = eligiblePointRows.slice(0, 180).map((row) => exercisePoint(row, timezone))
   return {
@@ -372,6 +381,7 @@ export const buildHealthInsight = (
   timezone: string,
   at = new Date(),
 ): HealthInsight => {
+  assertValidInsightTimezone(timezone, at)
   const eligiblePointRows = pointRows.filter((row) => row.occurred_at.getTime() <= at.getTime())
   const series = eligiblePointRows.slice(0, 180).map((row) => healthPoint(row, timezone))
   return {
