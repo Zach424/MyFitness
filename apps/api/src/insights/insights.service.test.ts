@@ -474,7 +474,12 @@ describe('exercise insight projection', () => {
     }
     const zeroMeasureInsight = buildExerciseInsight(
       'goblet_squat',
-      [{ ...emptyNinetyDayWindow, session_count: '1', completed_set_count: '1' }],
+      ([7, 30, 90] as const).map((days) => ({
+        ...emptyNinetyDayWindow,
+        days,
+        session_count: '1',
+        completed_set_count: '1',
+      })),
       [zeroMeasurePoint],
       'Asia/Shanghai',
       at,
@@ -490,7 +495,7 @@ describe('exercise insight projection', () => {
 
     const completeTwoSessionInsight = buildExerciseInsight(
       'goblet_squat',
-      [completeTwoSessionWindow],
+      ([7, 30, 90] as const).map((days) => ({ ...completeTwoSessionWindow, days })),
       points.slice(0, 2),
       'Asia/Shanghai',
       at,
@@ -737,6 +742,137 @@ describe('exercise insight projection', () => {
     expect(() =>
       buildExerciseInsight('goblet_squat', [], excessivePoints, 'Asia/Shanghai', at),
     ).toThrow('insight point rows cannot exceed the 181-row truncation receipt')
+  })
+
+  it('reconciles complete exercise point subsets at short-window boundaries', () => {
+    const at = new Date('2026-08-05T12:00:00.000Z')
+    const point = (
+      index: number,
+      occurredAt: Date,
+      completedSetCount: number,
+      totalReps: number,
+      volumeKg: string,
+      activeSeconds: number,
+      distanceMeters: number,
+    ) => ({
+      workout_id: `00000000-0000-4000-8000-${String(100 + index).padStart(12, '0')}`,
+      workout_revision: 1,
+      occurred_at: occurredAt,
+      name: '短窗口边界动作',
+      category: 'strength' as const,
+      tracking_mode: 'reps_load' as const,
+      equipment: ['dumbbells' as const],
+      equipment_notes: null,
+      completed_set_count: String(completedSetCount),
+      total_set_count: String(completedSetCount),
+      total_reps: String(totalReps),
+      volume_kg: volumeKg,
+      active_seconds: String(activeSeconds),
+      distance_meters: String(distanceMeters),
+    })
+    const points = [
+      point(1, at, 1, 0, '0', 0, 0),
+      point(2, new Date(at.getTime() - 7 * 86_400_000), 2, 10, '100.004', 31, 10),
+      point(3, new Date(at.getTime() - 7 * 86_400_000 - 1), 1, 20, '200.006', 61, 20),
+      point(4, new Date(at.getTime() - 30 * 86_400_000), 2, 30, '300.004', 91, 30),
+      point(5, new Date(at.getTime() - 30 * 86_400_000 - 1), 1, 40, '400.006', 121, 40),
+    ]
+    const windows = [
+      {
+        days: 7,
+        session_count: '2',
+        completed_set_count: '3',
+        total_reps: '10',
+        volume_kg: '100.004',
+        active_seconds: '31',
+        distance_meters: '10',
+      },
+      {
+        days: 30,
+        session_count: '4',
+        completed_set_count: '6',
+        total_reps: '60',
+        volume_kg: '600.014',
+        active_seconds: '183',
+        distance_meters: '60',
+      },
+      {
+        days: 90,
+        session_count: '5',
+        completed_set_count: '7',
+        total_reps: '100',
+        volume_kg: '1000.020',
+        active_seconds: '304',
+        distance_meters: '100',
+      },
+    ]
+
+    const insight = buildExerciseInsight('boundary_lift', windows, points, 'UTC', at)
+    expect(insight.windows).toEqual([
+      expect.objectContaining({ days: 7, sessionCount: 2, completedSetCount: 3, totalReps: 10 }),
+      expect.objectContaining({ days: 30, sessionCount: 4, completedSetCount: 6, totalReps: 60 }),
+      expect.objectContaining({ days: 90, sessionCount: 5, completedSetCount: 7, totalReps: 100 }),
+    ])
+
+    expect(() =>
+      buildExerciseInsight(
+        'boundary_lift',
+        windows.map((window) =>
+          window.days === 7 ? { ...window, session_count: '3', completed_set_count: '3' } : window,
+        ),
+        points,
+        'UTC',
+        at,
+      ),
+    ).toThrow('exercise insight short windows must match complete point counts')
+
+    for (const [field, value] of [
+      ['completed_set_count', '4'],
+      ['total_reps', '11'],
+      ['volume_kg', '100.014'],
+      ['active_seconds', '32'],
+      ['distance_meters', '11'],
+    ] as const) {
+      expect(() =>
+        buildExerciseInsight(
+          'boundary_lift',
+          windows.map((window) => (window.days === 7 ? { ...window, [field]: value } : window)),
+          points,
+          'UTC',
+          at,
+        ),
+      ).toThrow('exercise insight short windows must match complete point aggregates')
+    }
+
+    const emptyWindow = {
+      session_count: '0',
+      completed_set_count: '0',
+      total_reps: '0',
+      volume_kg: '0',
+      active_seconds: '0',
+      distance_meters: '0',
+    }
+    expect(() =>
+      buildExerciseInsight(
+        'boundary_lift',
+        [
+          { days: 7, ...emptyWindow },
+          { days: 30, ...emptyWindow },
+          {
+            days: 90,
+            session_count: '1',
+            completed_set_count: '1',
+            total_reps: '40',
+            volume_kg: '400.006',
+            active_seconds: '121',
+            distance_meters: '40',
+          },
+        ],
+        [points[4]!],
+        'UTC',
+        at,
+      ),
+    ).not.toThrow()
   })
 })
 

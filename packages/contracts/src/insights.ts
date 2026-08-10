@@ -614,7 +614,7 @@ const validateHealthInsightWindowPointRecordedDaysReceipt = (
   }
 }
 
-const healthPointsInWindow = <Point extends { occurredAt: string }>(
+const insightPointsInWindow = <Point extends { occurredAt: string }>(
   series: Point[],
   referenceTime: number,
   days: 7 | 30,
@@ -650,7 +650,7 @@ const validateHealthInsightShortWindowPointReceipts = (
     const windowIndex = insight.windows.findIndex((window) => window.days === days)
     if (windowIndex < 0) continue
     const window = insight.windows[windowIndex]!
-    const points = healthPointsInWindow(insight.series, referenceTime, days)
+    const points = insightPointsInWindow(insight.series, referenceTime, days)
     if (window.recordCount !== points.length) {
       ctx.addIssue({
         code: 'custom',
@@ -770,6 +770,72 @@ const validateExerciseInsightWindowPointAggregateReceipt = (
   })
 }
 
+const validateExerciseInsightShortWindowPointAggregateReceipts = (
+  insight: {
+    generatedAt: string
+    windows: Array<z.infer<typeof exerciseInsightWindowSchema>>
+    series: Array<z.infer<typeof exerciseInsightPointSchema>>
+  },
+  ctx: z.RefinementCtx,
+) => {
+  const ninetyDayWindow = insight.windows.find((window) => window.days === 90)
+  if (
+    !ninetyDayWindow ||
+    ninetyDayWindow.sessionCount > 180 ||
+    insight.series.length !== ninetyDayWindow.sessionCount
+  ) {
+    return
+  }
+
+  const referenceTime = Date.parse(insight.generatedAt)
+  for (const days of [7, 30] as const) {
+    const windowIndex = insight.windows.findIndex((window) => window.days === days)
+    if (windowIndex < 0) continue
+    const window = insight.windows[windowIndex]!
+    const points = insightPointsInWindow(insight.series, referenceTime, days)
+    if (window.sessionCount !== points.length) {
+      ctx.addIssue({
+        code: 'custom',
+        message: `${days}-day sessionCount must match the complete exercise point subset`,
+        path: ['windows', windowIndex, 'sessionCount'],
+      })
+    }
+
+    for (const field of ['completedSetCount', 'totalReps'] as const) {
+      const pointTotal = points.reduce((total, point) => total + BigInt(point[field]), 0n)
+      if (pointTotal !== BigInt(window[field])) {
+        ctx.addIssue({
+          code: 'custom',
+          message: `${days}-day ${field} must match the complete exercise point subset aggregate`,
+          path: ['windows', windowIndex, field],
+        })
+      }
+    }
+
+    for (const [field, precision] of [
+      ['volumeKg', 2],
+      ['activeMinutes', 1],
+      ['distanceKm', 2],
+    ] as const) {
+      const pointTotal = points.reduce((total, point) => total + point[field], 0)
+      const roundingUnit = 10 ** -precision
+      const quantizationTolerance = ((points.length + 1) * roundingUnit) / 2
+      const floatingTolerance =
+        Number.EPSILON *
+        Math.max(1, Math.abs(window[field]), Math.abs(pointTotal)) *
+        (points.length + 2) *
+        4
+      if (Math.abs(window[field] - pointTotal) > quantizationTolerance + floatingTolerance) {
+        ctx.addIssue({
+          code: 'custom',
+          message: `${days}-day ${field} must match complete exercise point subset within rounding tolerance`,
+          path: ['windows', windowIndex, field],
+        })
+      }
+    }
+  }
+}
+
 export const exerciseInsightSchema = z
   .object({
     generatedAt: z.string().datetime({ offset: true }),
@@ -791,6 +857,7 @@ export const exerciseInsightSchema = z
     validateInsightTruncationReceipt(insight, ctx)
     validateExerciseInsightWindowPointReceipt(insight, ctx)
     validateExerciseInsightWindowPointAggregateReceipt(insight, ctx)
+    validateExerciseInsightShortWindowPointAggregateReceipts(insight, ctx)
     validateInsightOccurrenceBoundary(insight, ctx)
   })
 

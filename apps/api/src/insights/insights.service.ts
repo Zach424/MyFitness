@@ -499,6 +499,17 @@ const sourceDecimalSumMatches = (expected: string, values: string[]) => {
   return Math.abs(expectedNumber - sum) <= floatingTolerance
 }
 
+const millisecondsPerDay = 86_400_000
+
+const insightPointRowsInWindow = <Row extends { occurred_at: Date }>(
+  rows: Row[],
+  at: Date,
+  days: 7 | 30,
+) => {
+  const lowerBoundary = at.getTime() - days * millisecondsPerDay
+  return rows.filter((row) => row.occurred_at.getTime() >= lowerBoundary)
+}
+
 const assertExerciseWindowPointAggregateReceipt = (
   windowRows: ExerciseWindowRow[],
   eligiblePointRows: ExercisePointRow[],
@@ -531,6 +542,46 @@ const assertExerciseWindowPointAggregateReceipt = (
     )
   ) {
     throw new Error('exercise insight 90-day window must match complete point aggregates')
+  }
+}
+
+const assertExerciseShortWindowPointAggregateReceipts = (
+  windowRows: ExerciseWindowRow[],
+  eligiblePointRows: ExercisePointRow[],
+  at: Date,
+) => {
+  const ninetyDaySessionCount = Number(
+    windowRows.find((row) => row.days === 90)?.session_count ?? 0,
+  )
+  if (ninetyDaySessionCount > 180) return
+
+  for (const days of [7, 30] as const) {
+    const window = windowRows.find((row) => row.days === days)
+    const points = insightPointRowsInWindow(eligiblePointRows, at, days)
+    if (Number(window?.session_count ?? 0) !== points.length) {
+      throw new Error('exercise insight short windows must match complete point counts')
+    }
+
+    const completedSets = points.reduce((total, row) => total + BigInt(row.completed_set_count), 0n)
+    const totalReps = points.reduce((total, row) => total + BigInt(row.total_reps), 0n)
+    if (
+      completedSets !== BigInt(window?.completed_set_count ?? '0') ||
+      totalReps !== BigInt(window?.total_reps ?? '0') ||
+      !sourceDecimalSumMatches(
+        window?.volume_kg ?? '0',
+        points.map((row) => row.volume_kg),
+      ) ||
+      !sourceDecimalSumMatches(
+        window?.active_seconds ?? '0',
+        points.map((row) => row.active_seconds),
+      ) ||
+      !sourceDecimalSumMatches(
+        window?.distance_meters ?? '0',
+        points.map((row) => row.distance_meters),
+      )
+    ) {
+      throw new Error('exercise insight short windows must match complete point aggregates')
+    }
   }
 }
 
@@ -600,13 +651,6 @@ const assertHealthWindowPointRecordedDaysReceipt = (
   }
 }
 
-const millisecondsPerDay = 86_400_000
-
-const healthPointRowsInWindow = (rows: HealthPointRow[], at: Date, days: 7 | 30) => {
-  const lowerBoundary = at.getTime() - days * millisecondsPerDay
-  return rows.filter((row) => row.occurred_at.getTime() >= lowerBoundary)
-}
-
 const assertHealthShortWindowPointReceipts = (
   windowRows: HealthWindowRow[],
   eligiblePointRows: HealthPointRow[],
@@ -619,7 +663,7 @@ const assertHealthShortWindowPointReceipts = (
   const formatter = createLocalDayFormatter(timezone)
   for (const days of [7, 30] as const) {
     const window = windowRows.find((row) => row.days === days)
-    const points = healthPointRowsInWindow(eligiblePointRows, at, days)
+    const points = insightPointRowsInWindow(eligiblePointRows, at, days)
     if (Number(window?.record_count ?? 0) !== points.length) {
       throw new Error('health insight short windows must match complete point counts')
     }
@@ -710,6 +754,7 @@ export const buildExerciseInsight = (
   assertInsightPointRowTruncationReceipt(eligiblePointRows)
   assertExercisePointWindowTruncationReceipt(windowRows, eligiblePointRows)
   assertExerciseWindowPointAggregateReceipt(windowRows, eligiblePointRows)
+  assertExerciseShortWindowPointAggregateReceipts(windowRows, eligiblePointRows, at)
   const series = eligiblePointRows.slice(0, 180).map((row) => exercisePoint(row, timezone))
   return {
     generatedAt: at.toISOString(),

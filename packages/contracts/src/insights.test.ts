@@ -510,7 +510,12 @@ describe('exercise insight contract', () => {
                 activeMinutes: 10.1,
                 distanceKm: 1.01,
               }
-            : window,
+            : {
+                ...window,
+                volumeKg: 240.12,
+                activeMinutes: 5,
+                distanceKm: 0.5,
+              },
         ),
         series: [
           {
@@ -522,6 +527,8 @@ describe('exercise insight contract', () => {
           {
             ...parsed.series[0]!,
             workoutId: '00000000-0000-4000-8000-000000000002',
+            occurredAt: '2026-06-05T10:00:00.000Z',
+            localDate: '2026-06-05',
             volumeKg: 240.13,
             activeMinutes: 5.1,
             distanceKm: 0.51,
@@ -542,6 +549,168 @@ describe('exercise insight contract', () => {
         }),
       )
     }
+  })
+
+  it('binds short exercise windows to complete point subsets at closed boundaries', () => {
+    const generatedAt = '2026-08-05T12:00:00.000Z'
+    const identity = {
+      name: '短窗口边界动作',
+      category: 'strength' as const,
+      trackingMode: 'reps_load' as const,
+      equipment: ['dumbbells' as const],
+      equipmentNotes: null,
+    }
+    const point = (
+      index: number,
+      occurredAt: string,
+      completedSetCount: number,
+      totalReps: number,
+      volumeKg: number,
+      activeMinutes: number,
+      distanceKm: number,
+    ) => ({
+      workoutId: `00000000-0000-4000-8000-${String(100 + index).padStart(12, '0')}`,
+      workoutRevision: 1,
+      occurredAt,
+      localDate: occurredAt.slice(0, 10),
+      identity,
+      completedSetCount,
+      totalSetCount: completedSetCount,
+      totalReps,
+      volumeKg,
+      activeMinutes,
+      distanceKm,
+    })
+    const series = [
+      point(1, generatedAt, 1, 0, 0, 0, 0),
+      point(2, '2026-07-29T12:00:00.000Z', 2, 10, 100, 0.5, 0.01),
+      point(3, '2026-07-29T11:59:59.999Z', 1, 20, 200.01, 1, 0.02),
+      point(4, '2026-07-06T12:00:00.000Z', 2, 30, 300, 1.5, 0.03),
+      point(5, '2026-07-06T11:59:59.999Z', 1, 40, 400.01, 2, 0.04),
+    ]
+    const windows = [
+      {
+        days: 7,
+        sessionCount: 2,
+        completedSetCount: 3,
+        totalReps: 10,
+        volumeKg: 100,
+        activeMinutes: 0.5,
+        distanceKm: 0.01,
+      },
+      {
+        days: 30,
+        sessionCount: 4,
+        completedSetCount: 6,
+        totalReps: 60,
+        volumeKg: 600.01,
+        activeMinutes: 3.1,
+        distanceKm: 0.06,
+      },
+      {
+        days: 90,
+        sessionCount: 5,
+        completedSetCount: 7,
+        totalReps: 100,
+        volumeKg: 1000.02,
+        activeMinutes: 5.1,
+        distanceKm: 0.1,
+      },
+    ]
+    const parsed = exerciseInsightSchema.parse({
+      generatedAt,
+      timezone: 'UTC',
+      exerciseKey: 'boundary_lift',
+      identity,
+      windows,
+      series,
+      hasMore: false,
+    })
+
+    const mismatchedCount = exerciseInsightSchema.safeParse({
+      ...parsed,
+      windows: parsed.windows.map((window) =>
+        window.days === 7 ? { ...window, sessionCount: 3, completedSetCount: 3 } : window,
+      ),
+    })
+    expect(mismatchedCount.success).toBe(false)
+    if (!mismatchedCount.success) {
+      expect(mismatchedCount.error.issues).toContainEqual(
+        expect.objectContaining({
+          message: '7-day sessionCount must match the complete exercise point subset',
+          path: ['windows', 0, 'sessionCount'],
+        }),
+      )
+    }
+
+    for (const [field, value, message] of [
+      [
+        'completedSetCount',
+        4,
+        '7-day completedSetCount must match the complete exercise point subset aggregate',
+      ],
+      ['totalReps', 11, '7-day totalReps must match the complete exercise point subset aggregate'],
+      [
+        'volumeKg',
+        101,
+        '7-day volumeKg must match complete exercise point subset within rounding tolerance',
+      ],
+      [
+        'activeMinutes',
+        1.5,
+        '7-day activeMinutes must match complete exercise point subset within rounding tolerance',
+      ],
+      [
+        'distanceKm',
+        0.03,
+        '7-day distanceKm must match complete exercise point subset within rounding tolerance',
+      ],
+    ] as const) {
+      const mismatch = exerciseInsightSchema.safeParse({
+        ...parsed,
+        windows: parsed.windows.map((window) =>
+          window.days === 7 ? { ...window, [field]: value } : window,
+        ),
+      })
+      expect(mismatch.success).toBe(false)
+      if (!mismatch.success) {
+        expect(mismatch.error.issues).toContainEqual(
+          expect.objectContaining({ message, path: ['windows', 0, field] }),
+        )
+      }
+    }
+
+    const emptyWindow = {
+      sessionCount: 0,
+      completedSetCount: 0,
+      totalReps: 0,
+      volumeKg: 0,
+      activeMinutes: 0,
+      distanceKm: 0,
+    }
+    expect(
+      exerciseInsightSchema.safeParse({
+        generatedAt,
+        timezone: 'UTC',
+        exerciseKey: 'boundary_lift',
+        identity,
+        windows: [
+          { days: 7, ...emptyWindow },
+          { days: 30, ...emptyWindow },
+          {
+            days: 90,
+            sessionCount: 1,
+            completedSetCount: 1,
+            totalReps: 40,
+            volumeKg: 400.01,
+            activeMinutes: 2,
+            distanceKm: 0.04,
+          },
+        ],
+        series: [series[4]],
+        hasMore: false,
+      }).success,
+    ).toBe(true)
   })
 
   it('rejects display names as unstable exercise keys', () => {

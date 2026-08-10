@@ -126,20 +126,21 @@ describe('exercise insight API with PostgreSQL', () => {
       expect.objectContaining({ days: 90, sessionCount: 2, totalReps: 15, volumeKg: 200 }),
     ])
     expect(initial.body.series).toHaveLength(2)
-    expect(initial.body.windows[2].sessionCount).toBe(initial.body.series.length)
-    for (const field of [
-      'completedSetCount',
-      'totalReps',
-      'volumeKg',
-      'activeMinutes',
-      'distanceKm',
-    ]) {
-      expect(initial.body.windows[2][field]).toBe(
-        initial.body.series.reduce(
-          (total: number, point: Record<string, number>) => total + point[field]!,
-          0,
-        ),
+    const generatedAt = Date.parse(String(initial.body.generatedAt))
+    for (const window of initial.body.windows as Array<Record<string, number>>) {
+      const points = (initial.body.series as Array<Record<string, number | string>>).filter(
+        (point) => Date.parse(String(point.occurredAt)) >= generatedAt - window.days! * 86_400_000,
       )
+      expect(window.sessionCount).toBe(points.length)
+      for (const field of [
+        'completedSetCount',
+        'totalReps',
+        'volumeKg',
+        'activeMinutes',
+        'distanceKm',
+      ]) {
+        expect(window[field]).toBe(points.reduce((total, point) => total + Number(point[field]), 0))
+      }
     }
     expect(initial.body.series[0]).toMatchObject({
       workoutId: recent.body.id,
