@@ -127,6 +127,40 @@ describe('exercise insight contract', () => {
     })
 
     expect(parsed.series[0]).toMatchObject({ completedSetCount: 2, totalSetCount: 3 })
+    const impossibleWindowCounts = exerciseInsightSchema.safeParse({
+      ...parsed,
+      windows: parsed.windows.map((window, index) =>
+        index === 0 ? { ...window, sessionCount: 3, completedSetCount: 2 } : window,
+      ),
+    })
+    expect(impossibleWindowCounts.success).toBe(false)
+    if (!impossibleWindowCounts.success) {
+      expect(impossibleWindowCounts.error.issues).toContainEqual(
+        expect.objectContaining({
+          message: 'sessionCount cannot exceed completedSetCount',
+          path: ['windows', 0, 'sessionCount'],
+        }),
+      )
+    }
+    const impossiblePointCounts = exerciseInsightSchema.safeParse({
+      ...parsed,
+      series: [{ ...parsed.series[0]!, completedSetCount: 4, totalSetCount: 3 }],
+    })
+    expect(impossiblePointCounts.success).toBe(false)
+    if (!impossiblePointCounts.success) {
+      expect(impossiblePointCounts.error.issues).toContainEqual(
+        expect.objectContaining({
+          message: 'completedSetCount cannot exceed totalSetCount',
+          path: ['series', 0, 'completedSetCount'],
+        }),
+      )
+    }
+    expect(
+      exerciseInsightSchema.safeParse({
+        ...parsed,
+        series: [{ ...parsed.series[0]!, completedSetCount: 0 }],
+      }).success,
+    ).toBe(false)
     const unsupportedHasMore = exerciseInsightSchema.safeParse({ ...parsed, hasMore: true })
     expect(unsupportedHasMore.success).toBe(false)
     if (!unsupportedHasMore.success) {
@@ -422,6 +456,36 @@ describe('health insight contract', () => {
     })
 
     expect(parsed.series[0]).toMatchObject({ canonicalUnit: 'kg', displayUnit: 'lb' })
+    const missingRecordedDay = healthInsightSchema.safeParse({
+      ...parsed,
+      windows: parsed.windows.map((window, index) =>
+        index === 0 ? { ...window, recordedDays: 0 } : window,
+      ),
+    })
+    expect(missingRecordedDay.success).toBe(false)
+    if (!missingRecordedDay.success) {
+      expect(missingRecordedDay.error.issues).toContainEqual(
+        expect.objectContaining({
+          message: 'recorded windows require a recorded day',
+          path: ['windows', 0],
+        }),
+      )
+    }
+    const invertedStatistics = healthInsightSchema.safeParse({
+      ...parsed,
+      windows: parsed.windows.map((window, index) =>
+        index === 0 ? { ...window, statistics: { minimum: 70, average: 69, maximum: 72 } } : window,
+      ),
+    })
+    expect(invertedStatistics.success).toBe(false)
+    if (!invertedStatistics.success) {
+      expect(invertedStatistics.error.issues).toContainEqual(
+        expect.objectContaining({
+          message: 'health statistics must satisfy minimum <= average <= maximum',
+          path: ['windows', 0, 'statistics'],
+        }),
+      )
+    }
     const unsupportedHasMore = healthInsightSchema.safeParse({ ...parsed, hasMore: true })
     expect(unsupportedHasMore.success).toBe(false)
     if (!unsupportedHasMore.success) {

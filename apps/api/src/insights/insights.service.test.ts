@@ -441,7 +441,10 @@ describe('exercise insight projection', () => {
     })
     const reorderedWindows = buildExerciseInsight(
       'goblet_squat',
-      [{ ...sevenDayWindow, days: 90, session_count: '9' }, sevenDayWindow],
+      [
+        { ...sevenDayWindow, days: 90, session_count: '9', completed_set_count: '9' },
+        sevenDayWindow,
+      ],
       [],
       'Asia/Shanghai',
       at,
@@ -471,6 +474,15 @@ describe('exercise insight projection', () => {
         at,
       ),
     ).toThrow('exercise insight window rows must have valid numeric values')
+    expect(() =>
+      buildExerciseInsight(
+        'goblet_squat',
+        [{ ...sevenDayWindow, session_count: '5' }],
+        [],
+        'Asia/Shanghai',
+        at,
+      ),
+    ).toThrow('exercise insight window rows must have consistent aggregate relationships')
     expect(() =>
       buildExerciseInsight(
         'goblet_squat',
@@ -509,6 +521,13 @@ describe('exercise insight projection', () => {
     expect(() =>
       buildExerciseInsight('goblet_squat', [], hiddenInvalidNumericPoints, 'Asia/Shanghai', at),
     ).toThrow('exercise insight point rows must have valid numeric values')
+    const hiddenInconsistentSetPoints = [
+      ...points.slice(0, 180),
+      { ...points[180]!, completed_set_count: '4' },
+    ]
+    expect(() =>
+      buildExerciseInsight('goblet_squat', [], hiddenInconsistentSetPoints, 'Asia/Shanghai', at),
+    ).toThrow('exercise insight point rows must have consistent aggregate relationships')
     expect(() =>
       buildExerciseInsight(
         'goblet_squat',
@@ -685,6 +704,42 @@ describe('health insight projection', () => {
         at,
       ),
     ).toThrow('health insight window rows must have valid numeric values')
+    expect(() =>
+      buildHealthInsight(
+        'body.weight',
+        [{ ...sevenDayWindow, record_count: '1', recorded_days: '2' }],
+        [],
+        'Asia/Shanghai',
+        at,
+      ),
+    ).toThrow('health insight window rows must have consistent aggregate relationships')
+    expect(() =>
+      buildHealthInsight(
+        'body.weight',
+        [
+          {
+            ...sevenDayWindow,
+            record_count: '0',
+            recorded_days: '0',
+            minimum: '0',
+            maximum: null,
+            average: null,
+          },
+        ],
+        [],
+        'Asia/Shanghai',
+        at,
+      ),
+    ).toThrow('health insight window rows must have consistent aggregate relationships')
+    expect(() =>
+      buildHealthInsight(
+        'body.weight',
+        [{ ...sevenDayWindow, minimum: '70', maximum: '72', average: '69' }],
+        [],
+        'Asia/Shanghai',
+        at,
+      ),
+    ).toThrow('health insight window rows must have consistent aggregate relationships')
     expect(() =>
       buildHealthInsight(
         'body.weight',

@@ -262,9 +262,19 @@ const exerciseInsightMetricsSchema = z
   })
   .strict()
 
-export const exerciseInsightWindowSchema = exerciseInsightMetricsSchema.safeExtend({
-  days: z.union([z.literal(7), z.literal(30), z.literal(90)]),
-})
+export const exerciseInsightWindowSchema = exerciseInsightMetricsSchema
+  .safeExtend({
+    days: z.union([z.literal(7), z.literal(30), z.literal(90)]),
+  })
+  .superRefine((window, ctx) => {
+    if (window.sessionCount > window.completedSetCount) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'sessionCount cannot exceed completedSetCount',
+        path: ['sessionCount'],
+      })
+    }
+  })
 
 export const exerciseInsightIdentitySchema = z
   .object({
@@ -287,6 +297,22 @@ export const exerciseInsightPointSchema = exerciseInsightMetricsSchema
     totalSetCount: z.number().int().positive(),
   })
   .strict()
+  .superRefine((point, ctx) => {
+    if (point.completedSetCount === 0) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'exercise insight points require a completed set',
+        path: ['completedSetCount'],
+      })
+    }
+    if (point.completedSetCount > point.totalSetCount) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'completedSetCount cannot exceed totalSetCount',
+        path: ['completedSetCount'],
+      })
+    }
+  })
 
 const validateInsightOccurrenceBoundary = (
   insight: { generatedAt: string; series: Array<{ occurredAt: string }> },
@@ -652,6 +678,22 @@ export const healthInsightWindowSchema = z
     }
     if (window.recordCount > 0 && statistics.some((value) => value === null)) {
       ctx.addIssue({ code: 'custom', message: 'recorded windows require statistics' })
+    }
+    if (window.recordCount > 0 && window.recordedDays === 0) {
+      ctx.addIssue({ code: 'custom', message: 'recorded windows require a recorded day' })
+    }
+    const { minimum, maximum, average } = window.statistics
+    if (
+      minimum !== null &&
+      maximum !== null &&
+      average !== null &&
+      (minimum > average || average > maximum)
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'health statistics must satisfy minimum <= average <= maximum',
+        path: ['statistics'],
+      })
     }
   })
 

@@ -264,6 +264,23 @@ const assertExercisePointRowNumbers = (rows: ExercisePointRow[]) => {
   }
 }
 
+const assertExerciseWindowRowRelationships = (rows: ExerciseWindowRow[]) => {
+  if (rows.some((row) => Number(row.session_count) > Number(row.completed_set_count))) {
+    throw new Error('exercise insight window rows must have consistent aggregate relationships')
+  }
+}
+
+const assertExercisePointRowRelationships = (rows: ExercisePointRow[]) => {
+  if (
+    rows.some((row) => {
+      const completedSetCount = Number(row.completed_set_count)
+      return completedSetCount === 0 || completedSetCount > Number(row.total_set_count)
+    })
+  ) {
+    throw new Error('exercise insight point rows must have consistent aggregate relationships')
+  }
+}
+
 const assertHealthWindowRowNumbers = (rows: HealthWindowRow[]) => {
   if (
     rows.some(
@@ -277,6 +294,34 @@ const assertHealthWindowRowNumbers = (rows: HealthWindowRow[]) => {
     )
   ) {
     throw new Error('health insight window rows must have valid numeric values')
+  }
+}
+
+const assertHealthWindowRowRelationships = (rows: HealthWindowRow[]) => {
+  if (
+    rows.some((row) => {
+      const recordCount = Number(row.record_count)
+      const recordedDays = Number(row.recorded_days)
+      const statistics = [row.minimum, row.maximum, row.average]
+      const hasCompleteStatistics = statistics.every((value) => value !== null)
+      const hasAnyStatistics = statistics.some((value) => value !== null)
+      if (
+        recordedDays > recordCount ||
+        (recordCount === 0 && (recordedDays !== 0 || hasAnyStatistics)) ||
+        (recordCount > 0 && (recordedDays === 0 || !hasCompleteStatistics))
+      ) {
+        return true
+      }
+      if (row.minimum === null || row.maximum === null || row.average === null) {
+        return false
+      }
+      const minimum = Number(row.minimum)
+      const maximum = Number(row.maximum)
+      const average = Number(row.average)
+      return minimum > average || average > maximum
+    })
+  ) {
+    throw new Error('health insight window rows must have consistent aggregate relationships')
   }
 }
 
@@ -380,8 +425,10 @@ export const buildExerciseInsight = (
   assertValidInsightTimezone(timezone, at)
   assertInsightWindowRowIdentities(windowRows)
   assertExerciseWindowRowNumbers(windowRows)
+  assertExerciseWindowRowRelationships(windowRows)
   assertValidInsightPointRowTimes(pointRows)
   assertExercisePointRowNumbers(pointRows)
+  assertExercisePointRowRelationships(pointRows)
   assertInsightPointRowOrder(pointRows)
   assertUniqueInsightPointRowIds(pointRows, (row) => row.workout_id)
   const eligiblePointRows = pointRows.filter((row) => row.occurred_at.getTime() <= at.getTime())
@@ -525,6 +572,7 @@ export const buildHealthInsight = (
   assertValidInsightTimezone(timezone, at)
   assertInsightWindowRowIdentities(windowRows)
   assertHealthWindowRowNumbers(windowRows)
+  assertHealthWindowRowRelationships(windowRows)
   assertValidInsightPointRowTimes(pointRows)
   assertHealthPointRowNumbers(pointRows)
   assertInsightPointRowOrder(pointRows)
