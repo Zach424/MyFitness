@@ -279,6 +279,32 @@ const assertExerciseWindowRowRelationships = (rows: ExerciseWindowRow[]) => {
   }
 }
 
+const exerciseWindowMonotonicFields = [
+  'session_count',
+  'completed_set_count',
+  'total_reps',
+  'volume_kg',
+  'active_seconds',
+  'distance_meters',
+] as const
+
+const assertExerciseWindowRowMonotonicity = (rows: ExerciseWindowRow[]) => {
+  const windows = ([7, 30, 90] as const).map((days) =>
+    rows.find((candidate) => candidate.days === days),
+  )
+  for (let index = 1; index < windows.length; index += 1) {
+    const shorter = windows[index - 1]
+    const longer = windows[index]
+    if (
+      exerciseWindowMonotonicFields.some(
+        (field) => Number(longer?.[field] ?? 0) < Number(shorter?.[field] ?? 0),
+      )
+    ) {
+      throw new Error('exercise insight window rows must preserve nested-set monotonicity')
+    }
+  }
+}
+
 const assertExercisePointRowRelationships = (rows: ExercisePointRow[]) => {
   if (
     rows.some((row) => {
@@ -505,6 +531,7 @@ export const buildExerciseInsight = (
   assertInsightWindowRowIdentities(windowRows)
   assertExerciseWindowRowNumbers(windowRows)
   assertExerciseWindowRowRelationships(windowRows)
+  assertExerciseWindowRowMonotonicity(windowRows)
   assertValidInsightPointRowTimes(pointRows)
   assertExercisePointRowNumbers(pointRows)
   assertExercisePointRowRelationships(pointRows)

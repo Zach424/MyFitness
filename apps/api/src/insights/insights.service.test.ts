@@ -404,8 +404,18 @@ describe('exercise insight projection', () => {
       completed_set_count: '4',
       total_reps: '40',
       volume_kg: '480.252',
-      active_seconds: '0',
-      distance_meters: '0',
+      active_seconds: '100',
+      distance_meters: '100',
+    }
+    const thirtyDayWindow = {
+      ...sevenDayWindow,
+      days: 30,
+      session_count: '9',
+      completed_set_count: '18',
+      total_reps: '180',
+      volume_kg: '2161.134',
+      active_seconds: '900',
+      distance_meters: '1000',
     }
     const ninetyDayWindow = {
       ...sevenDayWindow,
@@ -414,10 +424,12 @@ describe('exercise insight projection', () => {
       completed_set_count: '362',
       total_reps: '3620',
       volume_kg: '43462.806',
+      active_seconds: '18100',
+      distance_meters: '10000',
     }
     const insight = buildExerciseInsight(
       'goblet_squat',
-      [sevenDayWindow, ninetyDayWindow],
+      [sevenDayWindow, thirtyDayWindow, ninetyDayWindow],
       [futurePoint, ...points],
       'Asia/Shanghai',
       at,
@@ -425,7 +437,7 @@ describe('exercise insight projection', () => {
 
     expect(insight.identity?.name).toBe('纠正后的名称')
     expect(insight.windows[0]).toMatchObject({ days: 7, sessionCount: 2, volumeKg: 480.25 })
-    expect(insight.windows[1]).toMatchObject({ days: 30, sessionCount: 0 })
+    expect(insight.windows[1]).toMatchObject({ days: 30, sessionCount: 9 })
     expect(insight.series).toHaveLength(180)
     expect(insight.series[0]).toMatchObject({
       localDate: '2026-08-05',
@@ -449,11 +461,8 @@ describe('exercise insight projection', () => {
     })
     const reorderedWindows = buildExerciseInsight(
       'goblet_squat',
-      [
-        { ...sevenDayWindow, days: 90, session_count: '9', completed_set_count: '9' },
-        sevenDayWindow,
-      ],
-      points.slice(0, 9),
+      [ninetyDayWindow, sevenDayWindow, thirtyDayWindow],
+      points,
       'Asia/Shanghai',
       at,
     )
@@ -461,9 +470,27 @@ describe('exercise insight projection', () => {
       reorderedWindows.windows.map(({ days, sessionCount }) => ({ days, sessionCount })),
     ).toEqual([
       { days: 7, sessionCount: 2 },
-      { days: 30, sessionCount: 0 },
-      { days: 90, sessionCount: 9 },
+      { days: 30, sessionCount: 9 },
+      { days: 90, sessionCount: 181 },
     ])
+    for (const invalidThirtyDayWindow of [
+      { ...thirtyDayWindow, session_count: '1' },
+      { ...thirtyDayWindow, session_count: '2', completed_set_count: '3' },
+      { ...thirtyDayWindow, total_reps: '39' },
+      { ...thirtyDayWindow, volume_kg: '480.251' },
+      { ...thirtyDayWindow, active_seconds: '99' },
+      { ...thirtyDayWindow, distance_meters: '99' },
+    ]) {
+      expect(() =>
+        buildExerciseInsight(
+          'goblet_squat',
+          [sevenDayWindow, invalidThirtyDayWindow, ninetyDayWindow],
+          [],
+          'Asia/Shanghai',
+          at,
+        ),
+      ).toThrow('exercise insight window rows must preserve nested-set monotonicity')
+    }
     expect(() =>
       buildExerciseInsight(
         'goblet_squat',

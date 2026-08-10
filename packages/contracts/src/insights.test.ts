@@ -99,8 +99,8 @@ describe('exercise insight contract', () => {
         completedSetCount: 2,
         totalReps: 20,
         volumeKg: 240,
-        activeMinutes: 0,
-        distanceKm: 0,
+        activeMinutes: 10,
+        distanceKm: 1,
       })),
       series: [
         {
@@ -127,6 +127,30 @@ describe('exercise insight contract', () => {
     })
 
     expect(parsed.series[0]).toMatchObject({ completedSetCount: 2, totalSetCount: 3 })
+    for (const [field, value] of [
+      ['sessionCount', 0],
+      ['completedSetCount', 1],
+      ['totalReps', 19],
+      ['volumeKg', 239],
+      ['activeMinutes', 9],
+      ['distanceKm', 0.9],
+    ] as const) {
+      const nonMonotonicWindow = exerciseInsightSchema.safeParse({
+        ...parsed,
+        windows: parsed.windows.map((window, index) =>
+          index === 1 ? { ...window, [field]: value } : window,
+        ),
+      })
+      expect(nonMonotonicWindow.success).toBe(false)
+      if (!nonMonotonicWindow.success) {
+        expect(nonMonotonicWindow.error.issues).toContainEqual(
+          expect.objectContaining({
+            message: `exercise window ${field} must not decrease as days increase`,
+            path: ['windows', 1, field],
+          }),
+        )
+      }
+    }
     const impossibleWindowCounts = exerciseInsightSchema.safeParse({
       ...parsed,
       windows: parsed.windows.map((window, index) =>

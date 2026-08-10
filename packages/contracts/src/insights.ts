@@ -282,6 +282,34 @@ export const exerciseInsightWindowSchema = exerciseInsightMetricsSchema
     }
   })
 
+const exerciseInsightWindowMonotonicFields = [
+  'sessionCount',
+  'completedSetCount',
+  'totalReps',
+  'volumeKg',
+  'activeMinutes',
+  'distanceKm',
+] as const
+
+const validateExerciseInsightWindowMonotonicity = (
+  windows: Array<z.infer<typeof exerciseInsightWindowSchema>>,
+  ctx: z.RefinementCtx,
+) => {
+  for (let index = 1; index < windows.length; index += 1) {
+    const shorter = windows[index - 1]!
+    const longer = windows[index]!
+    exerciseInsightWindowMonotonicFields.forEach((field) => {
+      if (longer[field] < shorter[field]) {
+        ctx.addIssue({
+          code: 'custom',
+          message: `exercise window ${field} must not decrease as days increase`,
+          path: ['windows', index, field],
+        })
+      }
+    })
+  }
+}
+
 export const exerciseInsightIdentitySchema = z
   .object({
     name: z.string().trim().min(1).max(80),
@@ -532,6 +560,7 @@ export const exerciseInsightSchema = z
   .strict()
   .superRefine((insight, ctx) => {
     validateFixedInsightWindowDays(insight.windows, 'windows', ctx)
+    validateExerciseInsightWindowMonotonicity(insight.windows, ctx)
     validateInsightPointLocalDates(insight, ctx)
     validateInsightPointOrder(insight, ctx)
     validateUniqueInsightPointIds(insight.series, (point) => point.workoutId, 'workoutId', ctx)
