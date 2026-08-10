@@ -167,6 +167,38 @@ describe('exercise insight contract', () => {
         }),
       )
     }
+    const ascendingSeries = exerciseInsightSchema.safeParse({
+      ...parsed,
+      series: [
+        {
+          ...parsed.series[0]!,
+          workoutId: '00000000-0000-4000-8000-000000000002',
+          occurredAt: '2026-08-05T09:00:00.000Z',
+        },
+        parsed.series[0]!,
+      ],
+    })
+    expect(ascendingSeries.success).toBe(false)
+    if (!ascendingSeries.success) {
+      expect(ascendingSeries.error.issues).toContainEqual(
+        expect.objectContaining({
+          message: 'insight points must be ordered by occurredAt descending',
+          path: ['series', 1, 'occurredAt'],
+        }),
+      )
+    }
+    expect(
+      exerciseInsightSchema.safeParse({
+        ...parsed,
+        series: [
+          parsed.series[0]!,
+          {
+            ...parsed.series[0]!,
+            workoutId: '00000000-0000-4000-8000-000000000002',
+          },
+        ],
+      }).success,
+    ).toBe(true)
     const futurePoint = exerciseInsightSchema.safeParse({
       ...parsed,
       series: [{ ...parsed.series[0]!, occurredAt: '2026-08-05T13:00:00.000Z' }],
@@ -365,6 +397,26 @@ describe('health insight contract', () => {
         expect.objectContaining({
           message: 'insight point localDate must match occurredAt in the response timezone',
           path: ['series', 0, 'localDate'],
+        }),
+      )
+    }
+    const ascendingSeries = healthInsightSchema.safeParse({
+      ...parsed,
+      series: [
+        {
+          ...parsed.series[0]!,
+          recordId: '00000000-0000-4000-8000-000000000002',
+          occurredAt: '2026-08-05T09:00:00.000Z',
+        },
+        parsed.series[0]!,
+      ],
+    })
+    expect(ascendingSeries.success).toBe(false)
+    if (!ascendingSeries.success) {
+      expect(ascendingSeries.error.issues).toContainEqual(
+        expect.objectContaining({
+          message: 'insight points must be ordered by occurredAt descending',
+          path: ['series', 1, 'occurredAt'],
         }),
       )
     }

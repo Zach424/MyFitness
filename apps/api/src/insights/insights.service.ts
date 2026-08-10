@@ -195,6 +195,14 @@ const assertValidInsightTimezone = (timezone: string, at: Date) => {
   }
 }
 
+const assertInsightPointRowOrder = (rows: Array<{ occurred_at: Date }>) => {
+  for (let index = 1; index < rows.length; index += 1) {
+    if (rows[index]!.occurred_at.getTime() > rows[index - 1]!.occurred_at.getTime()) {
+      throw new Error('insight point rows must be ordered by occurred_at descending')
+    }
+  }
+}
+
 const shiftLocalDate = (localDate: string, days: number) => {
   const [year, month, day] = localDate.split('-').map(Number)
   return new Date(Date.UTC(year!, month! - 1, day! + days)).toISOString().slice(0, 10)
@@ -245,6 +253,7 @@ export const buildExerciseInsight = (
   at = new Date(),
 ): ExerciseInsight => {
   assertValidInsightTimezone(timezone, at)
+  assertInsightPointRowOrder(pointRows)
   const eligiblePointRows = pointRows.filter((row) => row.occurred_at.getTime() <= at.getTime())
   const series = eligiblePointRows.slice(0, 180).map((row) => exercisePoint(row, timezone))
   return {
@@ -382,6 +391,7 @@ export const buildHealthInsight = (
   at = new Date(),
 ): HealthInsight => {
   assertValidInsightTimezone(timezone, at)
+  assertInsightPointRowOrder(pointRows)
   const eligiblePointRows = pointRows.filter((row) => row.occurred_at.getTime() <= at.getTime())
   const series = eligiblePointRows.slice(0, 180).map((row) => healthPoint(row, timezone))
   return {

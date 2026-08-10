@@ -443,6 +443,13 @@ describe('exercise insight projection', () => {
     expect(() => buildExerciseInsight('goblet_squat', [], [], 'Invalid/Timezone', at)).toThrow(
       'insight timezone must be a valid IANA timezone',
     )
+    const hiddenAscendingPoints = [
+      ...points.slice(0, 180),
+      { ...points[180]!, occurred_at: points[0]!.occurred_at },
+    ]
+    expect(() =>
+      buildExerciseInsight('goblet_squat', [], hiddenAscendingPoints, 'Asia/Shanghai', at),
+    ).toThrow('insight point rows must be ordered by occurred_at descending')
   })
 })
 
@@ -580,5 +587,12 @@ describe('health insight projection', () => {
     expect(() => buildHealthInsight('body.weight', [], [], 'Invalid/Timezone', at)).toThrow(
       'insight timezone must be a valid IANA timezone',
     )
+    const hiddenAscendingPoints = [
+      ...points.slice(0, 180),
+      { ...points[180]!, occurred_at: points[0]!.occurred_at },
+    ]
+    expect(() =>
+      buildHealthInsight('body.weight', [], hiddenAscendingPoints, 'Asia/Shanghai', at),
+    ).toThrow('insight point rows must be ordered by occurred_at descending')
   })
 })

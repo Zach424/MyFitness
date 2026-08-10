@@ -333,6 +333,24 @@ const validateInsightPointLocalDates = (
   })
 }
 
+const validateInsightPointOrder = (
+  insight: { series: Array<{ occurredAt: string }> },
+  ctx: z.RefinementCtx,
+) => {
+  for (let index = 1; index < insight.series.length; index += 1) {
+    if (
+      Date.parse(insight.series[index]!.occurredAt) >
+      Date.parse(insight.series[index - 1]!.occurredAt)
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'insight points must be ordered by occurredAt descending',
+        path: ['series', index, 'occurredAt'],
+      })
+    }
+  }
+}
+
 export const exerciseInsightSchema = z
   .object({
     generatedAt: z.string().datetime({ offset: true }),
@@ -347,6 +365,7 @@ export const exerciseInsightSchema = z
   .superRefine((insight, ctx) => {
     validateFixedInsightWindowDays(insight.windows, 'windows', ctx)
     validateInsightPointLocalDates(insight, ctx)
+    validateInsightPointOrder(insight, ctx)
     validateInsightOccurrenceBoundary(insight, ctx)
   })
 
@@ -596,6 +615,7 @@ export const healthInsightSchema = z
   .superRefine((insight, ctx) => {
     validateFixedInsightWindowDays(insight.windows, 'windows', ctx)
     validateInsightPointLocalDates(insight, ctx)
+    validateInsightPointOrder(insight, ctx)
     validateInsightOccurrenceBoundary(insight, ctx)
   })
 
