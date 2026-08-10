@@ -129,6 +129,26 @@ describe('health insight API with PostgreSQL', () => {
     expect(initial.body.windows[2].recordedDays).toBe(
       new Set(initial.body.series.map((point: { localDate: string }) => point.localDate)).size,
     )
+    const referenceTime = Date.parse('2025-08-05T12:00:00.000Z')
+    for (const window of initial.body.windows as Array<{
+      days: 7 | 30 | 90
+      recordCount: number
+      recordedDays: number
+      statistics: { minimum: number; maximum: number; average: number }
+    }>) {
+      const subset = initial.body.series.filter(
+        (point: { occurredAt: string }) =>
+          Date.parse(point.occurredAt) >= referenceTime - window.days * 86_400_000,
+      ) as Array<{ canonicalValue: number; localDate: string }>
+      const values = subset.map((point) => point.canonicalValue)
+      expect(window.recordCount).toBe(subset.length)
+      expect(window.recordedDays).toBe(new Set(subset.map((point) => point.localDate)).size)
+      expect(window.statistics).toEqual({
+        minimum: Math.min(...values),
+        maximum: Math.max(...values),
+        average: values.reduce((total, value) => total + value, 0) / values.length,
+      })
+    }
     expect(initial.body.series[0]).toMatchObject({
       recordId: recent.body.id,
       metric: 'body.weight',

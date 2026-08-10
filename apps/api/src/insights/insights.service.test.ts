@@ -977,9 +977,19 @@ describe('health insight projection', () => {
       record_count: '180',
       average: '69.0055555555555556',
     }
+    const exactWindowRows = [
+      {
+        ...exactNinetyDayWindow,
+        days: 7,
+        record_count: '169',
+        average: '69.0059171597633136',
+      },
+      { ...exactNinetyDayWindow, days: 30 },
+      exactNinetyDayWindow,
+    ]
     const exactPrefix = buildHealthInsight(
       'body.weight',
-      [exactNinetyDayWindow],
+      exactWindowRows,
       points.slice(0, 180),
       'Asia/Shanghai',
       at,
@@ -987,7 +997,7 @@ describe('health insight projection', () => {
     expect(exactPrefix).toMatchObject({ hasMore: false })
     expect(exactPrefix.series).toHaveLength(180)
     expect(() =>
-      buildHealthInsight('body.weight', [exactNinetyDayWindow], points, 'Asia/Shanghai', at),
+      buildHealthInsight('body.weight', exactWindowRows, points, 'Asia/Shanghai', at),
     ).toThrow('health insight 90-day window must match the point truncation receipt')
     expect(() =>
       buildHealthInsight(
@@ -1161,20 +1171,23 @@ describe('health insight projection', () => {
       maximum: '70',
       average: '69.5',
     }
+    const completeWindows = ([7, 30, 90] as const).map((days) => ({ ...completeWindow, days }))
 
     expect(
-      buildHealthInsight('body.weight', [completeWindow], points, 'Asia/Shanghai', at).windows[2]
+      buildHealthInsight('body.weight', completeWindows, points, 'Asia/Shanghai', at).windows[2]
         .statistics,
     ).toEqual({ minimum: 69, maximum: 70, average: 69.5 })
     expect(
-      buildHealthInsight('body.weight', [completeWindow], points, 'America/New_York', at).windows[2]
+      buildHealthInsight('body.weight', completeWindows, points, 'America/New_York', at).windows[2]
         .recordedDays,
     ).toBe(1)
     for (const statistics of [{ minimum: '68.9' }, { maximum: '70.1' }, { average: '69.6' }]) {
       expect(() =>
         buildHealthInsight(
           'body.weight',
-          [{ ...completeWindow, ...statistics }],
+          completeWindows.map((window) =>
+            window.days === 90 ? { ...window, ...statistics } : window,
+          ),
           points,
           'Asia/Shanghai',
           at,
@@ -1184,7 +1197,9 @@ describe('health insight projection', () => {
     expect(() =>
       buildHealthInsight(
         'body.weight',
-        [{ ...completeWindow, recorded_days: '2' }],
+        completeWindows.map((window) =>
+          window.days === 90 ? { ...window, recorded_days: '2' } : window,
+        ),
         points,
         'America/New_York',
         at,
@@ -1199,11 +1214,130 @@ describe('health insight projection', () => {
     expect(
       buildHealthInsight(
         'body.weight',
-        [{ ...completeWindow, minimum: '-4', maximum: '-2', average: '-3' }],
+        completeWindows.map((window) => ({
+          ...window,
+          minimum: '-4',
+          maximum: '-2',
+          average: '-3',
+        })),
         negativePoints,
         'Asia/Shanghai',
         at,
       ).windows[2].statistics,
     ).toEqual({ minimum: -4, maximum: -2, average: -3 })
+  })
+
+  it('reconciles complete health point subsets at short-window boundaries', () => {
+    const at = new Date('2026-08-05T12:00:00.000Z')
+    const valuesAndTimes = [
+      [70, at.getTime()],
+      [68, at.getTime() - 7 * 86_400_000],
+      [66, at.getTime() - 7 * 86_400_000 - 1],
+      [64, at.getTime() - 30 * 86_400_000],
+      [62, at.getTime() - 30 * 86_400_000 - 1],
+    ] as const
+    const points = valuesAndTimes.map(([value, occurredAt], index) => ({
+      record_id: `00000000-0000-4000-810${index}-000000000001`,
+      metric: 'body.weight' as const,
+      record_revision: 1,
+      occurred_at: new Date(occurredAt),
+      timezone: 'Asia/Shanghai',
+      canonical_value: String(value),
+      canonical_unit: 'kg' as const,
+      display_value: String(value),
+      display_unit: 'kg' as const,
+      source_kind: 'manual' as const,
+      source_metadata: {},
+    }))
+    const windows = [
+      {
+        days: 7,
+        record_count: '2',
+        recorded_days: '2',
+        minimum: '68',
+        maximum: '70',
+        average: '69',
+      },
+      {
+        days: 30,
+        record_count: '4',
+        recorded_days: '3',
+        minimum: '64',
+        maximum: '70',
+        average: '67',
+      },
+      {
+        days: 90,
+        record_count: '5',
+        recorded_days: '3',
+        minimum: '62',
+        maximum: '70',
+        average: '66',
+      },
+    ]
+
+    const insight = buildHealthInsight('body.weight', windows, points, 'Asia/Shanghai', at)
+    expect(insight.windows.map((window) => window.recordCount)).toEqual([2, 4, 5])
+    expect(insight.windows.map((window) => window.recordedDays)).toEqual([2, 3, 3])
+    for (const [windowIndex, override, message] of [
+      [0, { record_count: '3' }, 'health insight short windows must match complete point counts'],
+      [
+        0,
+        { recorded_days: '1' },
+        'health insight short windows must match complete point recorded days',
+      ],
+      [0, { average: '69.1' }, 'health insight short windows must match complete point statistics'],
+    ] as const) {
+      expect(() =>
+        buildHealthInsight(
+          'body.weight',
+          windows.map((window, index) =>
+            index === windowIndex ? { ...window, ...override } : window,
+          ),
+          points,
+          'Asia/Shanghai',
+          at,
+        ),
+      ).toThrow(message)
+    }
+
+    const emptyShortWindows = [
+      {
+        days: 7,
+        record_count: '0',
+        recorded_days: '0',
+        minimum: null,
+        maximum: null,
+        average: null,
+      },
+      {
+        days: 30,
+        record_count: '0',
+        recorded_days: '0',
+        minimum: null,
+        maximum: null,
+        average: null,
+      },
+      {
+        days: 90,
+        record_count: '1',
+        recorded_days: '1',
+        minimum: '62',
+        maximum: '62',
+        average: '62',
+      },
+    ]
+    expect(
+      buildHealthInsight(
+        'body.weight',
+        emptyShortWindows,
+        [points[4]!],
+        'Asia/Shanghai',
+        at,
+      ).windows.slice(0, 2),
+    ).toEqual([
+      expect.objectContaining({ recordCount: 0, recordedDays: 0 }),
+      expect.objectContaining({ recordCount: 0, recordedDays: 0 }),
+    ])
   })
 })

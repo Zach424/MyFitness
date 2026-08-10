@@ -600,6 +600,56 @@ const assertHealthWindowPointRecordedDaysReceipt = (
   }
 }
 
+const millisecondsPerDay = 86_400_000
+
+const healthPointRowsInWindow = (rows: HealthPointRow[], at: Date, days: 7 | 30) => {
+  const lowerBoundary = at.getTime() - days * millisecondsPerDay
+  return rows.filter((row) => row.occurred_at.getTime() >= lowerBoundary)
+}
+
+const assertHealthShortWindowPointReceipts = (
+  windowRows: HealthWindowRow[],
+  eligiblePointRows: HealthPointRow[],
+  timezone: string,
+  at: Date,
+) => {
+  const ninetyDayRecordCount = Number(windowRows.find((row) => row.days === 90)?.record_count ?? 0)
+  if (ninetyDayRecordCount > 180) return
+
+  const formatter = createLocalDayFormatter(timezone)
+  for (const days of [7, 30] as const) {
+    const window = windowRows.find((row) => row.days === days)
+    const points = healthPointRowsInWindow(eligiblePointRows, at, days)
+    if (Number(window?.record_count ?? 0) !== points.length) {
+      throw new Error('health insight short windows must match complete point counts')
+    }
+
+    const recordedDays = new Set(points.map((row) => formatter.format(row.occurred_at))).size
+    if (Number(window?.recorded_days ?? 0) !== recordedDays) {
+      throw new Error('health insight short windows must match complete point recorded days')
+    }
+    if (points.length === 0) continue
+
+    const values = points.map((row) => Number(row.canonical_value))
+    const minimum = Math.min(...values)
+    const maximum = Math.max(...values)
+    const average = values.reduce((total, value) => total + value, 0) / values.length
+    if (
+      window?.minimum === null ||
+      window?.minimum === undefined ||
+      window.maximum === null ||
+      window.maximum === undefined ||
+      window.average === null ||
+      window.average === undefined ||
+      !sourceHealthStatisticMatches(window.minimum, values, minimum) ||
+      !sourceHealthStatisticMatches(window.maximum, values, maximum) ||
+      !sourceHealthStatisticMatches(window.average, values, average)
+    ) {
+      throw new Error('health insight short windows must match complete point statistics')
+    }
+  }
+}
+
 const shiftLocalDate = (localDate: string, days: number) => {
   const [year, month, day] = localDate.split('-').map(Number)
   return new Date(Date.UTC(year!, month! - 1, day! + days)).toISOString().slice(0, 10)
@@ -869,6 +919,7 @@ export const buildHealthInsight = (
   assertHealthPointWindowTruncationReceipt(windowRows, eligiblePointRows)
   assertHealthWindowPointStatisticsReceipt(windowRows, eligiblePointRows)
   assertHealthWindowPointRecordedDaysReceipt(windowRows, eligiblePointRows, timezone)
+  assertHealthShortWindowPointReceipts(windowRows, eligiblePointRows, timezone, at)
   assertHealthPointCanonicalUnitConsistency(eligiblePointRows)
   const localDayFormatter = createLocalDayFormatter(timezone)
   const series = eligiblePointRows.slice(0, 180).map((row) => healthPoint(row, localDayFormatter))

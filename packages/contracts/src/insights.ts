@@ -614,6 +614,87 @@ const validateHealthInsightWindowPointRecordedDaysReceipt = (
   }
 }
 
+const healthPointsInWindow = <Point extends { occurredAt: string }>(
+  series: Point[],
+  referenceTime: number,
+  days: 7 | 30,
+) => {
+  const lowerBoundary = referenceTime - days * 86_400_000
+  return series.filter((point) => Date.parse(point.occurredAt) >= lowerBoundary)
+}
+
+const validateHealthInsightShortWindowPointReceipts = (
+  insight: {
+    generatedAt: string
+    windows: Array<{
+      days: number
+      recordCount: number
+      recordedDays: number
+      statistics: { minimum: number | null; maximum: number | null; average: number | null }
+    }>
+    series: Array<{ occurredAt: string; localDate: string; canonicalValue: number }>
+  },
+  ctx: z.RefinementCtx,
+) => {
+  const ninetyDayWindow = insight.windows.find((window) => window.days === 90)
+  if (
+    !ninetyDayWindow ||
+    ninetyDayWindow.recordCount > 180 ||
+    insight.series.length !== ninetyDayWindow.recordCount
+  ) {
+    return
+  }
+
+  const referenceTime = Date.parse(insight.generatedAt)
+  for (const days of [7, 30] as const) {
+    const windowIndex = insight.windows.findIndex((window) => window.days === days)
+    if (windowIndex < 0) continue
+    const window = insight.windows[windowIndex]!
+    const points = healthPointsInWindow(insight.series, referenceTime, days)
+    if (window.recordCount !== points.length) {
+      ctx.addIssue({
+        code: 'custom',
+        message: `${days}-day recordCount must match the complete health point subset`,
+        path: ['windows', windowIndex, 'recordCount'],
+      })
+    }
+
+    const recordedDays = new Set(points.map((point) => point.localDate)).size
+    if (window.recordedDays !== recordedDays) {
+      ctx.addIssue({
+        code: 'custom',
+        message: `${days}-day recordedDays must match the complete health point local-date subset`,
+        path: ['windows', windowIndex, 'recordedDays'],
+      })
+    }
+    if (points.length === 0) continue
+
+    const values = points.map((point) => point.canonicalValue)
+    const derived = {
+      minimum: Math.min(...values),
+      maximum: Math.max(...values),
+      average: values.reduce((total, value) => total + value, 0) / values.length,
+    }
+    const sumAbs = values.reduce((total, value) => total + Math.abs(value), 0)
+    for (const field of ['minimum', 'maximum', 'average'] as const) {
+      const windowStatistic = window.statistics[field]
+      if (windowStatistic === null) continue
+      const floatingTolerance =
+        Number.EPSILON *
+        Math.max(1, Math.abs(windowStatistic), sumAbs, Math.abs(derived[field])) *
+        (values.length + 2) *
+        4
+      if (Math.abs(windowStatistic - derived[field]) > 0.00005 + floatingTolerance) {
+        ctx.addIssue({
+          code: 'custom',
+          message: `${days}-day health ${field} must match the complete canonical point subset within rounding tolerance`,
+          path: ['windows', windowIndex, 'statistics', field],
+        })
+      }
+    }
+  }
+}
+
 const validateExerciseInsightWindowPointReceipt = (
   insight: {
     windows: Array<{ days: number; sessionCount: number }>
@@ -1113,6 +1194,7 @@ export const healthInsightSchema = z
     validateHealthInsightWindowPointReceipt(insight, ctx)
     validateHealthInsightWindowPointStatisticsReceipt(insight, ctx)
     validateHealthInsightWindowPointRecordedDaysReceipt(insight, ctx)
+    validateHealthInsightShortWindowPointReceipts(insight, ctx)
     validateInsightOccurrenceBoundary(insight, ctx)
   })
 

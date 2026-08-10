@@ -875,17 +875,32 @@ describe('health insight contract', () => {
       ...parsed,
       windows: parsed.windows.map((window, index) => ({
         ...window,
-        recordCount: 2,
-        statistics: { minimum: 69, maximum: 70, average: [69.9, 69.1, 69.5][index]! },
+        recordCount: index + 1,
+        recordedDays: index + 1,
+        statistics: [
+          { minimum: 70, maximum: 70, average: 70 },
+          { minimum: 60, maximum: 70, average: 65 },
+          { minimum: 60, maximum: 80, average: 70 },
+        ][index]!,
       })),
       series: [
         parsed.series[0]!,
         {
           ...parsed.series[0]!,
           recordId: '00000000-0000-4000-8000-000000000002',
-          occurredAt: '2026-08-05T09:00:00.000Z',
-          canonicalValue: 69,
-          displayValue: 69,
+          occurredAt: '2026-07-26T09:00:00.000Z',
+          localDate: '2026-07-26',
+          canonicalValue: 60,
+          displayValue: 60,
+          displayUnit: 'kg',
+        },
+        {
+          ...parsed.series[0]!,
+          recordId: '00000000-0000-4000-8000-000000000003',
+          occurredAt: '2026-06-26T09:00:00.000Z',
+          localDate: '2026-06-26',
+          canonicalValue: 80,
+          displayValue: 80,
           displayUnit: 'kg',
         },
       ],
@@ -1179,6 +1194,129 @@ describe('health insight contract', () => {
         }),
       )
     }
+  })
+
+  it('binds short health windows to complete point subsets at closed boundaries', () => {
+    const generatedAt = '2026-08-05T12:00:00.000Z'
+    const referenceTime = Date.parse(generatedAt)
+    const valuesAndTimes = [
+      [70, referenceTime, '2026-08-05'],
+      [68, referenceTime - 7 * 86_400_000, '2026-07-29'],
+      [66, referenceTime - 7 * 86_400_000 - 1, '2026-07-29'],
+      [64, referenceTime - 30 * 86_400_000, '2026-07-06'],
+      [62, referenceTime - 30 * 86_400_000 - 1, '2026-07-06'],
+    ] as const
+    const series = valuesAndTimes.map(([value, occurredAt, localDate], index) => ({
+      recordId: `00000000-0000-4000-820${index}-000000000001`,
+      metric: 'body.weight' as const,
+      recordRevision: 1,
+      occurredAt: new Date(occurredAt).toISOString(),
+      localDate,
+      recordTimezone: 'Asia/Shanghai',
+      canonicalValue: value,
+      canonicalUnit: 'kg' as const,
+      displayValue: value,
+      displayUnit: 'kg' as const,
+      source: { kind: 'manual' as const },
+    }))
+    const windows = [
+      {
+        days: 7,
+        recordCount: 2,
+        recordedDays: 2,
+        statistics: { minimum: 68, maximum: 70, average: 69 },
+      },
+      {
+        days: 30,
+        recordCount: 4,
+        recordedDays: 3,
+        statistics: { minimum: 64, maximum: 70, average: 67 },
+      },
+      {
+        days: 90,
+        recordCount: 5,
+        recordedDays: 3,
+        statistics: { minimum: 62, maximum: 70, average: 66 },
+      },
+    ]
+    const complete = healthInsightSchema.parse({
+      generatedAt,
+      timezone: 'Asia/Shanghai',
+      metric: 'body.weight',
+      canonicalUnit: 'kg',
+      windows,
+      series,
+      hasMore: false,
+    })
+
+    for (const [field, value, message, path] of [
+      [
+        'recordCount',
+        3,
+        '7-day recordCount must match the complete health point subset',
+        ['windows', 0, 'recordCount'],
+      ],
+      [
+        'recordedDays',
+        1,
+        '7-day recordedDays must match the complete health point local-date subset',
+        ['windows', 0, 'recordedDays'],
+      ],
+    ] as const) {
+      const result = healthInsightSchema.safeParse({
+        ...complete,
+        windows: complete.windows.map((window, index) =>
+          index === 0 ? { ...window, [field]: value } : window,
+        ),
+      })
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error.issues).toContainEqual(expect.objectContaining({ message, path }))
+      }
+    }
+    const wrongAverage = healthInsightSchema.safeParse({
+      ...complete,
+      windows: complete.windows.map((window, index) =>
+        index === 0 ? { ...window, statistics: { ...window.statistics, average: 69.1 } } : window,
+      ),
+    })
+    expect(wrongAverage.success).toBe(false)
+    if (!wrongAverage.success) {
+      expect(wrongAverage.error.issues).toContainEqual(
+        expect.objectContaining({
+          message:
+            '7-day health average must match the complete canonical point subset within rounding tolerance',
+          path: ['windows', 0, 'statistics', 'average'],
+        }),
+      )
+    }
+
+    expect(
+      healthInsightSchema.safeParse({
+        ...complete,
+        windows: [
+          {
+            days: 7,
+            recordCount: 0,
+            recordedDays: 0,
+            statistics: { minimum: null, maximum: null, average: null },
+          },
+          {
+            days: 30,
+            recordCount: 0,
+            recordedDays: 0,
+            statistics: { minimum: null, maximum: null, average: null },
+          },
+          {
+            days: 90,
+            recordCount: 1,
+            recordedDays: 1,
+            statistics: { minimum: 62, maximum: 62, average: 62 },
+          },
+        ],
+        series: [series[4]!],
+      }).success,
+    ).toBe(true)
   })
 
   it('rejects invented statistics for an empty metric', () => {

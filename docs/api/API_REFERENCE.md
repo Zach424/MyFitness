@@ -267,6 +267,8 @@
 
 健康完整记录日收据：同一未截断前提下，90 日 `recordedDays` 必须精确等于全部点按响应 `timezone` 投影后去重的自然日数量。来源使用与 SQL `occurred_at AT TIME ZONE` 等价的 IANA 日期格式化，响应在逐点 `localDate` 已验证后对集合计数；同日多点和夏令时重复小时只算一个自然日。`recordCount > 180` 时两层都跳过，不从有限前缀复算；冲突定位 90 日 `recordedDays`，不自动修改窗口或点。
 
+健康短窗口子集收据：当 90 日 `recordCount <= 180` 且完整点集的点数、统计和记录日收据均成立时，来源按与 SQL 相同的绝对时刻闭区间 `occurred_at >= at - days` 从该点集筛出 7 日和 30 日子集，响应按 `generatedAt` 与公开点 `occurredAt` 重建相同子集。每个短窗口的 `recordCount`、按响应时区去重的 `recordedDays`、minimum、maximum 与 average 都必须与其子集一致；边界时刻包含，边界前 1 ms 排除，空子集保持零计数和 `null` 统计。整数精确比较，响应四位统计沿用 0.00005 半单位及有界 IEEE 误差；`recordCount > 180` 时全部跳过，不从截断前缀推断短窗口。
+
 ## 11. 周计划与回看接口
 
 | 方法与路径                                                       | 参数                                   | 功能与成功响应                                | 失败                    |
