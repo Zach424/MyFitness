@@ -2,6 +2,7 @@ import * as z from 'zod'
 
 import { exerciseEquipmentSchema, exerciseTrackingModeSchema } from './exercise-catalog'
 import {
+  isPersistedMeasurementConversionConsistent,
   metricCodeSchema,
   metricUnitDefinitions,
   recordSourceSchema,
@@ -776,18 +777,38 @@ export const healthInsightSchema = z
     validateUniqueInsightPointIds(insight.series, (point) => point.recordId, 'recordId', ctx)
     const metricUnits = metricUnitDefinitions[insight.metric]
     insight.series.forEach((point, index) => {
-      if (point.canonicalUnit !== metricUnits.canonicalUnit) {
+      const canonicalUnitMatches = point.canonicalUnit === metricUnits.canonicalUnit
+      const displayUnitAllowed = (metricUnits.allowedUnits as readonly string[]).includes(
+        point.displayUnit,
+      )
+      if (!canonicalUnitMatches) {
         ctx.addIssue({
           code: 'custom',
           message: 'health insight canonicalUnit must match the metric definition',
           path: ['series', index, 'canonicalUnit'],
         })
       }
-      if (!(metricUnits.allowedUnits as readonly string[]).includes(point.displayUnit)) {
+      if (!displayUnitAllowed) {
         ctx.addIssue({
           code: 'custom',
           message: 'health insight displayUnit must be allowed for the metric',
           path: ['series', index, 'displayUnit'],
+        })
+      }
+      if (
+        canonicalUnitMatches &&
+        displayUnitAllowed &&
+        !isPersistedMeasurementConversionConsistent(
+          point.canonicalValue,
+          point.canonicalUnit,
+          point.displayValue,
+          point.displayUnit,
+        )
+      ) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'health insight values must match the persisted unit conversion',
+          path: ['series', index, 'canonicalValue'],
         })
       }
     })

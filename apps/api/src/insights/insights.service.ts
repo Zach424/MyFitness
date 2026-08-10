@@ -26,6 +26,7 @@ import {
   confirmedHealthInsightSourceSchema,
   exerciseInsightIdentitySchema,
   healthInsightRecordTimezoneSchema,
+  isPersistedMeasurementConversionConsistent,
   personalStateLedgerPolicyVersion,
   subjectiveRecoveryMetrics,
   unitCodeSchema,
@@ -620,6 +621,22 @@ const assertHealthPointMetricUnits = (metric: MetricCode, rows: HealthPointRow[]
   }
 }
 
+const assertHealthPointMeasurementConversions = (rows: HealthPointRow[]) => {
+  if (
+    rows.some(
+      (row) =>
+        !isPersistedMeasurementConversionConsistent(
+          Number(row.canonical_value),
+          row.canonical_unit,
+          Number(row.display_value),
+          row.display_unit,
+        ),
+    )
+  ) {
+    throw new Error('health insight point rows must have consistent persisted value conversions')
+  }
+}
+
 export const buildHealthInsight = (
   metric: MetricCode,
   windowRows: HealthWindowRow[],
@@ -637,6 +654,7 @@ export const buildHealthInsight = (
   assertValidInsightPointRowIds(pointRows, (row) => row.record_id)
   assertValidHealthPointRowProvenance(pointRows)
   assertHealthPointMetricUnits(metric, pointRows)
+  assertHealthPointMeasurementConversions(pointRows)
   assertInsightPointRowOrder(pointRows)
   assertUniqueInsightPointRowIds(pointRows, (row) => row.record_id)
   const eligiblePointRows = pointRows.filter((row) => row.occurred_at.getTime() <= at.getTime())

@@ -160,14 +160,16 @@ purpose：`terms,privacy,health_data,ai_plan_explanation,food_photo_analysis,pro
 | --------- | ------------------------------------------------------------- | --------------------------------------- |
 | 标识/归属 | `id,user_id`                                                  | PK；user FK                             |
 | 指标      | `metric`                                                      | 身体或恢复指标码                        |
-| 标准值    | `canonical_value numeric,canonical_unit text`                 | 聚合与跨单位比较                        |
-| 原展示值  | `display_value numeric,display_unit text`                     | 保留用户当时输入                        |
+| 标准值    | `canonical_value numeric(14,4),canonical_unit text`           | 聚合与跨单位比较                        |
+| 原展示值  | `display_value numeric(14,4),display_unit text`               | 保留用户当时输入                        |
 | 来源      | `source_kind,source_metadata jsonb,confidence numeric,status` | 区分手动、设备、导入、AI 估计与确认状态 |
 | 时间      | `occurred_at timestamptz,timezone text`                       | 精确时间和本地日依据                    |
 | 并发/幂等 | `revision,idempotency_key,request_hash char`                  | 乐观锁和创建去重                        |
 | 生命周期  | `created_at,updated_at,deleted_at`                            | deleted_at 为软删除                     |
 
 唯一 `(user_id,idempotency_key)`。当前列表索引 `(user_id,occurred_at desc,created_at desc,id desc) WHERE deleted_at IS NULL` 支持稳定游标；`(user_id,metric,occurred_at desc)` 支持单指标窗口。
+
+主表与修订表的规范/展示值列都固定为 `NUMERIC(14,4)`。共享 `measurementPersistenceDecimalPlaces` 驱动只读换算一致性容差，迁移漂移测试同时锁定两张表的精度；容差只吸收两列持久化舍入和浮点计算余量，不放宽健康范围，也不把错误历史值自动重写。
 
 ### 6.2 `health_record_revisions`
 

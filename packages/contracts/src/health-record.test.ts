@@ -5,6 +5,10 @@ import {
   createHealthRecordBaseSchema,
   createHealthRecordSchema,
   expectedRevisionHeaderSchema,
+  isPersistedMeasurementConversionConsistent,
+  metricUnitDefinitions,
+  persistedMeasurementConversionTolerance,
+  unitCanonicalConversionDefinitions,
   updateHealthRecordSchema,
 } from './health-record'
 
@@ -83,5 +87,23 @@ describe('health-record contract', () => {
     expect(schema.type).toBe('object')
     expect(schema.required).toContain('metric')
     expect(schema.properties?.source).toBeDefined()
+  })
+
+  it('derives persisted conversion tolerance from NUMERIC(14,4) rounding', () => {
+    for (const definition of Object.values(metricUnitDefinitions)) {
+      for (const unit of definition.allowedUnits) {
+        expect(unitCanonicalConversionDefinitions[unit].canonicalUnit).toBe(
+          definition.canonicalUnit,
+        )
+      }
+    }
+    expect(persistedMeasurementConversionTolerance('hour')).toBeCloseTo(0.00305, 10)
+    expect(isPersistedMeasurementConversionConsistent(72.5748, 'kg', 160, 'lb')).toBe(true)
+    expect(isPersistedMeasurementConversionConsistent(72.575, 'kg', 160, 'lb')).toBe(false)
+    expect(isPersistedMeasurementConversionConsistent(427.407, 'minute', 7.1235, 'hour')).toBe(true)
+    expect(isPersistedMeasurementConversionConsistent(427.403, 'minute', 7.1235, 'hour')).toBe(
+      false,
+    )
+    expect(isPersistedMeasurementConversionConsistent(72.5748, 'cm', 160, 'lb')).toBe(false)
   })
 })

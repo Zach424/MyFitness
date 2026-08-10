@@ -484,7 +484,7 @@ describe('health insight contract', () => {
           recordTimezone: 'America/New_York',
           canonicalValue: 70,
           canonicalUnit: 'kg',
-          displayValue: 154.32,
+          displayValue: 154.3236,
           displayUnit: 'lb',
           source: { kind: 'device', metadata: { deviceName: 'Local test scale' } },
         },
@@ -557,6 +557,19 @@ describe('health insight contract', () => {
         expect.objectContaining({
           message: 'health insight displayUnit must be allowed for the metric',
           path: ['series', 0, 'displayUnit'],
+        }),
+      )
+    }
+    const inconsistentConversion = healthInsightSchema.safeParse({
+      ...parsed,
+      series: [{ ...parsed.series[0]!, canonicalValue: 160, displayValue: 160 }],
+    })
+    expect(inconsistentConversion.success).toBe(false)
+    if (!inconsistentConversion.success) {
+      expect(inconsistentConversion.error.issues).toContainEqual(
+        expect.objectContaining({
+          message: 'health insight values must match the persisted unit conversion',
+          path: ['series', 0, 'canonicalValue'],
         }),
       )
     }

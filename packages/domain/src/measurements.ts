@@ -1,4 +1,9 @@
-import { metricUnitDefinitions, type MetricCode, type UnitCode } from '@myfitness/contracts'
+import {
+  convertMeasurementValueToCanonical,
+  metricUnitDefinitions,
+  type MetricCode,
+  type UnitCode,
+} from '@myfitness/contracts'
 
 type MetricDefinition = {
   canonicalUnit: UnitCode
@@ -55,14 +60,6 @@ export const metricDefinitions: Record<MetricCode, MetricDefinition> = {
 
 const roundCanonical = (value: number) => Math.round((value + Number.EPSILON) * 10_000) / 10_000
 
-const convertUnit = (value: number, unit: UnitCode, canonicalUnit: UnitCode) => {
-  if (unit === canonicalUnit) return value
-  if (unit === 'lb' && canonicalUnit === 'kg') return value * 0.45359237
-  if (unit === 'in' && canonicalUnit === 'cm') return value * 2.54
-  if (unit === 'hour' && canonicalUnit === 'minute') return value * 60
-  throw new MeasurementError(`cannot convert ${unit} to ${canonicalUnit}`)
-}
-
 export class MeasurementError extends Error {
   constructor(message: string) {
     super(message)
@@ -77,7 +74,7 @@ export const normalizeMeasurement = (metric: MetricCode, value: number, unit: Un
     throw new MeasurementError(`${unit} is not allowed for ${metric}`)
   }
 
-  const canonicalValue = roundCanonical(convertUnit(value, unit, definition.canonicalUnit))
+  const canonicalValue = roundCanonical(convertMeasurementValueToCanonical(value, unit))
   if (canonicalValue < definition.min || canonicalValue > definition.max) {
     throw new MeasurementError(
       `${metric} must be between ${definition.min} and ${definition.max} ${definition.canonicalUnit}`,

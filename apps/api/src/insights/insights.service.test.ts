@@ -670,7 +670,7 @@ describe('health insight projection', () => {
       timezone: 'America/New_York',
       canonical_value: index === 0 ? '70' : '69',
       canonical_unit: 'kg' as const,
-      display_value: index === 0 ? '154.3235835' : '69',
+      display_value: index === 0 ? '154.3236' : '69',
       display_unit: index === 0 ? ('lb' as const) : ('kg' as const),
       source_kind: 'device' as const,
       source_metadata: { deviceName: 'Local scale' },
@@ -874,6 +874,33 @@ describe('health insight projection', () => {
     expect(() =>
       buildHealthInsight('body.weight', [], hiddenWrongDisplayUnitPoints, 'Asia/Shanghai', at),
     ).toThrow('health insight point rows must use units allowed for the metric')
+    const hiddenInconsistentConversionPoints = [
+      ...points.slice(0, 180),
+      {
+        ...points[180]!,
+        canonical_value: '160',
+        display_value: '160',
+        display_unit: 'lb' as const,
+      },
+    ]
+    expect(() =>
+      buildHealthInsight(
+        'body.weight',
+        [],
+        hiddenInconsistentConversionPoints,
+        'Asia/Shanghai',
+        at,
+      ),
+    ).toThrow('health insight point rows must have consistent persisted value conversions')
+    expect(() =>
+      buildHealthInsight(
+        'body.weight',
+        [],
+        [{ ...futurePoint, canonical_value: '160' }, ...points.slice(0, 180)],
+        'Asia/Shanghai',
+        at,
+      ),
+    ).toThrow('health insight point rows must have consistent persisted value conversions')
     const excessivePoints = [
       ...points,
       {

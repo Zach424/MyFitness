@@ -28,6 +28,7 @@ import {
   metricCodes,
   mealRevisionActions,
   mealTypes,
+  measurementPersistenceDecimalPlaces,
   nutritionSourceKinds,
   planEngineVersion,
   planRevisionActions,
@@ -142,6 +143,19 @@ describe('health-record migration drift', () => {
 
     for (const value of [...metricCodes, ...unitCodes, ...sourceKinds]) {
       expect(migration, `${value} is missing from the migration`).toContain(`'${value}'`)
+    }
+  })
+
+  it('keeps measurement value columns at the shared persistence scale', async () => {
+    const [recordMigration, revisionMigration] = await Promise.all([
+      readFile(migrationPath, 'utf8'),
+      readFile(lifecycleMigrationPath, 'utf8'),
+    ])
+    const numericType = `NUMERIC(14, ${measurementPersistenceDecimalPlaces})`
+
+    for (const migration of [recordMigration, revisionMigration]) {
+      expect(migration).toContain(`canonical_value ${numericType}`)
+      expect(migration).toContain(`display_value ${numericType}`)
     }
   })
 
