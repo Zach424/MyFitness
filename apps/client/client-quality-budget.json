@@ -3,11 +3,11 @@
   "h5": {
     "maxTotalBytes": 2842000,
     "maxEntrypointBytes": 320000,
-    "maxAsyncJavaScriptBytes": 206000,
+    "maxAsyncJavaScriptBytes": 160000,
     "forbiddenJavaScriptMarkers": ["Invalid input: expected", "localeError"]
   },
   "weapp": {
-    "maxTotalBytes": 1110000,
+    "maxTotalBytes": 1109000,
     "maxVendorBytes": 25000,
     "maxPageJavaScriptBytes": 63000,
     "forbiddenJavaScriptMarkers": ["Invalid input: expected", "localeError"]

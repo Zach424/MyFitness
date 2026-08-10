@@ -110,6 +110,14 @@ const configureH5 = (chain: WebpackChain) => {
         enforce: true,
         reuseExistingChunk: true,
       },
+      taroComponents: {
+        test: /[\\/]node_modules[\\/].pnpm[\\/]@tarojs\+components@/,
+        name: 'taro-components',
+        chunks: 'async',
+        priority: 20,
+        enforce: true,
+        reuseExistingChunk: true,
+      },
       clientAsyncShared: {
         test: /[\\/](?:node_modules|src[\\/](?:components|lib))[\\/]/,
         name: 'client-async-shared',
@@ -157,6 +165,9 @@ const config: UserConfigExport = {
   },
   mini: {
     webpackChain: addReleaseMetadata,
+    minifyXML: {
+      collapseWhitespace: true,
+    },
     postcss: {
       pxtransform: {
         enable: true,

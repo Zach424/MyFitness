@@ -415,6 +415,7 @@ test('consent receipt history keeps empty, current and continuation evidence dis
   await page.setViewportSize({ width: 390, height: 844 })
   const browserErrors = collectBrowserErrors(page)
   const session = await seedAccount(page, request)
+  await expect(page.locator('.custody-total__value')).toHaveText(/^\d+$/)
 
   await database.query('DELETE FROM nutrition_photo_candidates WHERE user_id = $1', [
     session.userId,
