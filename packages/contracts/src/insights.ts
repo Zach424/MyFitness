@@ -285,6 +285,22 @@ export const exerciseInsightIdentitySchema = z
     equipmentNotes: z.string().trim().min(1).max(120).nullable(),
   })
   .strict()
+  .superRefine((identity, ctx) => {
+    if (new Set(identity.equipment).size !== identity.equipment.length) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'exercise insight equipment must not contain duplicates',
+        path: ['equipment'],
+      })
+    }
+    if (identity.equipment.includes('other') && identity.equipmentNotes === null) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'equipmentNotes is required when equipment contains other',
+        path: ['equipmentNotes'],
+      })
+    }
+  })
 
 export const exerciseInsightPointSchema = exerciseInsightMetricsSchema
   .omit({ sessionCount: true })

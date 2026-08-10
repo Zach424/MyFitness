@@ -161,6 +161,43 @@ describe('exercise insight contract', () => {
         series: [{ ...parsed.series[0]!, completedSetCount: 0 }],
       }).success,
     ).toBe(false)
+    const duplicateEquipmentIdentity = {
+      ...parsed.series[0]!.identity,
+      equipment: ['dumbbells', 'dumbbells'] as const,
+    }
+    const duplicateEquipment = exerciseInsightSchema.safeParse({
+      ...parsed,
+      identity: duplicateEquipmentIdentity,
+      series: [{ ...parsed.series[0]!, identity: duplicateEquipmentIdentity }],
+    })
+    expect(duplicateEquipment.success).toBe(false)
+    if (!duplicateEquipment.success) {
+      expect(duplicateEquipment.error.issues).toContainEqual(
+        expect.objectContaining({
+          message: 'exercise insight equipment must not contain duplicates',
+          path: ['identity', 'equipment'],
+        }),
+      )
+    }
+    const missingOtherNotesIdentity = {
+      ...parsed.series[0]!.identity,
+      equipment: ['other'] as const,
+      equipmentNotes: null,
+    }
+    const missingOtherNotes = exerciseInsightSchema.safeParse({
+      ...parsed,
+      identity: missingOtherNotesIdentity,
+      series: [{ ...parsed.series[0]!, identity: missingOtherNotesIdentity }],
+    })
+    expect(missingOtherNotes.success).toBe(false)
+    if (!missingOtherNotes.success) {
+      expect(missingOtherNotes.error.issues).toContainEqual(
+        expect.objectContaining({
+          message: 'equipmentNotes is required when equipment contains other',
+          path: ['identity', 'equipmentNotes'],
+        }),
+      )
+    }
     const unsupportedHasMore = exerciseInsightSchema.safeParse({ ...parsed, hasMore: true })
     expect(unsupportedHasMore.success).toBe(false)
     if (!unsupportedHasMore.success) {

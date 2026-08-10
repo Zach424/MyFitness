@@ -22,7 +22,11 @@ import type {
   TrendWindow,
   UnitCode,
 } from '@myfitness/contracts'
-import { personalStateLedgerPolicyVersion, subjectiveRecoveryMetrics } from '@myfitness/contracts'
+import {
+  exerciseInsightIdentitySchema,
+  personalStateLedgerPolicyVersion,
+  subjectiveRecoveryMetrics,
+} from '@myfitness/contracts'
 import { estimateSubjectiveRecoveryState } from '@myfitness/domain'
 
 import { DatabaseService } from '../database/database.service'
@@ -281,6 +285,22 @@ const assertExercisePointRowRelationships = (rows: ExercisePointRow[]) => {
   }
 }
 
+const exercisePointIdentity = (row: ExercisePointRow): ExerciseInsightPoint['identity'] => ({
+  name: row.name,
+  category: row.category,
+  trackingMode: row.tracking_mode,
+  equipment: row.equipment,
+  equipmentNotes: row.equipment_notes,
+})
+
+const assertValidExercisePointRowSnapshots = (rows: ExercisePointRow[]) => {
+  if (
+    rows.some((row) => !exerciseInsightIdentitySchema.safeParse(exercisePointIdentity(row)).success)
+  ) {
+    throw new Error('exercise insight point rows must have valid identity snapshots')
+  }
+}
+
 const assertHealthWindowRowNumbers = (rows: HealthWindowRow[]) => {
   if (
     rows.some(
@@ -408,13 +428,7 @@ const exercisePoint = (row: ExercisePointRow, timezone: string): ExerciseInsight
   workoutRevision: row.workout_revision,
   occurredAt: row.occurred_at.toISOString(),
   localDate: localDay(row.occurred_at, timezone),
-  identity: {
-    name: row.name,
-    category: row.category,
-    trackingMode: row.tracking_mode,
-    equipment: row.equipment,
-    equipmentNotes: row.equipment_notes,
-  },
+  identity: exercisePointIdentity(row),
   completedSetCount: Number(row.completed_set_count),
   totalSetCount: Number(row.total_set_count),
   totalReps: Number(row.total_reps),
@@ -438,6 +452,7 @@ export const buildExerciseInsight = (
   assertValidInsightPointRowTimes(pointRows)
   assertExercisePointRowNumbers(pointRows)
   assertExercisePointRowRelationships(pointRows)
+  assertValidExercisePointRowSnapshots(pointRows)
   assertValidInsightPointRowIds(pointRows, (row) => row.workout_id)
   assertInsightPointRowOrder(pointRows)
   assertUniqueInsightPointRowIds(pointRows, (row) => row.workout_id)

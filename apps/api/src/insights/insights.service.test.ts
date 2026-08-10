@@ -528,6 +528,23 @@ describe('exercise insight projection', () => {
     expect(() =>
       buildExerciseInsight('goblet_squat', [], hiddenInconsistentSetPoints, 'Asia/Shanghai', at),
     ).toThrow('exercise insight point rows must have consistent aggregate relationships')
+    const hiddenInvalidSnapshot = (overrides: Partial<(typeof points)[number]>) => [
+      ...points.slice(0, 180),
+      { ...points[180]!, ...overrides },
+    ]
+    for (const invalidSnapshot of [
+      hiddenInvalidSnapshot({ name: '   ' }),
+      hiddenInvalidSnapshot({ name: '动'.repeat(81) }),
+      hiddenInvalidSnapshot({ category: 'unknown' as never }),
+      hiddenInvalidSnapshot({ tracking_mode: 'unknown' as never }),
+      hiddenInvalidSnapshot({ equipment: ['unknown' as never] }),
+      hiddenInvalidSnapshot({ equipment: ['dumbbells', 'dumbbells'] }),
+      hiddenInvalidSnapshot({ equipment: ['other'], equipment_notes: null }),
+    ]) {
+      expect(() =>
+        buildExerciseInsight('goblet_squat', [], invalidSnapshot, 'Asia/Shanghai', at),
+      ).toThrow('exercise insight point rows must have valid identity snapshots')
+    }
     const hiddenInvalidIdPoints = [
       ...points.slice(0, 180),
       { ...points[180]!, workout_id: 'not-a-workout-uuid' },
