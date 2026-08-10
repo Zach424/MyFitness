@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   PrivacyExportVerificationError,
+  privacyExportHttpFailureMessage,
   privacyExportContentTypeFromHeaders,
   verifyPrivacyExportArtifact,
 } from './privacy-export-verification'
@@ -32,6 +33,13 @@ const validArtifact = () =>
   })
 
 describe('portable privacy-export artifact verification', () => {
+  it('uses product-owned copy only for the deterministic synchronous-size refusal', () => {
+    expect(privacyExportHttpFailureMessage(413)).toBe(
+      '当前数据副本超过 50 MiB 同步下载上限，未下载或保存。当前版本无法生成该副本。',
+    )
+    expect(privacyExportHttpFailureMessage(500)).toBeUndefined()
+  })
+
   it('accepts the exact current envelope and returns only bounded receipt metadata', () => {
     const verification = verifyPrivacyExportArtifact(
       validArtifact(),

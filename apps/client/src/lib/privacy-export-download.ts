@@ -3,6 +3,7 @@ import Taro from '@tarojs/taro'
 import { ApiError, clearClientAccessToken, getClientAccessToken, getClientApiBaseUrl } from './api'
 import {
   PrivacyExportVerificationError,
+  privacyExportHttpFailureMessage,
   privacyExportContentTypeFromHeaders,
   verifyPrivacyExportArtifact,
 } from './privacy-export-verification'
@@ -62,7 +63,9 @@ export const downloadPrivacyExport = async ({
   }
   if (response.statusCode < 200 || response.statusCode >= 300) {
     releaseH5TemporaryFile()
-    throw new ApiError(response.statusCode, { message: '数据导出生成失败' })
+    throw new ApiError(response.statusCode, {
+      message: privacyExportHttpFailureMessage(response.statusCode) ?? '数据导出生成失败',
+    })
   }
 
   const fileName = `myfitness-export-${new Date().toISOString().slice(0, 10)}.json`

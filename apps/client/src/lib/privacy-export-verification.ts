@@ -13,6 +13,11 @@ export type PrivacyExportVerification = {
   byteLength: number
 }
 
+export const privacyExportHttpFailureMessage = (statusCode: number) =>
+  statusCode === 413
+    ? `当前数据副本超过 ${maximumPrivacyExportBytes / (1024 * 1024)} MiB 同步下载上限，未下载或保存。当前版本无法生成该副本。`
+    : undefined
+
 const dataKeys = [
   'account',
   'identities',

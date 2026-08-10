@@ -219,6 +219,31 @@ test('privacy export validates local content and media type before download succ
     '**/v1/me/privacy/export',
     async (route) => {
       await route.fulfill({
+        status: 413,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          statusCode: 413,
+          code: 'portable_export_too_large',
+          message: 'UNTRUSTED SERVER COPY MUST NOT BE SHOWN',
+          maximumBytes: 52_428_800,
+        }),
+      })
+    },
+    { times: 1 },
+  )
+  await page.getByRole('button', { name: '下载我的数据' }).click()
+  await expect(page.getByText(/当前数据副本超过 50 MiB 同步下载上限/)).toBeVisible()
+  await expect(page.getByText('UNTRUSTED SERVER COPY MUST NOT BE SHOWN')).toHaveCount(0)
+  await expect(page.locator('.deletion-step').filter({ hasText: '决定是否先导出' })).toContainText(
+    '尚未选择',
+  )
+  expect(downloads).toBe(0)
+  await page.getByRole('button', { name: '关闭' }).click()
+
+  await page.route(
+    '**/v1/me/privacy/export',
+    async (route) => {
+      await route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({ schemaVersion: 'myfitness-portable-export-v3' }),
@@ -263,7 +288,8 @@ test('privacy export validates local content and media type before download succ
     page.getByText(/已通过 myfitness-portable-export-v4 结构验证，已开始下载/),
   ).toBeVisible()
   expect(downloads).toBe(1)
-  expect(browserErrors).toEqual([])
+  expect(browserErrors.filter((error) => error.includes('status of 413'))).toHaveLength(1)
+  expect(browserErrors.filter((error) => !error.includes('status of 413'))).toEqual([])
 })
 
 test('privacy export rejects late artifacts after unmount or custody-authority loss', async ({
