@@ -406,6 +406,17 @@ const assertInsightPointRowTruncationReceipt = (rows: unknown[]) => {
   }
 }
 
+const assertHealthPointWindowTruncationReceipt = (
+  windowRows: HealthWindowRow[],
+  eligiblePointRows: HealthPointRow[],
+) => {
+  const recordCount = Number(windowRows.find((row) => row.days === 90)?.record_count ?? 0)
+  const expectedPointRows = recordCount > 180 ? 181 : recordCount
+  if (eligiblePointRows.length !== expectedPointRows) {
+    throw new Error('health insight 90-day window must match the point truncation receipt')
+  }
+}
+
 const shiftLocalDate = (localDate: string, days: number) => {
   const [year, month, day] = localDate.split('-').map(Number)
   return new Date(Date.UTC(year!, month! - 1, day! + days)).toISOString().slice(0, 10)
@@ -668,6 +679,7 @@ export const buildHealthInsight = (
   assertUniqueInsightPointRowIds(pointRows, (row) => row.record_id)
   const eligiblePointRows = pointRows.filter((row) => row.occurred_at.getTime() <= at.getTime())
   assertInsightPointRowTruncationReceipt(eligiblePointRows)
+  assertHealthPointWindowTruncationReceipt(windowRows, eligiblePointRows)
   assertHealthPointCanonicalUnitConsistency(eligiblePointRows)
   const series = eligiblePointRows.slice(0, 180).map((row) => healthPoint(row, timezone))
   return {

@@ -690,9 +690,16 @@ describe('health insight projection', () => {
       maximum: '70',
       average: '69.5',
     }
+    const ninetyDayWindow = {
+      ...sevenDayWindow,
+      days: 90,
+      record_count: '181',
+      recorded_days: '8',
+      average: '69.0055',
+    }
     const insight = buildHealthInsight(
       'body.weight',
-      [sevenDayWindow],
+      [sevenDayWindow, ninetyDayWindow],
       [futurePoint, ...points],
       'Asia/Shanghai',
       at,
@@ -701,6 +708,7 @@ describe('health insight projection', () => {
     expect(insight.canonicalUnit).toBe('kg')
     expect(insight.windows[0]).toMatchObject({ recordCount: 2, statistics: { average: 69.5 } })
     expect(insight.windows[1]).toMatchObject({ recordCount: 0, statistics: { average: null } })
+    expect(insight.windows[2]).toMatchObject({ recordCount: 181 })
     expect(insight.series).toHaveLength(180)
     expect(insight.series[0]).toMatchObject({
       localDate: '2026-08-05',
@@ -786,12 +794,37 @@ describe('health insight projection', () => {
 
     const advanced = buildHealthInsight(
       'body.weight',
-      [],
+      [ninetyDayWindow],
       [futurePoint, ...points.slice(0, 180)],
       'Asia/Shanghai',
       new Date(at.getTime() + 2 * 3_600_000),
     )
     expect(advanced.series[0]?.recordId).toBe(futurePoint.record_id)
+    const exactNinetyDayWindow = {
+      ...ninetyDayWindow,
+      record_count: '180',
+    }
+    const exactPrefix = buildHealthInsight(
+      'body.weight',
+      [exactNinetyDayWindow],
+      points.slice(0, 180),
+      'Asia/Shanghai',
+      at,
+    )
+    expect(exactPrefix).toMatchObject({ hasMore: false })
+    expect(exactPrefix.series).toHaveLength(180)
+    expect(() =>
+      buildHealthInsight('body.weight', [exactNinetyDayWindow], points, 'Asia/Shanghai', at),
+    ).toThrow('health insight 90-day window must match the point truncation receipt')
+    expect(() =>
+      buildHealthInsight(
+        'body.weight',
+        [ninetyDayWindow],
+        points.slice(0, 180),
+        'Asia/Shanghai',
+        at,
+      ),
+    ).toThrow('health insight 90-day window must match the point truncation receipt')
     expect(() => buildHealthInsight('body.weight', [], [], 'Invalid/Timezone', at)).toThrow(
       'insight timezone must be a valid IANA timezone',
     )

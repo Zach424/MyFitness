@@ -465,6 +465,33 @@ const validateInsightTruncationReceipt = (
   }
 }
 
+const validateHealthInsightWindowPointReceipt = (
+  insight: {
+    windows: Array<{ days: number; recordCount: number }>
+    series: unknown[]
+    hasMore: boolean
+  },
+  ctx: z.RefinementCtx,
+) => {
+  const windowIndex = insight.windows.findIndex((window) => window.days === 90)
+  if (windowIndex < 0) return
+  const recordCount = insight.windows[windowIndex]!.recordCount
+  if (insight.series.length !== Math.min(recordCount, 180)) {
+    ctx.addIssue({
+      code: 'custom',
+      message: '90-day recordCount must match the public health point prefix',
+      path: ['windows', windowIndex, 'recordCount'],
+    })
+  }
+  if (insight.hasMore !== recordCount > 180) {
+    ctx.addIssue({
+      code: 'custom',
+      message: 'hasMore must match the 90-day health record count',
+      path: ['hasMore'],
+    })
+  }
+}
+
 export const exerciseInsightSchema = z
   .object({
     generatedAt: z.string().datetime({ offset: true }),
@@ -838,6 +865,7 @@ export const healthInsightSchema = z
       }
     })
     validateInsightTruncationReceipt(insight, ctx)
+    validateHealthInsightWindowPointReceipt(insight, ctx)
     validateInsightOccurrenceBoundary(insight, ctx)
   })
 

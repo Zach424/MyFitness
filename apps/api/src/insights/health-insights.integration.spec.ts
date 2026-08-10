@@ -115,6 +115,7 @@ describe('health insight API with PostgreSQL', () => {
       expect.objectContaining({ days: 90, recordCount: 2 }),
     ])
     expect(initial.body.series).toHaveLength(2)
+    expect(initial.body.windows[2].recordCount).toBe(initial.body.series.length)
     expect(initial.body.series[0]).toMatchObject({
       recordId: recent.body.id,
       metric: 'body.weight',

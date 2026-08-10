@@ -626,6 +626,27 @@ describe('health insight contract', () => {
           path: ['hasMore'],
         }),
       )
+      expect(unsupportedHasMore.error.issues).toContainEqual(
+        expect.objectContaining({
+          message: 'hasMore must match the 90-day health record count',
+          path: ['hasMore'],
+        }),
+      )
+    }
+    const missingPublicPoint = healthInsightSchema.safeParse({
+      ...parsed,
+      windows: parsed.windows.map((window, index) =>
+        index === 2 ? { ...window, recordCount: 2 } : window,
+      ),
+    })
+    expect(missingPublicPoint.success).toBe(false)
+    if (!missingPublicPoint.success) {
+      expect(missingPublicPoint.error.issues).toContainEqual(
+        expect.objectContaining({
+          message: '90-day recordCount must match the public health point prefix',
+          path: ['windows', 2, 'recordCount'],
+        }),
+      )
     }
     const staleCanonicalUnit = healthInsightSchema.safeParse({
       ...parsed,
@@ -672,7 +693,17 @@ describe('health insight contract', () => {
       )
     }
     expect(
-      healthInsightSchema.safeParse({ ...parsed, canonicalUnit: null, series: [] }).success,
+      healthInsightSchema.safeParse({
+        ...parsed,
+        canonicalUnit: null,
+        windows: parsed.windows.map((window) => ({
+          ...window,
+          recordCount: 0,
+          recordedDays: 0,
+          statistics: { minimum: null, maximum: null, average: null },
+        })),
+        series: [],
+      }).success,
     ).toBe(true)
     const repeatedWindow = healthInsightSchema.safeParse({
       ...parsed,
