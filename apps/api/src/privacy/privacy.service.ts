@@ -36,7 +36,12 @@ import { DataOperationsService } from '../operations/data-operations.service'
 import { ProgressPhotosService } from '../progress-photos/progress-photos.service'
 import { ErasureLedgerService } from './erasure-ledger.service'
 import { decodeConsentReceiptCursor, encodeConsentReceiptCursor } from './consent-receipt-cursor'
-import { assertPortableExportWithinLimit } from './portable-export-artifact'
+import {
+  assertPortableExportByteLengthWithinLimit,
+  assertPortableExportWithinLimit,
+  portableExportBase64MediaByteDelta,
+  portableExportUnavailableMediaByteDelta,
+} from './portable-export-artifact'
 
 type InventoryRow = QueryResultRow & {
   category: PrivacyInventoryItem['category']
@@ -537,43 +542,40 @@ export class PrivacyService {
           },
         }),
       )
-      assertPortableExportWithinLimit(minimumPayload)
+      let minimumByteLength = assertPortableExportWithinLimit(minimumPayload)
+      const acceptMediaByteDelta = (delta: number) => {
+        minimumByteLength += delta
+        assertPortableExportByteLengthWithinLimit(minimumByteLength)
+      }
+      const readPortableMedia = async (storageKey: string | null) => {
+        if (!storageKey) return null
+
+        let bytes: Buffer
+        try {
+          bytes = await this.photoStorage.read(storageKey)
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+          acceptMediaByteDelta(portableExportUnavailableMediaByteDelta)
+          return { unavailable: true }
+        }
+
+        acceptMediaByteDelta(portableExportBase64MediaByteDelta(bytes.byteLength))
+        return {
+          contentType: 'image/jpeg',
+          encoding: 'base64',
+          data: bytes.toString('base64'),
+        }
+      }
 
       const foodPhotoAnalyses: Array<Record<string, unknown>> = []
       for (const photo of photoRows.rows) {
-        let media: Record<string, unknown> | null = null
-        if (photo.storage_key) {
-          try {
-            const bytes = await this.photoStorage.read(photo.storage_key)
-            media = {
-              contentType: 'image/jpeg',
-              encoding: 'base64',
-              data: bytes.toString('base64'),
-            }
-          } catch (error) {
-            if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
-            media = { unavailable: true }
-          }
-        }
+        const media = await readPortableMedia(photo.storage_key)
         foodPhotoAnalyses.push({ ...photo.payload, media })
       }
 
       const progressPhotos: Array<Record<string, unknown>> = []
       for (const photo of progressRows.rows) {
-        let media: Record<string, unknown> | null = null
-        if (photo.storage_key) {
-          try {
-            const bytes = await this.photoStorage.read(photo.storage_key)
-            media = {
-              contentType: 'image/jpeg',
-              encoding: 'base64',
-              data: bytes.toString('base64'),
-            }
-          } catch (error) {
-            if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
-            media = { unavailable: true }
-          }
-        }
+        const media = await readPortableMedia(photo.storage_key)
         progressPhotos.push({ ...photo.payload, media })
       }
 

@@ -292,6 +292,46 @@ describe('privacy ownership API with PostgreSQL and private media', () => {
     }
   })
 
+  it('stops before encoding or reading later media once the expanded floor is oversized', async () => {
+    const { token, userId } = await createUser()
+    await createPhoto(token, userId)
+    await createPhoto(token, userId)
+    const originalRead = storage.read.bind(storage)
+    let encodedMediaCount = 0
+    const read = vi.spyOn(storage, 'read').mockImplementation(async (storageKey) => {
+      const bytes = await originalRead(storageKey)
+      const encode = bytes.toString.bind(bytes)
+      bytes.toString = ((encoding?: BufferEncoding, start?: number, end?: number) => {
+        if (encoding === 'base64') encodedMediaCount += 1
+        return encode(encoding, start, end)
+      }) as Buffer['toString']
+      return bytes
+    })
+    const exactAssertion = portableExportArtifact.assertPortableExportByteLengthWithinLimit
+    const expandedGate = vi
+      .spyOn(portableExportArtifact, 'assertPortableExportByteLengthWithinLimit')
+      .mockImplementation((byteLength) => exactAssertion(byteLength, byteLength - 1))
+
+    try {
+      const refused = await request(app.getHttpServer())
+        .get('/v1/me/privacy/export')
+        .set('Authorization', `Bearer ${token}`)
+        .expect(413)
+
+      expect(refused.body).toMatchObject({
+        statusCode: 413,
+        code: privacyExportTooLargeCode,
+      })
+      expect(refused.body).not.toHaveProperty('data')
+      expect(expandedGate).toHaveBeenCalledTimes(1)
+      expect(read).toHaveBeenCalledTimes(1)
+      expect(encodedMediaCount).toBe(0)
+    } finally {
+      expandedGate.mockRestore()
+      read.mockRestore()
+    }
+  })
+
   it('pages owner consent receipts without turning history into current authorization', async () => {
     const bareSession = await request(app.getHttpServer())
       .post('/v1/auth/dev/session')

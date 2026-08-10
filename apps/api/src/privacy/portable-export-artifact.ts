@@ -7,7 +7,10 @@ import {
 
 const portableExportJson = (payload: PrivacyExport) => `${JSON.stringify(payload, null, 2)}\n`
 
-const assertPortableExportByteLength = (byteLength: number, maximumBytes: number) => {
+export const assertPortableExportByteLengthWithinLimit = (
+  byteLength: number,
+  maximumBytes = maximumPrivacyExportBytes,
+) => {
   if (byteLength <= maximumBytes) return byteLength
 
   throw new HttpException(
@@ -27,7 +30,28 @@ export const portableExportByteLength = (payload: PrivacyExport) =>
 export const assertPortableExportWithinLimit = (
   payload: PrivacyExport,
   maximumBytes = maximumPrivacyExportBytes,
-) => assertPortableExportByteLength(portableExportByteLength(payload), maximumBytes)
+) => assertPortableExportByteLengthWithinLimit(portableExportByteLength(payload), maximumBytes)
+
+const portableExportMediaWrapperByteLength = (media: Record<string, unknown> | null) =>
+  Buffer.byteLength(JSON.stringify({ data: { photos: [{ media }] } }, null, 2), 'utf8')
+
+const nullMediaWrapperByteLength = portableExportMediaWrapperByteLength(null)
+const emptyBase64MediaByteDelta =
+  portableExportMediaWrapperByteLength({
+    contentType: 'image/jpeg',
+    encoding: 'base64',
+    data: '',
+  }) - nullMediaWrapperByteLength
+
+export const portableExportUnavailableMediaByteDelta =
+  portableExportMediaWrapperByteLength({ unavailable: true }) - nullMediaWrapperByteLength
+
+export const portableExportBase64MediaByteDelta = (sourceByteLength: number) => {
+  if (!Number.isSafeInteger(sourceByteLength) || sourceByteLength < 0) {
+    throw new RangeError('portable export media byte length must be a non-negative safe integer')
+  }
+  return emptyBase64MediaByteDelta + 4 * Math.ceil(sourceByteLength / 3)
+}
 
 export const serializePortableExport = (
   payload: PrivacyExport,
@@ -35,6 +59,6 @@ export const serializePortableExport = (
 ) => {
   const serialized = portableExportJson(payload)
   const byteLength = Buffer.byteLength(serialized, 'utf8')
-  assertPortableExportByteLength(byteLength, maximumBytes)
+  assertPortableExportByteLengthWithinLimit(byteLength, maximumBytes)
   return Buffer.from(serialized, 'utf8')
 }

@@ -7,8 +7,11 @@ import {
 import { describe, expect, it } from 'vitest'
 
 import {
+  assertPortableExportByteLengthWithinLimit,
   assertPortableExportWithinLimit,
+  portableExportBase64MediaByteDelta,
   portableExportByteLength,
+  portableExportUnavailableMediaByteDelta,
   serializePortableExport,
 } from './portable-export-artifact'
 
@@ -88,5 +91,39 @@ describe('portable export server artifact', () => {
     expect(() =>
       assertPortableExportWithinLimit(minimum, portableExportByteLength(minimum) - 1),
     ).toThrowError(HttpException)
+  })
+
+  it('matches constant-time media deltas to the final pretty-printed bytes', () => {
+    for (const sourceByteLength of [0, 1, 2, 3, 4, 17, 1024]) {
+      const minimum = fixture()
+      minimum.data.foodPhotoAnalyses = [{ id: 'food-photo', media: null }]
+      minimum.data.progressPhotos = [{ id: 'progress-photo', media: null }]
+      const final = fixture()
+      final.data.foodPhotoAnalyses = [
+        {
+          id: 'food-photo',
+          media: {
+            contentType: 'image/jpeg',
+            encoding: 'base64',
+            data: Buffer.alloc(sourceByteLength).toString('base64'),
+          },
+        },
+      ]
+      final.data.progressPhotos = [{ id: 'progress-photo', media: { unavailable: true } }]
+
+      expect(
+        portableExportByteLength(minimum) +
+          portableExportBase64MediaByteDelta(sourceByteLength) +
+          portableExportUnavailableMediaByteDelta,
+      ).toBe(portableExportByteLength(final))
+    }
+  })
+
+  it('rejects invalid source byte lengths and preserves the exact numeric boundary', () => {
+    for (const invalid of [-1, 0.5, Number.POSITIVE_INFINITY, Number.MAX_SAFE_INTEGER + 1]) {
+      expect(() => portableExportBase64MediaByteDelta(invalid)).toThrowError(RangeError)
+    }
+    expect(assertPortableExportByteLengthWithinLimit(10, 10)).toBe(10)
+    expect(() => assertPortableExportByteLengthWithinLimit(11, 10)).toThrowError(HttpException)
   })
 })
