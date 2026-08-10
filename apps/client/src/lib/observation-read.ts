@@ -1,11 +1,15 @@
-export type ObservationReadFailureKind = 'offline' | 'refused' | 'service' | 'unknown'
+import type { ReadFailureKind, SnapshotReadPhase } from './read-authority'
 
-export type ObservationReadPhase =
-  'initial-loading' | 'ready' | 'refreshing' | 'initial-error' | 'stale'
+export {
+  classifyReadFailure as classifyObservationReadFailure,
+  snapshotReadPhase as observationReadPhase,
+} from './read-authority'
+
+export type ObservationReadFailureKind = ReadFailureKind
+
+export type ObservationReadPhase = SnapshotReadPhase
 
 export type ObservationReadSubject = 'health' | 'exercise' | 'nutrition'
-
-type StatusCodeError = { statusCode?: unknown; errMsg?: unknown }
 
 const subjectLabels: Record<ObservationReadSubject, string> = {
   health: '身体与恢复观察',
@@ -15,34 +19,6 @@ const subjectLabels: Record<ObservationReadSubject, string> = {
 
 export const observationReadSubjectLabel = (subject: ObservationReadSubject) =>
   subjectLabels[subject]
-
-export const classifyObservationReadFailure = (error: unknown): ObservationReadFailureKind => {
-  const candidate = error as StatusCodeError | null
-  const statusCode =
-    candidate && typeof candidate.statusCode === 'number' ? candidate.statusCode : undefined
-  if (statusCode !== undefined) {
-    if (statusCode >= 400 && statusCode < 500) return 'refused'
-    if (statusCode >= 500) return 'service'
-    return 'unknown'
-  }
-  if (error instanceof Error || (candidate && typeof candidate.errMsg === 'string'))
-    return 'offline'
-  return 'unknown'
-}
-
-export const observationReadPhase = ({
-  hasSnapshot,
-  busy,
-  hasFailure,
-}: {
-  hasSnapshot: boolean
-  busy: boolean
-  hasFailure: boolean
-}): ObservationReadPhase => {
-  if (busy) return hasSnapshot ? 'refreshing' : 'initial-loading'
-  if (hasFailure) return hasSnapshot ? 'stale' : 'initial-error'
-  return hasSnapshot ? 'ready' : 'initial-loading'
-}
 
 export const observationReadFailureCopy = (
   kind: ObservationReadFailureKind,

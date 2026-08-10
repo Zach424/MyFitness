@@ -25,44 +25,16 @@ import {
   preservedOccurrenceInstant,
   preservedOccurrenceValidationMessage,
 } from '../../lib/occurrence-time'
+import type { ReadFailureKind, SnapshotReadPhase } from '../../lib/read-authority'
 
-export type WorkoutReadFailureKind = 'offline' | 'refused' | 'service' | 'unknown'
+export {
+  classifyReadFailure as classifyWorkoutReadFailure,
+  snapshotReadPhase as workoutReadPhase,
+} from '../../lib/read-authority'
 
-export type WorkoutReadPhase =
-  'initial-loading' | 'ready' | 'refreshing' | 'initial-error' | 'stale'
+export type WorkoutReadFailureKind = ReadFailureKind
 
-type StatusCodeError = {
-  statusCode?: unknown
-  errMsg?: unknown
-}
-
-export const classifyWorkoutReadFailure = (error: unknown): WorkoutReadFailureKind => {
-  const candidate = error as StatusCodeError | null
-  const statusCode =
-    candidate && typeof candidate.statusCode === 'number' ? candidate.statusCode : undefined
-  if (statusCode !== undefined) {
-    if (statusCode >= 400 && statusCode < 500) return 'refused'
-    if (statusCode >= 500) return 'service'
-    return 'unknown'
-  }
-  if (error instanceof Error || (candidate && typeof candidate.errMsg === 'string'))
-    return 'offline'
-  return 'unknown'
-}
-
-export const workoutReadPhase = ({
-  hasSnapshot,
-  busy,
-  hasFailure,
-}: {
-  hasSnapshot: boolean
-  busy: boolean
-  hasFailure: boolean
-}): WorkoutReadPhase => {
-  if (busy) return hasSnapshot ? 'refreshing' : 'initial-loading'
-  if (hasFailure) return hasSnapshot ? 'stale' : 'initial-error'
-  return hasSnapshot ? 'ready' : 'initial-loading'
-}
+export type WorkoutReadPhase = SnapshotReadPhase
 
 export type DraftCatalogItem = Pick<
   ExerciseCatalogItem,

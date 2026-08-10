@@ -1,4 +1,8 @@
-export type AggregateHistoryReadFailureKind = 'offline' | 'refused' | 'service' | 'unknown'
+import type { ReadFailureKind } from './read-authority'
+
+export { classifyReadFailure as classifyAggregateHistoryReadFailure } from './read-authority'
+
+export type AggregateHistoryReadFailureKind = ReadFailureKind
 
 export type AggregateHistoryReadOperation = 'initial' | 'continuation'
 
@@ -9,24 +13,6 @@ export type AggregateHistoryReadFailure = {
 
 export type AggregateHistoryReadPhase =
   'initial-loading' | 'ready' | 'continuing' | 'initial-error' | 'stale'
-
-type StatusCodeError = { statusCode?: unknown; errMsg?: unknown }
-
-export const classifyAggregateHistoryReadFailure = (
-  error: unknown,
-): AggregateHistoryReadFailureKind => {
-  const candidate = error as StatusCodeError | null
-  const statusCode =
-    candidate && typeof candidate.statusCode === 'number' ? candidate.statusCode : undefined
-  if (statusCode !== undefined) {
-    if (statusCode >= 400 && statusCode < 500) return 'refused'
-    if (statusCode >= 500) return 'service'
-    return 'unknown'
-  }
-  if (error instanceof Error || (candidate && typeof candidate.errMsg === 'string'))
-    return 'offline'
-  return 'unknown'
-}
 
 export const aggregateHistoryReadPhase = ({
   hasSnapshot,

@@ -1,24 +1,9 @@
 import type { HistoryCalendar, HistoryCalendarDay } from '@myfitness/contracts'
+import type { ReadFailureKind } from '../../lib/read-authority'
 
-export type HistoryCalendarReadFailureKind = 'offline' | 'refused' | 'service' | 'unknown'
+export { classifyReadFailure as classifyHistoryCalendarReadFailure } from '../../lib/read-authority'
 
-type StatusCodeError = { statusCode?: unknown; errMsg?: unknown }
-
-export const classifyHistoryCalendarReadFailure = (
-  error: unknown,
-): HistoryCalendarReadFailureKind => {
-  const candidate = error as StatusCodeError | null
-  const statusCode =
-    candidate && typeof candidate.statusCode === 'number' ? candidate.statusCode : undefined
-  if (statusCode !== undefined) {
-    if (statusCode >= 400 && statusCode < 500) return 'refused'
-    if (statusCode >= 500) return 'service'
-    return 'unknown'
-  }
-  if (error instanceof Error || (candidate && typeof candidate.errMsg === 'string'))
-    return 'offline'
-  return 'unknown'
-}
+export type HistoryCalendarReadFailureKind = ReadFailureKind
 
 export const historyCalendarReadFailureCopy = (
   kind: HistoryCalendarReadFailureKind,

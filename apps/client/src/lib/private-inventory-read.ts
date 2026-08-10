@@ -1,11 +1,15 @@
-export type PrivateInventoryReadFailureKind = 'offline' | 'refused' | 'service' | 'unknown'
+import type { ReadFailureKind, SnapshotReadPhase } from './read-authority'
 
-export type PrivateInventoryReadPhase =
-  'initial-loading' | 'ready' | 'refreshing' | 'initial-error' | 'stale'
+export {
+  classifyReadFailure as classifyPrivateInventoryReadFailure,
+  snapshotReadPhase as privateInventoryReadPhase,
+} from './read-authority'
+
+export type PrivateInventoryReadFailureKind = ReadFailureKind
+
+export type PrivateInventoryReadPhase = SnapshotReadPhase
 
 export type PrivateInventoryReadSubject = 'food-proof' | 'progress-photo'
-
-type StatusCodeError = { statusCode?: unknown; errMsg?: unknown }
 
 const subjectLabels: Record<PrivateInventoryReadSubject, string> = {
   'food-proof': '餐食照片校样清单',
@@ -14,36 +18,6 @@ const subjectLabels: Record<PrivateInventoryReadSubject, string> = {
 
 export const privateInventoryReadSubjectLabel = (subject: PrivateInventoryReadSubject) =>
   subjectLabels[subject]
-
-export const classifyPrivateInventoryReadFailure = (
-  error: unknown,
-): PrivateInventoryReadFailureKind => {
-  const candidate = error as StatusCodeError | null
-  const statusCode =
-    candidate && typeof candidate.statusCode === 'number' ? candidate.statusCode : undefined
-  if (statusCode !== undefined) {
-    if (statusCode >= 400 && statusCode < 500) return 'refused'
-    if (statusCode >= 500) return 'service'
-    return 'unknown'
-  }
-  if (error instanceof Error || (candidate && typeof candidate.errMsg === 'string'))
-    return 'offline'
-  return 'unknown'
-}
-
-export const privateInventoryReadPhase = ({
-  hasSnapshot,
-  busy,
-  hasFailure,
-}: {
-  hasSnapshot: boolean
-  busy: boolean
-  hasFailure: boolean
-}): PrivateInventoryReadPhase => {
-  if (busy) return hasSnapshot ? 'refreshing' : 'initial-loading'
-  if (hasFailure) return hasSnapshot ? 'stale' : 'initial-error'
-  return hasSnapshot ? 'ready' : 'initial-loading'
-}
 
 export const privateInventoryReadFailureCopy = (
   kind: PrivateInventoryReadFailureKind,
