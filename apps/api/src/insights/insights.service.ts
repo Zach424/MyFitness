@@ -218,6 +218,83 @@ const assertInsightWindowRowIdentities = (rows: Array<{ days: number }>) => {
   }
 }
 
+const nonNegativeIntegerTextPattern = /^(?:0|[1-9]\d*)$/
+const positiveIntegerTextPattern = /^[1-9]\d*$/
+const finiteDecimalTextPattern = /^-?(?:0|[1-9]\d*)(?:\.\d+)?$/
+const nonNegativeDecimalTextPattern = /^(?:0|[1-9]\d*)(?:\.\d+)?$/
+
+const isSafeIntegerText = (value: string, pattern: RegExp) =>
+  pattern.test(value) && Number.isSafeInteger(Number(value))
+
+const isFiniteDecimalText = (value: string, pattern: RegExp) =>
+  pattern.test(value) && Number.isFinite(Number(value))
+
+const assertExerciseWindowRowNumbers = (rows: ExerciseWindowRow[]) => {
+  if (
+    rows.some(
+      (row) =>
+        ![row.session_count, row.completed_set_count, row.total_reps].every((value) =>
+          isSafeIntegerText(value, nonNegativeIntegerTextPattern),
+        ) ||
+        ![row.volume_kg, row.active_seconds, row.distance_meters].every((value) =>
+          isFiniteDecimalText(value, nonNegativeDecimalTextPattern),
+        ),
+    )
+  ) {
+    throw new Error('exercise insight window rows must have valid numeric values')
+  }
+}
+
+const assertExercisePointRowNumbers = (rows: ExercisePointRow[]) => {
+  if (
+    rows.some(
+      (row) =>
+        !Number.isSafeInteger(row.workout_revision) ||
+        row.workout_revision <= 0 ||
+        ![row.completed_set_count, row.total_reps].every((value) =>
+          isSafeIntegerText(value, nonNegativeIntegerTextPattern),
+        ) ||
+        !isSafeIntegerText(row.total_set_count, positiveIntegerTextPattern) ||
+        ![row.volume_kg, row.active_seconds, row.distance_meters].every((value) =>
+          isFiniteDecimalText(value, nonNegativeDecimalTextPattern),
+        ),
+    )
+  ) {
+    throw new Error('exercise insight point rows must have valid numeric values')
+  }
+}
+
+const assertHealthWindowRowNumbers = (rows: HealthWindowRow[]) => {
+  if (
+    rows.some(
+      (row) =>
+        ![row.record_count, row.recorded_days].every((value) =>
+          isSafeIntegerText(value, nonNegativeIntegerTextPattern),
+        ) ||
+        ![row.minimum, row.maximum, row.average].every(
+          (value) => value === null || isFiniteDecimalText(value, finiteDecimalTextPattern),
+        ),
+    )
+  ) {
+    throw new Error('health insight window rows must have valid numeric values')
+  }
+}
+
+const assertHealthPointRowNumbers = (rows: HealthPointRow[]) => {
+  if (
+    rows.some(
+      (row) =>
+        !Number.isSafeInteger(row.record_revision) ||
+        row.record_revision <= 0 ||
+        ![row.canonical_value, row.display_value].every((value) =>
+          isFiniteDecimalText(value, finiteDecimalTextPattern),
+        ),
+    )
+  ) {
+    throw new Error('health insight point rows must have valid numeric values')
+  }
+}
+
 const assertInsightPointRowOrder = (rows: Array<{ occurred_at: Date }>) => {
   for (let index = 1; index < rows.length; index += 1) {
     if (rows[index]!.occurred_at.getTime() > rows[index - 1]!.occurred_at.getTime()) {
@@ -302,7 +379,9 @@ export const buildExerciseInsight = (
   assertValidInsightReferenceTime(at)
   assertValidInsightTimezone(timezone, at)
   assertInsightWindowRowIdentities(windowRows)
+  assertExerciseWindowRowNumbers(windowRows)
   assertValidInsightPointRowTimes(pointRows)
+  assertExercisePointRowNumbers(pointRows)
   assertInsightPointRowOrder(pointRows)
   assertUniqueInsightPointRowIds(pointRows, (row) => row.workout_id)
   const eligiblePointRows = pointRows.filter((row) => row.occurred_at.getTime() <= at.getTime())
@@ -445,7 +524,9 @@ export const buildHealthInsight = (
   assertValidInsightReferenceTime(at)
   assertValidInsightTimezone(timezone, at)
   assertInsightWindowRowIdentities(windowRows)
+  assertHealthWindowRowNumbers(windowRows)
   assertValidInsightPointRowTimes(pointRows)
+  assertHealthPointRowNumbers(pointRows)
   assertInsightPointRowOrder(pointRows)
   assertUniqueInsightPointRowIds(pointRows, (row) => row.record_id)
   const eligiblePointRows = pointRows.filter((row) => row.occurred_at.getTime() <= at.getTime())

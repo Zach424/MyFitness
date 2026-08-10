@@ -465,6 +465,24 @@ describe('exercise insight projection', () => {
     expect(() =>
       buildExerciseInsight(
         'goblet_squat',
+        [{ ...sevenDayWindow, session_count: '1.5' }],
+        [],
+        'Asia/Shanghai',
+        at,
+      ),
+    ).toThrow('exercise insight window rows must have valid numeric values')
+    expect(() =>
+      buildExerciseInsight(
+        'goblet_squat',
+        [{ ...sevenDayWindow, volume_kg: '-0.01' }],
+        [],
+        'Asia/Shanghai',
+        at,
+      ),
+    ).toThrow('exercise insight window rows must have valid numeric values')
+    expect(() =>
+      buildExerciseInsight(
+        'goblet_squat',
         [{ ...sevenDayWindow, days: 14 }],
         [],
         'Asia/Shanghai',
@@ -484,6 +502,22 @@ describe('exercise insight projection', () => {
     expect(() =>
       buildExerciseInsight('goblet_squat', [], hiddenInvalidTimePoints, 'Asia/Shanghai', at),
     ).toThrow('insight point rows must have valid occurred_at values')
+    const hiddenInvalidNumericPoints = [
+      ...points.slice(0, 180),
+      { ...points[180]!, volume_kg: 'NaN' },
+    ]
+    expect(() =>
+      buildExerciseInsight('goblet_squat', [], hiddenInvalidNumericPoints, 'Asia/Shanghai', at),
+    ).toThrow('exercise insight point rows must have valid numeric values')
+    expect(() =>
+      buildExerciseInsight(
+        'goblet_squat',
+        [],
+        [{ ...points[0]!, workout_revision: 0 }],
+        'Asia/Shanghai',
+        at,
+      ),
+    ).toThrow('exercise insight point rows must have valid numeric values')
     const hiddenAscendingPoints = [
       ...points.slice(0, 180),
       { ...points[180]!, occurred_at: points[0]!.occurred_at },
@@ -645,6 +679,24 @@ describe('health insight projection', () => {
     expect(() =>
       buildHealthInsight(
         'body.weight',
+        [{ ...sevenDayWindow, record_count: '9007199254740992' }],
+        [],
+        'Asia/Shanghai',
+        at,
+      ),
+    ).toThrow('health insight window rows must have valid numeric values')
+    expect(() =>
+      buildHealthInsight(
+        'body.weight',
+        [{ ...sevenDayWindow, average: 'Infinity' }],
+        [],
+        'Asia/Shanghai',
+        at,
+      ),
+    ).toThrow('health insight window rows must have valid numeric values')
+    expect(() =>
+      buildHealthInsight(
+        'body.weight',
         [{ ...sevenDayWindow, days: 365 }],
         [],
         'Asia/Shanghai',
@@ -673,6 +725,22 @@ describe('health insight projection', () => {
         at,
       ),
     ).toThrow('insight point rows must have valid occurred_at values')
+    const hiddenInvalidNumericPoints = [
+      ...points.slice(0, 180),
+      { ...points[180]!, display_value: 'NaN' },
+    ]
+    expect(() =>
+      buildHealthInsight('body.weight', [], hiddenInvalidNumericPoints, 'Asia/Shanghai', at),
+    ).toThrow('health insight point rows must have valid numeric values')
+    expect(() =>
+      buildHealthInsight(
+        'body.weight',
+        [],
+        [{ ...points[0]!, record_revision: 0 }],
+        'Asia/Shanghai',
+        at,
+      ),
+    ).toThrow('health insight point rows must have valid numeric values')
     const hiddenAscendingPoints = [
       ...points.slice(0, 180),
       { ...points[180]!, occurred_at: points[0]!.occurred_at },
