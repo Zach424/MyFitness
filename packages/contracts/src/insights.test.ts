@@ -151,6 +151,61 @@ describe('exercise insight contract', () => {
         )
       }
     }
+    const emptyWindowMetrics = {
+      ...parsed.windows[0]!,
+      sessionCount: 0,
+      completedSetCount: 0,
+      totalReps: 0,
+      volumeKg: 0,
+      activeMinutes: 0,
+      distanceKm: 0,
+    }
+    const emptySessionWithSets = exerciseInsightSchema.safeParse({
+      ...parsed,
+      windows: [{ ...emptyWindowMetrics, completedSetCount: 1 }, ...parsed.windows.slice(1)],
+    })
+    expect(emptySessionWithSets.success).toBe(false)
+    if (!emptySessionWithSets.success) {
+      expect(emptySessionWithSets.error.issues).toContainEqual(
+        expect.objectContaining({
+          message: 'empty exercise windows cannot contain completed sets',
+          path: ['windows', 0, 'completedSetCount'],
+        }),
+      )
+    }
+    for (const [field, value] of [
+      ['totalReps', 1],
+      ['volumeKg', 0.01],
+      ['activeMinutes', 1],
+      ['distanceKm', 0.01],
+    ] as const) {
+      const emptyWindowWithMeasurement = exerciseInsightSchema.safeParse({
+        ...parsed,
+        windows: [{ ...emptyWindowMetrics, [field]: value }, ...parsed.windows.slice(1)],
+      })
+      expect(emptyWindowWithMeasurement.success).toBe(false)
+      if (!emptyWindowWithMeasurement.success) {
+        expect(emptyWindowWithMeasurement.error.issues).toContainEqual(
+          expect.objectContaining({
+            message: `exercise windows without completed sets must keep ${field} zero`,
+            path: ['windows', 0, field],
+          }),
+        )
+      }
+    }
+    expect(
+      exerciseInsightSchema.safeParse({
+        ...parsed,
+        windows: parsed.windows.map((window) => ({
+          ...window,
+          completedSetCount: 1,
+          totalReps: 0,
+          volumeKg: 0,
+          activeMinutes: 0,
+          distanceKm: 0,
+        })),
+      }).success,
+    ).toBe(true)
     const impossibleWindowCounts = exerciseInsightSchema.safeParse({
       ...parsed,
       windows: parsed.windows.map((window, index) =>

@@ -274,7 +274,20 @@ const assertExercisePointRowNumbers = (rows: ExercisePointRow[]) => {
 }
 
 const assertExerciseWindowRowRelationships = (rows: ExerciseWindowRow[]) => {
-  if (rows.some((row) => Number(row.session_count) > Number(row.completed_set_count))) {
+  if (
+    rows.some((row) => {
+      const sessionCount = Number(row.session_count)
+      const completedSetCount = Number(row.completed_set_count)
+      return (
+        sessionCount > completedSetCount ||
+        (sessionCount === 0 && completedSetCount !== 0) ||
+        (completedSetCount === 0 &&
+          [row.total_reps, row.volume_kg, row.active_seconds, row.distance_meters].some(
+            (value) => Number(value) !== 0,
+          ))
+      )
+    })
+  ) {
     throw new Error('exercise insight window rows must have consistent aggregate relationships')
   }
 }

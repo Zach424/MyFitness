@@ -280,6 +280,25 @@ export const exerciseInsightWindowSchema = exerciseInsightMetricsSchema
         path: ['sessionCount'],
       })
     }
+    if (window.sessionCount === 0 && window.completedSetCount !== 0) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'empty exercise windows cannot contain completed sets',
+        path: ['completedSetCount'],
+      })
+    }
+    if (window.completedSetCount === 0) {
+      const measurementFields = ['totalReps', 'volumeKg', 'activeMinutes', 'distanceKm'] as const
+      measurementFields.forEach((field) => {
+        if (window[field] !== 0) {
+          ctx.addIssue({
+            code: 'custom',
+            message: `exercise windows without completed sets must keep ${field} zero`,
+            path: [field],
+          })
+        }
+      })
+    }
   })
 
 const exerciseInsightWindowMonotonicFields = [

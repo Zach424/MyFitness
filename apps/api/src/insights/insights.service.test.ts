@@ -427,6 +427,15 @@ describe('exercise insight projection', () => {
       active_seconds: '18100',
       distance_meters: '10000',
     }
+    const emptyNinetyDayWindow = {
+      ...ninetyDayWindow,
+      session_count: '0',
+      completed_set_count: '0',
+      total_reps: '0',
+      volume_kg: '0',
+      active_seconds: '0',
+      distance_meters: '0',
+    }
     const insight = buildExerciseInsight(
       'goblet_squat',
       [sevenDayWindow, thirtyDayWindow, ninetyDayWindow],
@@ -447,6 +456,31 @@ describe('exercise insight projection', () => {
       volumeKg: 240.13,
     })
     expect(insight.hasMore).toBe(true)
+
+    const zeroMeasurePoint = {
+      ...points[0]!,
+      completed_set_count: '1',
+      total_set_count: '1',
+      total_reps: '0',
+      volume_kg: '0',
+      active_seconds: '0',
+      distance_meters: '0',
+    }
+    const zeroMeasureInsight = buildExerciseInsight(
+      'goblet_squat',
+      [{ ...emptyNinetyDayWindow, session_count: '1', completed_set_count: '1' }],
+      [zeroMeasurePoint],
+      'Asia/Shanghai',
+      at,
+    )
+    expect(zeroMeasureInsight.windows[2]).toMatchObject({
+      sessionCount: 1,
+      completedSetCount: 1,
+      totalReps: 0,
+      volumeKg: 0,
+      activeMinutes: 0,
+      distanceKm: 0,
+    })
 
     const advanced = buildExerciseInsight(
       'goblet_squat',
@@ -536,6 +570,31 @@ describe('exercise insight projection', () => {
         at,
       ),
     ).toThrow('exercise insight window rows must have consistent aggregate relationships')
+    expect(() =>
+      buildExerciseInsight(
+        'goblet_squat',
+        [{ ...emptyNinetyDayWindow, completed_set_count: '1' }],
+        [],
+        'Asia/Shanghai',
+        at,
+      ),
+    ).toThrow('exercise insight window rows must have consistent aggregate relationships')
+    for (const [field, value] of [
+      ['total_reps', '1'],
+      ['volume_kg', '0.01'],
+      ['active_seconds', '1'],
+      ['distance_meters', '1'],
+    ] as const) {
+      expect(() =>
+        buildExerciseInsight(
+          'goblet_squat',
+          [{ ...emptyNinetyDayWindow, [field]: value }],
+          [],
+          'Asia/Shanghai',
+          at,
+        ),
+      ).toThrow('exercise insight window rows must have consistent aggregate relationships')
+    }
     expect(() =>
       buildExerciseInsight(
         'goblet_squat',
