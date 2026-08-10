@@ -400,9 +400,17 @@ export const buildHistoryCalendar = (
 }
 
 export const buildDashboard = (rows: InsightRows, timezone: string, at = new Date()): Dashboard => {
+  const referenceTime = at.getTime()
+  const healthRows = rows.health.filter((row) => row.occurred_at.getTime() <= referenceTime)
+  const workoutRows = rows.workouts.filter((row) => row.occurred_at.getTime() <= referenceTime)
+  const mealRows = rows.meals.filter((row) => row.occurred_at.getTime() <= referenceTime)
+  const planExperience =
+    rows.planExperience && rows.planExperience.updated_at.getTime() <= referenceTime
+      ? rows.planExperience
+      : null
   const today = localDay(at, timezone)
   const evidence: TodayEvidence[] = [
-    ...rows.health
+    ...healthRows
       .filter((row) => localDay(row.occurred_at, timezone) === today)
       .map((row) => ({
         id: row.id,
@@ -412,7 +420,7 @@ export const buildDashboard = (rows: InsightRows, timezone: string, at = new Dat
         value: displayMeasurement(row.display_value, row.display_unit),
         note: `已确认 · v${row.revision}`,
       })),
-    ...rows.workouts
+    ...workoutRows
       .filter((row) => localDay(row.occurred_at, timezone) === today)
       .map((row) => ({
         id: row.id,
@@ -422,7 +430,7 @@ export const buildDashboard = (rows: InsightRows, timezone: string, at = new Dat
         value: `${Number(row.completed_sets)}/${Number(row.total_sets)} 组`,
         note: `${round(Number(row.volume_kg))} kg 训练量 · v${row.revision}`,
       })),
-    ...rows.meals
+    ...mealRows
       .filter((row) => localDay(row.occurred_at, timezone) === today)
       .map((row) => ({
         id: row.id,
@@ -435,7 +443,7 @@ export const buildDashboard = (rows: InsightRows, timezone: string, at = new Dat
   ].sort((a, b) => timeValue(new Date(a.occurredAt)) - timeValue(new Date(b.occurredAt)))
 
   const readiness = estimateSubjectiveRecoveryState(
-    rows.health
+    healthRows
       .filter((row) => subjectiveRecoveryMetricSet.has(row.metric))
       .map((row) => ({
         recordId: row.id,
@@ -451,9 +459,9 @@ export const buildDashboard = (rows: InsightRows, timezone: string, at = new Dat
 
   const trends = ([7, 30, 90] as const).map((days): TrendWindow => {
     const boundary = at.getTime() - days * 86_400_000
-    const health = rows.health.filter((row) => row.occurred_at.getTime() >= boundary)
-    const workouts = rows.workouts.filter((row) => row.occurred_at.getTime() >= boundary)
-    const meals = rows.meals.filter((row) => row.occurred_at.getTime() >= boundary)
+    const health = healthRows.filter((row) => row.occurred_at.getTime() >= boundary)
+    const workouts = workoutRows.filter((row) => row.occurred_at.getTime() >= boundary)
+    const meals = mealRows.filter((row) => row.occurred_at.getTime() >= boundary)
     const activeDays = new Set([
       ...health.map((row) => localDay(row.occurred_at, timezone)),
       ...workouts.map((row) => localDay(row.occurred_at, timezone)),
@@ -530,16 +538,16 @@ export const buildDashboard = (rows: InsightRows, timezone: string, at = new Dat
       evidenceCount: readiness.evidence.length,
       freshness: freshness(['source_record_changed', 'time_advanced']),
     },
-    planExperience: rows.planExperience
+    planExperience: planExperience
       ? {
           kind: 'plan_experience',
           knowledgeClass: 'user_confirmed',
           authority: 'plan_experience_reflection',
-          planId: rows.planExperience.plan_id,
-          planRevision: rows.planExperience.plan_revision,
-          experience: rows.planExperience.experience,
-          reflectionRevision: rows.planExperience.revision,
-          updatedAt: rows.planExperience.updated_at.toISOString(),
+          planId: planExperience.plan_id,
+          planRevision: planExperience.plan_revision,
+          experience: planExperience.experience,
+          reflectionRevision: planExperience.revision,
+          updatedAt: planExperience.updated_at.toISOString(),
           freshness: freshness(['plan_reflection_changed']),
         }
       : null,
@@ -567,10 +575,11 @@ export class InsightsService {
           SELECT id, metric, display_value, display_unit, canonical_value, occurred_at, revision,
             source_kind
           FROM health_records
-          WHERE user_id = $1 AND deleted_at IS NULL AND status = 'confirmed' AND occurred_at >= $2
+          WHERE user_id = $1 AND deleted_at IS NULL AND status = 'confirmed'
+            AND occurred_at >= $2 AND occurred_at <= $3
           ORDER BY occurred_at DESC
         `,
-        [userId, since],
+        [userId, since, at],
       ),
       this.database.query<WorkoutRow>(
         `
@@ -582,11 +591,12 @@ export class InsightsService {
           FROM workout_sessions w
           JOIN workout_exercises e ON e.workout_id = w.id
           JOIN workout_sets s ON s.exercise_id = e.id
-          WHERE w.user_id = $1 AND w.deleted_at IS NULL AND w.started_at >= $2
+          WHERE w.user_id = $1 AND w.deleted_at IS NULL
+            AND w.started_at >= $2 AND w.started_at <= $3
           GROUP BY w.id
           ORDER BY w.started_at DESC
         `,
-        [userId, since],
+        [userId, since, at],
       ),
       this.database.query<MealRow>(
         `
@@ -596,11 +606,12 @@ export class InsightsService {
             COALESCE(SUM(i.protein_g_per_100g * i.canonical_grams / 100), 0)::text AS protein_g
           FROM nutrition_meals m
           JOIN nutrition_meal_items i ON i.meal_id = m.id
-          WHERE m.user_id = $1 AND m.deleted_at IS NULL AND m.occurred_at >= $2
+          WHERE m.user_id = $1 AND m.deleted_at IS NULL
+            AND m.occurred_at >= $2 AND m.occurred_at <= $3
           GROUP BY m.id
           ORDER BY m.occurred_at DESC
         `,
-        [userId, since],
+        [userId, since, at],
       ),
       this.database.query<PlanExperienceRow>(
         `

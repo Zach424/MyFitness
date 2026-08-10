@@ -52,6 +52,7 @@ export const dashboardSchema = z
   .strict()
   .superRefine((dashboard, ctx) => {
     const ledger = dashboard.personalState
+    const referenceTime = Date.parse(dashboard.generatedAt)
     const trend = dashboard.trends.find((candidate) => candidate.days === 7)
     const expectedSources = ['manual', 'device', 'imported'].filter((kind) =>
       dashboard.readiness.evidence.some((evidence) => evidence.sourceKind === kind),
@@ -88,6 +89,18 @@ export const dashboardSchema = z
         ledger.confirmedRecovery.sourceKinds.join(',') !== expectedSources.join(',') ||
         ledger.confirmedRecovery.freshness.asOf !== dashboard.generatedAt
       : ledger.confirmedRecovery !== null
+    const futureEvidence =
+      dashboard.today.items.some((item) => Date.parse(item.occurredAt) > referenceTime) ||
+      dashboard.readiness.evidence.some(
+        (evidence) => Date.parse(evidence.occurredAt) > referenceTime,
+      )
+    if (futureEvidence) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'dashboard evidence cannot occur after generatedAt',
+        path: ['generatedAt'],
+      })
+    }
     if (ledgerMismatch || confirmedMismatch) {
       ctx.addIssue({
         code: 'custom',

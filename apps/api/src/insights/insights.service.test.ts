@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { dashboardSchema } from '@myfitness/contracts'
 
 import {
@@ -7,6 +7,7 @@ import {
   buildHealthInsight,
   buildHistoryCalendar,
   buildNutritionInsight,
+  InsightsService,
   type InsightRows,
 } from './insights.service'
 
@@ -190,6 +191,132 @@ describe('dashboard aggregation', () => {
       planExperience: null,
     })
     expect(dashboardSchema.parse(dashboard)).toEqual(dashboard)
+  })
+
+  it('excludes every fact and reflection later than the reference instant', () => {
+    const at = new Date('2026-08-10T12:00:00.000Z')
+    const past = new Date('2026-08-10T11:00:00.000Z')
+    const future = new Date('2026-08-10T13:00:00.000Z')
+    const dashboard = buildDashboard(
+      {
+        health: [past, future].map((occurred_at, index) => ({
+          id: `00000000-0000-4000-8000-00000000000${index + 1}`,
+          metric: 'recovery.energy',
+          display_value: String(index + 3),
+          display_unit: 'score_1_5',
+          canonical_value: String(index + 3),
+          occurred_at,
+          revision: 1,
+          source_kind: 'manual',
+        })),
+        workouts: [past, future].map((occurred_at, index) => ({
+          id: `00000000-0000-4000-8000-00000000001${index}`,
+          title: index === 0 ? '参考时刻前训练' : '参考时刻后训练',
+          occurred_at,
+          completed_sets: '1',
+          total_sets: '1',
+          volume_kg: '100',
+          active_seconds: '60',
+          revision: 1,
+        })),
+        meals: [past, future].map((occurred_at, index) => ({
+          id: `00000000-0000-4000-8000-00000000002${index}`,
+          title: index === 0 ? '参考时刻前餐食' : '参考时刻后餐食',
+          occurred_at,
+          energy_kcal: '300',
+          protein_g: '20',
+          item_count: '1',
+          revision: 1,
+        })),
+        planExperience: {
+          plan_id: '00000000-0000-4000-8000-000000000030',
+          plan_revision: 2,
+          experience: 'about_right',
+          revision: 1,
+          updated_at: future,
+        },
+      } as InsightRows,
+      'Asia/Shanghai',
+      at,
+    )
+
+    expect(dashboard.today.items.map((item) => item.title)).toEqual([
+      '精力',
+      '参考时刻前训练',
+      '参考时刻前餐食',
+    ])
+    expect(dashboard.trends[0]).toMatchObject({
+      measurementCount: 1,
+      workoutCount: 1,
+      mealCount: 1,
+    })
+    expect(dashboard.readiness.evidence).toHaveLength(1)
+    expect(dashboard.personalState).toMatchObject({
+      confirmedRecovery: { observationCount: 1 },
+      observedWindow: { measurementCount: 1, workoutCount: 1, mealCount: 1 },
+      planExperience: null,
+    })
+    expect(dashboardSchema.parse(dashboard)).toEqual(dashboard)
+    expect(
+      dashboardSchema.safeParse({
+        ...dashboard,
+        today: {
+          ...dashboard.today,
+          items: [
+            ...dashboard.today.items,
+            { ...dashboard.today.items[0]!, occurredAt: future.toISOString() },
+          ],
+        },
+      }).success,
+    ).toBe(false)
+
+    const futureReadiness = dashboardSchema.safeParse({
+      ...dashboard,
+      readiness: {
+        ...dashboard.readiness,
+        evidence: dashboard.readiness.evidence.map((item, index) =>
+          index === 0 ? { ...item, occurredAt: future.toISOString() } : item,
+        ),
+      },
+      personalState: {
+        ...dashboard.personalState,
+        confirmedRecovery: dashboard.personalState.confirmedRecovery
+          ? {
+              ...dashboard.personalState.confirmedRecovery,
+              latestEvidenceAt: future.toISOString(),
+            }
+          : null,
+      },
+    })
+    expect(futureReadiness.success).toBe(false)
+    if (!futureReadiness.success) {
+      expect(futureReadiness.error.issues).toContainEqual(
+        expect.objectContaining({ message: 'dashboard evidence cannot occur after generatedAt' }),
+      )
+    }
+  })
+
+  it('applies the same upper reference bound to all three dashboard source queries', async () => {
+    const calls: Array<{ text: string; values: unknown[] }> = []
+    const database = {
+      query: vi.fn(async (text: string, values: unknown[] = []) => {
+        calls.push({ text, values })
+        return { rows: [] }
+      }),
+    }
+    const at = new Date('2026-08-10T12:00:00.000Z')
+    const userId = '00000000-0000-4000-8000-000000000040'
+
+    await new InsightsService(database as never).dashboard(userId, 'Asia/Shanghai', at)
+
+    expect(calls).toHaveLength(4)
+    expect(calls[0]!.text).toContain('occurred_at >= $2 AND occurred_at <= $3')
+    expect(calls[1]!.text).toContain('w.started_at >= $2 AND w.started_at <= $3')
+    expect(calls[2]!.text).toContain('m.occurred_at >= $2 AND m.occurred_at <= $3')
+    for (const call of calls.slice(0, 3)) {
+      expect(call.values[0]).toBe(userId)
+      expect(call.values[2]).toBe(at)
+    }
   })
 })
 
