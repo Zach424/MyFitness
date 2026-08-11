@@ -444,7 +444,7 @@ intent 创建 → 验证一次性 token 与确认短语 → users 状态关闭 �
 
 `createWorkoutRevisionSnapshot()` 让 shape 与正文共享同一只读 repeatable-read 事务。shape 还要求 exercise `id` 在 revision 内唯一、set `id` 在父 exercise 内唯一；ID 只需符合规范 UUID 文本结构，不锁定特定版本。根页以 `jsonb_set(snapshot,'{exercises}','[]')` 形成一个有界骨架，动作页以 `jsonb_set(exercise_json,'{sets}','[]')` 形成骨架，set 页交付原对象；三者都在 PostgreSQL 内编码并执行 64 KiB UTF-8 门禁。动作和组页面只携上一元素 UUID，在相同 target CTE 内恢复 ordinality 后继续读取，应用和收据不暴露 ordinality。空数组键在 Node 中原地替换为懒数组，保留 JSONB 解析键序；真实数据库证明反序 position 快照物化后与直接 `SELECT snapshot` 的 JSON 字节相同。
 
-递归 JSON 来源契约已经能表达 workout 对象内的懒 exercises/sets/history，并证明嵌套取消可传播到文件根；数据库 `createWorkoutRevisionSnapshotLayerSnapshot()` 现已把当前 workout→exercise→set 与完整 revision→snapshot→exercise→set 七层读取组合到一个 active-owner、只读 `REPEATABLE READ` 事务。修订骨架由 PostgreSQL 以 `snapshot: null` 保留 JSONB 键位，复用节点原地挂载根/动作/组懒来源；当前关系图和每个修订快照都必须逐级完整 EOF，才能推进下一个兄弟节点。七层收据分别记录批次/行数，显式 `complete()` 前事务不提交。下一项数据库工作不再是分解 history，而是把该结构适配为完整 workout JSON 值，并让 JSON 根生命周期拥有同一会话；之后才能安全加入跨顶层协调。
+数据库训练来源现在提供两种共享实现的字段顺序：关系优先会话保持当前图→history 的内部审计用途，JSON 会话则按 PostgreSQL JSONB 的 `history→exercises` 键序读取。JSON 查询为 workout 交付 `history: []`/`exercises: []` 骨架，为当前 exercise 交付 `sets: []` 骨架，revision 与 snapshot 子层继续使用既有占位；Node 只原位替换值。`createPortableExportWorkoutJsonSource()` 把七层异步迭代器递归标记为 JSON 懒数组，并把完成/取消直接委托给同一只读 `REPEATABLE READ` 会话。真实 PostgreSQL 已完成完整 `workouts` 逐字节对账。该会话仍与三字段协调器分离；按 v4 顶层顺序，下一数据库工作是先有界化 `exerciseCatalog`，再处理 `foodCatalog` 和 workouts 的同根协调。
 
 ## 20. 安全与隐私控制
 

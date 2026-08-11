@@ -537,6 +537,38 @@ export const portableExportWorkoutHeaderPageQuery = `WITH page AS MATERIALIZED (
        FROM encoded
        ORDER BY started_at, created_at, id`
 
+export const portableExportWorkoutJsonHeaderPageQuery = `WITH page AS MATERIALIZED (
+         SELECT id, title, status, source_kind, source_metadata, started_at, ended_at,
+                timezone, pain_level, fatigue, note, revision, deleted_at, created_at, updated_at
+         FROM workout_sessions
+         WHERE user_id = $1
+           AND (
+             $2::uuid IS NULL
+             OR (started_at, created_at, id) > (
+               SELECT started_at, created_at, id
+               FROM workout_sessions
+               WHERE user_id = $1 AND id = $2::uuid
+             )
+           )
+         ORDER BY started_at, created_at, id
+         LIMIT $3
+       ), encoded AS MATERIALIZED (
+         SELECT id, started_at, created_at,
+                (to_jsonb(page) || jsonb_build_object(
+                  'exercises', '[]'::jsonb,
+                  'history', '[]'::jsonb
+                ))::text AS payload_text
+         FROM page
+       )
+       SELECT id,
+              CASE
+                WHEN octet_length(payload_text) <= $4 THEN payload_text
+                ELSE NULL
+              END AS payload_text,
+              octet_length(payload_text) AS payload_byte_length
+       FROM encoded
+       ORDER BY started_at, created_at, id`
+
 async function* workoutHeaderPageRows(
   client: PoolClient,
   userId: string,
@@ -544,23 +576,27 @@ async function* workoutHeaderPageRows(
   maximumPayloadBytes: number,
   stats: MutableSnapshotStats,
   signal?: AbortSignal,
+  query = portableExportWorkoutHeaderPageQuery,
+  payloadLabel = 'workout header',
 ): AsyncGenerator<Record<string, unknown>> {
   throwIfAborted(signal)
   let anchorId: string | null = null
 
   while (true) {
     throwIfAborted(signal)
-    const page: QueryResult<BoundedSnapshotRow> = await client.query<BoundedSnapshotRow>(
-      portableExportWorkoutHeaderPageQuery,
-      [userId, anchorId, batchRows, maximumPayloadBytes],
-    )
+    const page: QueryResult<BoundedSnapshotRow> = await client.query<BoundedSnapshotRow>(query, [
+      userId,
+      anchorId,
+      batchRows,
+      maximumPayloadBytes,
+    ])
     if (page.rows.length === 0) break
     yield* boundedPagePayloads(
       page.rows,
       batchRows,
       maximumPayloadBytes,
       stats,
-      'workout header',
+      payloadLabel,
       signal,
     )
 
@@ -604,6 +640,42 @@ export const portableExportWorkoutExerciseHeaderPageQuery = `WITH page AS MATERI
        FROM encoded
        ORDER BY position`
 
+export const portableExportWorkoutJsonExerciseHeaderPageQuery = `WITH page AS MATERIALIZED (
+         SELECT exercise.id, exercise.position, exercise.exercise_key, exercise.name,
+                exercise.category, exercise.notes, exercise.tracking_mode,
+                exercise.equipment, exercise.equipment_notes
+         FROM workout_exercises AS exercise
+         INNER JOIN workout_sessions AS workout ON workout.id = exercise.workout_id
+         WHERE workout.user_id = $1
+           AND exercise.workout_id = $2
+           AND (
+             $3::uuid IS NULL
+             OR exercise.position > (
+               SELECT anchor.position
+               FROM workout_exercises AS anchor
+               INNER JOIN workout_sessions AS anchor_workout
+                 ON anchor_workout.id = anchor.workout_id
+               WHERE anchor_workout.user_id = $1
+                 AND anchor.workout_id = $2
+                 AND anchor.id = $3::uuid
+             )
+           )
+         ORDER BY exercise.position
+         LIMIT $4
+       ), encoded AS MATERIALIZED (
+         SELECT id, position,
+                (to_jsonb(page) || jsonb_build_object('sets', '[]'::jsonb))::text AS payload_text
+         FROM page
+       )
+       SELECT id,
+              CASE
+                WHEN octet_length(payload_text) <= $5 THEN payload_text
+                ELSE NULL
+              END AS payload_text,
+              octet_length(payload_text) AS payload_byte_length
+       FROM encoded
+       ORDER BY position`
+
 async function* workoutExerciseHeaderPageRows(
   client: PoolClient,
   userId: string,
@@ -612,23 +684,28 @@ async function* workoutExerciseHeaderPageRows(
   maximumPayloadBytes: number,
   stats: MutableSnapshotStats,
   signal?: AbortSignal,
+  query = portableExportWorkoutExerciseHeaderPageQuery,
+  payloadLabel = 'workout exercise header',
 ): AsyncGenerator<Record<string, unknown>> {
   throwIfAborted(signal)
   let anchorId: string | null = null
 
   while (true) {
     throwIfAborted(signal)
-    const page: QueryResult<BoundedSnapshotRow> = await client.query<BoundedSnapshotRow>(
-      portableExportWorkoutExerciseHeaderPageQuery,
-      [userId, workoutId, anchorId, batchRows, maximumPayloadBytes],
-    )
+    const page: QueryResult<BoundedSnapshotRow> = await client.query<BoundedSnapshotRow>(query, [
+      userId,
+      workoutId,
+      anchorId,
+      batchRows,
+      maximumPayloadBytes,
+    ])
     if (page.rows.length === 0) break
     yield* boundedPagePayloads(
       page.rows,
       batchRows,
       maximumPayloadBytes,
       stats,
-      'workout exercise header',
+      payloadLabel,
       signal,
     )
 
@@ -2287,10 +2364,12 @@ const createWorkoutRevisionLayerSnapshotSession = (
   database: DatabaseService,
   userId: string,
   options: PortableExportDatabaseSnapshotOptions,
-  includeRevisionSnapshots: boolean,
+  mode: 'headers' | 'snapshots' | 'json',
 ):
   | PortableExportWorkoutRevisionHeaderLayerSnapshotSession
   | PortableExportWorkoutRevisionSnapshotLayerSession => {
+  const includeRevisionSnapshots = mode !== 'headers'
+  const jsonFieldOrder = mode === 'json'
   const batchRows = validateBatchRows(options.batchRows ?? portableExportSnapshotDefaultBatchRows)
   const maximumPayloadBytes = validateMaximumPayloadBytes(
     options.maximumPayloadBytes ?? portableExportSnapshotMaximumPayloadBytes,
@@ -2339,6 +2418,10 @@ const createWorkoutRevisionLayerSnapshotSession = (
         maximumPayloadBytes,
         workoutHeaderStats,
         options.signal,
+        jsonFieldOrder
+          ? portableExportWorkoutJsonHeaderPageQuery
+          : portableExportWorkoutHeaderPageQuery,
+        jsonFieldOrder ? 'workout JSON header' : 'workout header',
       )) {
         const workoutId = workoutHeader.id
         if (typeof workoutId !== 'string' || workoutId.length === 0) {
@@ -2353,6 +2436,15 @@ const createWorkoutRevisionLayerSnapshotSession = (
 
         const exercises: AsyncIterable<PortableExportWorkoutSetLayerSnapshotExercise> = {
           [Symbol.asyncIterator]: () => {
+            if (jsonFieldOrder && (!historyStarted || !historyCompleted)) {
+              return (async function* () {
+                throw await failLayer(
+                  new Error(
+                    'portable export workout JSON exercises must be read after history completes',
+                  ),
+                )
+              })()
+            }
             if (exercisesStarted) {
               return (async function* () {
                 throw await failLayer(
@@ -2371,6 +2463,10 @@ const createWorkoutRevisionLayerSnapshotSession = (
               maximumPayloadBytes,
               workoutExerciseStats,
               options.signal,
+              jsonFieldOrder
+                ? portableExportWorkoutJsonExerciseHeaderPageQuery
+                : portableExportWorkoutExerciseHeaderPageQuery,
+              jsonFieldOrder ? 'workout JSON exercise header' : 'workout exercise header',
             )[Symbol.asyncIterator]()
             let suppressSetRootFailure = false
             let exerciseIterator!: AsyncGenerator<
@@ -2530,7 +2626,7 @@ const createWorkoutRevisionLayerSnapshotSession = (
 
         const history: AsyncIterable<Record<string, unknown>> = {
           [Symbol.asyncIterator]: () => {
-            if (!exercisesStarted || !exercisesCompleted) {
+            if (!jsonFieldOrder && (!exercisesStarted || !exercisesCompleted)) {
               return (async function* () {
                 throw await failLayer(
                   new Error(
@@ -3246,7 +3342,7 @@ export class PortableExportDatabaseSnapshotService {
       this.database,
       userId,
       options,
-      false,
+      'headers',
     ) as PortableExportWorkoutRevisionHeaderLayerSnapshotSession
   }
 
@@ -3258,7 +3354,19 @@ export class PortableExportDatabaseSnapshotService {
       this.database,
       userId,
       options,
-      true,
+      'snapshots',
+    ) as PortableExportWorkoutRevisionSnapshotLayerSession
+  }
+
+  createWorkoutRevisionSnapshotJsonLayerSnapshot(
+    userId: string,
+    options: PortableExportDatabaseSnapshotOptions = {},
+  ): PortableExportWorkoutRevisionSnapshotLayerSession {
+    return createWorkoutRevisionLayerSnapshotSession(
+      this.database,
+      userId,
+      options,
+      'json',
     ) as PortableExportWorkoutRevisionSnapshotLayerSession
   }
 

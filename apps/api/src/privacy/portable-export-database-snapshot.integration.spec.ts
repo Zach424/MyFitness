@@ -22,6 +22,7 @@ import {
   createPortableExportJsonStream,
   portableExportJsonAsyncArray,
 } from './portable-export-json-stream'
+import { createPortableExportWorkoutJsonSource } from './portable-export-workout-json-source'
 
 describe('portable export bounded PostgreSQL snapshot', () => {
   const config = getRuntimeConfig()
@@ -1416,6 +1417,268 @@ describe('portable export bounded PostgreSQL snapshot', () => {
       workoutRevisionSnapshotRoots: { batchCount: 2, rowCount: 2 },
       workoutRevisionSnapshotExercises: { batchCount: 2, rowCount: 2 },
       workoutRevisionSnapshotSets: { batchCount: 3, rowCount: 3 },
+    })
+  })
+
+  it('serializes the complete lazy workouts array byte-for-byte in PostgreSQL JSONB field order', async () => {
+    const userId = await createUser()
+    const workoutId = await createWorkout(userId, '2026-08-11T02:53:30.000001Z')
+    const currentExerciseId = await createWorkoutExercise(workoutId, 1, {
+      name: '当前动作',
+    })
+    await createWorkoutSet(currentExerciseId, 1)
+    const revisionSnapshots = [
+      workoutRevisionSnapshot(userId, workoutId, 1, [
+        {
+          id: randomUUID(),
+          position: 2,
+          exerciseKey: 'history_first',
+          name: '历史首项',
+          category: 'strength',
+          sets: [
+            {
+              id: randomUUID(),
+              position: 2,
+              kind: 'working',
+              reps: 8,
+              canonicalLoadKg: null,
+              completed: true,
+            },
+            {
+              id: randomUUID(),
+              position: 1,
+              kind: 'warmup',
+              reps: 10,
+              canonicalLoadKg: null,
+              completed: true,
+            },
+          ],
+        },
+      ]),
+      workoutRevisionSnapshot(userId, workoutId, 2, [
+        {
+          id: randomUUID(),
+          position: 1,
+          exerciseKey: 'history_second',
+          name: '历史第二版',
+          category: 'strength',
+          trackingMode: 'reps_load',
+          equipment: [],
+          sets: [
+            {
+              id: randomUUID(),
+              position: 1,
+              kind: 'working',
+              reps: 12,
+              canonicalLoadKg: null,
+              completed: true,
+            },
+          ],
+        },
+      ]),
+    ]
+    await createWorkoutRevision(
+      userId,
+      workoutId,
+      1,
+      '2026-08-11T02:53:40.000001Z',
+      'created',
+      revisionSnapshots[0],
+    )
+    await createWorkoutRevision(
+      userId,
+      workoutId,
+      2,
+      '2026-08-11T02:53:40.000002Z',
+      'updated',
+      revisionSnapshots[1],
+    )
+    const direct = await pool.query<{ payload: Record<string, unknown> }>(
+      `SELECT (
+         to_jsonb(workout) || jsonb_build_object(
+           'exercises', COALESCE((
+             SELECT jsonb_agg(
+               (to_jsonb(exercise) - 'workout_id') || jsonb_build_object(
+                 'sets', COALESCE((
+                   SELECT jsonb_agg(to_jsonb(set_row) - 'exercise_id' ORDER BY set_row.position)
+                   FROM workout_sets AS set_row WHERE set_row.exercise_id = exercise.id
+                 ), '[]'::jsonb)
+               ) ORDER BY exercise.position
+             ) FROM workout_exercises AS exercise WHERE exercise.workout_id = workout.id
+           ), '[]'::jsonb),
+           'history', COALESCE((
+             SELECT jsonb_agg((to_jsonb(history) - 'user_id' - 'workout_id') ORDER BY history.revision)
+             FROM workout_revisions AS history WHERE history.workout_id = workout.id
+           ), '[]'::jsonb)
+         )
+       ) AS payload
+       FROM (
+         SELECT id, title, status, source_kind, source_metadata, started_at, ended_at,
+                timezone, pain_level, fatigue, note, revision, deleted_at, created_at, updated_at
+         FROM workout_sessions WHERE user_id = $1 ORDER BY started_at, created_at, id
+       ) AS workout`,
+      [userId],
+    )
+    const eager = privacyExportSchema.parse({
+      schemaVersion: privacyExportSchemaVersion,
+      generatedAt: '2026-08-11T02:54:00.000Z',
+      accountId: userId,
+      data: {
+        account: { id: userId, status: 'active' },
+        identities: [],
+        profile: null,
+        goal: null,
+        consentEvents: [],
+        healthRecords: [],
+        healthRecordRevisions: [],
+        exerciseCatalog: [],
+        foodCatalog: [],
+        workouts: direct.rows.map((row) => row.payload),
+        nutritionMeals: [],
+        nutritionFavorites: [],
+        weeklyPlans: [],
+        aiExplanationRuns: [],
+        foodPhotoAnalyses: [],
+        progressPhotos: [],
+      },
+    })
+    const expected = serializePortableExport(eager, Number.MAX_SAFE_INTEGER)
+    const layer = snapshots.createWorkoutRevisionSnapshotJsonLayerSnapshot(userId, {
+      batchRows: 1,
+    })
+    const workoutSource = createPortableExportWorkoutJsonSource(layer)
+    const json = createPortableExportJsonStream(
+      {
+        ...eager,
+        data: { ...eager.data, workouts: workoutSource.workouts as never },
+      },
+      { chunkBytes: 37, lifecycle: workoutSource },
+    )
+    let layerSettled = false
+    void layer.receipt.finally(() => {
+      layerSettled = true
+    })
+    const chunks: Buffer[] = []
+
+    for await (const chunk of json.bytes) {
+      expect(chunk.length).toBeLessThanOrEqual(37)
+      chunks.push(Buffer.from(chunk))
+    }
+
+    expect(Buffer.concat(chunks)).toEqual(expected)
+    expect(layerSettled).toBe(true)
+    await expect(layer.receipt).resolves.toMatchObject({
+      batchRows: 1,
+      workoutHeaders: { batchCount: 1, rowCount: 1 },
+      workoutExercises: { batchCount: 1, rowCount: 1 },
+      workoutSets: { batchCount: 1, rowCount: 1 },
+      workoutRevisions: { batchCount: 2, rowCount: 2 },
+      workoutRevisionSnapshotRoots: { batchCount: 2, rowCount: 2 },
+      workoutRevisionSnapshotExercises: { batchCount: 2, rowCount: 2 },
+      workoutRevisionSnapshotSets: { batchCount: 3, rowCount: 3 },
+    })
+    await expect(json.receipt).resolves.toEqual({
+      schemaVersion: privacyExportSchemaVersion,
+      chunkBytes: 37,
+      byteLength: expected.length,
+      sha256: createHash('sha256').update(expected).digest('hex'),
+    })
+  })
+
+  it('cancels the JSON-ordered workout transaction from an active immutable set', async () => {
+    const userId = await createUser()
+    const workoutId = await createWorkout(userId, '2026-08-11T02:54:10.000001Z')
+    const firstSetId = randomUUID()
+    const snapshot = workoutRevisionSnapshot(userId, workoutId, 1, [
+      {
+        id: randomUUID(),
+        position: 1,
+        exerciseKey: 'json_cancel',
+        name: 'JSON cancellation fixture',
+        category: 'strength',
+        sets: [
+          {
+            id: firstSetId,
+            position: 1,
+            kind: 'working',
+            reps: 10,
+            canonicalLoadKg: null,
+            completed: true,
+          },
+          {
+            id: randomUUID(),
+            position: 2,
+            kind: 'working',
+            reps: 8,
+            canonicalLoadKg: null,
+            completed: true,
+          },
+        ],
+      },
+    ])
+    await createWorkoutRevision(
+      userId,
+      workoutId,
+      1,
+      '2026-08-11T02:54:20.000001Z',
+      'created',
+      snapshot,
+    )
+    const eager = privacyExportSchema.parse({
+      schemaVersion: privacyExportSchemaVersion,
+      generatedAt: '2026-08-11T02:54:30.000Z',
+      accountId: userId,
+      data: {
+        account: { id: userId },
+        identities: [],
+        profile: null,
+        goal: null,
+        consentEvents: [],
+        healthRecords: [],
+        healthRecordRevisions: [],
+        exerciseCatalog: [],
+        foodCatalog: [],
+        workouts: [],
+        nutritionMeals: [],
+        nutritionFavorites: [],
+        weeklyPlans: [],
+        aiExplanationRuns: [],
+        foodPhotoAnalyses: [],
+        progressPhotos: [],
+      },
+    })
+    const layer = snapshots.createWorkoutRevisionSnapshotJsonLayerSnapshot(userId, {
+      batchRows: 1,
+    })
+    const workoutSource = createPortableExportWorkoutJsonSource(layer)
+    const json = createPortableExportJsonStream(
+      {
+        ...eager,
+        data: { ...eager.data, workouts: workoutSource.workouts as never },
+      },
+      { chunkBytes: 1, lifecycle: workoutSource },
+    )
+    const iterator = json.bytes[Symbol.asyncIterator]()
+    let prefix = ''
+    while (!prefix.includes(firstSetId)) {
+      const next = await iterator.next()
+      if (next.done) throw new Error('snapshot set fixture was not reached')
+      prefix += next.value.toString('utf8')
+    }
+    const jsonFailure = json.receipt.catch((error: unknown) => error)
+    const layerFailure = layer.receipt.catch((error: unknown) => error)
+    let returnFailure: unknown
+
+    try {
+      await iterator.return?.()
+    } catch (error) {
+      returnFailure = error
+    }
+
+    expect(await layerFailure).toBe(returnFailure)
+    expect(await jsonFailure).toBe(returnFailure)
+    expect(returnFailure).toMatchObject({
+      message: 'portable export workout revision snapshot sets did not complete',
     })
   })
 

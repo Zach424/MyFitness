@@ -1196,6 +1196,32 @@ describe('portable export database snapshot session', () => {
     expect(lifecycle).toMatchObject({ committed: false, rolledBack: true })
   })
 
+  it('requires JSON-ordered workout history before current relation exercises', async () => {
+    const { database, lifecycle } = fakeWorkoutExerciseLayerDatabase([{ id: 'workout-1' }], {
+      'workout-1': [{ id: 'exercise-current' }],
+    })
+    const session = new PortableExportDatabaseSnapshotService(
+      database,
+    ).createWorkoutRevisionSnapshotJsonLayerSnapshot('11111111-1111-4111-8111-111111111111')
+    const workouts = session.workouts[Symbol.asyncIterator]()
+    const workout = await workouts.next()
+    if (workout.done) throw new Error('workout fixture was not returned')
+    const receiptFailure = session.receipt.catch((error: unknown) => error)
+    let exerciseFailure: unknown
+
+    try {
+      await workout.value.exercises[Symbol.asyncIterator]().next()
+    } catch (error) {
+      exerciseFailure = error
+    }
+
+    expect(exerciseFailure).toMatchObject({
+      message: 'portable export workout JSON exercises must be read after history completes',
+    })
+    expect(await receiptFailure).toBe(exerciseFailure)
+    expect(lifecycle).toMatchObject({ committed: false, rolledBack: true })
+  })
+
   it('cancels the deepest revision set before history and workout parents', async () => {
     const revisionId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1'
     const snapshot = {

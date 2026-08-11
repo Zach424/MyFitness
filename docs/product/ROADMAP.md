@@ -2,7 +2,7 @@
 
 路线图按受控迭代组织。一轮可以跨越多个工作会话，但只有在实现、验证、档案更新和提交全部完成后才结束。
 
-进度快照（2026-08-11）：第 0–169 轮已在本地完成。异步便携归档现有保管状态/预约、递归懒数组的精确增量 v4 JSON、AES-256-GCM 分块认证信封、私有 multipart 对象 writer，以及同意事件/健康记录/健康修订三个同事务有界 keyset 行源。训练 `createWorkoutRevisionSnapshotLayerSnapshot()` 已把当前 workout→exercise→set 与全部 revision→snapshot→exercise→set 组合到一次 active-owner、只读 repeatable-read 根事务；`snapshot: null` 修订骨架原地挂载复用嵌套节点，每条 snapshot 必须完整结束才能推进，七层 64 KiB、显式提交、最深层取消、反序原序与完整 history 逐字节同步等价均由数据库替身和真实 PostgreSQL 证明。完整 workout JSON 适配、跨顶层协调、其他十个顶层集合/媒体、KMS、租约执行器、公开 API、限时下载和 UI 继续停放，R-013 保持中等级开放。生产依赖保持 0 个 critical/high、9 个 moderate；单元测试 547 项、集成测试 108 项、浏览器测试 95 项。
+进度快照（2026-08-11）：第 0–170 轮已在本地完成。异步便携归档现有保管状态/预约、递归懒数组精确 v4 JSON、认证加密、multipart writer、同意/健康/修订三字段同事务来源，以及完整 workout 懒 JSON 独立来源。训练 JSON 会话复用七层状态机，按 PostgreSQL 实际 `history→exercises` 键序消费；workout、当前 exercise 和 revision 通过空数组或 `snapshot: null` 骨架保留对象键位，适配器原位挂载递归懒节点。真实数据库证明完整 `workouts` 与同步 v4 逐字节相同，活动 snapshot set 取消统一拒绝 JSON/数据库收据。跨顶层协调、exercise/food catalog、后续集合/媒体、KMS、租约执行器、公开 API、限时下载和 UI 继续停放，R-013 保持中等级开放。生产依赖为 0 个 critical/high、9 个 moderate；单元 550 项、集成 110 项、浏览器 95 项。
 
 | 迭代 | 主要范围                              | 退出证据                                                                           |
 | ---- | ------------------------------------- | ---------------------------------------------------------------------------------- |
