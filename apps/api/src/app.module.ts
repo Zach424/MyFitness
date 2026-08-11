@@ -54,6 +54,7 @@ import { PrivacyController } from './privacy/privacy.controller'
 import { ErasureReceiptsController } from './privacy/erasure-receipts.controller'
 import { ErasureLedgerService } from './privacy/erasure-ledger.service'
 import { PortableExportArchiveService } from './privacy/portable-export-archive.service'
+import { PortableExportDatabaseSnapshotService } from './privacy/portable-export-database-snapshot'
 import { PrivacyService } from './privacy/privacy.service'
 import { WorkoutsController } from './workouts/workouts.controller'
 import { WorkoutsService } from './workouts/workouts.service'
@@ -105,6 +106,7 @@ import { WorkoutsService } from './workouts/workouts.service'
     ObjectStorageService,
     PlansService,
     PortableExportArchiveService,
+    PortableExportDatabaseSnapshotService,
     ProgressPhotosService,
     PrivacyService,
     RateLimitService,
