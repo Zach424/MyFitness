@@ -81,7 +81,7 @@ erDiagram
 
 | 领域     | 表                                                                                                          |        本地活动行 |
 | -------- | ----------------------------------------------------------------------------------------------------------- | ----------------: |
-| 迁移     | `schema_migrations`                                                                                         |                37 |
+| 迁移     | `schema_migrations`                                                                                         |                38 |
 | 用户身份 | `users` / `auth_identities` / `auth_sessions` / `auth_identity_suppressions`                                |  60 / 60 / 60 / 0 |
 | 资料授权 | `user_profiles` / `user_goals` / `consent_events`                                                           |        3 / 3 / 15 |
 | 健康     | `health_records` / `health_record_revisions`                                                                |             0 / 0 |
@@ -93,7 +93,7 @@ erDiagram
 | 进度照   | `progress_photos`                                                                                           |                 2 |
 | 计划     | `weekly_plans` / `weekly_plan_revisions` / `plan_workout_links` / `plan_experience_reflections`             |     3 / 4 / 0 / 0 |
 | AI       | `ai_explanation_runs`                                                                                       |                 2 |
-| 个人模型 | `personal_model_items` / `personal_model_item_revisions`                                                    |             0 / 0 |
+| 个人模型 | `personal_model_items` / `personal_model_item_revisions` / `personal_model_feedback_events`                 |         0 / 0 / 0 |
 | 隐私     | `privacy_erasure_intents` / `privacy_erasure_receipts` / `privacy_export_archives`                          |         0 / 0 / 0 |
 | 持久任务 | `data_operation_jobs` / `data_operation_attempts`                                                           |         179 / 179 |
 | 管理身份 | `admin_operators` / `admin_identities` / `admin_operator_roles` / `admin_sessions` / `admin_oidc_exchanges` | 0 / 0 / 0 / 0 / 0 |
@@ -352,11 +352,25 @@ kind 覆盖对象删除、提供方处置、备份日志等持久副作用。`de
 
 每行保存 `id,user_id,item_id,subject_key,schema_version,revision,previous_revision,action,snapshot,derivation_fingerprint,feedback_event_id,changed_at`。完整 JSONB 快照先由 P1b 严格 Schema 校验；数据库再次核对必要键、owner/item/subject/revision、时间、领域枚举、动作与状态。复合自引用外键要求非首修订的精确前驱真实存在，history 索引为 `(user_id,item_id,revision DESC)`。
 
-revision 的 UPDATE 和直接 DELETE 由触发器拒绝；延迟 constraint trigger 还要求新 revision 在同一事务中被发布为 current，避免只写历史、不推进聚合。repository 用 `FOR UPDATE` 和 expected revision 串行化竞争写入，真实 PostgreSQL 证明同一 expected revision 只有一个赢家。当前反馈表尚未建立，因此额外约束暂时禁止四种 user action revision 和非空 `feedback_event_id`；P2b 建立事件外键和原子转换后才能移除该停点。
+revision 的 UPDATE 和直接 DELETE 由触发器拒绝；延迟 constraint trigger 还要求新 revision 在同一事务中被发布为 current，避免只写历史、不推进聚合。repository 先锁 item，再以新语句读取锁后的 current revision；expected revision 让普通竞争写入只有一个赢家。普通 append 拒绝任何带 `feedback_event_id` 的 revision，用户动作只能走反馈应用事务。
 
 数据库重复保存所有者、主题、修订号和动作，是为了让关系约束在不解析全部业务对象时也能拒绝跨用户、错主题、断链和跳级发布。它不负责判断观察是否充分、置信是否合理或文字是否容易理解；这些规则仍由共享契约、确定性领域服务和后续用户研究负责。持久成功只证明结构与历史边界成立，不能被解释为个人认知结论已经真实或完整。
 
-本轮历史读取只服务内部仓储，按修订号从新到旧返回有限数量。公开分页需要单独设计不可伪造游标、认证所有者错误隐藏、删除和导出行为；在这些边界完成前，两张表不得直接暴露给客户端，也不得成为自由查询的用户画像数据源。
+本轮历史读取只服务内部仓储，按修订号从新到旧返回有限数量。公开分页需要单独设计不可伪造游标、认证所有者错误隐藏、删除和导出行为；在这些边界完成前，Personal Model 表不得直接暴露给客户端，也不得成为自由查询的用户画像数据源。
+
+### 14.5.3 `personal_model_feedback_events`
+
+每行保存 `id,user_id,item_id,item_revision,choice,reason_code,note,context_valid_until,created_at,transition_schema_version,outcome,no_op_reason,result_revision,result_fingerprint`，并从四选一 choice 生成固定 `revision_action`。输入字段对应 P1b 反馈事件；结果字段把 revised 的下一修订或 no-op 的固定原因和结果指纹保存为不可变收据。note 经过首尾空白和 1–300 字符门禁，temporary 必须有晚于事件的时限，其余选择不得携带时限。
+
+插入触发器要求事件命中同 owner、同 item 的精确 current 非终态 revision，且事件不能早于目标修订。no-op 还必须证明目标快照已经处于相同 feedback state，temporary 有效期相同，disagree 目标已经 disputed。事件的 UPDATE 和直接 DELETE 被拒绝，账户级级联仍可清理。
+
+revised 使用两条可延迟关系形成事务闭环：事件的 `result_revision` 指向精确下一 revision；结果 revision 的 event/owner/item/previous/action/revision/fingerprint 复合外键反向引用同一事件。`UNIQUE (feedback_event_id)` 和结果 revision 唯一约束保证一个事件最多产生一个历史结果。no-op 明确保持 `result_revision IS NULL`，不能制造伪修订。repository 在 item 行锁内先检查不可变事件是否已存在：完全相同则从目标/结果历史重建并返回，内容不同则冲突。
+
+双向关系不是为了增加两份结果权威，而是让事务提交时能够从任意一侧发现缺口。只有事件没有结果时，向前关系失败；只有用户修订没有事件时，反向关系失败；动作、前驱、结果编号或指纹不一致时，复合关系同样失败。数据库因此可以证明两行共同描述一次转换，而完整业务语义仍由共享契约负责。
+
+事件重放也不会修改原行或重新执行转换。契约允许 RFC 3339 明确偏移，而 PostgreSQL `timestamptz` 回读会统一时区表示；仓储因此只在幂等比较副本中把条目、证据与反馈的绝对时间折算为 UTC 时刻，不改写指纹覆盖的 revision/evidence JSON。随后读取已经保存的目标历史和结果历史，重建当时的完整收据，再与同样折算的本次输入逐字段比较；安全重放返回本次已经通过 Schema 的表示。这样既能恢复响应丢失后的确定结果，又不会把语义相同的 `+08:00` 与 `Z` 误判为事件换内容，也不会让规范化悄悄改变快照或指纹。其余字段对不上时只返回冲突，不猜测用户真正想要哪一个版本。
+
+反馈文字虽然长度有限，仍可能包含身体、训练安排或个人处境。数据库只为准确保存和本人后续复核而保留这些信息，不为搜索、画像或模型训练建立通用索引。以后进入导出和页面前，还必须补齐用途说明、最小展示、保留期限与删除传播证明。
 
 ## 15. 管理员身份与审计
 
@@ -390,7 +404,7 @@ revision 的 UPDATE 和直接 DELETE 由触发器拒绝；延迟 constraint trig
 
 ### 16.1 `schema_migrations`
 
-`name text` 主键、`checksum char`、`applied_at timestamptz`。当前 37 行，名称从 `0001` 连续至 `0037_personal_model_item_revision_core.sql`。checksum 用于检测已应用迁移文件被改写。
+`name text` 主键、`checksum char`、`applied_at timestamptz`。当前 38 行，名称从 `0001` 连续至 `0038_personal_model_feedback_event_core.sql`。checksum 用于检测已应用迁移文件被改写。
 
 ### 16.2 当前迁移演进主题
 
@@ -403,7 +417,7 @@ revision 的 UPDATE 和直接 DELETE 由触发器拒绝；延迟 constraint trig
 | 0020–0024 | 管理员支持与审计、OIDC、计划证据与关联             |
 | 0025–0030 | 洞察/回看数据、本人计划体验与归档保管/安全整数边界 |
 | 0031–0036 | 便携归档健康、训练、目录、餐食与计划关联全历史索引 |
-| 0037      | Personal Model item/revision 最小持久内核          |
+| 0037–0038 | Personal Model item/revision 与 feedback 最小内核  |
 
 迁移只能前向追加；不得在共享历史中重写已应用 SQL。生产发布前应先在备份副本演练、核对 checksum、外键和索引，再滚动应用。
 
@@ -412,7 +426,7 @@ revision 的 UPDATE 和直接 DELETE 由触发器拒绝；延迟 constraint trig
 | 父实体                              | 子实体                                           | 主要策略                                         |
 | ----------------------------------- | ------------------------------------------------ | ------------------------------------------------ |
 | `users`                             | 资料、目标、会话、身份、授权、业务聚合、照片、AI | 账户级删除时级联清理                             |
-| `users`                             | Personal Model item 与完整 revision 历史         | 账户级删除时级联；日常直接物理删除由触发器拒绝   |
+| `users`                             | Personal Model item、revision 与 feedback 历史   | 账户级删除时级联；日常直接物理删除由触发器拒绝   |
 | `users`                             | `privacy_export_archives`                        | RESTRICT；先处置私有对象并删除保管行             |
 | 当前聚合                            | 子项与 revision                                  | 聚合物理删除时级联；普通用户删除只先软删         |
 | `weekly_plans` / `workout_sessions` | `plan_workout_links`                             | 复合所有权 FK；账户删除最终级联                  |
@@ -428,11 +442,11 @@ revision 的 UPDATE 和直接 DELETE 由触发器拒绝；延迟 constraint trig
 
 ### 18.2 历史
 
-所有 revision 表有 `(aggregate_id,revision)` 唯一约束，并有 `(user_id,aggregate_id,revision desc)` 读取索引，防止跨用户历史查询。Personal Model 使用 `(user_id,item_id,revision desc)`，并由 owner/item/subject 复合外键同时锁定历史链归属。
+所有 revision 表有 `(aggregate_id,revision)` 唯一约束，并有 `(user_id,aggregate_id,revision desc)` 读取索引，防止跨用户历史查询。Personal Model revision 使用 `(user_id,item_id,revision desc)`；feedback 使用 `(user_id,item_id,created_at desc,id desc)`，并由 target/result 复合外键锁定同一历史链归属。
 
 ### 18.3 幂等
 
-健康、训练、餐食、计划、目录、AI 和照片均以 `(user_id,idempotency_key)` 唯一；数据操作使用全局 dedupe_key。
+健康、训练、餐食、计划、目录、AI 和照片均以 `(user_id,idempotency_key)` 唯一；数据操作使用全局 dedupe_key。Personal Model feedback 以全局 event UUID 标识命令，同 owner/item 下完全相同的事件结果可以重放，同一 UUID 换内容会冲突。
 
 ### 18.4 活动态与到期任务
 
@@ -448,7 +462,7 @@ revision 的 UPDATE 和直接 DELETE 由触发器拒绝；延迟 constraint trig
 
 创建 → 当前 revision 1 + revision 快照 → 更正增加 revision → 用户删除写 deleted_at 与 deleted 修订 → 当前列表/洞察排除 → 账户级删除时当前与历史物理清除。
 
-Personal Model item 创建时在同一事务写入 revision 1 并发布当前指针；后续更新锁定 item、校验期望 revision、只追加完整快照并把指针精确推进一位。当前阶段不支持普通物理删除，只有账户级 owner 级联可清理 item 与历史；反馈事件、来源传播和便携导出生命周期留待后续迁移。
+Personal Model item 创建时在同一事务写入 revision 1 并发布当前指针；后续更新锁定 item、校验期望 revision、只追加完整快照并把指针精确推进一位。反馈 revised 在同一事务追加事件、结果 revision 并推进指针；no-op 只追加结果收据。当前阶段不支持普通物理删除，只有账户级 owner 级联可清理 item、revision 与 feedback；来源传播和便携导出生命周期留待后续迁移。
 
 ### 19.2 临时餐食照片
 
@@ -497,6 +511,7 @@ intent 创建 → 验证一次性 token 与确认短语 → users 状态关闭 �
 - admin 审计表有数据库级不可变触发器；普通 revision 表通过应用只追加策略和唯一 revision 约束保护。
 - JSONB 用于需要版本化的聚合快照或提供方详情；进入 JSONB 前仍由严格 Zod Schema 校验，不接受任意模型原文直接持久化。
 - Personal Model 仓储在写入和读取时都执行共享完整 Schema 校验；数据库检查只负责 owner、subject、revision 链、核心枚举与原子发布等持久边界，不能替代 claim/evidence 的完整契约校验。
+- Personal Model feedback 的 note、reason 和 temporary 时限属于敏感用户校准信息；日志与指标不得记录正文。事件 ID 只用于仓储幂等和内部关联，不是公开授权凭据。
 
 ## 21. 当前限制与后续设计风险
 
@@ -506,7 +521,7 @@ intent 创建 → 验证一次性 token 与确认短语 → users 状态关闭 �
 - 当前本地数据操作表有 179 个 job/attempt，来自测试和演示；应通过状态分布、失败码和死信而不是总行数判断健康。
 - 归档表与状态机已存在，但请求仓储、执行任务、加密对象、下载授权和到期扫描尚未实现；表结构不能被描述为用户可用的异步导出。
 - 没有设备原生同步表、社交表、支付表或医疗病历表；这些不属于当前实现。
-- `personal_model_items` 与 `personal_model_item_revisions` 已建立 owner 复合键、不可变历史、原子当前指针和真实 PostgreSQL 并发证明，但仍只是内部 P2a 持久内核。反馈事件、证据引用、Weekly Cognitive Review、来源更正/删除传播、列表、便携导出和公开 API 尚未持久化；在这些语义通过验证前，不得把 item/revision 表描述为用户可用的“认知镜子”，也不得建立任意 JSON“用户画像”旁路。
+- `personal_model_items`、`personal_model_item_revisions` 与 `personal_model_feedback_events` 已建立 owner 复合键、不可变历史、原子当前指针、反馈结果绑定和真实 PostgreSQL 并发证明，但仍只是内部 P2a/P2b 持久内核。证据引用、Weekly Cognitive Review、来源更正/删除传播、列表、便携导出和公开 API 尚未持久化；在这些语义通过验证前，不得把三张表描述为用户可用的“认知镜子”，也不得建立任意 JSON“用户画像”旁路。
 - 备份物理删除时限属于生产保留政策和演练证据，不能只由主数据库 receipt 状态推断。
 
 ## 22. 运行核对查询

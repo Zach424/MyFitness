@@ -1,7 +1,10 @@
 import { randomUUID } from 'node:crypto'
 
 import {
+  personalModelFeedbackTransitionResultSchema,
   personalModelItemRevisionSchema,
+  type PersonalModelFeedbackEvent,
+  type PersonalModelFeedbackTransitionResult,
   type PersonalModelItemRevision,
 } from '@myfitness/contracts'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -115,7 +118,94 @@ const nextRevision = (
       updatedAt: changedAt,
     },
     derivationFingerprint: fingerprint,
+    feedbackEventId: null,
     changedAt,
+  })
+
+const revisedFeedbackFor = (
+  current: PersonalModelItemRevision,
+  choice: PersonalModelFeedbackEvent['choice'],
+  eventId: string,
+  createdAt: string,
+  fingerprint: string,
+  contextValidUntil: string | null = null,
+): PersonalModelFeedbackTransitionResult => {
+  const action = {
+    matches_me: 'user_confirmed',
+    temporary_context: 'user_marked_temporary',
+    disagree: 'user_disagreed',
+    uncertain: 'user_uncertain',
+  }[choice] as PersonalModelItemRevision['action']
+  const feedbackState = {
+    matches_me: 'confirmed',
+    temporary_context: 'temporary',
+    disagree: 'disagreed',
+    uncertain: 'uncertain',
+  }[choice] as PersonalModelItemRevision['snapshot']['feedbackState']
+  const event = {
+    id: eventId,
+    userId: current.userId,
+    itemId: current.itemId,
+    itemRevision: current.revision,
+    choice,
+    reasonCode: null,
+    note: null,
+    contextValidUntil,
+    createdAt,
+  }
+
+  return personalModelFeedbackTransitionResultSchema.parse({
+    schemaVersion: 'personal-model-feedback-transition-v1',
+    outcome: 'revised',
+    event,
+    previousItem: current.snapshot,
+    revision: {
+      schemaVersion: 'personal-model-item-revision-v1',
+      id: randomUUID(),
+      userId: current.userId,
+      itemId: current.itemId,
+      revision: current.revision + 1,
+      previousRevision: current.revision,
+      action,
+      snapshot: {
+        ...current.snapshot,
+        status: choice === 'disagree' ? 'disputed' : current.snapshot.status,
+        feedbackState,
+        validTo: choice === 'temporary_context' ? contextValidUntil : current.snapshot.validTo,
+        revision: current.revision + 1,
+        updatedAt: createdAt,
+      },
+      derivationFingerprint: fingerprint,
+      feedbackEventId: eventId,
+      changedAt: createdAt,
+    },
+  })
+}
+
+const noOpFeedbackFor = (
+  current: PersonalModelItemRevision,
+  choice: PersonalModelFeedbackEvent['choice'],
+  eventId: string,
+  createdAt: string,
+  fingerprint: string,
+): PersonalModelFeedbackTransitionResult =>
+  personalModelFeedbackTransitionResultSchema.parse({
+    schemaVersion: 'personal-model-feedback-transition-v1',
+    outcome: 'no_op',
+    event: {
+      id: eventId,
+      userId: current.userId,
+      itemId: current.itemId,
+      itemRevision: current.revision,
+      choice,
+      reasonCode: null,
+      note: null,
+      contextValidUntil: choice === 'temporary_context' ? current.snapshot.validTo : null,
+      createdAt,
+    },
+    currentItem: current.snapshot,
+    reason: 'feedback_already_current',
+    resultFingerprint: fingerprint,
   })
 
 describe('PersonalModelRepository with PostgreSQL', () => {
@@ -212,7 +302,7 @@ describe('PersonalModelRepository with PostgreSQL', () => {
       snapshot: { ...stale.snapshot, feedbackState: 'confirmed' },
     })
     await expect(repository.append(userId, itemId, 2, feedbackRevision)).rejects.toThrow(
-      'feedback revisions cannot persist before feedback events are available',
+      'feedback revisions must use the feedback application transaction',
     )
   })
 
@@ -232,6 +322,233 @@ describe('PersonalModelRepository with PostgreSQL', () => {
     expect((await repository.history(userId, itemId)).map((item) => item.revision)).toEqual([
       3, 2, 1,
     ])
+  })
+
+  it('persists one feedback event and its revised result atomically', async () => {
+    const eventId = randomUUID()
+    const transition = revisedFeedbackFor(
+      current,
+      'matches_me',
+      eventId,
+      '2026-08-10T04:00:00.000Z',
+      '1'.repeat(64),
+    )
+
+    await expect(repository.applyFeedback(userId, itemId, transition)).resolves.toEqual(transition)
+    current = await repository.getCurrent(userId, itemId)
+    expect(current).toEqual(transition.outcome === 'revised' ? transition.revision : null)
+
+    const stored = await pool.query<{
+      outcome: string
+      item_revision: number
+      result_revision: number
+      revision_action: string
+      result_fingerprint: string
+    }>(
+      `
+        SELECT outcome, item_revision, result_revision, revision_action, result_fingerprint
+        FROM personal_model_feedback_events
+        WHERE id = $1 AND user_id = $2 AND item_id = $3
+      `,
+      [eventId, userId, itemId],
+    )
+    expect(stored.rows[0]).toEqual({
+      outcome: 'revised',
+      item_revision: 3,
+      result_revision: 4,
+      revision_action: 'user_confirmed',
+      result_fingerprint: '1'.repeat(64),
+    })
+    expect((await repository.history(userId, itemId)).map((item) => item.revision)).toEqual([
+      4, 3, 2, 1,
+    ])
+  })
+
+  it('persists no-op feedback without a revision and safely replays the same event', async () => {
+    const transition = noOpFeedbackFor(
+      current,
+      'matches_me',
+      randomUUID(),
+      '2026-08-10T05:00:00.000Z',
+      '2'.repeat(64),
+    )
+    await expect(repository.applyFeedback(userId, itemId, transition)).resolves.toEqual(transition)
+    await expect(repository.applyFeedback(userId, itemId, transition)).resolves.toEqual(transition)
+
+    expect((await repository.getCurrent(userId, itemId)).revision).toBe(4)
+    expect((await repository.history(userId, itemId)).map((item) => item.revision)).toEqual([
+      4, 3, 2, 1,
+    ])
+    const stored = await pool.query<{
+      count: string
+      outcome: string
+      result_revision: number | null
+    }>(
+      `
+        SELECT COUNT(*) OVER ()::TEXT AS count, outcome, result_revision
+        FROM personal_model_feedback_events
+        WHERE id = $1
+      `,
+      [transition.event.id],
+    )
+    expect(stored.rows[0]).toEqual({ count: '1', outcome: 'no_op', result_revision: null })
+  })
+
+  it('converges concurrent duplicate feedback and rejects event identity reuse', async () => {
+    const eventId = randomUUID()
+    const transition = revisedFeedbackFor(
+      current,
+      'uncertain',
+      eventId,
+      '2026-08-10T06:00:00.000Z',
+      '3'.repeat(64),
+    )
+    const results = await Promise.all([
+      repository.applyFeedback(userId, itemId, transition),
+      repository.applyFeedback(userId, itemId, transition),
+    ])
+    expect(results).toEqual([transition, transition])
+    current = await repository.getCurrent(userId, itemId)
+    expect(current.revision).toBe(5)
+
+    const linked = await pool.query<{ event_count: string; revision_count: string }>(
+      `
+        SELECT
+          (SELECT COUNT(*) FROM personal_model_feedback_events WHERE id = $1)::TEXT AS event_count,
+          (
+            SELECT COUNT(*)
+            FROM personal_model_item_revisions
+            WHERE feedback_event_id = $1
+          )::TEXT AS revision_count
+      `,
+      [eventId],
+    )
+    expect(linked.rows[0]).toEqual({ event_count: '1', revision_count: '1' })
+
+    const reused = noOpFeedbackFor(
+      current,
+      'uncertain',
+      eventId,
+      '2026-08-10T06:30:00.000Z',
+      '4'.repeat(64),
+    )
+    await expect(repository.applyFeedback(userId, itemId, reused)).rejects.toThrow(
+      'feedback event id is already in use',
+    )
+  })
+
+  it('fails stale and cross-owner feedback before storing an event', async () => {
+    const history = await repository.history(userId, itemId)
+    const staleCurrent = history.find((revision) => revision.revision === 4)
+    expect(staleCurrent).toBeDefined()
+    const stale = revisedFeedbackFor(
+      staleCurrent!,
+      'uncertain',
+      randomUUID(),
+      '2026-08-10T07:00:00.000Z',
+      '5'.repeat(64),
+    )
+    await expect(repository.applyFeedback(userId, itemId, stale)).rejects.toThrow(
+      'feedback target is no longer current',
+    )
+    await expect(repository.applyFeedback(otherUserId, itemId, stale)).rejects.toThrow(
+      'feedback target does not match request',
+    )
+    const stored = await pool.query<{ count: string }>(
+      'SELECT COUNT(*)::TEXT AS count FROM personal_model_feedback_events WHERE id = $1',
+      [stale.event.id],
+    )
+    expect(stored.rows[0]?.count).toBe('0')
+  })
+
+  it('compares offset timestamps semantically and preserves the stored representation', async () => {
+    const transition = revisedFeedbackFor(
+      current,
+      'temporary_context',
+      randomUUID(),
+      '2026-08-10T16:00:00.000+08:00',
+      '8'.repeat(64),
+      '2026-08-20T16:00:00.000+08:00',
+    )
+
+    const first = await repository.applyFeedback(userId, itemId, transition)
+    const replay = await repository.applyFeedback(userId, itemId, transition)
+    expect(first.event.createdAt).toBe('2026-08-10T16:00:00.000+08:00')
+    expect(first.event.contextValidUntil).toBe('2026-08-20T16:00:00.000+08:00')
+    expect(replay).toEqual(first)
+    if (first.outcome !== 'revised') throw new Error('expected revised transition')
+    expect(first.revision.changedAt).toBe('2026-08-10T16:00:00.000+08:00')
+    expect(first.revision.snapshot.updatedAt).toBe('2026-08-10T16:00:00.000+08:00')
+    expect(first.revision.snapshot.validTo).toBe('2026-08-20T16:00:00.000+08:00')
+
+    current = await repository.getCurrent(userId, itemId)
+    expect(current).toEqual(first.revision)
+  })
+
+  it('rejects direct event mutation and incomplete or false no-op outcomes', async () => {
+    const event = await pool.query<{ id: string }>(
+      'SELECT id FROM personal_model_feedback_events WHERE user_id = $1 ORDER BY created_at LIMIT 1',
+      [userId],
+    )
+    const eventId = event.rows[0]?.id
+    expect(eventId).toBeDefined()
+    await expect(
+      pool.query('UPDATE personal_model_feedback_events SET note = note WHERE id = $1', [eventId]),
+    ).rejects.toMatchObject({ code: 'P0001' })
+    await expect(
+      pool.query('DELETE FROM personal_model_feedback_events WHERE id = $1', [eventId]),
+    ).rejects.toMatchObject({ code: 'P0001' })
+
+    await expect(
+      pool.query(
+        `
+          INSERT INTO personal_model_feedback_events (
+            id, user_id, item_id, item_revision, choice, reason_code, note,
+            context_valid_until, created_at, transition_schema_version,
+            outcome, no_op_reason, result_revision, result_fingerprint
+          )
+          VALUES (
+            $1, $2, $3, $4, 'matches_me', NULL, NULL,
+            NULL, $5, 'personal-model-feedback-transition-v1',
+            'revised', NULL, $6, $7
+          )
+        `,
+        [
+          randomUUID(),
+          userId,
+          itemId,
+          current.revision,
+          '2026-08-10T08:00:00.000Z',
+          current.revision + 1,
+          '6'.repeat(64),
+        ],
+      ),
+    ).rejects.toMatchObject({ code: '23503' })
+
+    await expect(
+      pool.query(
+        `
+          INSERT INTO personal_model_feedback_events (
+            id, user_id, item_id, item_revision, choice, reason_code, note,
+            context_valid_until, created_at, transition_schema_version,
+            outcome, no_op_reason, result_revision, result_fingerprint
+          )
+          VALUES (
+            $1, $2, $3, $4, 'uncertain', NULL, NULL,
+            NULL, $5, 'personal-model-feedback-transition-v1',
+            'no_op', 'feedback_already_current', NULL, $6
+          )
+        `,
+        [
+          randomUUID(),
+          userId,
+          itemId,
+          current.revision,
+          '2026-08-10T08:00:00.000Z',
+          '7'.repeat(64),
+        ],
+      ),
+    ).rejects.toMatchObject({ code: 'P0001' })
   })
 
   it('rejects revision mutation, unpublished revisions and cross-owner rows in PostgreSQL', async () => {
@@ -273,7 +590,11 @@ describe('PersonalModelRepository with PostgreSQL', () => {
     ).rejects.toMatchObject({ code: 'P0001' })
 
     await pool.query('DELETE FROM users WHERE id = $1', [userId])
-    const remaining = await pool.query<{ item_count: string; revision_count: string }>(
+    const remaining = await pool.query<{
+      item_count: string
+      revision_count: string
+      feedback_count: string
+    }>(
       `
       SELECT
         (SELECT COUNT(*) FROM personal_model_items WHERE user_id = $1)::TEXT AS item_count,
@@ -281,10 +602,19 @@ describe('PersonalModelRepository with PostgreSQL', () => {
           SELECT COUNT(*)
           FROM personal_model_item_revisions
           WHERE user_id = $1 OR item_id = $2
-        )::TEXT AS revision_count
+        )::TEXT AS revision_count,
+        (
+          SELECT COUNT(*)
+          FROM personal_model_feedback_events
+          WHERE user_id = $1 OR item_id = $2
+        )::TEXT AS feedback_count
     `,
       [userId, itemId],
     )
-    expect(remaining.rows[0]).toEqual({ item_count: '0', revision_count: '0' })
+    expect(remaining.rows[0]).toEqual({
+      item_count: '0',
+      revision_count: '0',
+      feedback_count: '0',
+    })
   })
 })

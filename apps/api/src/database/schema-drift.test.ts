@@ -59,7 +59,11 @@ import {
   progressPhotoViews,
   personalModelClaimSchemaVersions,
   personalModelContractVersion,
+  personalModelFeedbackChoices,
+  personalModelFeedbackNoOpReasons,
+  personalModelFeedbackReasonCodes,
   personalModelFeedbackStates,
+  personalModelFeedbackTransitionVersion,
   personalModelItemRevisionVersion,
   personalModelKinds,
   personalModelRevisionActions,
@@ -172,6 +176,10 @@ const portableExportPlanWorkoutLinkIndexMigrationPath = path.resolve(
 const personalModelItemRevisionMigrationPath = path.resolve(
   __dirname,
   '../../../../infra/postgres/migrations/0037_personal_model_item_revision_core.sql',
+)
+const personalModelFeedbackEventMigrationPath = path.resolve(
+  __dirname,
+  '../../../../infra/postgres/migrations/0038_personal_model_feedback_event_core.sql',
 )
 
 describe('health-record migration drift', () => {
@@ -497,6 +505,35 @@ describe('health-record migration drift', () => {
       'personal_model_item_revisions_immutable',
       'personal_model_item_revisions_current_guard',
       'ON DELETE CASCADE',
+    ]) {
+      expect(migration).toContain(boundary)
+    }
+  })
+
+  it('binds append-only Personal Model feedback events to exactly one transition result', async () => {
+    const migration = await readFile(personalModelFeedbackEventMigrationPath, 'utf8')
+    for (const value of [
+      personalModelFeedbackTransitionVersion,
+      ...personalModelFeedbackChoices,
+      ...personalModelFeedbackReasonCodes,
+      ...personalModelFeedbackNoOpReasons,
+    ]) {
+      expect(migration, `${value} is missing from the feedback event migration`).toContain(
+        `'${value}'`,
+      )
+    }
+    for (const boundary of [
+      'CREATE TABLE personal_model_feedback_events',
+      'personal_model_feedback_events_target_revision_fk',
+      'personal_model_feedback_events_result_revision_fk',
+      'personal_model_feedback_events_revision_relation_unique',
+      'DROP CONSTRAINT personal_model_item_revisions_feedback_persistence_pending_check',
+      'personal_model_item_revisions_feedback_event_unique',
+      'personal_model_item_revisions_feedback_event_fk',
+      'DEFERRABLE INITIALLY DEFERRED',
+      'personal_model_feedback_events_target_guard',
+      'personal_model_feedback_events_immutable',
+      'feedback events are append-only',
     ]) {
       expect(migration).toContain(boundary)
     }

@@ -1,6 +1,15 @@
+import { isDeepStrictEqual } from 'node:util'
+
 import { Injectable } from '@nestjs/common'
 import {
+  personalModelFeedbackEventSchema,
+  personalModelFeedbackTransitionResultSchema,
+  personalModelFeedbackTransitionVersion,
+  personalModelItemSchema,
   personalModelItemRevisionSchema,
+  type PersonalModelFeedbackEvent,
+  type PersonalModelFeedbackTransitionResult,
+  type PersonalModelItem,
   type PersonalModelItemRevision,
 } from '@myfitness/contracts'
 import type { PoolClient } from 'pg'
@@ -21,14 +30,96 @@ type PersonalModelRevisionRow = {
   changed_at: Date
 }
 
-type LockedPersonalModelItemRow = {
+type PersonalModelItemPointerRow = {
   current_revision: number
-} & PersonalModelRevisionRow
+}
+
+type PersonalModelFeedbackEventRow = {
+  id: string
+  user_id: string
+  item_id: string
+  item_revision: number
+  choice: PersonalModelFeedbackEvent['choice']
+  reason_code: PersonalModelFeedbackEvent['reasonCode']
+  note: string | null
+  context_valid_until: Date | null
+  created_at: Date
+  transition_schema_version: string
+  outcome: PersonalModelFeedbackTransitionResult['outcome']
+  no_op_reason: 'feedback_already_current' | null
+  result_revision: number | null
+  result_fingerprint: string
+}
 
 const maximumHistoryPageSize = 50
 
-const mapRevisionRow = (row: PersonalModelRevisionRow): PersonalModelItemRevision =>
-  personalModelItemRevisionSchema.parse({
+const canonicalizeDateTime = (value: string): string => new Date(value).toISOString()
+
+const normalizePersonalModelItemDateTimes = (item: PersonalModelItem): PersonalModelItem =>
+  personalModelItemSchema.parse({
+    ...item,
+    confidence:
+      item.confidence.basis === 'longitudinal_observation'
+        ? {
+            ...item.confidence,
+            latestEvidenceAt:
+              item.confidence.latestEvidenceAt === null
+                ? null
+                : canonicalizeDateTime(item.confidence.latestEvidenceAt),
+          }
+        : item.confidence,
+    evidenceSet: {
+      ...item.evidenceSet,
+      asOf: canonicalizeDateTime(item.evidenceSet.asOf),
+      window: {
+        ...item.evidenceSet.window,
+        startAt: canonicalizeDateTime(item.evidenceSet.window.startAt),
+        endAt: canonicalizeDateTime(item.evidenceSet.window.endAt),
+      },
+      references: item.evidenceSet.references.map((reference) => ({
+        ...reference,
+        time:
+          reference.time.kind === 'instant'
+            ? {
+                kind: 'instant' as const,
+                occurredAt: canonicalizeDateTime(reference.time.occurredAt),
+              }
+            : {
+                ...reference.time,
+                startedAt: canonicalizeDateTime(reference.time.startedAt),
+                endedAt: canonicalizeDateTime(reference.time.endedAt),
+              },
+      })),
+    },
+    validFrom: canonicalizeDateTime(item.validFrom),
+    validTo: item.validTo === null ? null : canonicalizeDateTime(item.validTo),
+    observedFrom: canonicalizeDateTime(item.observedFrom),
+    observedThrough: canonicalizeDateTime(item.observedThrough),
+    derivedAt: canonicalizeDateTime(item.derivedAt),
+    createdAt: canonicalizeDateTime(item.createdAt),
+    updatedAt: canonicalizeDateTime(item.updatedAt),
+  })
+
+const normalizeRevisionDateTimes = (
+  revision: PersonalModelItemRevision,
+): PersonalModelItemRevision => {
+  const changedAt = canonicalizeDateTime(revision.changedAt)
+  return personalModelItemRevisionSchema.parse({
+    ...revision,
+    snapshot: {
+      ...normalizePersonalModelItemDateTimes(revision.snapshot),
+      updatedAt: changedAt,
+    },
+    changedAt,
+  })
+}
+
+const mapRevisionRow = (row: PersonalModelRevisionRow): PersonalModelItemRevision => {
+  const snapshot = personalModelItemSchema.parse(row.snapshot)
+  if (Date.parse(snapshot.updatedAt) !== row.changed_at.getTime()) {
+    throw new Error('personal model revision time does not match its snapshot')
+  }
+  return personalModelItemRevisionSchema.parse({
     schemaVersion: row.schema_version,
     id: row.id,
     userId: row.user_id,
@@ -36,11 +127,42 @@ const mapRevisionRow = (row: PersonalModelRevisionRow): PersonalModelItemRevisio
     revision: row.revision,
     previousRevision: row.previous_revision,
     action: row.action,
-    snapshot: row.snapshot,
+    snapshot,
     derivationFingerprint: row.derivation_fingerprint.trim(),
     feedbackEventId: row.feedback_event_id,
-    changedAt: row.changed_at.toISOString(),
+    changedAt: snapshot.updatedAt,
   })
+}
+
+const lockCurrentRevision = async (
+  client: PoolClient,
+  userId: string,
+  itemId: string,
+): Promise<{ currentRevision: number; revision: PersonalModelItemRevision }> => {
+  const itemResult = await client.query<PersonalModelItemPointerRow>(
+    `
+      SELECT current_revision
+      FROM personal_model_items
+      WHERE user_id = $1 AND id = $2
+      FOR UPDATE
+    `,
+    [userId, itemId],
+  )
+  const item = itemResult.rows[0]
+  if (!item) throw new PersonalModelItemNotFoundError()
+
+  const revisionResult = await client.query<PersonalModelRevisionRow>(
+    `
+      SELECT *
+      FROM personal_model_item_revisions
+      WHERE user_id = $1 AND item_id = $2 AND revision = $3
+    `,
+    [userId, itemId, item.current_revision],
+  )
+  const revision = revisionResult.rows[0]
+  if (!revision) throw new Error('personal model current revision is missing')
+  return { currentRevision: item.current_revision, revision: mapRevisionRow(revision) }
+}
 
 const insertRevision = async (
   client: PoolClient,
@@ -79,6 +201,131 @@ const insertRevision = async (
   const stored = result.rows[0]
   if (!stored) throw new Error('personal model revision insert returned no row')
   return mapRevisionRow(stored)
+}
+
+const mapFeedbackEventRow = (
+  row: PersonalModelFeedbackEventRow,
+  contextValidUntil = row.context_valid_until?.toISOString() ?? null,
+): PersonalModelFeedbackEvent =>
+  personalModelFeedbackEventSchema.parse({
+    id: row.id,
+    userId: row.user_id,
+    itemId: row.item_id,
+    itemRevision: row.item_revision,
+    choice: row.choice,
+    reasonCode: row.reason_code,
+    note: row.note,
+    contextValidUntil,
+    createdAt: row.created_at.toISOString(),
+  })
+
+const contextValidUntilForSnapshot = (
+  row: PersonalModelFeedbackEventRow,
+  item: PersonalModelItem,
+): string | null => {
+  if (row.choice !== 'temporary_context') return null
+  if (
+    row.context_valid_until === null ||
+    item.validTo === null ||
+    row.context_valid_until.getTime() !== Date.parse(item.validTo)
+  ) {
+    throw new Error('personal model temporary feedback validity does not match its result')
+  }
+  return item.validTo
+}
+
+const normalizeFeedbackTransitionDateTimes = (
+  transition: PersonalModelFeedbackTransitionResult,
+): PersonalModelFeedbackTransitionResult => {
+  const event = personalModelFeedbackEventSchema.parse({
+    ...transition.event,
+    contextValidUntil:
+      transition.event.contextValidUntil === null
+        ? null
+        : canonicalizeDateTime(transition.event.contextValidUntil),
+    createdAt: canonicalizeDateTime(transition.event.createdAt),
+  })
+
+  if (transition.outcome === 'no_op') {
+    return personalModelFeedbackTransitionResultSchema.parse({
+      ...transition,
+      event,
+      currentItem: normalizePersonalModelItemDateTimes(transition.currentItem),
+    })
+  }
+
+  return personalModelFeedbackTransitionResultSchema.parse({
+    ...transition,
+    event,
+    previousItem: normalizePersonalModelItemDateTimes(transition.previousItem),
+    revision: normalizeRevisionDateTimes(transition.revision),
+  })
+}
+
+const findPersistedFeedbackTransition = async (
+  client: PoolClient,
+  userId: string,
+  itemId: string,
+  eventId: string,
+): Promise<PersonalModelFeedbackTransitionResult | null> => {
+  const eventResult = await client.query<PersonalModelFeedbackEventRow>(
+    `
+      SELECT *
+      FROM personal_model_feedback_events
+      WHERE id = $1 AND user_id = $2 AND item_id = $3
+    `,
+    [eventId, userId, itemId],
+  )
+  const eventRow = eventResult.rows[0]
+  if (!eventRow) return null
+
+  const targetResult = await client.query<PersonalModelRevisionRow>(
+    `
+      SELECT *
+      FROM personal_model_item_revisions
+      WHERE user_id = $1 AND item_id = $2 AND revision = $3
+    `,
+    [userId, itemId, eventRow.item_revision],
+  )
+  const targetRow = targetResult.rows[0]
+  if (!targetRow) throw new Error('personal model feedback target revision is missing')
+
+  const targetItem = mapRevisionRow(targetRow).snapshot
+  if (eventRow.outcome === 'no_op') {
+    const event = mapFeedbackEventRow(eventRow, contextValidUntilForSnapshot(eventRow, targetItem))
+    return personalModelFeedbackTransitionResultSchema.parse({
+      schemaVersion: eventRow.transition_schema_version,
+      outcome: 'no_op',
+      event,
+      currentItem: targetItem,
+      reason: eventRow.no_op_reason,
+      resultFingerprint: eventRow.result_fingerprint.trim(),
+    })
+  }
+
+  const revisionResult = await client.query<PersonalModelRevisionRow>(
+    `
+      SELECT *
+      FROM personal_model_item_revisions
+      WHERE user_id = $1 AND item_id = $2 AND revision = $3
+    `,
+    [userId, itemId, eventRow.result_revision],
+  )
+  const revisionRow = revisionResult.rows[0]
+  if (!revisionRow) throw new Error('personal model feedback result revision is missing')
+  const revision = mapRevisionRow(revisionRow)
+  const event = mapFeedbackEventRow(
+    eventRow,
+    contextValidUntilForSnapshot(eventRow, revision.snapshot),
+  )
+
+  return personalModelFeedbackTransitionResultSchema.parse({
+    schemaVersion: eventRow.transition_schema_version,
+    outcome: 'revised',
+    event,
+    previousItem: targetItem,
+    revision,
+  })
 }
 
 const isPostgresError = (error: unknown): error is { code: string } =>
@@ -144,7 +391,7 @@ export class PersonalModelRepository {
     const revision = personalModelItemRevisionSchema.parse(input)
     if (revision.feedbackEventId !== null) {
       throw new PersonalModelRevisionConflictError(
-        'feedback revisions cannot persist before feedback events are available',
+        'feedback revisions must use the feedback application transaction',
       )
     }
     if (
@@ -157,40 +404,14 @@ export class PersonalModelRepository {
     }
 
     return this.database.withTransaction(async (client) => {
-      const locked = await client.query<LockedPersonalModelItemRow>(
-        `
-          SELECT
-            item.current_revision,
-            revision.id,
-            revision.user_id,
-            revision.item_id,
-            revision.schema_version,
-            revision.revision,
-            revision.previous_revision,
-            revision.action,
-            revision.snapshot,
-            revision.derivation_fingerprint,
-            revision.feedback_event_id,
-            revision.changed_at
-          FROM personal_model_items AS item
-          JOIN personal_model_item_revisions AS revision
-            ON revision.user_id = item.user_id
-           AND revision.item_id = item.id
-           AND revision.revision = item.current_revision
-          WHERE item.user_id = $1 AND item.id = $2
-          FOR UPDATE OF item
-        `,
-        [userId, itemId],
-      )
-      const currentRow = locked.rows[0]
-      if (!currentRow) throw new PersonalModelItemNotFoundError()
-      if (currentRow.current_revision !== expectedRevision) {
+      const locked = await lockCurrentRevision(client, userId, itemId)
+      if (locked.currentRevision !== expectedRevision) {
         throw new PersonalModelRevisionConflictError(
-          `personal model revision changed; current revision is ${currentRow.current_revision}`,
+          `personal model revision changed; current revision is ${locked.currentRevision}`,
         )
       }
 
-      const current = mapRevisionRow(currentRow)
+      const current = locked.revision
       if (revision.snapshot.createdAt !== current.snapshot.createdAt) {
         throw new PersonalModelRevisionConflictError('item creation time cannot change')
       }
@@ -211,6 +432,100 @@ export class PersonalModelRepository {
         throw new PersonalModelRevisionConflictError()
       }
       return stored
+    })
+  }
+
+  async applyFeedback(
+    userId: string,
+    itemId: string,
+    input: PersonalModelFeedbackTransitionResult,
+  ): Promise<PersonalModelFeedbackTransitionResult> {
+    const transition = personalModelFeedbackTransitionResultSchema.parse(input)
+    if (transition.event.userId !== userId || transition.event.itemId !== itemId) {
+      throw new PersonalModelRevisionConflictError('feedback target does not match request')
+    }
+
+    return this.database.withTransaction(async (client) => {
+      const locked = await lockCurrentRevision(client, userId, itemId)
+
+      const persisted = await findPersistedFeedbackTransition(
+        client,
+        userId,
+        itemId,
+        transition.event.id,
+      )
+      if (persisted) {
+        if (
+          isDeepStrictEqual(
+            normalizeFeedbackTransitionDateTimes(persisted),
+            normalizeFeedbackTransitionDateTimes(transition),
+          )
+        ) {
+          return transition
+        }
+        throw new PersonalModelRevisionConflictError('feedback event id is already in use')
+      }
+
+      const current = locked.revision
+      const targetItem =
+        transition.outcome === 'revised' ? transition.previousItem : transition.currentItem
+      if (
+        locked.currentRevision !== transition.event.itemRevision ||
+        !isDeepStrictEqual(current.snapshot, targetItem)
+      ) {
+        throw new PersonalModelRevisionConflictError('feedback target is no longer current')
+      }
+
+      const resultRevision = transition.outcome === 'revised' ? transition.revision.revision : null
+      const resultFingerprint =
+        transition.outcome === 'revised'
+          ? transition.revision.derivationFingerprint
+          : transition.resultFingerprint
+      const noOpReason = transition.outcome === 'no_op' ? transition.reason : null
+      await client.query(
+        `
+          INSERT INTO personal_model_feedback_events (
+            id, user_id, item_id, item_revision, choice, reason_code, note,
+            context_valid_until, created_at, transition_schema_version,
+            outcome, no_op_reason, result_revision, result_fingerprint
+          )
+          VALUES (
+            $1, $2, $3, $4, $5, $6, $7,
+            $8, $9, $10,
+            $11, $12, $13, $14
+          )
+        `,
+        [
+          transition.event.id,
+          transition.event.userId,
+          transition.event.itemId,
+          transition.event.itemRevision,
+          transition.event.choice,
+          transition.event.reasonCode,
+          transition.event.note,
+          transition.event.contextValidUntil,
+          transition.event.createdAt,
+          personalModelFeedbackTransitionVersion,
+          transition.outcome,
+          noOpReason,
+          resultRevision,
+          resultFingerprint,
+        ],
+      )
+
+      if (transition.outcome === 'no_op') return transition
+
+      const stored = await insertRevision(client, transition.revision)
+      const updated = await client.query(
+        `
+          UPDATE personal_model_items
+          SET current_revision = $1, updated_at = $2
+          WHERE user_id = $3 AND id = $4 AND current_revision = $5
+        `,
+        [stored.revision, stored.changedAt, userId, itemId, transition.event.itemRevision],
+      )
+      if (updated.rowCount !== 1) throw new PersonalModelRevisionConflictError()
+      return transition
     })
   }
 

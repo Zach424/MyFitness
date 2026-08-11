@@ -32,11 +32,11 @@
 - 原生 Apple Health、Health Connect 或穿戴设备自动同步。
 - 照片人体测量、姿态诊断、精确体脂率或“好坏体态”判断。
 - AI 自动修改计划、自动确认事实、自动写入餐食或自动提高训练量。
-- 用户可见的 Personal Model、Pattern/Hypothesis 生命周期、Weekly Cognitive Review、用户校准和模型修订闭环；当前只有内部 item/revision 持久内核。
+- 用户可见的 Personal Model、Pattern/Hypothesis 生命周期、Weekly Cognitive Review、用户校准和模型修订闭环；当前只有内部 item/revision/feedback 持久内核。
 - 基于长期个人模型自动执行 Contextual Decision，或把相关性、短期状态和用户未确认推断当作稳定人格标签。
 - 用户端离线写入队列；网络结果不确定时不会在后台自动重放请求。
 
-仓库已实现 Personal Model P1a/P1b 内部共享契约：三个严格 claim、首批证据引用、可复算置信收据、显式 Unknown、active-only 决策资格、四选一反馈事件、不可变完整修订、精确反馈 revised/no-op 结果，以及结构化 Weekly Cognitive Review revision/current/history 信封。P2a 进一步把 item 当前指针与完整 revision 快照写入 PostgreSQL，通过复合 owner 外键、不可变触发器、延迟原子发布约束、行锁和期望修订检查保护当前历史链。低覆盖条目可以保存用户异议但仍无决策资格；不过反馈事件、证据、回顾、来源传播、便携导出、API、派生服务和客户端尚未接入，因此不构成用户可见的个人模型、每周认知回顾或自动适应功能。
+仓库已实现 Personal Model P1a/P1b 内部共享契约，以及 P2a item/revision 和 P2b feedback 最小 PostgreSQL 内核。复合 owner 外键、不可变触发器和延迟原子发布保护完整历史链；追加式反馈行保存四选一动作与 revised/no-op 收据，双向延迟外键保证 revised 事件和结果 revision 不可分离。仓储锁定 item 后重新读取 current，支持相同事件与结果安全重放，拒绝过期目标、跨 owner 请求、事件身份换内容和直接反馈 revision 旁路。低覆盖异议仍无决策资格；证据/回顾关系、来源传播、便携导出、API、派生服务和客户端尚未接入，因此不构成用户可见的个人模型、每周认知回顾或自动适应功能。
 
 ## 3. 用户、权限与信任边界
 
