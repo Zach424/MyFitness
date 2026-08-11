@@ -387,11 +387,33 @@ repository 在插入 revision 后使用一次 JSON 数组展开，按原顺序�
 
 证据行本身不可 UPDATE 或直接 DELETE；账户删除引发的 revision 级联可以清理。迁移会从既有 revision JSON 前向回填，任何不满足当前关系的旧快照都会使迁移失败关闭，而不是静默截断证据。
 
-这张表当前只证明“模型修订声明的引用被完整、可查询地投影”，不证明来源聚合真实存在或仍具资格。`workout_revisions` 已有不可变历史，但 onboarding `user_goals` 仍是覆盖式当前行，没有可供 `onboarding_goal_revision` 使用的历史表；因此 0039 刻意不创建伪多态来源外键，也不自动把来源更正/删除改写成 withdrawn。补齐 goal source revision、goal/workout 复合来源约束和追加式撤回 revision 是下一门禁。
+0041 在原投影上增加四个生成列：goal evidence 只生成 `onboarding_goal_id/revision`，workout evidence 只生成 `workout_id/revision`，另一分支保持 null。两组复合外键分别命中 `user_goal_revisions(user_id,goal_id,revision)` 与 `workout_revisions(user_id,workout_id,revision)`；类型由原 evidence kind 决定，应用不能选择错误分支或只填写字符串身份。迁移会验证既有引用的精确来源，缺失或跨 owner 历史使整体回滚。
 
-读取时必须区分三层含义。第一层是历史陈述：某次模型修订在形成时引用了哪些材料，这一层由完整快照和有序投影共同证明，之后不得改写。第二层是来源权威：被引用的目标或训练修订是否真实存在、是否属于同一账户、是否正是当时的版本，这一层必须由原业务聚合的不可变历史和复合外键证明。第三层是当前资格：原来源后来是否被更正、撤回或删除，以及旧结论现在是否仍可用于建议，这一层需要来源事件、重新评估和新的模型修订。三层不能互相替代；仅仅查到一条投影行，既不能证明原材料真实，也不能证明它今天仍然合格。
+来源资格延迟触发器进一步核对不可变来源内容。goal 引用的 instant 时刻必须等于目标 revision 的 changed time；workout 引用必须与训练 snapshot 的 owner、聚合 ID、revision、source kind、起止时刻和时区相同。新 eligible 引用只能命中当前 goal 或当前未删除 workout；`source_corrected` 要求来源已经推进，`source_deleted` 只适用于随后软删除的 workout。`policy_changed` 与 `link_removed` 仍可作为显式业务撤回原因，但不会由这两个来源触发器自行产生。
 
-后续来源绑定必须逐类实施并分别验收。建档目标要先保存每次本人确认的完整历史，训练来源则要明确当前删除标记与指定历史版本之间的资格规则。来源发生变化时，后台流程只能读取受影响的当前条目，按照固定规则生成包含撤回理由的新证据集合，再决定条目保持、争议还是失效；旧模型修订及旧投影继续保留当时事实。处理失败必须可以重试且不能产生半条修订，重复事件必须收敛到同一结果，跨账户来源必须在数据库层失败。这样才能同时满足可追溯、更正权和历史不可抵赖，而不是用删除历史换取表面上的“当前正确”。
+读取仍要区分三层含义。第一层是历史陈述：某次模型修订在形成时引用了哪些材料，由完整快照和有序投影证明，之后不得改写。第二层是来源权威：目标或训练修订是否真实存在并属于同一账户，由生成式类型键和复合外键证明。第三层是当前资格：新 revision 写入时来源是否仍为当前、未删除，由延迟资格门禁证明。旧 revision 的当时标签不会因后续变化被反向改写；当前资格变化由下一节的 refresh 协议表达。
+
+### 14.5.5 `personal_model_source_refresh_requests` 与 resolutions
+
+request 每行保存 `id,user_id,item_id,affected_item_revision,affected_reference_id,evidence_kind,source_aggregate_id,withdrawn_source_revision,observed_source_revision,reason,created_at`。它复合绑定受影响 current item 的精确 eligible evidence，并使用与 evidence 相同的生成式 goal/workout 类型键同时外键绑定旧来源和新观察修订。goal 只产生 `source_corrected`；workout 的 updated/deleted revision 分别产生 `source_corrected` / `source_deleted`。owner、item、kind、聚合和旧修订唯一，使重复事件收敛而不覆盖首次义务。
+
+goal/workout revision 的 AFTER INSERT 触发器只扫描当前模型 item 的 eligible 引用，并在同一来源事务追加 request。0041 还为迁移时已经过期的 current evidence 回填请求；旧 revision 中不是 current 的引用不会被误当作待处理状态。request 的精确延迟门禁要求受影响引用仍是 item current、来源新修订确实是当前、动作/删除状态与理由一致，创建时刻等于来源 history changed time。
+
+resolution 保存 `request_id,user_id,item_id,resolved_item_revision,withdrawn_reference_id,resolved_at`。repository 写完下一 revision 的全部 evidence 后，从其中匹配同 kind、聚合、旧修订和理由的 withdrawn context 自动追加 resolution。延迟门禁要求解决 revision 晚于受影响 revision，引用为 context、理由一致且解决时间等于模型 revision changed time；另一个 revision 侧门禁拒绝任何跨过 pending request 却没有 resolution 的提交。request 与 resolution 均不可 UPDATE 或直接 DELETE，只有账户级 owner 级联清理。
+
+请求保存的是来源变化发生时的精确责任边界。受影响模型修订和引用共同说明“哪个当前结论仍在依赖旧材料”，旧来源修订说明“哪一份历史材料退出当前资格”，新观察修订说明“哪一次权威变化触发处理”，理由则限定后续只能使用相符的撤回语义。任何字段都不能在消费后清空或覆盖，否则系统将无法区分真正处理、错误归因和运维手工改写。解决记录另表追加，正是为了让义务与处理证据同时长期可复核。
+
+来源事务只负责产生请求，不锁定或修改模型条目的当前指针。这样目标和训练写入不需要等待尚未实现的派生计算，也不会把记录保存成败与认知更新服务可用性绑死。与此同时，请求在同一数据库事务生成，来源修订一旦提交就不会出现“权威已经变化但待处理义务尚未落盘”的窗口。若触发器或约束失败，来源写入整体回滚，调用方得到原有写入失败，而不是留下无法追踪的半完成状态。
+
+消费事务应先锁定条目当前行，再读取该条目的全部未解决请求和最新来源修订。一个新模型修订可以共同处理同一条目的多个待办，但每个请求都要有独立解决记录和一条精确撤回引用。提交门禁按当前指针统一检查，因此两个执行者从同一前驱竞争时只有一个能够发布；另一个必须在冲突后重新读取最新修订和剩余请求，不能把等待前的快照当成仍然有效，也不能简单把唯一冲突解释为已经处理。
+
+待处理读取应以所有者和条目为首要过滤条件，并排除已有解决关系；来源触发扫描则从当前模型引用按来源类型、聚合和修订定位受影响条目。两类方向不同：前者服务后续派生消费，后者服务来源变化入队。当前迁移分别为精确外键、请求唯一身份和解决查询提供索引；真实数据扩大后应观测扫描行数、锁等待和写放大，再决定是否增加局部索引，不能仅凭开发夹具提前复制冗余索引。
+
+迁移回填只为当前条目仍标作合格、但来源事实上已经推进或删除的引用产生义务。它不会修改原模型快照，不会猜测中间漏失的来源版本，也不会自动生成解决记录。若旧引用根本无法命中权威历史，迁移在添加外键或验证来源事实时失败，要求先调查数据，而不是把悬空引用包装成撤回。这个顺序保证部署完成后，所有存量请求都至少拥有可审计的旧来源和明确变化事实。
+
+账户擦除从所有者根节点级联移除模型、证据、请求与解决历史，日常业务路径则不提供物理删除。这样既保留用户仍持有账户期间的解释、争议和纠正链，也不会让新增内部账本逃离账户删除范围。公开导出尚未包含这些表，因此它们目前只能作为内部权威；开放用户读取前必须定义可理解的来源变化说明、分页边界、本人授权和便携导出结构，不能直接暴露内部队列字段。
+
+该账本是可重试的待重算协议，不是派生器。它证明来源变化已产生义务、后续 revision 明确承认旧证据退出当前资格，却不决定新 claim、置信、状态或是否增加替代 eligible 来源。下一轮由确定性 training availability 执行器消费；在此之前不得把“已排队”描述为“认知已自动更新”。
 
 ## 15. 管理员身份与审计
 
@@ -425,7 +447,7 @@ repository 在插入 revision 后使用一次 JSON 数组展开，按原顺序�
 
 ### 16.1 `schema_migrations`
 
-`name text` 主键、`checksum char`、`applied_at timestamptz`。当前 40 行，名称从 `0001` 连续至 `0040_onboarding_goal_revision_history.sql`。checksum 用于检测已应用迁移文件被改写。
+`name text` 主键、`checksum char`、`applied_at timestamptz`。当前 41 行，名称从 `0001` 连续至 `0041_personal_model_source_qualification.sql`。checksum 用于检测已应用迁移文件被改写。
 
 ### 16.2 当前迁移演进主题
 
@@ -440,22 +462,23 @@ repository 在插入 revision 后使用一次 JSON 数组展开，按原顺序�
 | 0031–0036 | 便携归档健康、训练、目录、餐食与计划关联全历史索引                 |
 | 0037–0039 | Personal Model item/revision、feedback 与 evidence projection 内核 |
 | 0040      | onboarding goal 稳定聚合、不可变修订与诚实迁移检查点               |
+| 0041      | Personal Model 精确来源资格、refresh request 与 resolution         |
 
 迁移只能前向追加；不得在共享历史中重写已应用 SQL。生产发布前应先在备份副本演练、核对 checksum、外键和索引，再滚动应用。
 
 ## 17. 外键删除策略
 
-| 父实体                              | 子实体                                                   | 主要策略                                         |
-| ----------------------------------- | -------------------------------------------------------- | ------------------------------------------------ |
-| `users`                             | 资料、目标、会话、身份、授权、业务聚合、照片、AI         | 账户级删除时级联清理                             |
-| `user_goals`                        | `user_goal_revisions`                                    | 当前行直接删除拒绝；仅账户删除级联清理完整历史   |
-| `users`                             | Personal Model item、revision、feedback 与 evidence 历史 | 账户级删除时级联；日常直接物理删除由触发器拒绝   |
-| `users`                             | `privacy_export_archives`                                | RESTRICT；先处置私有对象并删除保管行             |
-| 当前聚合                            | 子项与 revision                                          | 聚合物理删除时级联；普通用户删除只先软删         |
-| `weekly_plans` / `workout_sessions` | `plan_workout_links`                                     | 复合所有权 FK；账户删除最终级联                  |
-| `consent_events`                    | AI/照片运行                                              | 保持明确授权引用；正常撤回不删除事件             |
-| `privacy_erasure_receipts`          | data jobs                                                | receipt 可被保留或解除引用；任务不会丢失尝试证据 |
-| `admin_operators`                   | 管理身份、角色、会话、审计 operator 引用                 | 身份数据级联；审计需保持不可变语义               |
+| 父实体                              | 子实体                                                            | 主要策略                                         |
+| ----------------------------------- | ----------------------------------------------------------------- | ------------------------------------------------ |
+| `users`                             | 资料、目标、会话、身份、授权、业务聚合、照片、AI                  | 账户级删除时级联清理                             |
+| `user_goals`                        | `user_goal_revisions`                                             | 当前行直接删除拒绝；仅账户删除级联清理完整历史   |
+| `users`                             | Personal Model item、revision、feedback、evidence 与 refresh 历史 | 账户级删除时级联；日常直接物理删除由触发器拒绝   |
+| `users`                             | `privacy_export_archives`                                         | RESTRICT；先处置私有对象并删除保管行             |
+| 当前聚合                            | 子项与 revision                                                   | 聚合物理删除时级联；普通用户删除只先软删         |
+| `weekly_plans` / `workout_sessions` | `plan_workout_links`                                              | 复合所有权 FK；账户删除最终级联                  |
+| `consent_events`                    | AI/照片运行                                                       | 保持明确授权引用；正常撤回不删除事件             |
+| `privacy_erasure_receipts`          | data jobs                                                         | receipt 可被保留或解除引用；任务不会丢失尝试证据 |
+| `admin_operators`                   | 管理身份、角色、会话、审计 operator 引用                          | 身份数据级联；审计需保持不可变语义               |
 
 ## 18. 关键索引策略
 
@@ -465,7 +488,7 @@ repository 在插入 revision 后使用一次 JSON 数组展开，按原顺序�
 
 ### 18.2 历史
 
-所有 revision 表有 `(aggregate_id,revision)` 唯一约束，并有 `(user_id,aggregate_id,revision desc)` 读取索引，防止跨用户历史查询。Goal history 使用 `(user_id,goal_id,revision desc)` 并以独立 `history_coverage` 区分完整链与迁移检查点。Personal Model revision 使用 `(user_id,item_id,revision desc)`；feedback 使用 `(user_id,item_id,created_at desc,id desc)`；evidence projection 使用 owner/item/revision/ordinal 与 owner/evidence kind/aggregate revision 两条索引，分别支持还原有序证据和后续来源影响查询。当前 evidence 来源索引尚未绑定 goal/workout 来源外键或撤回传播。
+所有 revision 表有 `(aggregate_id,revision)` 唯一约束，并有 `(user_id,aggregate_id,revision desc)` 读取索引，防止跨用户历史查询。Goal history 使用 `(user_id,goal_id,revision desc)` 并以独立 `history_coverage` 区分完整链与迁移检查点。Personal Model revision 使用 `(user_id,item_id,revision desc)`；feedback 使用 `(user_id,item_id,created_at desc,id desc)`；evidence projection 使用 owner/item/revision/ordinal 与 owner/evidence kind/aggregate revision 两条索引，分别支持还原有序证据和来源影响查询。refresh request 使用 owner/item/affected revision/time/ID 索引读取待处理义务；source 唯一键负责重复事件收敛，pending 状态由 absence of resolution 推导，不维护可漂移状态列。
 
 ### 18.3 幂等
 
@@ -485,7 +508,7 @@ repository 在插入 revision 后使用一次 JSON 数组展开，按原顺序�
 
 创建 → 当前 revision 1 + revision 快照 → 更正增加 revision → 用户删除写 deleted_at 与 deleted 修订 → 当前列表/洞察排除 → 账户级删除时当前与历史物理清除。
 
-Personal Model item 创建时在同一事务写入 revision 1、全部有序 evidence projection 并发布当前指针；后续普通更新与反馈 revised 都只追加完整快照和对应证据行，再把指针精确推进一位。反馈 no-op 只追加结果收据，不复制 revision 或证据。当前阶段不支持普通物理删除，只有账户级 owner 级联可清理 item、revision、feedback 与 evidence；来源传播和便携导出生命周期留待后续迁移。
+Personal Model item 创建时在同一事务写入 revision 1、全部有序 evidence projection 并发布当前指针；后续普通更新与反馈 revised 都只追加完整快照和对应证据行，再把指针精确推进一位。反馈 no-op 只追加结果收据，不复制 revision 或证据。goal/workout 来源更新会为当前 eligible evidence 追加 refresh request；下一 revision 必须包含匹配 withdrawn context 并形成 resolution。当前阶段不支持普通物理删除，只有账户级 owner 级联可清理 item、revision、feedback、evidence、request 与 resolution；个人模型便携导出生命周期仍待后续迁移。
 
 建档目标创建时写稳定聚合和完整 revision 1；以后每次资料/目标共同 revision 都追加一条目标快照，即使目标字段未改变也保存本次本人重新提交的精确来源版本。旧账号在 0040 只获得当前检查点，覆盖范围继续随新修订继承。同步便携导出的当前 goal 对象内含有序 `revision_history`；普通读取仍只返回当前建档，账户删除清除当前与全部历史。
 

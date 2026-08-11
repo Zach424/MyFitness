@@ -197,6 +197,10 @@ const onboardingGoalRevisionHistoryMigrationPath = path.resolve(
   __dirname,
   '../../../../infra/postgres/migrations/0040_onboarding_goal_revision_history.sql',
 )
+const personalModelSourceQualificationMigrationPath = path.resolve(
+  __dirname,
+  '../../../../infra/postgres/migrations/0041_personal_model_source_qualification.sql',
+)
 
 describe('health-record migration drift', () => {
   it('contains every contract metric, unit and source kind', async () => {
@@ -614,6 +618,30 @@ describe('health-record migration drift', () => {
       'user goal current row does not match its immutable revision',
       'user_goal_revisions_immutable',
       'user goal revisions are append-only',
+    ]) {
+      expect(migration).toContain(boundary)
+    }
+  })
+
+  it('binds Personal Model evidence to exact sources and requires withdrawal resolution', async () => {
+    const migration = await readFile(personalModelSourceQualificationMigrationPath, 'utf8')
+    for (const boundary of [
+      'personal_model_evidence_refs_onboarding_source_fk',
+      'personal_model_evidence_refs_workout_source_fk',
+      'personal_model_evidence_refs_source_qualification_guard',
+      'CREATE TABLE personal_model_source_refresh_requests',
+      'personal_model_source_refresh_requests_evidence_fk',
+      'personal_model_source_refresh_requests_source_unique',
+      'CREATE TABLE personal_model_source_refresh_resolutions',
+      'personal_model_source_refresh_resolutions_evidence_fk',
+      'personal_model_source_refresh_requests_exact_guard',
+      'personal_model_source_refresh_resolutions_exact_guard',
+      'personal_model_item_revisions_source_refresh_guard',
+      'user_goal_revisions_personal_model_refresh',
+      'workout_revisions_personal_model_refresh',
+      'personal model revision omitted a pending source withdrawal',
+      'personal_model_source_refresh_requests_immutable',
+      'personal_model_source_refresh_resolutions_immutable',
     ]) {
       expect(migration).toContain(boundary)
     }

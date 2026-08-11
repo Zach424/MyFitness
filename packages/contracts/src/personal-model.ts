@@ -576,15 +576,23 @@ export const personalModelItemSchema = z
         )
       }
       const references = item.evidenceSet.references
+      const eligibleReferences = references.filter(
+        (reference) => reference.qualification === 'eligible',
+      )
+      const claimReference = references.find(
+        (reference) => reference.aggregateRevision === item.claim.sourceGoalRevision,
+      )
       if (
-        references.length !== 1 ||
-        references[0]?.evidenceKind !== 'onboarding_goal_revision' ||
-        references[0].aggregateRevision !== item.claim.sourceGoalRevision
+        references.some((reference) => reference.evidenceKind !== 'onboarding_goal_revision') ||
+        new Set(references.map((reference) => reference.aggregateId)).size !== 1 ||
+        claimReference === undefined ||
+        (!terminal &&
+          (eligibleReferences.length !== 1 || claimReference.qualification !== 'eligible'))
       ) {
         addIssue(
           ctx,
           ['evidenceSet', 'references'],
-          'availability constraints require the exact onboarding goal revision',
+          'availability constraints require one stable goal chain and its exact current revision',
         )
       }
       return

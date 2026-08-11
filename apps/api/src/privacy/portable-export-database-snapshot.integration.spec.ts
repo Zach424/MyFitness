@@ -1969,7 +1969,7 @@ describe('portable export bounded PostgreSQL snapshot', () => {
         [userId, workoutId, null, 2, portableExportSnapshotMaximumPayloadBytes],
       )
       expect(JSON.stringify(plan.rows[0]?.['QUERY PLAN'])).toMatch(
-        /workout_revisions_(user_workout_idx|workout_id_revision_key)/,
+        /workout_revisions_(user_workout_idx|workout_id_revision_key|owner_workout_revision_unique)/,
       )
     } finally {
       await client.query('ROLLBACK')

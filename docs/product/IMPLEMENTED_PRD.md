@@ -22,7 +22,7 @@
 | 服务端     | NestJS 模块化单体，统一 `/v1` API                                |
 | 数据       | PostgreSQL 主库、对象存储私有照片、Redis/持久任务辅助运行        |
 | AI         | 计划解释与餐食照片候选；输出必须通过结构与安全校验，失败时可降级 |
-| 已验证规模 | 87 个 HTTP 操作、40 张当前数据库表、40 个已执行迁移              |
+| 已验证规模 | 87 个 HTTP 操作、42 张当前数据库表、41 个已执行迁移              |
 
 ### 2.1 当前明确不包含
 
@@ -32,11 +32,11 @@
 - 原生 Apple Health、Health Connect 或穿戴设备自动同步。
 - 照片人体测量、姿态诊断、精确体脂率或“好坏体态”判断。
 - AI 自动修改计划、自动确认事实、自动写入餐食或自动提高训练量。
-- 用户可见的 Personal Model、Pattern/Hypothesis 生命周期、Weekly Cognitive Review、用户校准和模型修订闭环；当前只有内部 item/revision/feedback/evidence projection 持久内核及 onboarding goal 来源历史。
+- 用户可见的 Personal Model、Pattern/Hypothesis 生命周期、Weekly Cognitive Review、用户校准和模型修订闭环；当前只有内部 item/revision/feedback/evidence、goal/workout 来源资格及 refresh request/resolution 持久内核。
 - 基于长期个人模型自动执行 Contextual Decision，或把相关性、短期状态和用户未确认推断当作稳定人格标签。
 - 用户端离线写入队列；网络结果不确定时不会在后台自动重放请求。
 
-仓库已实现 Personal Model P1a/P1b 内部共享契约，以及 P2a item/revision、P2b feedback 和 P2c 首个 evidence projection PostgreSQL 内核。复合 owner 外键、不可变触发器和延迟原子发布保护完整历史链；追加式反馈与结果 revision 不可分离；每个新 revision 又必须在同一事务把完整有序 EvidenceReference 投影成不可变行，提交时核对快照数组、身份、顺序、资格及支持/反对/撤回计数。仓储所有 revision 写入路径共用该投影，晚加、漏加、改写和账户残留均受真实数据库测试保护。onboarding goal 现已具有稳定聚合 ID、共享 revision、不可变严格快照、完整/检查点覆盖标记、账户删除和本人同步导出；低覆盖异议仍无决策资格。goal/workout 来源资格与撤回传播、回顾、Personal Model 便携导出、API、派生服务和客户端尚未接入，因此不构成用户可见的个人模型、每周认知回顾或自动适应功能。
+仓库已实现 Personal Model P1a/P1b 内部共享契约，以及 P2a item/revision、P2b feedback 和 P2c evidence/source PostgreSQL 内核。复合 owner 外键、不可变触发器和延迟原子发布保护完整历史链；追加式反馈与结果 revision 不可分离；每个新 revision 又必须在同一事务把完整有序 EvidenceReference 投影成不可变行，提交时核对快照数组、身份、顺序、资格及支持/反对/撤回计数。onboarding goal 具有稳定聚合、不可变快照与诚实检查点；goal/workout evidence 进一步通过生成式类型键绑定同 owner 精确来源，新 eligible 引用必须命中当前未删除来源。来源更正/删除会在原事务生成不可变 refresh request，下一模型 revision 必须包含对应 withdrawn context 并形成 resolution，否则回滚。该协议尚无确定性消费执行器；回顾、Personal Model 便携导出、API、派生服务和客户端也未接入，因此不构成用户可见的个人模型、每周认知回顾或自动适应功能。
 
 ## 3. 用户、权限与信任边界
 

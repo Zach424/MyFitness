@@ -324,6 +324,47 @@ describe('personal model contract', () => {
     ).toBe(false)
   })
 
+  it('keeps a corrected goal revision as withdrawn context beside one current goal source', () => {
+    const availability = availabilityItem()
+    const previous = availability.evidenceSet.references[0]!
+    const corrected = {
+      ...availability,
+      claim: { ...availability.claim, sourceGoalRevision: 4 },
+      evidenceSet: {
+        ...availability.evidenceSet,
+        withdrawnCount: 1,
+        evidenceFingerprint: 'b'.repeat(64),
+        references: [
+          {
+            ...previous,
+            role: 'context' as const,
+            qualification: 'withdrawn' as const,
+            withdrawnReason: 'source_corrected' as const,
+          },
+          {
+            ...previous,
+            id: uuidFor(3),
+            aggregateRevision: 4,
+            time: { kind: 'instant' as const, occurredAt: '2026-08-10T08:00:00.000Z' },
+          },
+        ],
+      },
+    }
+
+    expect(personalModelItemSchema.safeParse(corrected).success).toBe(true)
+    expect(
+      personalModelItemSchema.safeParse({
+        ...corrected,
+        evidenceSet: {
+          ...corrected.evidenceSet,
+          references: corrected.evidenceSet.references.map((reference, index) =>
+            index === 1 ? { ...reference, aggregateId: uuidFor(4) } : reference,
+          ),
+        },
+      }).success,
+    ).toBe(false)
+  })
+
   it('checks evidence counts, owner isolation, uniqueness and withdrawal semantics', () => {
     const behavior = behaviorItem()
     expect(

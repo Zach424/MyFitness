@@ -21,21 +21,27 @@ import {
 
 const observedFrom = '2026-08-03T00:00:00.000Z'
 const observedThrough = '2026-08-10T00:00:00.000Z'
+const initialGoalChangedAt = '2026-08-09T08:00:00.000Z'
+const initialWorkoutStartedAt = '2026-08-08T08:00:00.000Z'
+const initialWorkoutEndedAt = '2026-08-08T09:00:00.000Z'
 
-const createdRevisionFor = (userId: string, itemId: string): PersonalModelItemRevision => {
+const createdRevisionFor = (
+  userId: string,
+  itemId: string,
+  goalId: string,
+): PersonalModelItemRevision => {
   const evidenceId = randomUUID()
-  const goalId = randomUUID()
   const reference = {
     id: evidenceId,
     ownerUserId: userId,
     role: 'supporting' as const,
     evidenceKind: 'onboarding_goal_revision' as const,
     aggregateId: goalId,
-    aggregateRevision: 3,
+    aggregateRevision: 1,
     sourceKind: 'user_confirmed' as const,
     qualification: 'eligible' as const,
     withdrawnReason: null,
-    time: { kind: 'instant' as const, occurredAt: '2026-08-09T08:00:00.000Z' },
+    time: { kind: 'instant' as const, occurredAt: initialGoalChangedAt },
   }
   const snapshot = {
     contractVersion: 'personal-model-contract-v1' as const,
@@ -47,7 +53,7 @@ const createdRevisionFor = (userId: string, itemId: string): PersonalModelItemRe
     claim: {
       availableDays: ['mon', 'wed', 'fri'] as const,
       sessionMinutes: 60,
-      sourceGoalRevision: 3,
+      sourceGoalRevision: 1,
       durationUnit: 'minutes' as const,
     },
     source: 'user_confirmed' as const,
@@ -121,6 +127,108 @@ const nextRevision = (
     feedbackEventId: null,
     changedAt,
   })
+
+const createdWorkoutRevisionFor = (
+  userId: string,
+  itemId: string,
+  workoutId: string,
+): PersonalModelItemRevision => {
+  const reference = {
+    id: randomUUID(),
+    ownerUserId: userId,
+    role: 'supporting' as const,
+    evidenceKind: 'workout_revision' as const,
+    aggregateId: workoutId,
+    aggregateRevision: 1,
+    sourceKind: 'manual' as const,
+    qualification: 'eligible' as const,
+    withdrawnReason: null,
+    time: {
+      kind: 'interval' as const,
+      startedAt: initialWorkoutStartedAt,
+      endedAt: initialWorkoutEndedAt,
+      timezone: 'Asia/Shanghai',
+    },
+  }
+  const snapshot = {
+    contractVersion: 'personal-model-contract-v1' as const,
+    id: itemId,
+    userId,
+    kind: 'behavior' as const,
+    subjectKey: 'training.recorded_frequency' as const,
+    claimSchemaVersion: 'recorded_training_frequency_behavior_v1' as const,
+    claim: {
+      observationWindow: {
+        startDate: '2026-08-03',
+        endDateExclusive: '2026-08-10',
+        completeWeeks: 1,
+        timezone: 'Asia/Shanghai',
+      },
+      weeklyRecordedSessionCounts: [1],
+      qualifyingWorkoutCount: 1,
+      recordedWeekCount: 1,
+      medianSessionsPerWeek: 1,
+      minimumSessionsPerWeek: 1,
+      maximumSessionsPerWeek: 1,
+      frequencyUnit: 'recorded_sessions_per_week' as const,
+      medianPolicyVersion: 'numeric-median-v1' as const,
+    },
+    source: 'deterministic_rule' as const,
+    status: 'candidate' as const,
+    confidence: {
+      policyVersion: 'personal-model-confidence-v1' as const,
+      basis: 'longitudinal_observation' as const,
+      level: 'low' as const,
+      qualifiedEvidenceCount: 1,
+      distinctLocalDates: 1,
+      completeWeeks: 1,
+      comparedWindowCount: 1,
+      stableWindowCount: 0,
+      contradictingEvidenceCount: 0,
+      latestEvidenceAt: initialWorkoutEndedAt,
+      limitations: ['limited_coverage'] as const,
+    },
+    evidenceSet: {
+      policyVersion: 'recorded-workout-evidence-v1',
+      ownerUserId: userId,
+      asOf: observedThrough,
+      window: {
+        startAt: observedFrom,
+        endAt: observedThrough,
+        timezone: 'Asia/Shanghai',
+      },
+      includedCount: 1,
+      supportingCount: 1,
+      contradictingCount: 0,
+      withdrawnCount: 0,
+      evidenceFingerprint: 'c'.repeat(64),
+      references: [reference],
+    },
+    validFrom: observedThrough,
+    validTo: null,
+    observedFrom,
+    observedThrough,
+    derivedAt: observedThrough,
+    revision: 1,
+    feedbackState: 'unreviewed' as const,
+    createdAt: observedThrough,
+    updatedAt: observedThrough,
+  }
+
+  return personalModelItemRevisionSchema.parse({
+    schemaVersion: 'personal-model-item-revision-v1',
+    id: randomUUID(),
+    userId,
+    itemId,
+    revision: 1,
+    previousRevision: null,
+    action: 'created',
+    snapshot,
+    derivationFingerprint: 'd'.repeat(64),
+    feedbackEventId: null,
+    changedAt: observedThrough,
+  })
+}
 
 const revisedFeedbackFor = (
   current: PersonalModelItemRevision,
@@ -215,8 +323,12 @@ describe('PersonalModelRepository with PostgreSQL', () => {
   const repository = new PersonalModelRepository(database)
   const userId = randomUUID()
   const otherUserId = randomUUID()
+  const workoutUserId = randomUUID()
   const itemId = randomUUID()
-  let current = createdRevisionFor(userId, itemId)
+  const goalId = randomUUID()
+  const workoutItemId = randomUUID()
+  const workoutId = randomUUID()
+  let current = createdRevisionFor(userId, itemId, goalId)
 
   const insertRawRevision = (
     revision: PersonalModelItemRevision,
@@ -250,11 +362,119 @@ describe('PersonalModelRepository with PostgreSQL', () => {
 
   beforeAll(async () => {
     await runMigrations(databaseUrl)
-    await pool.query('INSERT INTO users (id) VALUES ($1), ($2)', [userId, otherUserId])
+    await pool.query('INSERT INTO users (id) VALUES ($1), ($2), ($3)', [
+      userId,
+      otherUserId,
+      workoutUserId,
+    ])
+    const client = await pool.connect()
+    try {
+      await client.query('BEGIN')
+      await client.query(
+        `
+          INSERT INTO user_profiles (
+            user_id, display_name, age_band, sex_for_calculations,
+            height_cm, display_height, display_height_unit, unit_system,
+            timezone, adult_confirmed_at, risk_status, risk_flags,
+            revision, created_at, updated_at
+          )
+          VALUES (
+            $1, 'Source owner', '25_34', 'unspecified',
+            170, 170, 'cm', 'metric',
+            'Asia/Shanghai', $2, 'eligible', '{}',
+            1, $2, $2
+          )
+        `,
+        [userId, initialGoalChangedAt],
+      )
+      await client.query(
+        `
+          INSERT INTO user_goals (
+            user_id, primary_goal, experience, available_days,
+            session_minutes, equipment, dietary_preferences,
+            created_at, updated_at, goal_id, revision
+          )
+          VALUES (
+            $1, 'fitness', 'beginner', ARRAY['mon', 'wed', 'fri'],
+            60, ARRAY['bodyweight'], ARRAY['none'],
+            $3, $3, $2, 1
+          )
+        `,
+        [userId, goalId, initialGoalChangedAt],
+      )
+      await client.query(
+        `
+          INSERT INTO user_goal_revisions (
+            user_id, goal_id, revision, previous_revision, action, history_coverage,
+            primary_goal, experience, available_days, session_minutes,
+            equipment, dietary_preferences, snapshot, changed_at
+          )
+          SELECT
+            user_id, goal_id, revision, NULL, 'created', 'complete',
+            primary_goal, experience, available_days, session_minutes,
+            equipment, dietary_preferences,
+            build_user_goal_revision_snapshot_v1(
+              user_id, goal_id, revision, 'created', 'complete',
+              primary_goal, experience, available_days, session_minutes,
+              equipment, dietary_preferences, updated_at
+            ),
+            updated_at
+          FROM user_goals
+          WHERE user_id = $1
+        `,
+        [userId],
+      )
+      await client.query('COMMIT')
+    } catch (error) {
+      await client.query('ROLLBACK')
+      throw error
+    } finally {
+      client.release()
+    }
+    await pool.query(
+      `
+        INSERT INTO workout_sessions (
+          id, user_id, title, status, source_kind, source_metadata,
+          started_at, ended_at, timezone, pain_level, fatigue, note,
+          revision, idempotency_key, request_hash, created_at, updated_at
+        )
+        VALUES (
+          $1, $2, 'Source workout', 'completed', 'manual', '{}',
+          $3, $4, 'Asia/Shanghai', 0, 2, NULL,
+          1, 'source-workout-idempotency', $5, $3, $3
+        )
+      `,
+      [workoutId, workoutUserId, initialWorkoutStartedAt, initialWorkoutEndedAt, '0'.repeat(64)],
+    )
+    await pool.query(
+      `
+        INSERT INTO workout_revisions (
+          id, workout_id, user_id, action, revision, snapshot, changed_at
+        )
+        VALUES ($1, $2, $3, 'created', 1, $4::JSONB, $5)
+      `,
+      [
+        randomUUID(),
+        workoutId,
+        workoutUserId,
+        JSON.stringify({
+          id: workoutId,
+          userId: workoutUserId,
+          revision: 1,
+          source: { kind: 'manual' },
+          startedAt: initialWorkoutStartedAt,
+          endedAt: initialWorkoutEndedAt,
+          timezone: 'Asia/Shanghai',
+        }),
+        initialWorkoutStartedAt,
+      ],
+    )
   })
 
   afterAll(async () => {
-    await pool.query('DELETE FROM users WHERE id = ANY($1::uuid[])', [[userId, otherUserId]])
+    await pool.query('DELETE FROM users WHERE id = ANY($1::uuid[])', [
+      [userId, otherUserId, workoutUserId],
+    ])
     await database.onModuleDestroy()
     await pool.end()
   })
@@ -357,7 +577,7 @@ describe('PersonalModelRepository with PostgreSQL', () => {
           JSON.stringify(extraReference),
         ],
       ),
-    ).rejects.toMatchObject({ code: 'P0001' })
+    ).rejects.toMatchObject({ code: '23503' })
   })
 
   it('advances exactly one revision and fails closed for stale or other-owner access', async () => {
@@ -633,6 +853,484 @@ describe('PersonalModelRepository with PostgreSQL', () => {
     ).rejects.toMatchObject({ code: 'P0001' })
   })
 
+  it('queues an exact goal-source refresh and requires the next revision to withdraw it', async () => {
+    const correctedAt = '2026-08-10T09:00:00.000Z'
+    const client = await pool.connect()
+    try {
+      await client.query('BEGIN')
+      await client.query(
+        `
+          UPDATE user_profiles
+          SET revision = 2, updated_at = $2
+          WHERE user_id = $1 AND revision = 1
+        `,
+        [userId, correctedAt],
+      )
+      await client.query(
+        `
+          UPDATE user_goals
+          SET available_days = ARRAY['tue', 'thu'], session_minutes = 45,
+              revision = 2, updated_at = $2
+          WHERE user_id = $1 AND revision = 1
+        `,
+        [userId, correctedAt],
+      )
+      await client.query(
+        `
+          INSERT INTO user_goal_revisions (
+            user_id, goal_id, revision, previous_revision, action, history_coverage,
+            primary_goal, experience, available_days, session_minutes,
+            equipment, dietary_preferences, snapshot, changed_at
+          )
+          SELECT
+            goal.user_id, goal.goal_id, goal.revision, 1, 'updated',
+            predecessor.history_coverage,
+            goal.primary_goal, goal.experience, goal.available_days, goal.session_minutes,
+            goal.equipment, goal.dietary_preferences,
+            build_user_goal_revision_snapshot_v1(
+              goal.user_id, goal.goal_id, goal.revision, 'updated',
+              predecessor.history_coverage,
+              goal.primary_goal, goal.experience, goal.available_days,
+              goal.session_minutes, goal.equipment, goal.dietary_preferences,
+              goal.updated_at
+            ),
+            goal.updated_at
+          FROM user_goals AS goal
+          JOIN user_goal_revisions AS predecessor
+            ON predecessor.user_id = goal.user_id
+           AND predecessor.goal_id = goal.goal_id
+           AND predecessor.revision = 1
+          WHERE goal.user_id = $1
+        `,
+        [userId],
+      )
+      await client.query('COMMIT')
+    } catch (error) {
+      await client.query('ROLLBACK')
+      throw error
+    } finally {
+      client.release()
+    }
+
+    const pending = await pool.query<{
+      reason: string
+      withdrawn_source_revision: number
+      observed_source_revision: number
+      affected_item_revision: number
+    }>(
+      `
+        SELECT reason, withdrawn_source_revision, observed_source_revision,
+               affected_item_revision
+        FROM personal_model_source_refresh_requests
+        WHERE user_id = $1 AND item_id = $2
+      `,
+      [userId, itemId],
+    )
+    expect(pending.rows).toEqual([
+      {
+        reason: 'source_corrected',
+        withdrawn_source_revision: 1,
+        observed_source_revision: 2,
+        affected_item_revision: current.revision,
+      },
+    ])
+
+    const omitted = nextRevision(current, '2026-08-10T09:30:00.000Z', '9'.repeat(64))
+    await expect(
+      repository.append(userId, itemId, current.revision, omitted),
+    ).rejects.toMatchObject({ code: 'P0001' })
+
+    const changedAt = '2026-08-10T10:00:00.000Z'
+    const previousReference = current.snapshot.evidenceSet.references[0]!
+    const withdrawnReference = {
+      ...previousReference,
+      role: 'context' as const,
+      qualification: 'withdrawn' as const,
+      withdrawnReason: 'source_corrected' as const,
+    }
+    const replacementReference = {
+      ...previousReference,
+      id: randomUUID(),
+      aggregateRevision: 2,
+      time: { kind: 'instant' as const, occurredAt: correctedAt },
+    }
+    const corrected = personalModelItemRevisionSchema.parse({
+      ...current,
+      id: randomUUID(),
+      revision: current.revision + 1,
+      previousRevision: current.revision,
+      action: 'evidence_accumulated',
+      snapshot: {
+        ...current.snapshot,
+        claim: {
+          ...current.snapshot.claim,
+          availableDays: ['tue', 'thu'],
+          sessionMinutes: 45,
+          sourceGoalRevision: 2,
+        },
+        evidenceSet: {
+          ...current.snapshot.evidenceSet,
+          asOf: changedAt,
+          window: { ...current.snapshot.evidenceSet.window, endAt: changedAt },
+          withdrawnCount: 1,
+          evidenceFingerprint: '9'.repeat(64),
+          references: [withdrawnReference, replacementReference],
+        },
+        observedThrough: changedAt,
+        derivedAt: changedAt,
+        revision: current.revision + 1,
+        updatedAt: changedAt,
+      },
+      derivationFingerprint: 'a'.repeat(64),
+      feedbackEventId: null,
+      changedAt,
+    })
+
+    current = await repository.append(userId, itemId, current.revision, corrected)
+    const receipt = await pool.query<{
+      resolved_item_revision: number
+      withdrawn_reference_id: string
+      reason: string
+    }>(
+      `
+        SELECT resolution.resolved_item_revision, resolution.withdrawn_reference_id,
+               request.reason
+        FROM personal_model_source_refresh_resolutions AS resolution
+        JOIN personal_model_source_refresh_requests AS request
+          ON request.id = resolution.request_id
+        WHERE resolution.user_id = $1 AND resolution.item_id = $2
+      `,
+      [userId, itemId],
+    )
+    expect(receipt.rows).toEqual([
+      {
+        resolved_item_revision: current.revision,
+        withdrawn_reference_id: withdrawnReference.id,
+        reason: 'source_corrected',
+      },
+    ])
+
+    const bindings = await pool.query<{
+      onboarding_goal_id: string | null
+      onboarding_goal_revision: number | null
+      workout_id: string | null
+      workout_revision: number | null
+    }>(
+      `
+        SELECT onboarding_goal_id, onboarding_goal_revision, workout_id, workout_revision
+        FROM personal_model_evidence_refs
+        WHERE user_id = $1 AND item_id = $2 AND item_revision = $3
+        ORDER BY ordinal
+      `,
+      [userId, itemId, current.revision],
+    )
+    expect(bindings.rows).toEqual([
+      {
+        onboarding_goal_id: goalId,
+        onboarding_goal_revision: 1,
+        workout_id: null,
+        workout_revision: null,
+      },
+      {
+        onboarding_goal_id: goalId,
+        onboarding_goal_revision: 2,
+        workout_id: null,
+        workout_revision: null,
+      },
+    ])
+
+    await expect(
+      pool.query(
+        'UPDATE personal_model_source_refresh_requests SET created_at = created_at WHERE user_id = $1 AND item_id = $2',
+        [userId, itemId],
+      ),
+    ).rejects.toMatchObject({ code: 'P0001' })
+    await expect(
+      pool.query(
+        'DELETE FROM personal_model_source_refresh_resolutions WHERE user_id = $1 AND item_id = $2',
+        [userId, itemId],
+      ),
+    ).rejects.toMatchObject({ code: 'P0001' })
+  })
+
+  it('binds workout sources and closes correction and deletion refresh requests', async () => {
+    const missingSource = createdWorkoutRevisionFor(workoutUserId, randomUUID(), randomUUID())
+    await expect(repository.create(missingSource)).rejects.toMatchObject({ code: '23503' })
+
+    const mismatchedSource = createdWorkoutRevisionFor(workoutUserId, randomUUID(), workoutId)
+    const mismatchedReference = mismatchedSource.snapshot.evidenceSet.references[0]!
+    await expect(
+      repository.create({
+        ...mismatchedSource,
+        snapshot: {
+          ...mismatchedSource.snapshot,
+          evidenceSet: {
+            ...mismatchedSource.snapshot.evidenceSet,
+            references: [
+              {
+                ...mismatchedReference,
+                time: { ...mismatchedReference.time, timezone: 'UTC' },
+              },
+            ],
+          },
+        },
+      }),
+    ).rejects.toMatchObject({ code: 'P0001' })
+
+    let workoutCurrent = createdWorkoutRevisionFor(workoutUserId, workoutItemId, workoutId)
+    workoutCurrent = await repository.create(workoutCurrent)
+    const initialBinding = await pool.query<{
+      workout_id: string
+      workout_revision: number
+      onboarding_goal_id: string | null
+    }>(
+      `
+        SELECT workout_id, workout_revision, onboarding_goal_id
+        FROM personal_model_evidence_refs
+        WHERE user_id = $1 AND item_id = $2 AND item_revision = 1
+      `,
+      [workoutUserId, workoutItemId],
+    )
+    expect(initialBinding.rows).toEqual([
+      { workout_id: workoutId, workout_revision: 1, onboarding_goal_id: null },
+    ])
+
+    const correctedAt = '2026-08-10T10:30:00.000Z'
+    const correctedStartedAt = '2026-08-08T08:15:00.000Z'
+    const correctedEndedAt = '2026-08-08T09:15:00.000Z'
+    const correctedClient = await pool.connect()
+    try {
+      await correctedClient.query('BEGIN')
+      await correctedClient.query(
+        `
+          UPDATE workout_sessions
+          SET started_at = $3, ended_at = $4, revision = 2, updated_at = $5
+          WHERE id = $1 AND user_id = $2 AND revision = 1
+        `,
+        [workoutId, workoutUserId, correctedStartedAt, correctedEndedAt, correctedAt],
+      )
+      await correctedClient.query(
+        `
+          INSERT INTO workout_revisions (
+            id, workout_id, user_id, action, revision, snapshot, changed_at
+          )
+          VALUES ($1, $2, $3, 'updated', 2, $4::JSONB, $5)
+        `,
+        [
+          randomUUID(),
+          workoutId,
+          workoutUserId,
+          JSON.stringify({
+            id: workoutId,
+            userId: workoutUserId,
+            revision: 2,
+            source: { kind: 'manual' },
+            startedAt: correctedStartedAt,
+            endedAt: correctedEndedAt,
+            timezone: 'Asia/Shanghai',
+          }),
+          correctedAt,
+        ],
+      )
+      await correctedClient.query('COMMIT')
+    } catch (error) {
+      await correctedClient.query('ROLLBACK')
+      throw error
+    } finally {
+      correctedClient.release()
+    }
+
+    const initialReference = workoutCurrent.snapshot.evidenceSet.references[0]!
+    const correctedReference = {
+      ...initialReference,
+      id: randomUUID(),
+      aggregateRevision: 2,
+      time: {
+        kind: 'interval' as const,
+        startedAt: correctedStartedAt,
+        endedAt: correctedEndedAt,
+        timezone: 'Asia/Shanghai',
+      },
+    }
+    const correctedRevision = personalModelItemRevisionSchema.parse({
+      ...workoutCurrent,
+      id: randomUUID(),
+      revision: 2,
+      previousRevision: 1,
+      action: 'evidence_accumulated',
+      snapshot: {
+        ...workoutCurrent.snapshot,
+        confidence: {
+          ...workoutCurrent.snapshot.confidence,
+          latestEvidenceAt: correctedEndedAt,
+        },
+        evidenceSet: {
+          ...workoutCurrent.snapshot.evidenceSet,
+          asOf: correctedAt,
+          window: { ...workoutCurrent.snapshot.evidenceSet.window, endAt: correctedAt },
+          withdrawnCount: 1,
+          evidenceFingerprint: 'e'.repeat(64),
+          references: [
+            {
+              ...initialReference,
+              role: 'context',
+              qualification: 'withdrawn',
+              withdrawnReason: 'source_corrected',
+            },
+            correctedReference,
+          ],
+        },
+        observedThrough: correctedAt,
+        derivedAt: correctedAt,
+        revision: 2,
+        updatedAt: correctedAt,
+      },
+      derivationFingerprint: 'f'.repeat(64),
+      feedbackEventId: null,
+      changedAt: correctedAt,
+    })
+    workoutCurrent = await repository.append(workoutUserId, workoutItemId, 1, correctedRevision)
+
+    const deletedAt = '2026-08-10T11:00:00.000Z'
+    const deletedClient = await pool.connect()
+    try {
+      await deletedClient.query('BEGIN')
+      await deletedClient.query(
+        `
+          UPDATE workout_sessions
+          SET deleted_at = $3, revision = 3, updated_at = $3
+          WHERE id = $1 AND user_id = $2 AND revision = 2
+        `,
+        [workoutId, workoutUserId, deletedAt],
+      )
+      await deletedClient.query(
+        `
+          INSERT INTO workout_revisions (
+            id, workout_id, user_id, action, revision, snapshot, changed_at
+          )
+          VALUES ($1, $2, $3, 'deleted', 3, $4::JSONB, $5)
+        `,
+        [
+          randomUUID(),
+          workoutId,
+          workoutUserId,
+          JSON.stringify({
+            id: workoutId,
+            userId: workoutUserId,
+            revision: 3,
+            source: { kind: 'manual' },
+            startedAt: correctedStartedAt,
+            endedAt: correctedEndedAt,
+            timezone: 'Asia/Shanghai',
+          }),
+          deletedAt,
+        ],
+      )
+      await deletedClient.query('COMMIT')
+    } catch (error) {
+      await deletedClient.query('ROLLBACK')
+      throw error
+    } finally {
+      deletedClient.release()
+    }
+
+    const invalidatedRevision = personalModelItemRevisionSchema.parse({
+      ...workoutCurrent,
+      id: randomUUID(),
+      revision: 3,
+      previousRevision: 2,
+      action: 'invalidated',
+      snapshot: {
+        ...workoutCurrent.snapshot,
+        status: 'invalidated',
+        confidence: {
+          policyVersion: 'personal-model-confidence-v1',
+          basis: 'longitudinal_observation',
+          level: 'insufficient',
+          qualifiedEvidenceCount: 0,
+          distinctLocalDates: 0,
+          completeWeeks: 1,
+          comparedWindowCount: 0,
+          stableWindowCount: 0,
+          contradictingEvidenceCount: 0,
+          latestEvidenceAt: null,
+          limitations: ['limited_coverage', 'source_withdrawn'],
+        },
+        evidenceSet: {
+          ...workoutCurrent.snapshot.evidenceSet,
+          asOf: deletedAt,
+          window: { ...workoutCurrent.snapshot.evidenceSet.window, endAt: deletedAt },
+          includedCount: 0,
+          supportingCount: 0,
+          withdrawnCount: 1,
+          evidenceFingerprint: '1'.repeat(64),
+          references: [
+            {
+              ...correctedReference,
+              role: 'context',
+              qualification: 'withdrawn',
+              withdrawnReason: 'source_deleted',
+            },
+          ],
+        },
+        validTo: deletedAt,
+        observedThrough: deletedAt,
+        derivedAt: deletedAt,
+        revision: 3,
+        updatedAt: deletedAt,
+      },
+      derivationFingerprint: '2'.repeat(64),
+      feedbackEventId: null,
+      changedAt: deletedAt,
+    })
+    workoutCurrent = await repository.append(workoutUserId, workoutItemId, 2, invalidatedRevision)
+    expect(workoutCurrent.snapshot.status).toBe('invalidated')
+
+    const refreshes = await pool.query<{
+      reason: string
+      observed_source_revision: number
+      resolved_item_revision: number
+    }>(
+      `
+        SELECT request.reason, request.observed_source_revision,
+               resolution.resolved_item_revision
+        FROM personal_model_source_refresh_requests AS request
+        JOIN personal_model_source_refresh_resolutions AS resolution
+          ON resolution.request_id = request.id
+        WHERE request.user_id = $1 AND request.item_id = $2
+        ORDER BY request.observed_source_revision
+      `,
+      [workoutUserId, workoutItemId],
+    )
+    expect(refreshes.rows).toEqual([
+      { reason: 'source_corrected', observed_source_revision: 2, resolved_item_revision: 2 },
+      { reason: 'source_deleted', observed_source_revision: 3, resolved_item_revision: 3 },
+    ])
+
+    await pool.query('DELETE FROM users WHERE id = $1', [workoutUserId])
+    const remaining = await pool.query<{
+      evidence_count: string
+      request_count: string
+      resolution_count: string
+    }>(
+      `
+        SELECT
+          (SELECT COUNT(*) FROM personal_model_evidence_refs WHERE user_id = $1)::TEXT
+            AS evidence_count,
+          (SELECT COUNT(*) FROM personal_model_source_refresh_requests WHERE user_id = $1)::TEXT
+            AS request_count,
+          (SELECT COUNT(*) FROM personal_model_source_refresh_resolutions WHERE user_id = $1)::TEXT
+            AS resolution_count
+      `,
+      [workoutUserId],
+    )
+    expect(remaining.rows[0]).toEqual({
+      evidence_count: '0',
+      request_count: '0',
+      resolution_count: '0',
+    })
+  })
+
   it('rejects revision mutation, unpublished revisions and cross-owner rows in PostgreSQL', async () => {
     await expect(
       pool.query('UPDATE personal_model_item_revisions SET snapshot = snapshot WHERE id = $1', [
@@ -643,7 +1341,7 @@ describe('PersonalModelRepository with PostgreSQL', () => {
       pool.query('DELETE FROM personal_model_item_revisions WHERE id = $1', [current.id]),
     ).rejects.toMatchObject({ code: 'P0001' })
 
-    const unpublished = nextRevision(current, '2026-08-10T03:00:00.000Z', 'f'.repeat(64))
+    const unpublished = nextRevision(current, '2026-08-10T12:00:00.000Z', 'f'.repeat(64))
     await expect(insertRawRevision(unpublished)).rejects.toMatchObject({ code: 'P0001' })
 
     const crossOwnerSnapshot = {
@@ -685,7 +1383,7 @@ describe('PersonalModelRepository with PostgreSQL', () => {
     )
     expect(projectedHistory.rows[0]).toEqual({
       revision_count: String(current.revision),
-      evidence_count: String(current.revision),
+      evidence_count: String(current.revision + 1),
     })
 
     await expect(

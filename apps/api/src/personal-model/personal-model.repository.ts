@@ -196,6 +196,40 @@ const insertEvidenceReferences = async (
       JSON.stringify(revision.snapshot.evidenceSet.references),
     ],
   )
+
+  await client.query(
+    `
+      INSERT INTO personal_model_source_refresh_resolutions (
+        request_id, user_id, item_id, resolved_item_revision,
+        withdrawn_reference_id, resolved_at
+      )
+      SELECT
+        request.id,
+        request.user_id,
+        request.item_id,
+        $3,
+        evidence.reference_id,
+        $4
+      FROM personal_model_source_refresh_requests AS request
+      JOIN personal_model_evidence_refs AS evidence
+        ON evidence.user_id = request.user_id
+       AND evidence.item_id = request.item_id
+       AND evidence.item_revision = $3
+       AND evidence.evidence_kind = request.evidence_kind
+       AND evidence.aggregate_id = request.source_aggregate_id
+       AND evidence.aggregate_revision = request.withdrawn_source_revision
+       AND evidence.qualification = 'withdrawn'
+       AND evidence.withdrawn_reason = request.reason
+      LEFT JOIN personal_model_source_refresh_resolutions AS resolution
+        ON resolution.request_id = request.id
+      WHERE request.user_id = $1
+        AND request.item_id = $2
+        AND request.affected_item_revision < $3
+        AND resolution.request_id IS NULL
+      ON CONFLICT (request_id) DO NOTHING
+    `,
+    [revision.userId, revision.itemId, revision.revision, revision.changedAt],
+  )
 }
 
 const insertRevision = async (
