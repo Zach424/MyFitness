@@ -265,7 +265,8 @@ const fakeWorkoutExerciseLayerDatabase = (
             sql.includes('FROM user_exercise_catalog_entries') ||
             sql.includes('FROM user_exercise_catalog_revisions') ||
             sql.includes('FROM user_food_catalog_entries') ||
-            sql.includes('FROM user_food_catalog_revisions')
+            sql.includes('FROM user_food_catalog_revisions') ||
+            sql.includes('FROM nutrition_meals')
           ) {
             return { rows: [] }
           }
@@ -2213,7 +2214,7 @@ describe('portable export database snapshot session', () => {
     expect(lifecycle).toMatchObject({ committed: false, rolledBack: true })
   })
 
-  it('reuses the coordinated client for a complete JSON-ordered workout sixth field', async () => {
+  it('reuses one coordinated client and owner check through the nutrition meal seventh field', async () => {
     const revisionId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1'
     const snapshotExerciseId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1'
     const snapshotSetId = 'cccccccc-cccc-4ccc-8ccc-ccccccccccc1'
@@ -2237,7 +2238,7 @@ describe('portable export database snapshot session', () => {
     )
     const session = new PortableExportDatabaseSnapshotService(
       database,
-    ).createConsentHealthCatalogWorkoutSnapshot('11111111-1111-4111-8111-111111111111', {
+    ).createConsentHealthCatalogWorkoutNutritionSnapshot('11111111-1111-4111-8111-111111111111', {
       batchRows: 1,
     })
     const observed: string[] = []
@@ -2261,6 +2262,7 @@ describe('portable export database snapshot session', () => {
         for await (const set of exercise.sets) observed.push(set.id as string)
       }
     }
+    for await (const _ of session.nutritionMeals) observed.push('nutrition-meal')
     await session.complete()
 
     expect(observed).toEqual([
@@ -2285,6 +2287,11 @@ describe('portable export database snapshot session', () => {
       workoutRevisionSnapshotRoots: { batchCount: 1, rowCount: 1 },
       workoutRevisionSnapshotExercises: { batchCount: 1, rowCount: 1 },
       workoutRevisionSnapshotSets: { batchCount: 1, rowCount: 1 },
+      nutritionMeals: { batchCount: 0, rowCount: 0 },
+      nutritionMealItems: { batchCount: 0, rowCount: 0 },
+      nutritionMealRevisions: { batchCount: 0, rowCount: 0 },
+      nutritionMealRevisionSnapshotRoots: { batchCount: 0, rowCount: 0 },
+      nutritionMealRevisionSnapshotItems: { batchCount: 0, rowCount: 0 },
     })
   })
 

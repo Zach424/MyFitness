@@ -1,5 +1,6 @@
 import type {
   PortableExportConsentHealthCatalogSnapshotSession,
+  PortableExportConsentHealthCatalogWorkoutNutritionSnapshotSession,
   PortableExportConsentHealthCatalogWorkoutSnapshotSession,
   PortableExportConsentHealthExerciseCatalogSnapshotSession,
   PortableExportExerciseCatalogSnapshotEntry,
@@ -8,6 +9,7 @@ import {
   portableExportJsonAsyncArray,
   type PortableExportJsonAsyncArray,
 } from './portable-export-json-stream'
+import { createPortableExportNutritionMealJsonArray } from './portable-export-nutrition-meal-json-source'
 import { createPortableExportWorkoutJsonArray } from './portable-export-workout-json-source'
 
 export type PortableExportConsentHealthExerciseCatalogJsonSource = {
@@ -34,6 +36,14 @@ export type PortableExportConsentHealthCatalogWorkoutJsonSource =
     receipt: PortableExportConsentHealthCatalogWorkoutSnapshotSession['receipt']
     complete: PortableExportConsentHealthCatalogWorkoutSnapshotSession['complete']
     cancel: PortableExportConsentHealthCatalogWorkoutSnapshotSession['cancel']
+  }
+
+export type PortableExportConsentHealthCatalogWorkoutNutritionJsonSource =
+  PortableExportConsentHealthCatalogWorkoutJsonSource & {
+    nutritionMeals: PortableExportJsonAsyncArray<Record<string, unknown>>
+    receipt: PortableExportConsentHealthCatalogWorkoutNutritionSnapshotSession['receipt']
+    complete: PortableExportConsentHealthCatalogWorkoutNutritionSnapshotSession['complete']
+    cancel: PortableExportConsentHealthCatalogWorkoutNutritionSnapshotSession['cancel']
   }
 
 const catalogJsonValues = async function* (
@@ -83,6 +93,21 @@ export const createPortableExportConsentHealthCatalogWorkoutJsonSource = (
   exerciseCatalog: portableExportJsonAsyncArray(catalogJsonValues(session.exerciseCatalog)),
   foodCatalog: portableExportJsonAsyncArray(catalogJsonValues(session.foodCatalog)),
   workouts: createPortableExportWorkoutJsonArray(session.workouts),
+  receipt: session.receipt,
+  complete: session.complete,
+  cancel: session.cancel,
+})
+
+export const createPortableExportConsentHealthCatalogWorkoutNutritionJsonSource = (
+  session: PortableExportConsentHealthCatalogWorkoutNutritionSnapshotSession,
+): PortableExportConsentHealthCatalogWorkoutNutritionJsonSource => ({
+  consentEvents: portableExportJsonAsyncArray(session.consentEvents),
+  healthRecords: portableExportJsonAsyncArray(session.healthRecords),
+  healthRecordRevisions: portableExportJsonAsyncArray(session.healthRecordRevisions),
+  exerciseCatalog: portableExportJsonAsyncArray(catalogJsonValues(session.exerciseCatalog)),
+  foodCatalog: portableExportJsonAsyncArray(catalogJsonValues(session.foodCatalog)),
+  workouts: createPortableExportWorkoutJsonArray(session.workouts),
+  nutritionMeals: createPortableExportNutritionMealJsonArray(session.nutritionMeals),
   receipt: session.receipt,
   complete: session.complete,
   cancel: session.cancel,

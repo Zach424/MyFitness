@@ -6,6 +6,8 @@ import { describe, expect, it } from 'vitest'
 import type {
   PortableExportConsentHealthCatalogSnapshotReceipt,
   PortableExportConsentHealthCatalogSnapshotSession,
+  PortableExportConsentHealthCatalogWorkoutNutritionSnapshotReceipt,
+  PortableExportConsentHealthCatalogWorkoutNutritionSnapshotSession,
   PortableExportConsentHealthCatalogWorkoutSnapshotReceipt,
   PortableExportConsentHealthCatalogWorkoutSnapshotSession,
   PortableExportConsentHealthExerciseCatalogSnapshotReceipt,
@@ -14,6 +16,7 @@ import type {
 import { serializePortableExport } from './portable-export-artifact'
 import {
   createPortableExportConsentHealthCatalogJsonSource,
+  createPortableExportConsentHealthCatalogWorkoutNutritionJsonSource,
   createPortableExportConsentHealthCatalogWorkoutJsonSource,
   createPortableExportConsentHealthExerciseCatalogJsonSource,
 } from './portable-export-exercise-catalog-json-source'
@@ -52,10 +55,21 @@ const emptyCatalogWorkoutReceipt =
     workoutRevisionSnapshotSets: { batchCount: 0, rowCount: 0 },
   })
 
+const emptyCatalogWorkoutNutritionReceipt =
+  (): PortableExportConsentHealthCatalogWorkoutNutritionSnapshotReceipt => ({
+    ...emptyCatalogWorkoutReceipt(),
+    nutritionMeals: { batchCount: 0, rowCount: 0 },
+    nutritionMealItems: { batchCount: 0, rowCount: 0 },
+    nutritionMealRevisions: { batchCount: 0, rowCount: 0 },
+    nutritionMealRevisionSnapshotRoots: { batchCount: 0, rowCount: 0 },
+    nutritionMealRevisionSnapshotItems: { batchCount: 0, rowCount: 0 },
+  })
+
 const exportFixture = (
   exerciseCatalog: Array<Record<string, unknown>>,
   foodCatalog: Array<Record<string, unknown>> = [],
   workouts: Array<Record<string, unknown>> = [],
+  nutritionMeals: Array<Record<string, unknown>> = [],
 ) =>
   privacyExportSchema.parse({
     schemaVersion: privacyExportSchemaVersion,
@@ -72,7 +86,7 @@ const exportFixture = (
       exerciseCatalog,
       foodCatalog,
       workouts,
-      nutritionMeals: [],
+      nutritionMeals,
       nutritionFavorites: [],
       weeklyPlans: [],
       aiExplanationRuns: [],
@@ -461,6 +475,115 @@ describe('portable export exercise catalog JSON source', () => {
     for await (const chunk of json.bytes) chunks.push(Buffer.from(chunk))
 
     expect(Buffer.concat(chunks)).toEqual(expected)
+    expect(completed).toBe(true)
+    expect(cancelled).toBe(false)
+  })
+
+  it('streams nutrition meals as the seventh coordinated field byte-for-byte', async () => {
+    const traversal: string[] = []
+    let completed = false
+    let cancelled = false
+    const currentItem = { id: 'meal-item-current', position: 1, name: 'Oats' }
+    const snapshotItem = { id: 'meal-item-history', position: 1, name: 'Rice' }
+    const mealExpected = {
+      id: 'meal-1',
+      items: [currentItem],
+      history: [
+        {
+          id: 'meal-revision-1',
+          revision: 1,
+          snapshot: { id: 'meal-1', items: [snapshotItem] },
+        },
+      ],
+    }
+    const session = {
+      consentEvents: (async function* () {
+        traversal.push('consent')
+        yield { id: 'consent-1' }
+      })(),
+      healthRecords: (async function* () {
+        traversal.push('health')
+        yield { id: 'health-1' }
+      })(),
+      healthRecordRevisions: (async function* () {
+        traversal.push('health-revision')
+        yield { id: 'health-revision-1' }
+      })(),
+      exerciseCatalog: (async function* () {
+        traversal.push('exercise-catalog')
+      })(),
+      foodCatalog: (async function* () {
+        traversal.push('food-catalog')
+      })(),
+      workouts: (async function* () {
+        traversal.push('workouts')
+      })(),
+      nutritionMeals: (async function* () {
+        traversal.push('meal')
+        yield {
+          header: { id: mealExpected.id, items: [], history: [] },
+          items: (async function* () {
+            traversal.push('meal-item-current')
+            yield currentItem
+          })(),
+          history: (async function* () {
+            traversal.push('meal-revision-1')
+            yield {
+              id: 'meal-revision-1',
+              revision: 1,
+              snapshot: {
+                id: 'meal-1',
+                items: (async function* () {
+                  traversal.push('meal-item-history')
+                  yield snapshotItem
+                })(),
+              },
+            }
+          })(),
+        }
+      })(),
+      receipt: Promise.resolve(emptyCatalogWorkoutNutritionReceipt()),
+      complete: async () => {
+        completed = true
+      },
+      cancel: async () => {
+        cancelled = true
+      },
+    } as PortableExportConsentHealthCatalogWorkoutNutritionSnapshotSession
+    const source = createPortableExportConsentHealthCatalogWorkoutNutritionJsonSource(session)
+    const eager = exportFixture([], [], [], [mealExpected])
+    const expected = serializePortableExport(eager, Number.MAX_SAFE_INTEGER)
+    const payload: PortableExportJsonSource = {
+      ...eager,
+      data: {
+        ...eager.data,
+        consentEvents: source.consentEvents as never,
+        healthRecords: source.healthRecords as never,
+        healthRecordRevisions: source.healthRecordRevisions as never,
+        exerciseCatalog: source.exerciseCatalog as never,
+        foodCatalog: source.foodCatalog as never,
+        workouts: source.workouts as never,
+        nutritionMeals: source.nutritionMeals as never,
+      },
+    }
+    const json = createPortableExportJsonStream(payload, { chunkBytes: 17, lifecycle: source })
+    const chunks: Buffer[] = []
+
+    for await (const chunk of json.bytes) chunks.push(Buffer.from(chunk))
+
+    expect(Buffer.concat(chunks)).toEqual(expected)
+    expect(traversal).toEqual([
+      'consent',
+      'health',
+      'health-revision',
+      'exercise-catalog',
+      'food-catalog',
+      'workouts',
+      'meal',
+      'meal-item-current',
+      'meal-revision-1',
+      'meal-item-history',
+    ])
     expect(completed).toBe(true)
     expect(cancelled).toBe(false)
   })

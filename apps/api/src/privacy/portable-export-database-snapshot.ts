@@ -319,6 +319,28 @@ export type PortableExportConsentHealthCatalogWorkoutSnapshotSession = {
   cancel: (error: unknown) => Promise<void>
 }
 
+export type PortableExportConsentHealthCatalogWorkoutNutritionSnapshotReceipt =
+  PortableExportConsentHealthCatalogWorkoutSnapshotReceipt & {
+    nutritionMeals: PortableExportHealthHistorySnapshotCollectionReceipt
+    nutritionMealItems: PortableExportHealthHistorySnapshotCollectionReceipt
+    nutritionMealRevisions: PortableExportHealthHistorySnapshotCollectionReceipt
+    nutritionMealRevisionSnapshotRoots: PortableExportHealthHistorySnapshotCollectionReceipt
+    nutritionMealRevisionSnapshotItems: PortableExportHealthHistorySnapshotCollectionReceipt
+  }
+
+export type PortableExportConsentHealthCatalogWorkoutNutritionSnapshotSession = {
+  consentEvents: AsyncIterable<Record<string, unknown>>
+  healthRecords: AsyncIterable<Record<string, unknown>>
+  healthRecordRevisions: AsyncIterable<Record<string, unknown>>
+  exerciseCatalog: AsyncIterable<PortableExportExerciseCatalogSnapshotEntry>
+  foodCatalog: AsyncIterable<PortableExportFoodCatalogSnapshotEntry>
+  workouts: AsyncIterable<PortableExportWorkoutRevisionSnapshotLayerWorkout>
+  nutritionMeals: AsyncIterable<PortableExportNutritionMealLayerSnapshotMeal>
+  receipt: Promise<PortableExportConsentHealthCatalogWorkoutNutritionSnapshotReceipt>
+  complete: () => Promise<void>
+  cancel: (error: unknown) => Promise<void>
+}
+
 type BoundedSnapshotRow = QueryResultRow & {
   id: string
   payload_text: string | null
@@ -3810,10 +3832,16 @@ type NutritionMealLayerSnapshotItem =
       kind: 'boundary'
     }
 
+type NutritionMealLayerSnapshotContext = {
+  accountAlreadyValidated?: boolean
+  failRoot?: (error: unknown) => Promise<unknown>
+}
+
 const createNutritionMealLayerSnapshotSession = (
   database: DatabaseService,
   userId: string,
   options: PortableExportDatabaseSnapshotOptions,
+  context: NutritionMealLayerSnapshotContext = {},
 ): PortableExportNutritionMealLayerSnapshotSession => {
   const batchRows = validateBatchRows(options.batchRows ?? portableExportSnapshotDefaultBatchRows)
   const maximumPayloadBytes = validateMaximumPayloadBytes(
@@ -3847,7 +3875,7 @@ const createNutritionMealLayerSnapshotSession = (
   const transactionItems = database.streamReadOnlyRepeatableRead(
     async function* (client): AsyncGenerator<NutritionMealLayerSnapshotItem> {
       throwIfAborted(options.signal)
-      await assertActiveAccount(client, userId)
+      if (!context.accountAlreadyValidated) await assertActiveAccount(client, userId)
 
       for await (const header of nutritionMealHeaderPageRows(
         client,
@@ -4188,13 +4216,14 @@ const createNutritionMealLayerSnapshotSession = (
     } catch (error) {
       cleanupErrors.push(error)
     }
-    finalizedError =
+    const layerError =
       cleanupErrors.length === 0
         ? rootError
         : new AggregateError(
             [rootError, ...cleanupErrors],
             'portable export nutrition meal layer and nested cleanup both failed',
           )
+    finalizedError = context.failRoot ? await context.failRoot(layerError) : layerError
     rejectReceipt(finalizedError)
     return finalizedError
   }
@@ -4273,6 +4302,13 @@ type CoordinatedWorkoutSnapshotStats = {
   revisionSnapshotSets: MutableSnapshotStats
 }
 
+type CoordinatedNutritionMealSnapshotStats = {
+  items: MutableSnapshotStats
+  revisions: MutableSnapshotStats
+  revisionSnapshotRoots: MutableSnapshotStats
+  revisionSnapshotItems: MutableSnapshotStats
+}
+
 async function* coordinatedWorkoutJsonRows(
   client: PoolClient,
   userId: string,
@@ -4316,6 +4352,45 @@ async function* coordinatedWorkoutJsonRows(
     result.receipt.workoutRevisionSnapshotExercises,
   )
   Object.assign(nestedStats.revisionSnapshotSets, result.receipt.workoutRevisionSnapshotSets)
+}
+
+async function* coordinatedNutritionMealJsonRows(
+  client: PoolClient,
+  userId: string,
+  batchRows: number,
+  maximumPayloadBytes: number,
+  mealStats: MutableSnapshotStats,
+  nestedStats: CoordinatedNutritionMealSnapshotStats,
+  signal?: AbortSignal,
+  failRoot?: (error: unknown) => Promise<unknown>,
+): AsyncGenerator<Record<string, unknown>> {
+  const existingClientDatabase = {
+    streamReadOnlyRepeatableRead: <T>(
+      operation: (transactionClient: PoolClient) => AsyncIterable<T>,
+    ): AsyncIterable<T> => operation(client),
+  } as DatabaseService
+  const session = createNutritionMealLayerSnapshotSession(
+    existingClientDatabase,
+    userId,
+    { batchRows, maximumPayloadBytes, signal },
+    { accountAlreadyValidated: true, failRoot },
+  )
+  const receiptResult = session.receipt.then(
+    (receipt) => ({ ok: true as const, receipt }),
+    (error: unknown) => ({ ok: false as const, error }),
+  )
+
+  for await (const meal of session.meals) {
+    yield meal as unknown as Record<string, unknown>
+  }
+  await session.complete()
+  const result = await receiptResult
+  if (!result.ok) throw result.error
+  Object.assign(mealStats, result.receipt.meals)
+  Object.assign(nestedStats.items, result.receipt.mealItems)
+  Object.assign(nestedStats.revisions, result.receipt.mealRevisions)
+  Object.assign(nestedStats.revisionSnapshotRoots, result.receipt.mealRevisionSnapshotRoots)
+  Object.assign(nestedStats.revisionSnapshotItems, result.receipt.mealRevisionSnapshotItems)
 }
 
 type WorkoutRevisionSnapshotItem =
@@ -4787,6 +4862,42 @@ const consentHealthCatalogWorkoutSnapshotDefinitions = (
     },
   ] as const
 
+const consentHealthCatalogWorkoutNutritionSnapshotDefinitions = (
+  exerciseRevisionStats: MutableSnapshotStats,
+  foodRevisionStats: MutableSnapshotStats,
+  workoutNestedStats: CoordinatedWorkoutSnapshotStats,
+  nutritionMealNestedStats: CoordinatedNutritionMealSnapshotStats,
+) =>
+  [
+    ...consentHealthCatalogWorkoutSnapshotDefinitions(
+      exerciseRevisionStats,
+      foodRevisionStats,
+      workoutNestedStats,
+    ),
+    {
+      name: 'nutritionMeals',
+      rowFactory: (
+        client: PoolClient,
+        userId: string,
+        batchRows: number,
+        maximumPayloadBytes: number,
+        mealStats: MutableSnapshotStats,
+        signal?: AbortSignal,
+        failRoot?: (error: unknown) => Promise<unknown>,
+      ) =>
+        coordinatedNutritionMealJsonRows(
+          client,
+          userId,
+          batchRows,
+          maximumPayloadBytes,
+          mealStats,
+          nutritionMealNestedStats,
+          signal,
+          failRoot,
+        ),
+    },
+  ] as const
+
 @Injectable()
 export class PortableExportDatabaseSnapshotService {
   constructor(private readonly database: DatabaseService) {}
@@ -5040,5 +5151,60 @@ export class PortableExportDatabaseSnapshotService {
     return Object.assign(session, {
       receipt,
     }) as PortableExportConsentHealthCatalogWorkoutSnapshotSession
+  }
+
+  createConsentHealthCatalogWorkoutNutritionSnapshot(
+    userId: string,
+    options: PortableExportDatabaseSnapshotOptions = {},
+  ): PortableExportConsentHealthCatalogWorkoutNutritionSnapshotSession {
+    const exerciseRevisionStats: MutableSnapshotStats = { batchCount: 0, rowCount: 0 }
+    const foodRevisionStats: MutableSnapshotStats = { batchCount: 0, rowCount: 0 }
+    const workoutNestedStats: CoordinatedWorkoutSnapshotStats = {
+      exercises: { batchCount: 0, rowCount: 0 },
+      sets: { batchCount: 0, rowCount: 0 },
+      revisions: { batchCount: 0, rowCount: 0 },
+      revisionSnapshotRoots: { batchCount: 0, rowCount: 0 },
+      revisionSnapshotExercises: { batchCount: 0, rowCount: 0 },
+      revisionSnapshotSets: { batchCount: 0, rowCount: 0 },
+    }
+    const nutritionMealNestedStats: CoordinatedNutritionMealSnapshotStats = {
+      items: { batchCount: 0, rowCount: 0 },
+      revisions: { batchCount: 0, rowCount: 0 },
+      revisionSnapshotRoots: { batchCount: 0, rowCount: 0 },
+      revisionSnapshotItems: { batchCount: 0, rowCount: 0 },
+    }
+    const session = createCoordinatedSnapshotSession(
+      this.database,
+      userId,
+      options,
+      consentHealthCatalogWorkoutNutritionSnapshotDefinitions(
+        exerciseRevisionStats,
+        foodRevisionStats,
+        workoutNestedStats,
+        nutritionMealNestedStats,
+      ),
+    )
+    const receipt = session.receipt.then((baseReceipt) => ({
+      ...baseReceipt,
+      exerciseCatalogRevisions: { ...exerciseRevisionStats },
+      foodCatalogRevisions: { ...foodRevisionStats },
+      workoutExercises: { ...workoutNestedStats.exercises },
+      workoutSets: { ...workoutNestedStats.sets },
+      workoutRevisions: { ...workoutNestedStats.revisions },
+      workoutRevisionSnapshotRoots: { ...workoutNestedStats.revisionSnapshotRoots },
+      workoutRevisionSnapshotExercises: { ...workoutNestedStats.revisionSnapshotExercises },
+      workoutRevisionSnapshotSets: { ...workoutNestedStats.revisionSnapshotSets },
+      nutritionMealItems: { ...nutritionMealNestedStats.items },
+      nutritionMealRevisions: { ...nutritionMealNestedStats.revisions },
+      nutritionMealRevisionSnapshotRoots: {
+        ...nutritionMealNestedStats.revisionSnapshotRoots,
+      },
+      nutritionMealRevisionSnapshotItems: {
+        ...nutritionMealNestedStats.revisionSnapshotItems,
+      },
+    }))
+    return Object.assign(session, {
+      receipt,
+    }) as PortableExportConsentHealthCatalogWorkoutNutritionSnapshotSession
   }
 }
