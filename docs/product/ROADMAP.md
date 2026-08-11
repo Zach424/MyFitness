@@ -2,7 +2,7 @@
 
 路线图按受控迭代组织。一轮可以跨越多个工作会话，但只有在实现、验证、档案更新和提交全部完成后才结束。
 
-进度快照（2026-08-11）：第 0–168 轮已在本地完成。异步便携归档现有保管状态/预约、递归懒数组的精确增量 v4 JSON、AES-256-GCM 分块认证信封、私有 multipart 对象 writer，以及同意事件/健康记录/健康修订三个同事务有界 keyset 行源。训练已有当前 workout→exercise→set→revision header 四层同根生命周期，并新增单 revision snapshot→exercise→set 三层原序来源：shape 验证父级范围 UUID 唯一，空数组骨架保护 JSONB 对象键序，UUID 锚点恢复 ordinality，三层 64 KiB、显式提交、最深层取消和反序快照逐字节 JSONB 等价均由真实数据库证明。单 snapshot 尚未嵌入多 revision history，完整 v4 连接和其他十个顶层集合/媒体尚未完成，KMS、租约执行器、公开 API、限时下载和 UI 继续停放，R-013 保持中等级开放。H5/WeApp 产物与预算沿用第 146 轮实测；生产依赖保持 0 个 critical/high、9 个 moderate。单元测试 544 项、集成测试 106 项、浏览器测试 95 项。R-009 与账号、预算、域名、凭据和付费提供方继续停放，仍是正式发布门槛。
+进度快照（2026-08-11）：第 0–169 轮已在本地完成。异步便携归档现有保管状态/预约、递归懒数组的精确增量 v4 JSON、AES-256-GCM 分块认证信封、私有 multipart 对象 writer，以及同意事件/健康记录/健康修订三个同事务有界 keyset 行源。训练 `createWorkoutRevisionSnapshotLayerSnapshot()` 已把当前 workout→exercise→set 与全部 revision→snapshot→exercise→set 组合到一次 active-owner、只读 repeatable-read 根事务；`snapshot: null` 修订骨架原地挂载复用嵌套节点，每条 snapshot 必须完整结束才能推进，七层 64 KiB、显式提交、最深层取消、反序原序与完整 history 逐字节同步等价均由数据库替身和真实 PostgreSQL 证明。完整 workout JSON 适配、跨顶层协调、其他十个顶层集合/媒体、KMS、租约执行器、公开 API、限时下载和 UI 继续停放，R-013 保持中等级开放。生产依赖保持 0 个 critical/high、9 个 moderate；单元测试 547 项、集成测试 108 项、浏览器测试 95 项。
 
 | 迭代 | 主要范围                              | 退出证据                                                                           |
 | ---- | ------------------------------------- | ---------------------------------------------------------------------------------- |

@@ -1297,6 +1297,163 @@ describe('portable export bounded PostgreSQL snapshot', () => {
     expect(await crossOwnerReceipt).toBe(crossOwnerError)
   })
 
+  it('streams complete workout revision history byte-for-byte after the current relation graph', async () => {
+    const userId = await createUser()
+    const workoutId = await createWorkout(userId, '2026-08-11T02:52:00.000001Z')
+    const currentExerciseId = await createWorkoutExercise(workoutId, 1)
+    await createWorkoutSet(currentExerciseId, 1)
+    const snapshotsByRevision = [
+      workoutRevisionSnapshot(userId, workoutId, 1, [
+        {
+          id: randomUUID(),
+          position: 2,
+          exerciseKey: 'stored_first',
+          name: '第一版存储首项',
+          category: 'strength',
+          sets: [
+            {
+              id: randomUUID(),
+              position: 2,
+              kind: 'working',
+              reps: 8,
+              canonicalLoadKg: null,
+              completed: true,
+            },
+            {
+              id: randomUUID(),
+              position: 1,
+              kind: 'warmup',
+              reps: 10,
+              canonicalLoadKg: null,
+              completed: true,
+            },
+          ],
+        },
+      ]),
+      workoutRevisionSnapshot(userId, workoutId, 2, [
+        {
+          id: randomUUID(),
+          position: 1,
+          exerciseKey: 'stored_second',
+          name: '第二版',
+          category: 'strength',
+          trackingMode: 'reps_load',
+          equipment: [],
+          sets: [
+            {
+              id: randomUUID(),
+              position: 1,
+              kind: 'working',
+              reps: 12,
+              canonicalLoadKg: null,
+              completed: true,
+            },
+          ],
+        },
+      ]),
+    ]
+    await createWorkoutRevision(
+      userId,
+      workoutId,
+      1,
+      '2026-08-11T02:53:00.000001Z',
+      'created',
+      snapshotsByRevision[0],
+    )
+    await createWorkoutRevision(
+      userId,
+      workoutId,
+      2,
+      '2026-08-11T02:53:00.000002Z',
+      'updated',
+      snapshotsByRevision[1],
+    )
+    const direct = await pool.query<{ payload: Record<string, unknown> }>(
+      `SELECT to_jsonb(history) - 'user_id' - 'workout_id' AS payload
+       FROM workout_revisions AS history
+       WHERE history.user_id = $1 AND history.workout_id = $2
+       ORDER BY history.revision`,
+      [userId, workoutId],
+    )
+    const session = snapshots.createWorkoutRevisionSnapshotLayerSnapshot(userId, { batchRows: 1 })
+    const materializedHistory: Array<Record<string, unknown>> = []
+
+    for await (const workout of session.workouts) {
+      for await (const exercise of workout.exercises) {
+        for await (const _ of exercise.sets) {
+          // Current relations must reach EOF before immutable history starts.
+        }
+      }
+      for await (const revision of workout.history) {
+        const snapshot = { ...revision.snapshot, exercises: [] as Array<Record<string, unknown>> }
+        for await (const exercise of revision.snapshot.exercises) {
+          const exerciseValue = { ...exercise, sets: [] as Array<Record<string, unknown>> }
+          for await (const set of exercise.sets) exerciseValue.sets.push(set)
+          snapshot.exercises.push(exerciseValue)
+        }
+        materializedHistory.push({ ...revision, snapshot })
+      }
+    }
+    await session.complete()
+
+    expect(materializedHistory).toHaveLength(2)
+    expect(JSON.stringify(materializedHistory)).toBe(
+      JSON.stringify(direct.rows.map((row) => row.payload)),
+    )
+    expect(
+      (
+        (materializedHistory[0]!.snapshot as Record<string, unknown>).exercises as Array<
+          Record<string, unknown>
+        >
+      )[0]!.position,
+    ).toBe(2)
+    await expect(session.receipt).resolves.toMatchObject({
+      batchRows: 1,
+      workoutHeaders: { rowCount: 1 },
+      workoutExercises: { rowCount: 1 },
+      workoutSets: { rowCount: 1 },
+      workoutRevisions: { batchCount: 2, rowCount: 2 },
+      workoutRevisionSnapshotRoots: { batchCount: 2, rowCount: 2 },
+      workoutRevisionSnapshotExercises: { batchCount: 2, rowCount: 2 },
+      workoutRevisionSnapshotSets: { batchCount: 3, rowCount: 3 },
+    })
+  })
+
+  it('fails the combined history before emitting an unknown revision snapshot', async () => {
+    const userId = await createUser()
+    const workoutId = await createWorkout(userId, '2026-08-11T02:54:00.000001Z')
+    const secretMarker = `combined-unknown-${randomUUID()}`
+    const snapshot = workoutRevisionSnapshot(userId, workoutId, 1, [], {
+      unknownFutureField: secretMarker,
+    })
+    await createWorkoutRevision(
+      userId,
+      workoutId,
+      1,
+      '2026-08-11T02:54:30.000001Z',
+      'created',
+      snapshot,
+    )
+    const session = snapshots.createWorkoutRevisionSnapshotLayerSnapshot(userId)
+    const workouts = session.workouts[Symbol.asyncIterator]()
+    const workout = await workouts.next()
+    for await (const _ of workout.value!.exercises) {
+      // Reach history without exposing immutable snapshot content.
+    }
+    const receiptFailure = session.receipt.catch((error: unknown) => error)
+    let historyFailure: unknown
+
+    try {
+      await workout.value!.history[Symbol.asyncIterator]().next()
+    } catch (error) {
+      historyFailure = error
+    }
+
+    expect(historyFailure).toBeInstanceOf(PortableExportWorkoutRevisionSnapshotNotDecomposableError)
+    expect(String(historyFailure)).not.toContain(secretMarker)
+    expect(await receiptFailure).toBe(historyFailure)
+  })
+
   it('fails closed before emitting content for an unknown revision snapshot shape', async () => {
     const userId = await createUser()
     const workoutId = await createWorkout(userId, '2026-08-11T02:55:00.000001Z')

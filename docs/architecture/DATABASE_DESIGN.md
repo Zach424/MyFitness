@@ -444,7 +444,7 @@ intent 创建 → 验证一次性 token 与确认短语 → users 状态关闭 �
 
 `createWorkoutRevisionSnapshot()` 让 shape 与正文共享同一只读 repeatable-read 事务。shape 还要求 exercise `id` 在 revision 内唯一、set `id` 在父 exercise 内唯一；ID 只需符合规范 UUID 文本结构，不锁定特定版本。根页以 `jsonb_set(snapshot,'{exercises}','[]')` 形成一个有界骨架，动作页以 `jsonb_set(exercise_json,'{sets}','[]')` 形成骨架，set 页交付原对象；三者都在 PostgreSQL 内编码并执行 64 KiB UTF-8 门禁。动作和组页面只携上一元素 UUID，在相同 target CTE 内恢复 ordinality 后继续读取，应用和收据不暴露 ordinality。空数组键在 Node 中原地替换为懒数组，保留 JSONB 解析键序；真实数据库证明反序 position 快照物化后与直接 `SELECT snapshot` 的 JSON 字节相同。
 
-递归 JSON 来源契约已经能表达 workout 对象内的懒 exercises/sets/history，并证明嵌套取消可传播到文件根；数据库现已分别完成当前 workout→exercise→set→revision header 四层事务和单 revision snapshot→exercise→set 三层事务。后者发布 shape、根、动作与组收据并完成原序正文，但尚未连接前者。下一项数据库工作是让每个 revision 头强制完整消费其 snapshot 后才能推进下一 revision，并把组合 history 与同步 v4 逐字节对账；不得截断历史、遗漏 snapshot、按 position 改写数组或用空 history 形成不完整公开对象。
+递归 JSON 来源契约已经能表达 workout 对象内的懒 exercises/sets/history，并证明嵌套取消可传播到文件根；数据库 `createWorkoutRevisionSnapshotLayerSnapshot()` 现已把当前 workout→exercise→set 与完整 revision→snapshot→exercise→set 七层读取组合到一个 active-owner、只读 `REPEATABLE READ` 事务。修订骨架由 PostgreSQL 以 `snapshot: null` 保留 JSONB 键位，复用节点原地挂载根/动作/组懒来源；当前关系图和每个修订快照都必须逐级完整 EOF，才能推进下一个兄弟节点。七层收据分别记录批次/行数，显式 `complete()` 前事务不提交。下一项数据库工作不再是分解 history，而是把该结构适配为完整 workout JSON 值，并让 JSON 根生命周期拥有同一会话；之后才能安全加入跨顶层协调。
 
 ## 20. 安全与隐私控制
 
