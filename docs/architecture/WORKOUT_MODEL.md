@@ -56,7 +56,7 @@ Migration `0023_user_exercise_catalog.sql` adds tracking/equipment snapshot colu
 
 Migration `0024_exercise_insight_index.sql` adds `(workout_id, exercise_key)` lookup support for the read projection. It stores no duplicate trend data.
 
-便携归档的内部读取保持当前关系图与修订证据的所有权语义。`createWorkoutExerciseLayerSnapshot()` 在一次 active-owner、只读 `REPEATABLE READ` 根事务中按 `(started_at,created_at,id)` 读取包含软删除记录的 workout 头，再按父级唯一 `position` 读取九个动作标量。每个动作子流只能读取一次且必须完整结束，外层才能前进；私有边界后还需显式 `complete()` 才提交。跳过、重复、提前停止或取消会先关闭活动子流，再回滚根事务。该层不包含 sets/history，也未接入公开 v4；下一层必须保持同样的最深子流清理责任。
+便携归档的内部读取保持当前关系图与修订证据的所有权语义。`createWorkoutSetLayerSnapshot()` 在一次 active-owner、只读 `REPEATABLE READ` 根事务中按 `(started_at,created_at,id)` 读取包含软删除记录的 workout 头，再按父级唯一 `position` 读取九个动作标量和十一个 set 标量。三层子流都只能读取一次且必须完整结束，父层才能前进；私有边界后还需显式 `complete()` 才提交。跳过、重复、提前停止或取消会先关闭最深活动 set，再关闭 exercise 与根事务。该层不包含 history，也未接入公开 v4；下一层必须先建立 revision 总序，再完整分解可能超过 64 KiB 的 snapshot。
 
 ## Exercise catalog and history boundary
 

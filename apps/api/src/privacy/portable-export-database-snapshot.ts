@@ -55,6 +55,31 @@ export type PortableExportWorkoutExerciseLayerSnapshotSession = {
   cancel: (error: unknown) => Promise<void>
 }
 
+export type PortableExportWorkoutSetLayerSnapshotExercise = {
+  header: Record<string, unknown>
+  sets: AsyncIterable<Record<string, unknown>>
+}
+
+export type PortableExportWorkoutSetLayerSnapshotWorkout = {
+  header: Record<string, unknown>
+  exercises: AsyncIterable<PortableExportWorkoutSetLayerSnapshotExercise>
+}
+
+export type PortableExportWorkoutSetLayerSnapshotReceipt = {
+  batchRows: number
+  maximumPayloadBytes: number
+  workoutHeaders: PortableExportHealthHistorySnapshotCollectionReceipt
+  workoutExercises: PortableExportHealthHistorySnapshotCollectionReceipt
+  workoutSets: PortableExportHealthHistorySnapshotCollectionReceipt
+}
+
+export type PortableExportWorkoutSetLayerSnapshotSession = {
+  workouts: AsyncIterable<PortableExportWorkoutSetLayerSnapshotWorkout>
+  receipt: Promise<PortableExportWorkoutSetLayerSnapshotReceipt>
+  complete: () => Promise<void>
+  cancel: (error: unknown) => Promise<void>
+}
+
 export type PortableExportHealthHistorySnapshotCollectionReceipt = {
   batchCount: number
   rowCount: number
@@ -514,6 +539,81 @@ async function* workoutExerciseHeaderPageRows(
   }
 }
 
+export const portableExportWorkoutSetPageQuery = `WITH page AS MATERIALIZED (
+         SELECT set_row.id, set_row.position, set_row.kind, set_row.reps,
+                set_row.display_load, set_row.display_load_unit,
+                set_row.canonical_load_kg, set_row.duration_seconds,
+                set_row.distance_meters, set_row.rpe, set_row.completed
+         FROM workout_sets AS set_row
+         INNER JOIN workout_exercises AS exercise ON exercise.id = set_row.exercise_id
+         INNER JOIN workout_sessions AS workout ON workout.id = exercise.workout_id
+         WHERE workout.user_id = $1
+           AND exercise.workout_id = $2
+           AND set_row.exercise_id = $3
+           AND (
+             $4::uuid IS NULL
+             OR set_row.position > (
+               SELECT anchor.position
+               FROM workout_sets AS anchor
+               INNER JOIN workout_exercises AS anchor_exercise
+                 ON anchor_exercise.id = anchor.exercise_id
+               INNER JOIN workout_sessions AS anchor_workout
+                 ON anchor_workout.id = anchor_exercise.workout_id
+               WHERE anchor_workout.user_id = $1
+                 AND anchor_exercise.workout_id = $2
+                 AND anchor.exercise_id = $3
+                 AND anchor.id = $4::uuid
+             )
+           )
+         ORDER BY set_row.position
+         LIMIT $5
+       ), encoded AS MATERIALIZED (
+         SELECT id, position, to_jsonb(page)::text AS payload_text
+         FROM page
+       )
+       SELECT id,
+              CASE
+                WHEN octet_length(payload_text) <= $6 THEN payload_text
+                ELSE NULL
+              END AS payload_text,
+              octet_length(payload_text) AS payload_byte_length
+       FROM encoded
+       ORDER BY position`
+
+async function* workoutSetPageRows(
+  client: PoolClient,
+  userId: string,
+  workoutId: string,
+  exerciseId: string,
+  batchRows: number,
+  maximumPayloadBytes: number,
+  stats: MutableSnapshotStats,
+  signal?: AbortSignal,
+): AsyncGenerator<Record<string, unknown>> {
+  throwIfAborted(signal)
+  let anchorId: string | null = null
+
+  while (true) {
+    throwIfAborted(signal)
+    const page: QueryResult<BoundedSnapshotRow> = await client.query<BoundedSnapshotRow>(
+      portableExportWorkoutSetPageQuery,
+      [userId, workoutId, exerciseId, anchorId, batchRows, maximumPayloadBytes],
+    )
+    if (page.rows.length === 0) break
+    yield* boundedPagePayloads(
+      page.rows,
+      batchRows,
+      maximumPayloadBytes,
+      stats,
+      'workout set',
+      signal,
+    )
+
+    anchorId = page.rows.at(-1)!.id
+    if (page.rows.length < batchRows) break
+  }
+}
+
 async function* healthRecordRows(
   client: PoolClient,
   userId: string,
@@ -845,6 +945,349 @@ const createWorkoutExerciseLayerSnapshotSession = (
   return { workouts, receipt, complete, cancel }
 }
 
+type WorkoutSetLayerSnapshotItem =
+  | {
+      kind: 'workout'
+      value: PortableExportWorkoutSetLayerSnapshotWorkout
+    }
+  | {
+      kind: 'boundary'
+    }
+
+const createWorkoutSetLayerSnapshotSession = (
+  database: DatabaseService,
+  userId: string,
+  options: PortableExportDatabaseSnapshotOptions,
+): PortableExportWorkoutSetLayerSnapshotSession => {
+  const batchRows = validateBatchRows(options.batchRows ?? portableExportSnapshotDefaultBatchRows)
+  const maximumPayloadBytes = validateMaximumPayloadBytes(
+    options.maximumPayloadBytes ?? portableExportSnapshotMaximumPayloadBytes,
+  )
+  const workoutHeaderStats: MutableSnapshotStats = { batchCount: 0, rowCount: 0 }
+  const workoutExerciseStats: MutableSnapshotStats = { batchCount: 0, rowCount: 0 }
+  const workoutSetStats: MutableSnapshotStats = { batchCount: 0, rowCount: 0 }
+  let resolveReceipt!: (receipt: PortableExportWorkoutSetLayerSnapshotReceipt) => void
+  let rejectReceipt!: (error: unknown) => void
+  const receipt = new Promise<PortableExportWorkoutSetLayerSnapshotReceipt>((resolve, reject) => {
+    resolveReceipt = resolve
+    rejectReceipt = reject
+  })
+  let finalized = false
+  let finalizedError: unknown
+  let workoutsStarted = false
+  let workoutsReachedBoundary = false
+  let activeExerciseIterator:
+    AsyncIterator<PortableExportWorkoutSetLayerSnapshotExercise, void, undefined> | undefined
+  let activeSetIterator: AsyncIterator<Record<string, unknown>, void, undefined> | undefined
+  let transactionIterator: AsyncIterator<WorkoutSetLayerSnapshotItem, void, undefined>
+  let failLayer!: (rootError: unknown) => Promise<unknown>
+
+  const transactionItems = database.streamReadOnlyRepeatableRead(
+    async function* (client): AsyncGenerator<WorkoutSetLayerSnapshotItem> {
+      throwIfAborted(options.signal)
+      await assertActiveAccount(client, userId)
+
+      for await (const workoutHeader of workoutHeaderPageRows(
+        client,
+        userId,
+        batchRows,
+        maximumPayloadBytes,
+        workoutHeaderStats,
+        options.signal,
+      )) {
+        const workoutId = workoutHeader.id
+        if (typeof workoutId !== 'string' || workoutId.length === 0) {
+          throw new Error('portable export workout set layer returned an invalid workout')
+        }
+        let exercisesStarted = false
+        let exercisesCompleted = false
+
+        const exercises: AsyncIterable<PortableExportWorkoutSetLayerSnapshotExercise> = {
+          [Symbol.asyncIterator]: () => {
+            if (exercisesStarted) {
+              return (async function* () {
+                throw await failLayer(
+                  new Error(
+                    'portable export workout set layer exercises must be read once before the next workout',
+                  ),
+                )
+              })()
+            }
+            exercisesStarted = true
+            const exerciseSourceIterator = workoutExerciseHeaderPageRows(
+              client,
+              userId,
+              workoutId,
+              batchRows,
+              maximumPayloadBytes,
+              workoutExerciseStats,
+              options.signal,
+            )[Symbol.asyncIterator]()
+            let suppressSetRootFailure = false
+            let exerciseIterator!: AsyncGenerator<
+              PortableExportWorkoutSetLayerSnapshotExercise,
+              void,
+              undefined
+            >
+            exerciseIterator = (async function* () {
+              let exerciseSourceError: unknown
+              try {
+                while (true) {
+                  const nextExercise = await exerciseSourceIterator.next()
+                  if (nextExercise.done) {
+                    exercisesCompleted = true
+                    return
+                  }
+                  const exerciseHeader = nextExercise.value
+                  const exerciseId = exerciseHeader.id
+                  if (typeof exerciseId !== 'string' || exerciseId.length === 0) {
+                    throw new Error(
+                      'portable export workout set layer returned an invalid exercise',
+                    )
+                  }
+                  let setsStarted = false
+                  let setsCompleted = false
+
+                  const sets: AsyncIterable<Record<string, unknown>> = {
+                    [Symbol.asyncIterator]: () => {
+                      if (setsStarted) {
+                        return (async function* () {
+                          throw await failLayer(
+                            new Error(
+                              'portable export workout sets must be read once before the next exercise',
+                            ),
+                          )
+                        })()
+                      }
+                      setsStarted = true
+                      const setSourceIterator = workoutSetPageRows(
+                        client,
+                        userId,
+                        workoutId,
+                        exerciseId,
+                        batchRows,
+                        maximumPayloadBytes,
+                        workoutSetStats,
+                        options.signal,
+                      )[Symbol.asyncIterator]()
+                      let setIterator!: AsyncGenerator<Record<string, unknown>, void, undefined>
+                      setIterator = (async function* () {
+                        let setSourceError: unknown
+                        try {
+                          while (true) {
+                            const nextSet = await setSourceIterator.next()
+                            if (nextSet.done) {
+                              setsCompleted = true
+                              return
+                            }
+                            yield nextSet.value
+                          }
+                        } catch (error) {
+                          setSourceError = error
+                          throw error
+                        } finally {
+                          if (activeSetIterator === setIterator) activeSetIterator = undefined
+                          if (!setsCompleted) {
+                            let cleanupError: unknown
+                            try {
+                              await setSourceIterator.return?.(undefined)
+                            } catch (error) {
+                              cleanupError = error
+                            }
+                            if (!finalized && !suppressSetRootFailure) {
+                              const rootError =
+                                setSourceError ??
+                                new Error('portable export workout sets did not complete')
+                              throw await failLayer(
+                                cleanupError === undefined
+                                  ? rootError
+                                  : new AggregateError(
+                                      [rootError, cleanupError],
+                                      'portable export workout set source and cleanup both failed',
+                                    ),
+                              )
+                            }
+                            if (cleanupError !== undefined) throw cleanupError
+                          }
+                        }
+                      })()
+                      activeSetIterator = setIterator
+                      return setIterator
+                    },
+                  }
+
+                  yield { header: exerciseHeader, sets }
+                  if (!setsStarted || !setsCompleted) {
+                    throw new Error(
+                      'portable export workout sets must complete before the next exercise',
+                    )
+                  }
+                }
+              } catch (error) {
+                exerciseSourceError = error
+                throw error
+              } finally {
+                if (activeExerciseIterator === exerciseIterator) {
+                  activeExerciseIterator = undefined
+                }
+                if (!exercisesCompleted) {
+                  suppressSetRootFailure = true
+                  const cleanupErrors: unknown[] = []
+                  try {
+                    await activeSetIterator?.return?.(undefined)
+                  } catch (error) {
+                    cleanupErrors.push(error)
+                  } finally {
+                    activeSetIterator = undefined
+                  }
+                  try {
+                    await exerciseSourceIterator.return?.(undefined)
+                  } catch (error) {
+                    cleanupErrors.push(error)
+                  } finally {
+                    suppressSetRootFailure = false
+                  }
+                  if (!finalized) {
+                    const rootError =
+                      exerciseSourceError ??
+                      new Error('portable export workout set layer exercises did not complete')
+                    throw await failLayer(
+                      cleanupErrors.length === 0
+                        ? rootError
+                        : new AggregateError(
+                            [rootError, ...cleanupErrors],
+                            'portable export workout exercise source and nested cleanup both failed',
+                          ),
+                    )
+                  }
+                  if (cleanupErrors.length === 1) throw cleanupErrors[0]
+                  if (cleanupErrors.length > 1) {
+                    throw new AggregateError(
+                      cleanupErrors,
+                      'portable export workout exercise nested cleanup failed',
+                    )
+                  }
+                }
+              }
+            })()
+            activeExerciseIterator = exerciseIterator
+            return exerciseIterator
+          },
+        }
+
+        yield { kind: 'workout', value: { header: workoutHeader, exercises } }
+        if (!exercisesStarted || !exercisesCompleted) {
+          throw new Error(
+            'portable export workout set layer exercises must complete before the next workout',
+          )
+        }
+      }
+
+      throwIfAborted(options.signal)
+      yield { kind: 'boundary' }
+    },
+  )
+  transactionIterator = transactionItems[Symbol.asyncIterator]()
+
+  const fail = async (rootError: unknown) => {
+    if (finalized) return finalizedError ?? rootError
+    finalized = true
+    const cleanupErrors: unknown[] = []
+    try {
+      await activeSetIterator?.return?.(undefined)
+    } catch (error) {
+      cleanupErrors.push(error)
+    } finally {
+      activeSetIterator = undefined
+    }
+    try {
+      await activeExerciseIterator?.return?.(undefined)
+    } catch (error) {
+      cleanupErrors.push(error)
+    } finally {
+      activeExerciseIterator = undefined
+    }
+    try {
+      await transactionIterator.return?.(undefined)
+    } catch (error) {
+      cleanupErrors.push(error)
+    }
+    finalizedError =
+      cleanupErrors.length === 0
+        ? rootError
+        : new AggregateError(
+            [rootError, ...cleanupErrors],
+            'portable export workout set layer and nested cleanup both failed',
+          )
+    rejectReceipt(finalizedError)
+    return finalizedError
+  }
+  failLayer = fail
+
+  const workouts: AsyncIterable<PortableExportWorkoutSetLayerSnapshotWorkout> = {
+    [Symbol.asyncIterator]: () =>
+      (async function* () {
+        if (workoutsStarted) {
+          throw await fail(
+            new Error('portable export workout set layer must be read once in order'),
+          )
+        }
+        workoutsStarted = true
+        try {
+          while (true) {
+            const next = await transactionIterator.next()
+            if (next.done) {
+              throw new Error('portable export workout set layer ended before its boundary')
+            }
+            if (next.value.kind === 'boundary') {
+              workoutsReachedBoundary = true
+              return
+            }
+            yield next.value.value
+          }
+        } catch (error) {
+          throw await fail(error)
+        } finally {
+          if (!workoutsReachedBoundary && !finalized) {
+            await fail(new Error('portable export workout set layer did not complete'))
+          }
+        }
+      })(),
+  }
+
+  const complete = async () => {
+    if (finalized || !workoutsStarted || !workoutsReachedBoundary) {
+      throw await fail(
+        new Error('portable export workout set layer cannot commit before it completes'),
+      )
+    }
+    try {
+      const next = await transactionIterator.next()
+      if (!next.done) {
+        throw new Error('portable export workout set layer returned data after its boundary')
+      }
+      finalized = true
+      resolveReceipt({
+        batchRows,
+        maximumPayloadBytes,
+        workoutHeaders: { ...workoutHeaderStats },
+        workoutExercises: { ...workoutExerciseStats },
+        workoutSets: { ...workoutSetStats },
+      })
+    } catch (error) {
+      throw await fail(error)
+    }
+  }
+
+  const cancel = async (error: unknown) => {
+    const rootError = error ?? new Error('portable export workout set layer was cancelled')
+    const finalError = await fail(rootError)
+    if (finalError !== rootError) throw finalError
+  }
+
+  return { workouts, receipt, complete, cancel }
+}
+
 type CoordinatedSnapshotItem<Collection extends string> =
   | {
       kind: 'row'
@@ -1095,6 +1538,13 @@ export class PortableExportDatabaseSnapshotService {
     options: PortableExportDatabaseSnapshotOptions = {},
   ): PortableExportWorkoutExerciseLayerSnapshotSession {
     return createWorkoutExerciseLayerSnapshotSession(this.database, userId, options)
+  }
+
+  createWorkoutSetLayerSnapshot(
+    userId: string,
+    options: PortableExportDatabaseSnapshotOptions = {},
+  ): PortableExportWorkoutSetLayerSnapshotSession {
+    return createWorkoutSetLayerSnapshotSession(this.database, userId, options)
   }
 
   createHealthHistorySnapshot(

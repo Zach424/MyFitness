@@ -96,6 +96,7 @@ const fakeHealthHistoryDatabase = (
 const fakeWorkoutExerciseLayerDatabase = (
   workouts: Array<Record<string, unknown>>,
   exercisesByWorkout: Readonly<Record<string, Array<Record<string, unknown>>>>,
+  setsByExercise: Readonly<Record<string, Array<Record<string, unknown>>>> = {},
 ) => {
   const lifecycle = {
     accountQueries: 0,
@@ -112,13 +113,16 @@ const fakeWorkoutExerciseLayerDatabase = (
             lifecycle.accountQueries += 1
             return { rows: [{ id: parameters[0] }] }
           }
+          const isSetPage = sql.includes('FROM workout_sets AS set_row')
           const isExercisePage = sql.includes('FROM workout_exercises AS exercise')
-          const values = isExercisePage
-            ? (exercisesByWorkout[parameters[1] as string] ?? [])
-            : workouts
-          const anchorId = parameters[isExercisePage ? 2 : 1] as string | null
-          const batchRows = parameters[isExercisePage ? 3 : 2] as number
-          const maximumPayloadBytes = parameters[isExercisePage ? 4 : 3] as number
+          const values = isSetPage
+            ? (setsByExercise[parameters[2] as string] ?? [])
+            : isExercisePage
+              ? (exercisesByWorkout[parameters[1] as string] ?? [])
+              : workouts
+          const anchorId = parameters[isSetPage ? 3 : isExercisePage ? 2 : 1] as string | null
+          const batchRows = parameters[isSetPage ? 4 : isExercisePage ? 3 : 2] as number
+          const maximumPayloadBytes = parameters[isSetPage ? 5 : isExercisePage ? 4 : 3] as number
           const anchorIndex = anchorId ? values.findIndex((value) => value.id === anchorId) : -1
           return {
             rows: values.slice(anchorIndex + 1, anchorIndex + 1 + batchRows).map((payload) => {
@@ -365,6 +369,212 @@ describe('portable export database snapshot session', () => {
       message: 'portable export workout exercises must be read once before the next workout',
     })
     expect(await receiptFailure).toBe(repeatedFailure)
+    expect(lifecycle).toMatchObject({ committed: false, rolledBack: true })
+  })
+
+  it('keeps workout, exercise and set rows in one explicitly committed root stream', async () => {
+    const { database, lifecycle } = fakeWorkoutExerciseLayerDatabase(
+      [{ id: 'workout-1' }],
+      {
+        'workout-1': [{ id: 'exercise-1' }, { id: 'exercise-2' }],
+      },
+      {
+        'exercise-1': [{ id: 'set-1' }, { id: 'set-2' }],
+        'exercise-2': [{ id: 'set-3' }],
+      },
+    )
+    const service = new PortableExportDatabaseSnapshotService(database)
+    const session = service.createWorkoutSetLayerSnapshot('11111111-1111-4111-8111-111111111111', {
+      batchRows: 1,
+    })
+    const observed: Array<{ workoutId: unknown; exercises: unknown[][] }> = []
+
+    for await (const workout of session.workouts) {
+      const exercises: unknown[][] = []
+      for await (const exercise of workout.exercises) {
+        const setIds: unknown[] = []
+        for await (const set of exercise.sets) setIds.push(set.id)
+        exercises.push([exercise.header.id, ...setIds])
+      }
+      observed.push({ workoutId: workout.header.id, exercises })
+    }
+    expect(lifecycle.committed).toBe(false)
+
+    await session.complete()
+
+    expect(observed).toEqual([
+      {
+        workoutId: 'workout-1',
+        exercises: [
+          ['exercise-1', 'set-1', 'set-2'],
+          ['exercise-2', 'set-3'],
+        ],
+      },
+    ])
+    expect(lifecycle).toMatchObject({
+      accountQueries: 1,
+      streamCount: 1,
+      committed: true,
+      rolledBack: false,
+    })
+    await expect(session.receipt).resolves.toEqual({
+      batchRows: 1,
+      maximumPayloadBytes: portableExportSnapshotMaximumPayloadBytes,
+      workoutHeaders: { batchCount: 1, rowCount: 1 },
+      workoutExercises: { batchCount: 2, rowCount: 2 },
+      workoutSets: { batchCount: 3, rowCount: 3 },
+    })
+  })
+
+  it('fails the set-layer root when its exercise field is skipped', async () => {
+    const { database, lifecycle } = fakeWorkoutExerciseLayerDatabase(
+      [{ id: 'workout-1' }, { id: 'workout-2' }],
+      { 'workout-1': [{ id: 'exercise-1' }], 'workout-2': [] },
+      { 'exercise-1': [{ id: 'set-1' }] },
+    )
+    const service = new PortableExportDatabaseSnapshotService(database)
+    const session = service.createWorkoutSetLayerSnapshot('11111111-1111-4111-8111-111111111111')
+    const workouts = session.workouts[Symbol.asyncIterator]()
+    await expect(workouts.next()).resolves.toMatchObject({ done: false })
+    const receiptFailure = session.receipt.catch((error: unknown) => error)
+    let streamFailure: unknown
+
+    try {
+      await workouts.next()
+    } catch (error) {
+      streamFailure = error
+    }
+
+    expect(streamFailure).toMatchObject({
+      message: 'portable export workout set layer exercises must complete before the next workout',
+    })
+    expect(await receiptFailure).toBe(streamFailure)
+    expect(lifecycle).toMatchObject({ committed: false, rolledBack: true })
+  })
+
+  it('fails the root when a workout set field is skipped before the next exercise', async () => {
+    const { database, lifecycle } = fakeWorkoutExerciseLayerDatabase(
+      [{ id: 'workout-1' }],
+      { 'workout-1': [{ id: 'exercise-1' }, { id: 'exercise-2' }] },
+      { 'exercise-1': [{ id: 'set-1' }], 'exercise-2': [{ id: 'set-2' }] },
+    )
+    const service = new PortableExportDatabaseSnapshotService(database)
+    const session = service.createWorkoutSetLayerSnapshot('11111111-1111-4111-8111-111111111111')
+    const workouts = session.workouts[Symbol.asyncIterator]()
+    const workout = await workouts.next()
+    if (workout.done) throw new Error('workout fixture was not returned')
+    const exercises = workout.value.exercises[Symbol.asyncIterator]()
+    await expect(exercises.next()).resolves.toMatchObject({ done: false })
+    const receiptFailure = session.receipt.catch((error: unknown) => error)
+    let streamFailure: unknown
+
+    try {
+      await exercises.next()
+    } catch (error) {
+      streamFailure = error
+    }
+
+    expect(streamFailure).toMatchObject({
+      message: 'portable export workout sets must complete before the next exercise',
+    })
+    expect(await receiptFailure).toBe(streamFailure)
+    expect(lifecycle).toMatchObject({ committed: false, rolledBack: true })
+  })
+
+  it('closes every parent when an active workout set field stops early', async () => {
+    const { database, lifecycle } = fakeWorkoutExerciseLayerDatabase(
+      [{ id: 'workout-1' }],
+      { 'workout-1': [{ id: 'exercise-1' }] },
+      { 'exercise-1': [{ id: 'set-1' }, { id: 'set-2' }] },
+    )
+    const service = new PortableExportDatabaseSnapshotService(database)
+    const session = service.createWorkoutSetLayerSnapshot('11111111-1111-4111-8111-111111111111', {
+      batchRows: 1,
+    })
+    const workouts = session.workouts[Symbol.asyncIterator]()
+    const workout = await workouts.next()
+    if (workout.done) throw new Error('workout fixture was not returned')
+    const exercises = workout.value.exercises[Symbol.asyncIterator]()
+    const exercise = await exercises.next()
+    if (exercise.done) throw new Error('exercise fixture was not returned')
+    const sets = exercise.value.sets[Symbol.asyncIterator]()
+    await expect(sets.next()).resolves.toMatchObject({ done: false })
+    const receiptFailure = session.receipt.catch((error: unknown) => error)
+    let streamFailure: unknown
+
+    try {
+      await sets.return?.()
+    } catch (error) {
+      streamFailure = error
+    }
+
+    expect(streamFailure).toMatchObject({
+      message: 'portable export workout sets did not complete',
+    })
+    expect(await receiptFailure).toBe(streamFailure)
+    expect(lifecycle).toMatchObject({ committed: false, rolledBack: true })
+  })
+
+  it('rejects repeated consumption of a completed workout set field', async () => {
+    const { database, lifecycle } = fakeWorkoutExerciseLayerDatabase(
+      [{ id: 'workout-1' }],
+      { 'workout-1': [{ id: 'exercise-1' }] },
+      { 'exercise-1': [{ id: 'set-1' }] },
+    )
+    const service = new PortableExportDatabaseSnapshotService(database)
+    const session = service.createWorkoutSetLayerSnapshot('11111111-1111-4111-8111-111111111111')
+    const workouts = session.workouts[Symbol.asyncIterator]()
+    const workout = await workouts.next()
+    if (workout.done) throw new Error('workout fixture was not returned')
+    const exercises = workout.value.exercises[Symbol.asyncIterator]()
+    const exercise = await exercises.next()
+    if (exercise.done) throw new Error('exercise fixture was not returned')
+    for await (const _ of exercise.value.sets) {
+      // Consume the permitted set field once.
+    }
+    const receiptFailure = session.receipt.catch((error: unknown) => error)
+    let repeatedFailure: unknown
+
+    try {
+      await exercise.value.sets[Symbol.asyncIterator]().next()
+    } catch (error) {
+      repeatedFailure = error
+    }
+
+    expect(repeatedFailure).toMatchObject({
+      message: 'portable export workout sets must be read once before the next exercise',
+    })
+    expect(await receiptFailure).toBe(repeatedFailure)
+    expect(lifecycle).toMatchObject({ committed: false, rolledBack: true })
+  })
+
+  it('closes the active set before cancelling the exercise and workout parents', async () => {
+    const { database, lifecycle } = fakeWorkoutExerciseLayerDatabase(
+      [{ id: 'workout-1' }],
+      { 'workout-1': [{ id: 'exercise-1' }] },
+      { 'exercise-1': [{ id: 'set-1' }, { id: 'set-2' }] },
+    )
+    const service = new PortableExportDatabaseSnapshotService(database)
+    const session = service.createWorkoutSetLayerSnapshot('11111111-1111-4111-8111-111111111111', {
+      batchRows: 1,
+    })
+    const workouts = session.workouts[Symbol.asyncIterator]()
+    const workout = await workouts.next()
+    if (workout.done) throw new Error('workout fixture was not returned')
+    const exercises = workout.value.exercises[Symbol.asyncIterator]()
+    const exercise = await exercises.next()
+    if (exercise.done) throw new Error('exercise fixture was not returned')
+    const sets = exercise.value.sets[Symbol.asyncIterator]()
+    await expect(sets.next()).resolves.toMatchObject({ done: false })
+    const cancellation = new Error('workout set root cancelled by lease owner')
+    const receiptFailure = session.receipt.catch((error: unknown) => error)
+
+    await session.cancel(cancellation)
+
+    expect(await receiptFailure).toBe(cancellation)
+    await expect(sets.next()).resolves.toEqual({ done: true, value: undefined })
+    await expect(exercises.next()).resolves.toEqual({ done: true, value: undefined })
+    await expect(workouts.next()).rejects.toBe(cancellation)
     expect(lifecycle).toMatchObject({ committed: false, rolledBack: true })
   })
 
