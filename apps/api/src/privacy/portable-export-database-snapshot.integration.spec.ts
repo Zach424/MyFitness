@@ -12,12 +12,14 @@ import {
   PortableExportDatabaseSnapshotService,
   PortableExportSnapshotPayloadTooLargeError,
   PortableExportWorkoutRevisionSnapshotNotDecomposableError,
+  portableExportExerciseCatalogEntryPageQuery,
   portableExportSnapshotMaximumPayloadBytes,
   portableExportWorkoutExerciseHeaderPageQuery,
   portableExportWorkoutHeaderPageQuery,
   portableExportWorkoutRevisionHeaderPageQuery,
   portableExportWorkoutSetPageQuery,
 } from './portable-export-database-snapshot'
+import { createPortableExportConsentHealthExerciseCatalogJsonSource } from './portable-export-exercise-catalog-json-source'
 import {
   createPortableExportJsonStream,
   portableExportJsonAsyncArray,
@@ -105,6 +107,87 @@ describe('portable export bounded PostgreSQL snapshot', () => {
       `INSERT INTO consent_events (id, user_id, purpose, version, accepted_at)
        VALUES ($1, $2, $3, $4, $5::timestamptz)`,
       [id, userId, purpose, `snapshot-${randomUUID()}`.slice(0, 40), acceptedAt],
+    )
+    return id
+  }
+
+  const createExerciseCatalogEntry = async (
+    userId: string,
+    createdAt: string,
+    options: {
+      id?: string
+      name?: string
+      revision?: number
+      archivedAt?: string | null
+    } = {},
+  ) => {
+    const id = options.id ?? randomUUID()
+    await pool.query(
+      `INSERT INTO user_exercise_catalog_entries (
+         id, user_id, name, aliases, category, tracking_mode, equipment,
+         equipment_notes, revision, idempotency_key, request_hash,
+         archived_at, created_at, updated_at
+       ) VALUES (
+         $1, $2, $3, ARRAY['fixture alias']::text[], 'strength', 'reps_load',
+         ARRAY['bodyweight']::text[], NULL, $4, $5, repeat('e', 64),
+         $6::timestamptz, $7::timestamptz, $7::timestamptz
+       )`,
+      [
+        id,
+        userId,
+        options.name ?? `Catalog ${id.slice(0, 8)}`,
+        options.revision ?? 1,
+        `catalog-export-${randomUUID()}`,
+        options.archivedAt ?? null,
+        createdAt,
+      ],
+    )
+    return id
+  }
+
+  const createExerciseCatalogRevision = async (
+    userId: string,
+    entryId: string,
+    revision: number,
+    changedAt: string,
+    action: 'created' | 'updated' | 'archived' = 'created',
+  ) => {
+    const id = randomUUID()
+    const entry = await pool.query<{
+      name: string
+      archived_at: Date | null
+      created_at: Date
+      updated_at: Date
+    }>(
+      `SELECT name, archived_at, created_at, updated_at
+       FROM user_exercise_catalog_entries WHERE id = $1 AND user_id = $2`,
+      [entryId, userId],
+    )
+    const row = entry.rows[0]
+    if (!row) throw new Error('exercise catalog fixture entry was not found')
+    const snapshot = {
+      source: 'custom',
+      id: entryId,
+      userId,
+      key: `custom_${entryId.replaceAll('-', '')}`,
+      name: row.name,
+      aliases: ['fixture alias'],
+      category: 'strength',
+      trackingMode: 'reps_load',
+      equipment: ['bodyweight'],
+      equipmentNotes: null,
+      catalogVersion: null,
+      revision,
+      editable: true,
+      archivedAt: row.archived_at?.toISOString() ?? null,
+      createdAt: row.created_at.toISOString(),
+      updatedAt: row.updated_at.toISOString(),
+    }
+    await pool.query(
+      `INSERT INTO user_exercise_catalog_revisions (
+         id, entry_id, user_id, action, revision, snapshot, changed_at
+       ) VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::timestamptz)`,
+      [id, entryId, userId, action, revision, JSON.stringify(snapshot), changedAt],
     )
     return id
   }
@@ -2661,5 +2744,284 @@ describe('portable export bounded PostgreSQL snapshot', () => {
 
     await iterator.return?.()
     await Promise.all([jsonReceiptRejection, snapshotReceiptRejection])
+  })
+
+  it('streams owner exercise catalog histories as the fourth coordinated v4 field', async () => {
+    const userId = await createUser()
+    const otherUserId = await createUser()
+    await createConsentEvent(userId, '2026-08-11T04:40:00.000001Z')
+    const firstEntryId = await createExerciseCatalogEntry(userId, '2026-08-11T04:41:00.000001Z', {
+      name: 'Owner active catalog',
+      revision: 2,
+    })
+    await createExerciseCatalogRevision(
+      userId,
+      firstEntryId,
+      1,
+      '2026-08-11T04:42:00.000001Z',
+      'created',
+    )
+    await createExerciseCatalogRevision(
+      userId,
+      firstEntryId,
+      2,
+      '2026-08-11T04:42:00.000002Z',
+      'updated',
+    )
+    const archivedEntryId = await createExerciseCatalogEntry(
+      userId,
+      '2026-08-11T04:41:00.000002Z',
+      {
+        name: 'Owner archived catalog',
+        archivedAt: '2026-08-11T04:43:00.000001Z',
+      },
+    )
+    await createExerciseCatalogRevision(
+      userId,
+      archivedEntryId,
+      1,
+      '2026-08-11T04:43:00.000001Z',
+      'archived',
+    )
+    const otherEntryId = await createExerciseCatalogEntry(
+      otherUserId,
+      '2026-08-11T04:41:00.000001Z',
+      { name: 'Other owner catalog' },
+    )
+    await createExerciseCatalogRevision(otherUserId, otherEntryId, 1, '2026-08-11T04:42:00.000001Z')
+
+    const stable = snapshots.createConsentHealthExerciseCatalogSnapshot(userId, {
+      batchRows: 1,
+    })
+    for await (const _ of stable.consentEvents) {
+      // Establish the root transaction through field one.
+    }
+    for await (const _ of stable.healthRecords) {
+      // Reach field two boundary.
+    }
+    for await (const _ of stable.healthRecordRevisions) {
+      // Reach field three boundary.
+    }
+    const concurrentEntryId = await createExerciseCatalogEntry(
+      userId,
+      '2026-08-11T04:41:00.000003Z',
+      { name: 'Concurrent catalog' },
+    )
+    await createExerciseCatalogRevision(userId, concurrentEntryId, 1, '2026-08-11T04:44:00.000001Z')
+    const stableCatalog: Array<Record<string, unknown>> = []
+    for await (const entry of stable.exerciseCatalog) {
+      const value = { ...entry, history: [] as Array<Record<string, unknown>> }
+      for await (const revision of entry.history) value.history.push(revision)
+      stableCatalog.push(value)
+    }
+    expect(stableCatalog.map((entry) => entry.id)).toEqual([firstEntryId, archivedEntryId])
+    expect(stableCatalog.some((entry) => entry.id === concurrentEntryId)).toBe(false)
+    expect(stableCatalog.some((entry) => entry.id === otherEntryId)).toBe(false)
+    await stable.complete()
+    await expect(stable.receipt).resolves.toMatchObject({
+      consentEvents: { batchCount: 1, rowCount: 1 },
+      exerciseCatalog: { batchCount: 2, rowCount: 2 },
+      exerciseCatalogRevisions: { batchCount: 3, rowCount: 3 },
+    })
+
+    const index = await pool.query<{ indexdef: string }>(
+      `SELECT indexdef FROM pg_indexes
+       WHERE schemaname = 'public'
+         AND indexname = 'user_exercise_catalog_entries_user_export_idx'`,
+    )
+    expect(index.rows[0]?.indexdef).toContain('(user_id, created_at, id)')
+    const client = await pool.connect()
+    try {
+      await client.query('BEGIN')
+      await client.query('SET LOCAL enable_seqscan = off')
+      const plan = await client.query<{ 'QUERY PLAN': unknown }>(
+        `EXPLAIN (FORMAT JSON, COSTS OFF) ${portableExportExerciseCatalogEntryPageQuery}`,
+        [userId, null, 2, portableExportSnapshotMaximumPayloadBytes],
+      )
+      expect(JSON.stringify(plan.rows[0]?.['QUERY PLAN'])).toContain(
+        'user_exercise_catalog_entries_user_export_idx',
+      )
+    } finally {
+      await client.query('ROLLBACK')
+      client.release()
+    }
+
+    const eager = snapshots.createConsentHealthExerciseCatalogSnapshot(userId, { batchRows: 2 })
+    const eagerConsentEvents: Array<Record<string, unknown>> = []
+    const eagerHealthRecords: Array<Record<string, unknown>> = []
+    const eagerHealthRecordRevisions: Array<Record<string, unknown>> = []
+    const eagerCatalog: Array<Record<string, unknown>> = []
+    for await (const row of eager.consentEvents) eagerConsentEvents.push(row)
+    for await (const row of eager.healthRecords) eagerHealthRecords.push(row)
+    for await (const row of eager.healthRecordRevisions) eagerHealthRecordRevisions.push(row)
+    for await (const entry of eager.exerciseCatalog) {
+      const value = { ...entry, history: [] as Array<Record<string, unknown>> }
+      for await (const revision of entry.history) value.history.push(revision)
+      eagerCatalog.push(value)
+    }
+    await eager.complete()
+    const direct = await pool.query<{ payload: Record<string, unknown> }>(
+      `SELECT (
+         (to_jsonb(entry) - 'user_id' - 'idempotency_key' - 'request_hash')
+         || jsonb_build_object(
+           'history', COALESCE((
+             SELECT jsonb_agg(
+               (to_jsonb(history) - 'user_id' - 'entry_id') ORDER BY history.revision
+             )
+             FROM user_exercise_catalog_revisions AS history
+             WHERE history.entry_id = entry.id
+           ), '[]'::jsonb)
+         )
+       ) AS payload
+       FROM user_exercise_catalog_entries AS entry
+       WHERE user_id = $1
+       ORDER BY created_at, id`,
+      [userId],
+    )
+    expect(JSON.stringify(eagerCatalog)).toBe(JSON.stringify(direct.rows.map((row) => row.payload)))
+    expect(eagerCatalog.map((entry) => entry.id)).toEqual([
+      firstEntryId,
+      archivedEntryId,
+      concurrentEntryId,
+    ])
+    expect(eagerCatalog.some((entry) => entry.id === otherEntryId)).toBe(false)
+    expect(eagerCatalog.every((entry) => entry.source !== 'starter')).toBe(true)
+
+    const eagerPayload = privacyExportSchema.parse({
+      schemaVersion: privacyExportSchemaVersion,
+      generatedAt: '2026-08-11T04:50:00.000Z',
+      accountId: userId,
+      data: {
+        account: { id: userId, status: 'active' },
+        identities: [],
+        profile: null,
+        goal: null,
+        consentEvents: eagerConsentEvents,
+        healthRecords: eagerHealthRecords,
+        healthRecordRevisions: eagerHealthRecordRevisions,
+        exerciseCatalog: eagerCatalog,
+        foodCatalog: [],
+        workouts: [],
+        nutritionMeals: [],
+        nutritionFavorites: [],
+        weeklyPlans: [],
+        aiExplanationRuns: [],
+        foodPhotoAnalyses: [],
+        progressPhotos: [],
+      },
+    })
+    const expected = serializePortableExport(eagerPayload, Number.MAX_SAFE_INTEGER)
+    const lazy = snapshots.createConsentHealthExerciseCatalogSnapshot(userId, { batchRows: 2 })
+    const source = createPortableExportConsentHealthExerciseCatalogJsonSource(lazy)
+    const json = createPortableExportJsonStream(
+      {
+        ...eagerPayload,
+        data: {
+          ...eagerPayload.data,
+          consentEvents: source.consentEvents as never,
+          healthRecords: source.healthRecords as never,
+          healthRecordRevisions: source.healthRecordRevisions as never,
+          exerciseCatalog: source.exerciseCatalog as never,
+        },
+      },
+      { chunkBytes: 41, lifecycle: source },
+    )
+    const chunks: Buffer[] = []
+    for await (const chunk of json.bytes) chunks.push(Buffer.from(chunk))
+
+    expect(Buffer.concat(chunks)).toEqual(expected)
+    await expect(lazy.receipt).resolves.toMatchObject({
+      exerciseCatalog: { batchCount: 2, rowCount: 3 },
+      exerciseCatalogRevisions: { batchCount: 3, rowCount: 4 },
+    })
+    await expect(json.receipt).resolves.toEqual({
+      schemaVersion: privacyExportSchemaVersion,
+      chunkBytes: 41,
+      byteLength: expected.length,
+      sha256: createHash('sha256').update(expected).digest('hex'),
+    })
+  })
+
+  it('cancels the four-field root from an active exercise catalog history', async () => {
+    const userId = await createUser()
+    const entryId = await createExerciseCatalogEntry(userId, '2026-08-11T05:00:00.000001Z', {
+      name: 'Catalog cancellation',
+      revision: 2,
+    })
+    const firstRevisionId = await createExerciseCatalogRevision(
+      userId,
+      entryId,
+      1,
+      '2026-08-11T05:01:00.000001Z',
+    )
+    await createExerciseCatalogRevision(
+      userId,
+      entryId,
+      2,
+      '2026-08-11T05:01:00.000002Z',
+      'updated',
+    )
+    const base = privacyExportSchema.parse({
+      schemaVersion: privacyExportSchemaVersion,
+      generatedAt: '2026-08-11T05:02:00.000Z',
+      accountId: userId,
+      data: {
+        account: { id: userId },
+        identities: [],
+        profile: null,
+        goal: null,
+        consentEvents: [],
+        healthRecords: [],
+        healthRecordRevisions: [],
+        exerciseCatalog: [],
+        foodCatalog: [],
+        workouts: [],
+        nutritionMeals: [],
+        nutritionFavorites: [],
+        weeklyPlans: [],
+        aiExplanationRuns: [],
+        foodPhotoAnalyses: [],
+        progressPhotos: [],
+      },
+    })
+    const snapshot = snapshots.createConsentHealthExerciseCatalogSnapshot(userId, {
+      batchRows: 1,
+    })
+    const source = createPortableExportConsentHealthExerciseCatalogJsonSource(snapshot)
+    const json = createPortableExportJsonStream(
+      {
+        ...base,
+        data: {
+          ...base.data,
+          consentEvents: source.consentEvents as never,
+          healthRecords: source.healthRecords as never,
+          healthRecordRevisions: source.healthRecordRevisions as never,
+          exerciseCatalog: source.exerciseCatalog as never,
+        },
+      },
+      { chunkBytes: 1, lifecycle: source },
+    )
+    const iterator = json.bytes[Symbol.asyncIterator]()
+    let prefix = ''
+    while (!prefix.includes(firstRevisionId)) {
+      const next = await iterator.next()
+      if (next.done) throw new Error('exercise catalog revision fixture was not reached')
+      prefix += next.value.toString('utf8')
+    }
+    const jsonFailure = json.receipt.catch((error: unknown) => error)
+    const snapshotFailure = snapshot.receipt.catch((error: unknown) => error)
+    let returnFailure: unknown
+
+    try {
+      await iterator.return?.()
+    } catch (error) {
+      returnFailure = error
+    }
+
+    expect(await snapshotFailure).toBe(returnFailure)
+    expect(await jsonFailure).toBe(returnFailure)
+    expect(returnFailure).toMatchObject({
+      message: 'portable export exercise catalog history did not complete',
+    })
   })
 })

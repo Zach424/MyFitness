@@ -99,6 +99,112 @@ const fakeHealthHistoryDatabase = (
   return { database, lifecycle }
 }
 
+const fakeConsentHealthExerciseCatalogDatabase = (
+  consentEvents: Array<Record<string, unknown>>,
+  healthRecords: Array<Record<string, unknown>>,
+  healthRecordRevisions: Array<Record<string, unknown>>,
+  exerciseCatalog: Array<Record<string, unknown> & { history: Array<Record<string, unknown>> }>,
+) => {
+  const lifecycle = {
+    accountQueries: 0,
+    streamCount: 0,
+    queryOrder: [] as string[],
+    committed: false,
+    rolledBack: false,
+  }
+  const boundedRows = (values: Array<Record<string, unknown>>, maximumPayloadBytes: number) =>
+    values.map((payload) => {
+      const payloadText = JSON.stringify(payload)
+      const payloadByteLength = Buffer.byteLength(payloadText)
+      return {
+        id: payload.id,
+        payload_text: payloadByteLength <= maximumPayloadBytes ? payloadText : null,
+        payload_byte_length: payloadByteLength,
+      }
+    })
+  const pageAfter = (
+    values: Array<Record<string, unknown>>,
+    anchorId: string | null,
+    batchRows: number,
+  ) => {
+    const anchorIndex = anchorId ? values.findIndex((value) => value.id === anchorId) : -1
+    return values.slice(anchorIndex + 1, anchorIndex + 1 + batchRows)
+  }
+  const database = {
+    streamReadOnlyRepeatableRead: (operation: (client: PoolClient) => AsyncIterable<unknown>) => {
+      lifecycle.streamCount += 1
+      const client = {
+        query: async (sql: string, parameters: unknown[]) => {
+          if (sql.startsWith('SELECT id FROM users')) {
+            lifecycle.accountQueries += 1
+            return { rows: [{ id: parameters[0] }] }
+          }
+          if (sql.includes('FROM user_exercise_catalog_revisions AS history')) {
+            lifecycle.queryOrder.push('catalog-history')
+            const entry = exerciseCatalog.find((value) => value.id === parameters[1])
+            return {
+              rows: boundedRows(
+                pageAfter(
+                  entry?.history ?? [],
+                  parameters[2] as string | null,
+                  parameters[3] as number,
+                ),
+                parameters[4] as number,
+              ),
+            }
+          }
+          if (sql.includes('FROM user_exercise_catalog_entries AS entry')) {
+            lifecycle.queryOrder.push('catalog-entry')
+            return {
+              rows: boundedRows(
+                pageAfter(
+                  exerciseCatalog.map(({ history: _history, ...entry }) => ({
+                    ...entry,
+                    history: [],
+                  })),
+                  parameters[1] as string | null,
+                  parameters[2] as number,
+                ),
+                parameters[3] as number,
+              ),
+            }
+          }
+          const values = sql.includes('FROM consent_events')
+            ? consentEvents
+            : sql.includes('FROM health_record_revisions')
+              ? healthRecordRevisions
+              : healthRecords
+          lifecycle.queryOrder.push(
+            sql.includes('FROM consent_events')
+              ? 'consent'
+              : sql.includes('FROM health_record_revisions')
+                ? 'health-revision'
+                : 'health',
+          )
+          return {
+            rows: boundedRows(
+              pageAfter(values, parameters[1] as string | null, parameters[2] as number),
+              parameters[3] as number,
+            ),
+          }
+        },
+      } as unknown as PoolClient
+
+      return (async function* () {
+        let completed = false
+        try {
+          for await (const value of operation(client)) yield value
+          completed = true
+          lifecycle.committed = true
+        } finally {
+          if (!completed) lifecycle.rolledBack = true
+        }
+      })()
+    },
+  } as unknown as DatabaseService
+  return { database, lifecycle }
+}
+
 const fakeWorkoutExerciseLayerDatabase = (
   workouts: Array<Record<string, unknown>>,
   exercisesByWorkout: Readonly<Record<string, Array<Record<string, unknown>>>>,
@@ -1719,6 +1825,203 @@ describe('portable export database snapshot session', () => {
       healthRecords: { batchCount: 1, rowCount: 1 },
       healthRecordRevisions: { batchCount: 1, rowCount: 1 },
     })
+  })
+
+  it('coordinates owner exercise entries and bounded histories after consent and health', async () => {
+    const { database, lifecycle } = fakeConsentHealthExerciseCatalogDatabase(
+      [{ id: 'consent-1' }],
+      [{ id: 'health-1' }],
+      [{ id: 'health-revision-1' }],
+      [
+        {
+          id: 'catalog-entry-1',
+          name: 'Active custom entry',
+          archived_at: null,
+          history: [
+            { id: 'catalog-revision-1', revision: 1 },
+            { id: 'catalog-revision-2', revision: 2 },
+          ],
+        },
+        {
+          id: 'catalog-entry-2',
+          name: 'Archived custom entry',
+          archived_at: '2026-08-11T10:00:00.000Z',
+          history: [],
+        },
+      ],
+    )
+    const service = new PortableExportDatabaseSnapshotService(database)
+    const session = service.createConsentHealthExerciseCatalogSnapshot(
+      '11111111-1111-4111-8111-111111111111',
+      { batchRows: 1 },
+    )
+    const observedEntries: Array<Record<string, unknown>> = []
+
+    for await (const _ of session.consentEvents) {
+      // Complete field one.
+    }
+    for await (const _ of session.healthRecords) {
+      // Complete field two.
+    }
+    for await (const _ of session.healthRecordRevisions) {
+      // Complete field three.
+    }
+    for await (const entry of session.exerciseCatalog) {
+      const value = { ...entry, history: [] as Array<Record<string, unknown>> }
+      for await (const revision of entry.history) value.history.push(revision)
+      observedEntries.push(value)
+    }
+    expect(lifecycle.committed).toBe(false)
+
+    await session.complete()
+
+    expect(observedEntries).toEqual([
+      {
+        id: 'catalog-entry-1',
+        name: 'Active custom entry',
+        archived_at: null,
+        history: [
+          { id: 'catalog-revision-1', revision: 1 },
+          { id: 'catalog-revision-2', revision: 2 },
+        ],
+      },
+      {
+        id: 'catalog-entry-2',
+        name: 'Archived custom entry',
+        archived_at: '2026-08-11T10:00:00.000Z',
+        history: [],
+      },
+    ])
+    expect(lifecycle).toMatchObject({
+      accountQueries: 1,
+      streamCount: 1,
+      committed: true,
+      rolledBack: false,
+    })
+    expect(lifecycle.queryOrder).toEqual([
+      'consent',
+      'consent',
+      'health',
+      'health',
+      'health-revision',
+      'health-revision',
+      'catalog-entry',
+      'catalog-history',
+      'catalog-history',
+      'catalog-history',
+      'catalog-entry',
+      'catalog-history',
+      'catalog-entry',
+    ])
+    await expect(session.receipt).resolves.toEqual({
+      batchRows: 1,
+      maximumPayloadBytes: portableExportSnapshotMaximumPayloadBytes,
+      consentEvents: { batchCount: 1, rowCount: 1 },
+      healthRecords: { batchCount: 1, rowCount: 1 },
+      healthRecordRevisions: { batchCount: 1, rowCount: 1 },
+      exerciseCatalog: { batchCount: 2, rowCount: 2 },
+      exerciseCatalogRevisions: { batchCount: 2, rowCount: 2 },
+    })
+  })
+
+  it('fails the coordinated root when catalog history is skipped', async () => {
+    const { database, lifecycle } = fakeConsentHealthExerciseCatalogDatabase(
+      [],
+      [],
+      [],
+      [
+        {
+          id: 'catalog-entry-1',
+          history: [{ id: 'catalog-revision-1', revision: 1 }],
+        },
+        {
+          id: 'catalog-entry-2',
+          history: [],
+        },
+      ],
+    )
+    const service = new PortableExportDatabaseSnapshotService(database)
+    const session = service.createConsentHealthExerciseCatalogSnapshot(
+      '11111111-1111-4111-8111-111111111111',
+      { batchRows: 1 },
+    )
+    for await (const _ of session.consentEvents) {
+      // Empty field boundary.
+    }
+    for await (const _ of session.healthRecords) {
+      // Empty field boundary.
+    }
+    for await (const _ of session.healthRecordRevisions) {
+      // Empty field boundary.
+    }
+    const entries = session.exerciseCatalog[Symbol.asyncIterator]()
+    await expect(entries.next()).resolves.toMatchObject({
+      done: false,
+      value: { id: 'catalog-entry-1' },
+    })
+    const receiptFailure = session.receipt.catch((error: unknown) => error)
+    let streamFailure: unknown
+
+    try {
+      await entries.next()
+    } catch (error) {
+      streamFailure = error
+    }
+
+    expect(streamFailure).toMatchObject({
+      message: 'portable export exercise catalog history must complete',
+    })
+    expect(await receiptFailure).toBe(streamFailure)
+    expect(lifecycle).toMatchObject({ committed: false, rolledBack: true })
+  })
+
+  it('rejects an oversized catalog revision before its content crosses the root', async () => {
+    const { database, lifecycle } = fakeConsentHealthExerciseCatalogDatabase(
+      [],
+      [],
+      [],
+      [
+        {
+          id: 'catalog-entry-1',
+          history: [
+            {
+              id: 'catalog-revision-1',
+              snapshot: { notes: 'private-catalog-content'.repeat(100) },
+            },
+          ],
+        },
+      ],
+    )
+    const service = new PortableExportDatabaseSnapshotService(database)
+    const session = service.createConsentHealthExerciseCatalogSnapshot(
+      '11111111-1111-4111-8111-111111111111',
+      { maximumPayloadBytes: 128 },
+    )
+    for await (const _ of session.consentEvents) {
+      // Empty field boundary.
+    }
+    for await (const _ of session.healthRecords) {
+      // Empty field boundary.
+    }
+    for await (const _ of session.healthRecordRevisions) {
+      // Empty field boundary.
+    }
+    const entries = session.exerciseCatalog[Symbol.asyncIterator]()
+    const entry = await entries.next()
+    if (entry.done) throw new Error('catalog fixture was not returned')
+    const receiptFailure = session.receipt.catch((error: unknown) => error)
+    let historyFailure: unknown
+
+    try {
+      await entry.value.history[Symbol.asyncIterator]().next()
+    } catch (error) {
+      historyFailure = error
+    }
+
+    expect(historyFailure).toBeInstanceOf(PortableExportSnapshotPayloadTooLargeError)
+    expect((historyFailure as Error).message).not.toContain('private-catalog-content')
+    expect(await receiptFailure).toBe(historyFailure)
+    expect(lifecycle).toMatchObject({ committed: false, rolledBack: true })
   })
 
   it('fails closed when a coordinated collection is skipped', async () => {

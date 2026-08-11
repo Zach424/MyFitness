@@ -66,6 +66,8 @@ Migration `0024_exercise_insight_index.sql` adds `(workout_id, exercise_key)` lo
 
 The active picker combines the versioned `starter-2026-08-05-v1` catalog with owner-created entries. A custom definition has a stable key, display name, aliases, category, tracking mode, equipment and optional equipment notes. Creation is idempotent, correction uses an expected revision, and archive removes the definition from active search while keeping immutable definition revisions.
 
+便携导出的所有权边界与活动选择器不同：`exerciseCatalog` 只导出 owner 自定义活动或已归档条目及其不可变修订，版本化 starter 属于产品代码，不复制到用户数据包。异步来源按 `(created_at,id)` 读取含 `history: []` 的条目骨架，再按 revision 读取 history 子流；迁移 0033 提供全历史 owner 索引。条目与修订分别执行 64 KiB 门禁，完整 history 是推进下一条目的前置条件。
+
 Selecting an entry copies its visible semantics into the workout draft and then the saved exercise snapshot. Renaming, changing equipment or archiving the definition does not update an open draft or any stored workout. The workout `catalogKey` can support later grouping, but there is deliberately no live foreign key that grants a mutable directory authority over historical fact display.
 
 ## Exercise observation projection

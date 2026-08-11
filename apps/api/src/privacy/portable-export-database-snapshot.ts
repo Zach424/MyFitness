@@ -206,6 +206,26 @@ export type PortableExportConsentHealthSnapshotSession = {
   cancel: (error: unknown) => Promise<void>
 }
 
+export type PortableExportExerciseCatalogSnapshotEntry = Record<string, unknown> & {
+  history: AsyncIterable<Record<string, unknown>>
+}
+
+export type PortableExportConsentHealthExerciseCatalogSnapshotReceipt =
+  PortableExportConsentHealthSnapshotReceipt & {
+    exerciseCatalog: PortableExportHealthHistorySnapshotCollectionReceipt
+    exerciseCatalogRevisions: PortableExportHealthHistorySnapshotCollectionReceipt
+  }
+
+export type PortableExportConsentHealthExerciseCatalogSnapshotSession = {
+  consentEvents: AsyncIterable<Record<string, unknown>>
+  healthRecords: AsyncIterable<Record<string, unknown>>
+  healthRecordRevisions: AsyncIterable<Record<string, unknown>>
+  exerciseCatalog: AsyncIterable<PortableExportExerciseCatalogSnapshotEntry>
+  receipt: Promise<PortableExportConsentHealthExerciseCatalogSnapshotReceipt>
+  complete: () => Promise<void>
+  cancel: (error: unknown) => Promise<void>
+}
+
 type BoundedSnapshotRow = QueryResultRow & {
   id: string
   payload_text: string | null
@@ -503,6 +523,181 @@ async function* healthRecordRevisionPageRows(
       'health record revision',
       signal,
     )
+
+    anchorId = page.rows.at(-1)!.id
+    if (page.rows.length < batchRows) break
+  }
+}
+
+export const portableExportExerciseCatalogEntryPageQuery = `WITH page AS MATERIALIZED (
+         SELECT entry.id, entry.created_at,
+                ((to_jsonb(entry) - 'user_id' - 'idempotency_key' - 'request_hash')
+                  || jsonb_build_object('history', '[]'::jsonb))::text AS payload_text
+         FROM user_exercise_catalog_entries AS entry
+         WHERE entry.user_id = $1
+           AND (
+             $2::uuid IS NULL
+             OR (entry.created_at, entry.id) > (
+               SELECT anchor.created_at, anchor.id
+               FROM user_exercise_catalog_entries AS anchor
+               WHERE anchor.user_id = $1 AND anchor.id = $2::uuid
+             )
+           )
+         ORDER BY entry.created_at, entry.id
+         LIMIT $3
+       )
+       SELECT id,
+              CASE
+                WHEN octet_length(payload_text) <= $4 THEN payload_text
+                ELSE NULL
+              END AS payload_text,
+              octet_length(payload_text) AS payload_byte_length
+       FROM page
+       ORDER BY created_at, id`
+
+export const portableExportExerciseCatalogRevisionPageQuery = `WITH page AS MATERIALIZED (
+         SELECT history.id, history.revision,
+                (to_jsonb(history) - 'user_id' - 'entry_id')::text AS payload_text
+         FROM user_exercise_catalog_revisions AS history
+         INNER JOIN user_exercise_catalog_entries AS entry ON entry.id = history.entry_id
+         WHERE entry.user_id = $1
+           AND history.user_id = $1
+           AND history.entry_id = $2
+           AND (
+             $3::uuid IS NULL
+             OR history.revision > (
+               SELECT anchor.revision
+               FROM user_exercise_catalog_revisions AS anchor
+               INNER JOIN user_exercise_catalog_entries AS anchor_entry
+                 ON anchor_entry.id = anchor.entry_id
+               WHERE anchor_entry.user_id = $1
+                 AND anchor.user_id = $1
+                 AND anchor.entry_id = $2
+                 AND anchor.id = $3::uuid
+             )
+           )
+         ORDER BY history.revision
+         LIMIT $4
+       )
+       SELECT id,
+              CASE
+                WHEN octet_length(payload_text) <= $5 THEN payload_text
+                ELSE NULL
+              END AS payload_text,
+              octet_length(payload_text) AS payload_byte_length
+       FROM page
+       ORDER BY revision`
+
+async function* exerciseCatalogRevisionPageRows(
+  client: PoolClient,
+  userId: string,
+  entryId: string,
+  batchRows: number,
+  maximumPayloadBytes: number,
+  stats: MutableSnapshotStats,
+  signal?: AbortSignal,
+): AsyncGenerator<Record<string, unknown>> {
+  throwIfAborted(signal)
+  let anchorId: string | null = null
+
+  while (true) {
+    throwIfAborted(signal)
+    const page: QueryResult<BoundedSnapshotRow> = await client.query<BoundedSnapshotRow>(
+      portableExportExerciseCatalogRevisionPageQuery,
+      [userId, entryId, anchorId, batchRows, maximumPayloadBytes],
+    )
+    if (page.rows.length === 0) break
+    yield* boundedPagePayloads(
+      page.rows,
+      batchRows,
+      maximumPayloadBytes,
+      stats,
+      'exercise catalog revision',
+      signal,
+    )
+    anchorId = page.rows.at(-1)!.id
+    if (page.rows.length < batchRows) break
+  }
+}
+
+async function* exerciseCatalogPageRows(
+  client: PoolClient,
+  userId: string,
+  batchRows: number,
+  maximumPayloadBytes: number,
+  entryStats: MutableSnapshotStats,
+  revisionStats: MutableSnapshotStats,
+  signal?: AbortSignal,
+  failRoot?: (error: unknown) => Promise<unknown>,
+): AsyncGenerator<PortableExportExerciseCatalogSnapshotEntry> {
+  throwIfAborted(signal)
+  let anchorId: string | null = null
+
+  while (true) {
+    throwIfAborted(signal)
+    const page: QueryResult<BoundedSnapshotRow> = await client.query<BoundedSnapshotRow>(
+      portableExportExerciseCatalogEntryPageQuery,
+      [userId, anchorId, batchRows, maximumPayloadBytes],
+    )
+    if (page.rows.length === 0) break
+
+    for (const header of boundedPagePayloads(
+      page.rows,
+      batchRows,
+      maximumPayloadBytes,
+      entryStats,
+      'exercise catalog entry',
+      signal,
+    )) {
+      if (
+        !Object.hasOwn(header, 'history') ||
+        !Array.isArray(header.history) ||
+        header.history.length !== 0
+      ) {
+        throw new Error('portable export snapshot returned an invalid exercise catalog entry page')
+      }
+      const entryId = header.id as string
+      let historyStarted = false
+      let historyCompleted = false
+      const history: AsyncIterable<Record<string, unknown>> = {
+        [Symbol.asyncIterator]: () =>
+          (async function* () {
+            if (historyStarted) {
+              const error = new Error(
+                'portable export exercise catalog history must be read once in order',
+              )
+              throw failRoot ? await failRoot(error) : error
+            }
+            historyStarted = true
+            let failure: unknown
+            try {
+              yield* exerciseCatalogRevisionPageRows(
+                client,
+                userId,
+                entryId,
+                batchRows,
+                maximumPayloadBytes,
+                revisionStats,
+                signal,
+              )
+              historyCompleted = true
+            } catch (error) {
+              failure = error
+              throw failRoot ? await failRoot(error) : error
+            } finally {
+              if (!historyCompleted && failure === undefined) {
+                const error = new Error('portable export exercise catalog history did not complete')
+                throw failRoot ? await failRoot(error) : error
+              }
+            }
+          })(),
+      }
+      header.history = history
+      yield header as PortableExportExerciseCatalogSnapshotEntry
+      if (!historyStarted || !historyCompleted) {
+        throw new Error('portable export exercise catalog history must complete')
+      }
+    }
 
     anchorId = page.rows.at(-1)!.id
     if (page.rows.length < batchRows) break
@@ -1734,6 +1929,7 @@ type SnapshotRowsFactory = (
   maximumPayloadBytes: number,
   stats: MutableSnapshotStats,
   signal?: AbortSignal,
+  failRoot?: (error: unknown) => Promise<unknown>,
 ) => AsyncIterable<Record<string, unknown>>
 
 const createSnapshotSession = (
@@ -3127,6 +3323,7 @@ const createCoordinatedSnapshotSession = <Collection extends string>(
     resolveReceipt = resolve
     rejectReceipt = reject
   })
+  let failRoot!: (rootError: unknown) => Promise<unknown>
 
   const transactionItems = database.streamReadOnlyRepeatableRead(
     async function* (client): AsyncGenerator<CoordinatedSnapshotItem<Collection>> {
@@ -3144,6 +3341,7 @@ const createCoordinatedSnapshotSession = <Collection extends string>(
           maximumPayloadBytes,
           collectionStats,
           options.signal,
+          (error) => failRoot(error),
         )) {
           yield { kind: 'row', collection: definition.name, value }
         }
@@ -3176,6 +3374,7 @@ const createCoordinatedSnapshotSession = <Collection extends string>(
     rejectReceipt(finalError)
     return finalError
   }
+  failRoot = fail
 
   const consumeCollection = async function* (
     collection: Collection,
@@ -3287,6 +3486,33 @@ const consentHealthSnapshotDefinitions = [
   { name: 'consentEvents', rowFactory: consentEventPageRows },
   ...healthHistorySnapshotDefinitions,
 ] as const
+
+const consentHealthExerciseCatalogSnapshotDefinitions = (revisionStats: MutableSnapshotStats) =>
+  [
+    ...consentHealthSnapshotDefinitions,
+    {
+      name: 'exerciseCatalog',
+      rowFactory: (
+        client: PoolClient,
+        userId: string,
+        batchRows: number,
+        maximumPayloadBytes: number,
+        entryStats: MutableSnapshotStats,
+        signal?: AbortSignal,
+        failRoot?: (error: unknown) => Promise<unknown>,
+      ) =>
+        exerciseCatalogPageRows(
+          client,
+          userId,
+          batchRows,
+          maximumPayloadBytes,
+          entryStats,
+          revisionStats,
+          signal,
+          failRoot,
+        ),
+    },
+  ] as const
 
 @Injectable()
 export class PortableExportDatabaseSnapshotService {
@@ -3431,5 +3657,25 @@ export class PortableExportDatabaseSnapshotService {
       options,
       consentHealthSnapshotDefinitions,
     )
+  }
+
+  createConsentHealthExerciseCatalogSnapshot(
+    userId: string,
+    options: PortableExportDatabaseSnapshotOptions = {},
+  ): PortableExportConsentHealthExerciseCatalogSnapshotSession {
+    const revisionStats: MutableSnapshotStats = { batchCount: 0, rowCount: 0 }
+    const session = createCoordinatedSnapshotSession(
+      this.database,
+      userId,
+      options,
+      consentHealthExerciseCatalogSnapshotDefinitions(revisionStats),
+    )
+    const receipt = session.receipt.then((baseReceipt) => ({
+      ...baseReceipt,
+      exerciseCatalogRevisions: { ...revisionStats },
+    }))
+    return Object.assign(session, {
+      receipt,
+    }) as PortableExportConsentHealthExerciseCatalogSnapshotSession
   }
 }

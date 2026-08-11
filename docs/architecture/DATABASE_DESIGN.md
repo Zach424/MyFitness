@@ -444,7 +444,7 @@ intent 创建 → 验证一次性 token 与确认短语 → users 状态关闭 �
 
 `createWorkoutRevisionSnapshot()` 让 shape 与正文共享同一只读 repeatable-read 事务。shape 还要求 exercise `id` 在 revision 内唯一、set `id` 在父 exercise 内唯一；ID 只需符合规范 UUID 文本结构，不锁定特定版本。根页以 `jsonb_set(snapshot,'{exercises}','[]')` 形成一个有界骨架，动作页以 `jsonb_set(exercise_json,'{sets}','[]')` 形成骨架，set 页交付原对象；三者都在 PostgreSQL 内编码并执行 64 KiB UTF-8 门禁。动作和组页面只携上一元素 UUID，在相同 target CTE 内恢复 ordinality 后继续读取，应用和收据不暴露 ordinality。空数组键在 Node 中原地替换为懒数组，保留 JSONB 解析键序；真实数据库证明反序 position 快照物化后与直接 `SELECT snapshot` 的 JSON 字节相同。
 
-数据库训练来源现在提供两种共享实现的字段顺序：关系优先会话保持当前图→history 的内部审计用途，JSON 会话则按 PostgreSQL JSONB 的 `history→exercises` 键序读取。JSON 查询为 workout 交付 `history: []`/`exercises: []` 骨架，为当前 exercise 交付 `sets: []` 骨架，revision 与 snapshot 子层继续使用既有占位；Node 只原位替换值。`createPortableExportWorkoutJsonSource()` 把七层异步迭代器递归标记为 JSON 懒数组，并把完成/取消直接委托给同一只读 `REPEATABLE READ` 会话。真实 PostgreSQL 已完成完整 `workouts` 逐字节对账。该会话仍与三字段协调器分离；按 v4 顶层顺序，下一数据库工作是先有界化 `exerciseCatalog`，再处理 `foodCatalog` 和 workouts 的同根协调。
+数据库训练来源现在提供关系优先与 JSONB `history→exercises` 两种共享字段顺序；`createPortableExportWorkoutJsonSource()` 把七层迭代器递归标记为 JSON 懒数组，真实 PostgreSQL 已完成完整 `workouts` 逐字节对账。动作目录则已进入跨顶层协调：迁移 0033 为全量活动/归档条目新增 `(user_id,created_at,id)` 非部分索引，条目查询交付含 `history: []` 的同步键序骨架；每个条目再通过既有 `(user_id,entry_id,revision DESC)` 索引反向读取 revision 升序子流。条目和修订分别执行 64 KiB 门禁，锚点只保存末 UUID并在同一 owner/entry 快照内恢复完整排序值。四字段 JSON 已与同步投影逐字节对账；下一数据库工作是以同一模式有界化 `foodCatalog`，再连接 workouts。
 
 ## 20. 安全与隐私控制
 
