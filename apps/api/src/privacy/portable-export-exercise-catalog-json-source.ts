@@ -1,4 +1,5 @@
 import type {
+  PortableExportConsentHealthCatalogSnapshotSession,
   PortableExportConsentHealthExerciseCatalogSnapshotSession,
   PortableExportExerciseCatalogSnapshotEntry,
 } from './portable-export-database-snapshot'
@@ -16,6 +17,14 @@ export type PortableExportConsentHealthExerciseCatalogJsonSource = {
   complete: PortableExportConsentHealthExerciseCatalogSnapshotSession['complete']
   cancel: PortableExportConsentHealthExerciseCatalogSnapshotSession['cancel']
 }
+
+export type PortableExportConsentHealthCatalogJsonSource =
+  PortableExportConsentHealthExerciseCatalogJsonSource & {
+    foodCatalog: PortableExportJsonAsyncArray<Record<string, unknown>>
+    receipt: PortableExportConsentHealthCatalogSnapshotSession['receipt']
+    complete: PortableExportConsentHealthCatalogSnapshotSession['complete']
+    cancel: PortableExportConsentHealthCatalogSnapshotSession['cancel']
+  }
 
 const catalogJsonValues = async function* (
   entries: AsyncIterable<PortableExportExerciseCatalogSnapshotEntry>,
@@ -37,6 +46,19 @@ export const createPortableExportConsentHealthExerciseCatalogJsonSource = (
   healthRecords: portableExportJsonAsyncArray(session.healthRecords),
   healthRecordRevisions: portableExportJsonAsyncArray(session.healthRecordRevisions),
   exerciseCatalog: portableExportJsonAsyncArray(catalogJsonValues(session.exerciseCatalog)),
+  receipt: session.receipt,
+  complete: session.complete,
+  cancel: session.cancel,
+})
+
+export const createPortableExportConsentHealthCatalogJsonSource = (
+  session: PortableExportConsentHealthCatalogSnapshotSession,
+): PortableExportConsentHealthCatalogJsonSource => ({
+  consentEvents: portableExportJsonAsyncArray(session.consentEvents),
+  healthRecords: portableExportJsonAsyncArray(session.healthRecords),
+  healthRecordRevisions: portableExportJsonAsyncArray(session.healthRecordRevisions),
+  exerciseCatalog: portableExportJsonAsyncArray(catalogJsonValues(session.exerciseCatalog)),
+  foodCatalog: portableExportJsonAsyncArray(catalogJsonValues(session.foodCatalog)),
   receipt: session.receipt,
   complete: session.complete,
   cancel: session.cancel,

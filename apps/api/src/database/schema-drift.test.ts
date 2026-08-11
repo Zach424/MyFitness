@@ -148,6 +148,10 @@ const portableExportExerciseCatalogIndexMigrationPath = path.resolve(
   __dirname,
   '../../../../infra/postgres/migrations/0033_portable_export_exercise_catalog_index.sql',
 )
+const portableExportFoodCatalogIndexMigrationPath = path.resolve(
+  __dirname,
+  '../../../../infra/postgres/migrations/0034_portable_export_food_catalog_index.sql',
+)
 
 describe('health-record migration drift', () => {
   it('contains every contract metric, unit and source kind', async () => {
@@ -244,6 +248,11 @@ describe('health-record migration drift', () => {
   it('indexes the complete owner exercise catalog export order', async () => {
     const migration = await readFile(portableExportExerciseCatalogIndexMigrationPath, 'utf8')
     expect(migration).toContain('ON user_exercise_catalog_entries (user_id, created_at, id)')
+  })
+
+  it('indexes the complete owner food catalog export order', async () => {
+    const migration = await readFile(portableExportFoodCatalogIndexMigrationPath, 'utf8')
+    expect(migration).toContain('ON user_food_catalog_entries (user_id, created_at, id)')
   })
 
   it('contains every nutrition lifecycle enum at the snapshot boundary', async () => {

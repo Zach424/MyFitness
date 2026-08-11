@@ -48,6 +48,8 @@ Owner-created foods now live in a separate versioned definition aggregate. The s
 
 Selecting a definition copies its current values into the existing meal draft/snapshot. Later correction or archive cannot rewrite that draft, a persisted meal, meal history or a favorite. Archived definitions leave normal search but stay in owner history/export until account erasure. Owner values remain reference data, not verified provider or laboratory facts.
 
+异步便携归档只把 `user_food_catalog_entries` 视为 owner 数据，包含活动与归档定义及其不可变修订；代码内置 starter 参考目录属于共享产品常量，不复制进用户数据包。条目按 `(created_at,id)`、history 按 revision 做两层 keyset，PostgreSQL 先交付 `history: []` 骨架，再由 Node 原位挂载修订子流；迁移 0034 的非部分 owner 索引覆盖归档定义。条目与每条修订各自执行 64 KiB UTF-8 门禁，并与同意、健康和动作目录共享同一个只读 `REPEATABLE READ` 事实时刻。该结构不验证用户填写的营养事实，也不改变餐食快照、收藏或照片候选边界。
+
 The definition register is a dedicated H5/WeApp route; the meal page refreshes active entries on show and searches owner aliases. Food-photo candidates remain limited to the controlled starter catalog. Barcode/provider search, branded variants, recipes, non-gram household conversion rules and catalog reconciliation are deferred.
 
 `GET /v1/food-catalog/:entryId/history` accepts `limit` (default 20, maximum 50) and an opaque UUID/revision cursor. The API validates the exact owner entry and anchor before returning `revision < boundary` newest first. The register initially renders 10 versions through the shared definition ledger and explicitly loads older pages; archive remains owner-readable. Pagination does not verify the user-confirmed nutrient values or reference.

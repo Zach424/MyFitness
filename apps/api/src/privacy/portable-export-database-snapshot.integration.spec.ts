@@ -13,13 +13,17 @@ import {
   PortableExportSnapshotPayloadTooLargeError,
   PortableExportWorkoutRevisionSnapshotNotDecomposableError,
   portableExportExerciseCatalogEntryPageQuery,
+  portableExportFoodCatalogEntryPageQuery,
   portableExportSnapshotMaximumPayloadBytes,
   portableExportWorkoutExerciseHeaderPageQuery,
   portableExportWorkoutHeaderPageQuery,
   portableExportWorkoutRevisionHeaderPageQuery,
   portableExportWorkoutSetPageQuery,
 } from './portable-export-database-snapshot'
-import { createPortableExportConsentHealthExerciseCatalogJsonSource } from './portable-export-exercise-catalog-json-source'
+import {
+  createPortableExportConsentHealthCatalogJsonSource,
+  createPortableExportConsentHealthExerciseCatalogJsonSource,
+} from './portable-export-exercise-catalog-json-source'
 import {
   createPortableExportJsonStream,
   portableExportJsonAsyncArray,
@@ -185,6 +189,95 @@ describe('portable export bounded PostgreSQL snapshot', () => {
     }
     await pool.query(
       `INSERT INTO user_exercise_catalog_revisions (
+         id, entry_id, user_id, action, revision, snapshot, changed_at
+       ) VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::timestamptz)`,
+      [id, entryId, userId, action, revision, JSON.stringify(snapshot), changedAt],
+    )
+    return id
+  }
+
+  const createFoodCatalogEntry = async (
+    userId: string,
+    createdAt: string,
+    options: {
+      id?: string
+      name?: string
+      revision?: number
+      archivedAt?: string | null
+    } = {},
+  ) => {
+    const id = options.id ?? randomUUID()
+    await pool.query(
+      `INSERT INTO user_food_catalog_entries (
+         id, user_id, name, aliases, category,
+         energy_kcal_per_100g, protein_g_per_100g, carbohydrate_g_per_100g,
+         fat_g_per_100g, fiber_g_per_100g, reference,
+         default_amount, default_unit, default_grams, revision,
+         idempotency_key, request_hash, archived_at, created_at, updated_at
+       ) VALUES (
+         $1, $2, $3, ARRAY['fixture alias']::text[], 'staple',
+         372, 13.5, 58.7, 7, 10.1, 'fixture nutrition reference',
+         50, 'g', 50, $4, $5, repeat('f', 64),
+         $6::timestamptz, $7::timestamptz, $7::timestamptz
+       )`,
+      [
+        id,
+        userId,
+        options.name ?? `Food ${id.slice(0, 8)}`,
+        options.revision ?? 1,
+        `food-export-${randomUUID()}`,
+        options.archivedAt ?? null,
+        createdAt,
+      ],
+    )
+    return id
+  }
+
+  const createFoodCatalogRevision = async (
+    userId: string,
+    entryId: string,
+    revision: number,
+    changedAt: string,
+    action: 'created' | 'updated' | 'archived' = 'created',
+  ) => {
+    const id = randomUUID()
+    const entry = await pool.query<{
+      name: string
+      archived_at: Date | null
+      created_at: Date
+      updated_at: Date
+    }>(
+      `SELECT name, archived_at, created_at, updated_at
+       FROM user_food_catalog_entries WHERE id = $1 AND user_id = $2`,
+      [entryId, userId],
+    )
+    const row = entry.rows[0]
+    if (!row) throw new Error('food catalog fixture entry was not found')
+    const snapshot = {
+      source: 'custom',
+      id: entryId,
+      userId,
+      key: `custom_${entryId.replaceAll('-', '')}`,
+      name: row.name,
+      aliases: ['fixture alias'],
+      category: 'staple',
+      energyKcalPer100g: 372,
+      proteinGPer100g: 13.5,
+      carbohydrateGPer100g: 58.7,
+      fatGPer100g: 7,
+      fiberGPer100g: 10.1,
+      reference: 'fixture nutrition reference',
+      defaultAmount: 50,
+      defaultUnit: 'g',
+      defaultGrams: 50,
+      revision,
+      editable: true,
+      archivedAt: row.archived_at?.toISOString() ?? null,
+      createdAt: row.created_at.toISOString(),
+      updatedAt: row.updated_at.toISOString(),
+    }
+    await pool.query(
+      `INSERT INTO user_food_catalog_revisions (
          id, entry_id, user_id, action, revision, snapshot, changed_at
        ) VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::timestamptz)`,
       [id, entryId, userId, action, revision, JSON.stringify(snapshot), changedAt],
@@ -3022,6 +3115,289 @@ describe('portable export bounded PostgreSQL snapshot', () => {
     expect(await jsonFailure).toBe(returnFailure)
     expect(returnFailure).toMatchObject({
       message: 'portable export exercise catalog history did not complete',
+    })
+  })
+
+  it('streams owner food catalog histories as the fifth coordinated v4 field', async () => {
+    const userId = await createUser()
+    const otherUserId = await createUser()
+    await createConsentEvent(userId, '2026-08-11T05:10:00.000001Z')
+    const exerciseEntryId = await createExerciseCatalogEntry(
+      userId,
+      '2026-08-11T05:11:00.000001Z',
+      { name: 'Boundary exercise' },
+    )
+    await createExerciseCatalogRevision(userId, exerciseEntryId, 1, '2026-08-11T05:12:00.000001Z')
+    const firstEntryId = await createFoodCatalogEntry(userId, '2026-08-11T05:13:00.000001Z', {
+      name: 'Owner active food',
+      revision: 2,
+    })
+    await createFoodCatalogRevision(userId, firstEntryId, 1, '2026-08-11T05:14:00.000001Z')
+    await createFoodCatalogRevision(
+      userId,
+      firstEntryId,
+      2,
+      '2026-08-11T05:14:00.000002Z',
+      'updated',
+    )
+    const archivedEntryId = await createFoodCatalogEntry(userId, '2026-08-11T05:13:00.000002Z', {
+      name: 'Owner archived food',
+      archivedAt: '2026-08-11T05:15:00.000001Z',
+    })
+    await createFoodCatalogRevision(
+      userId,
+      archivedEntryId,
+      1,
+      '2026-08-11T05:15:00.000001Z',
+      'archived',
+    )
+    const otherEntryId = await createFoodCatalogEntry(otherUserId, '2026-08-11T05:13:00.000001Z', {
+      name: 'Other owner food',
+    })
+    await createFoodCatalogRevision(otherUserId, otherEntryId, 1, '2026-08-11T05:14:00.000001Z')
+
+    const stable = snapshots.createConsentHealthCatalogSnapshot(userId, { batchRows: 1 })
+    for await (const _ of stable.consentEvents) {
+      // Establish the root transaction through field one.
+    }
+    for await (const _ of stable.healthRecords) {
+      // Reach field two boundary.
+    }
+    for await (const _ of stable.healthRecordRevisions) {
+      // Reach field three boundary.
+    }
+    for await (const entry of stable.exerciseCatalog) {
+      for await (const _ of entry.history) {
+        // Reach field four boundary with nested history complete.
+      }
+    }
+    const concurrentEntryId = await createFoodCatalogEntry(userId, '2026-08-11T05:13:00.000003Z', {
+      name: 'Concurrent food',
+    })
+    await createFoodCatalogRevision(userId, concurrentEntryId, 1, '2026-08-11T05:16:00.000001Z')
+    const stableCatalog: Array<Record<string, unknown>> = []
+    for await (const entry of stable.foodCatalog) {
+      const value = { ...entry, history: [] as Array<Record<string, unknown>> }
+      for await (const revision of entry.history) value.history.push(revision)
+      stableCatalog.push(value)
+    }
+    expect(stableCatalog.map((entry) => entry.id)).toEqual([firstEntryId, archivedEntryId])
+    expect(stableCatalog.some((entry) => entry.id === concurrentEntryId)).toBe(false)
+    expect(stableCatalog.some((entry) => entry.id === otherEntryId)).toBe(false)
+    await stable.complete()
+    await expect(stable.receipt).resolves.toMatchObject({
+      consentEvents: { batchCount: 1, rowCount: 1 },
+      exerciseCatalog: { batchCount: 1, rowCount: 1 },
+      exerciseCatalogRevisions: { batchCount: 1, rowCount: 1 },
+      foodCatalog: { batchCount: 2, rowCount: 2 },
+      foodCatalogRevisions: { batchCount: 3, rowCount: 3 },
+    })
+
+    const index = await pool.query<{ indexdef: string }>(
+      `SELECT indexdef FROM pg_indexes
+       WHERE schemaname = 'public'
+         AND indexname = 'user_food_catalog_entries_user_export_idx'`,
+    )
+    expect(index.rows[0]?.indexdef).toContain('(user_id, created_at, id)')
+    const client = await pool.connect()
+    try {
+      await client.query('BEGIN')
+      await client.query('SET LOCAL enable_seqscan = off')
+      const plan = await client.query<{ 'QUERY PLAN': unknown }>(
+        `EXPLAIN (FORMAT JSON, COSTS OFF) ${portableExportFoodCatalogEntryPageQuery}`,
+        [userId, null, 2, portableExportSnapshotMaximumPayloadBytes],
+      )
+      expect(JSON.stringify(plan.rows[0]?.['QUERY PLAN'])).toContain(
+        'user_food_catalog_entries_user_export_idx',
+      )
+    } finally {
+      await client.query('ROLLBACK')
+      client.release()
+    }
+
+    const eager = snapshots.createConsentHealthCatalogSnapshot(userId, { batchRows: 2 })
+    const eagerConsentEvents: Array<Record<string, unknown>> = []
+    const eagerHealthRecords: Array<Record<string, unknown>> = []
+    const eagerHealthRecordRevisions: Array<Record<string, unknown>> = []
+    const eagerExerciseCatalog: Array<Record<string, unknown>> = []
+    const eagerFoodCatalog: Array<Record<string, unknown>> = []
+    for await (const row of eager.consentEvents) eagerConsentEvents.push(row)
+    for await (const row of eager.healthRecords) eagerHealthRecords.push(row)
+    for await (const row of eager.healthRecordRevisions) eagerHealthRecordRevisions.push(row)
+    for await (const entry of eager.exerciseCatalog) {
+      const value = { ...entry, history: [] as Array<Record<string, unknown>> }
+      for await (const revision of entry.history) value.history.push(revision)
+      eagerExerciseCatalog.push(value)
+    }
+    for await (const entry of eager.foodCatalog) {
+      const value = { ...entry, history: [] as Array<Record<string, unknown>> }
+      for await (const revision of entry.history) value.history.push(revision)
+      eagerFoodCatalog.push(value)
+    }
+    await eager.complete()
+    const direct = await pool.query<{ payload: Record<string, unknown> }>(
+      `SELECT (
+         (to_jsonb(entry) - 'user_id' - 'idempotency_key' - 'request_hash')
+         || jsonb_build_object(
+           'history', COALESCE((
+             SELECT jsonb_agg(
+               (to_jsonb(history) - 'user_id' - 'entry_id') ORDER BY history.revision
+             )
+             FROM user_food_catalog_revisions AS history
+             WHERE history.entry_id = entry.id
+           ), '[]'::jsonb)
+         )
+       ) AS payload
+       FROM user_food_catalog_entries AS entry
+       WHERE user_id = $1
+       ORDER BY created_at, id`,
+      [userId],
+    )
+    expect(JSON.stringify(eagerFoodCatalog)).toBe(
+      JSON.stringify(direct.rows.map((row) => row.payload)),
+    )
+    expect(eagerFoodCatalog.map((entry) => entry.id)).toEqual([
+      firstEntryId,
+      archivedEntryId,
+      concurrentEntryId,
+    ])
+    expect(eagerFoodCatalog.some((entry) => entry.id === otherEntryId)).toBe(false)
+    expect(
+      eagerFoodCatalog.every(
+        (entry) =>
+          !('user_id' in entry) && !('idempotency_key' in entry) && !('request_hash' in entry),
+      ),
+    ).toBe(true)
+
+    const eagerPayload = privacyExportSchema.parse({
+      schemaVersion: privacyExportSchemaVersion,
+      generatedAt: '2026-08-11T05:20:00.000Z',
+      accountId: userId,
+      data: {
+        account: { id: userId, status: 'active' },
+        identities: [],
+        profile: null,
+        goal: null,
+        consentEvents: eagerConsentEvents,
+        healthRecords: eagerHealthRecords,
+        healthRecordRevisions: eagerHealthRecordRevisions,
+        exerciseCatalog: eagerExerciseCatalog,
+        foodCatalog: eagerFoodCatalog,
+        workouts: [],
+        nutritionMeals: [],
+        nutritionFavorites: [],
+        weeklyPlans: [],
+        aiExplanationRuns: [],
+        foodPhotoAnalyses: [],
+        progressPhotos: [],
+      },
+    })
+    const expected = serializePortableExport(eagerPayload, Number.MAX_SAFE_INTEGER)
+    const lazy = snapshots.createConsentHealthCatalogSnapshot(userId, { batchRows: 2 })
+    const source = createPortableExportConsentHealthCatalogJsonSource(lazy)
+    const json = createPortableExportJsonStream(
+      {
+        ...eagerPayload,
+        data: {
+          ...eagerPayload.data,
+          consentEvents: source.consentEvents as never,
+          healthRecords: source.healthRecords as never,
+          healthRecordRevisions: source.healthRecordRevisions as never,
+          exerciseCatalog: source.exerciseCatalog as never,
+          foodCatalog: source.foodCatalog as never,
+        },
+      },
+      { chunkBytes: 43, lifecycle: source },
+    )
+    const chunks: Buffer[] = []
+    for await (const chunk of json.bytes) chunks.push(Buffer.from(chunk))
+
+    expect(Buffer.concat(chunks)).toEqual(expected)
+    await expect(lazy.receipt).resolves.toMatchObject({
+      foodCatalog: { batchCount: 2, rowCount: 3 },
+      foodCatalogRevisions: { batchCount: 3, rowCount: 4 },
+    })
+    await expect(json.receipt).resolves.toEqual({
+      schemaVersion: privacyExportSchemaVersion,
+      chunkBytes: 43,
+      byteLength: expected.length,
+      sha256: createHash('sha256').update(expected).digest('hex'),
+    })
+  })
+
+  it('cancels the five-field root from an active food catalog history', async () => {
+    const userId = await createUser()
+    const entryId = await createFoodCatalogEntry(userId, '2026-08-11T05:30:00.000001Z', {
+      name: 'Food cancellation',
+      revision: 2,
+    })
+    const firstRevisionId = await createFoodCatalogRevision(
+      userId,
+      entryId,
+      1,
+      '2026-08-11T05:31:00.000001Z',
+    )
+    await createFoodCatalogRevision(userId, entryId, 2, '2026-08-11T05:31:00.000002Z', 'updated')
+    const base = privacyExportSchema.parse({
+      schemaVersion: privacyExportSchemaVersion,
+      generatedAt: '2026-08-11T05:32:00.000Z',
+      accountId: userId,
+      data: {
+        account: { id: userId },
+        identities: [],
+        profile: null,
+        goal: null,
+        consentEvents: [],
+        healthRecords: [],
+        healthRecordRevisions: [],
+        exerciseCatalog: [],
+        foodCatalog: [],
+        workouts: [],
+        nutritionMeals: [],
+        nutritionFavorites: [],
+        weeklyPlans: [],
+        aiExplanationRuns: [],
+        foodPhotoAnalyses: [],
+        progressPhotos: [],
+      },
+    })
+    const snapshot = snapshots.createConsentHealthCatalogSnapshot(userId, { batchRows: 1 })
+    const source = createPortableExportConsentHealthCatalogJsonSource(snapshot)
+    const json = createPortableExportJsonStream(
+      {
+        ...base,
+        data: {
+          ...base.data,
+          consentEvents: source.consentEvents as never,
+          healthRecords: source.healthRecords as never,
+          healthRecordRevisions: source.healthRecordRevisions as never,
+          exerciseCatalog: source.exerciseCatalog as never,
+          foodCatalog: source.foodCatalog as never,
+        },
+      },
+      { chunkBytes: 1, lifecycle: source },
+    )
+    const iterator = json.bytes[Symbol.asyncIterator]()
+    let prefix = ''
+    while (!prefix.includes(firstRevisionId)) {
+      const next = await iterator.next()
+      if (next.done) throw new Error('food catalog revision fixture was not reached')
+      prefix += next.value.toString('utf8')
+    }
+    const jsonFailure = json.receipt.catch((error: unknown) => error)
+    const snapshotFailure = snapshot.receipt.catch((error: unknown) => error)
+    let returnFailure: unknown
+
+    try {
+      await iterator.return?.()
+    } catch (error) {
+      returnFailure = error
+    }
+
+    expect(await snapshotFailure).toBe(returnFailure)
+    expect(await jsonFailure).toBe(returnFailure)
+    expect(returnFailure).toMatchObject({
+      message: 'portable export food catalog history did not complete',
     })
   })
 })

@@ -104,6 +104,7 @@ const fakeConsentHealthExerciseCatalogDatabase = (
   healthRecords: Array<Record<string, unknown>>,
   healthRecordRevisions: Array<Record<string, unknown>>,
   exerciseCatalog: Array<Record<string, unknown> & { history: Array<Record<string, unknown>> }>,
+  foodCatalog: Array<Record<string, unknown> & { history: Array<Record<string, unknown>> }> = [],
 ) => {
   const lifecycle = {
     accountQueries: 0,
@@ -138,6 +139,36 @@ const fakeConsentHealthExerciseCatalogDatabase = (
           if (sql.startsWith('SELECT id FROM users')) {
             lifecycle.accountQueries += 1
             return { rows: [{ id: parameters[0] }] }
+          }
+          if (sql.includes('FROM user_food_catalog_revisions AS history')) {
+            lifecycle.queryOrder.push('food-history')
+            const entry = foodCatalog.find((value) => value.id === parameters[1])
+            return {
+              rows: boundedRows(
+                pageAfter(
+                  entry?.history ?? [],
+                  parameters[2] as string | null,
+                  parameters[3] as number,
+                ),
+                parameters[4] as number,
+              ),
+            }
+          }
+          if (sql.includes('FROM user_food_catalog_entries AS entry')) {
+            lifecycle.queryOrder.push('food-entry')
+            return {
+              rows: boundedRows(
+                pageAfter(
+                  foodCatalog.map(({ history: _history, ...entry }) => ({
+                    ...entry,
+                    history: [],
+                  })),
+                  parameters[1] as string | null,
+                  parameters[2] as number,
+                ),
+                parameters[3] as number,
+              ),
+            }
           }
           if (sql.includes('FROM user_exercise_catalog_revisions AS history')) {
             lifecycle.queryOrder.push('catalog-history')
@@ -2021,6 +2052,153 @@ describe('portable export database snapshot session', () => {
     expect(historyFailure).toBeInstanceOf(PortableExportSnapshotPayloadTooLargeError)
     expect((historyFailure as Error).message).not.toContain('private-catalog-content')
     expect(await receiptFailure).toBe(historyFailure)
+    expect(lifecycle).toMatchObject({ committed: false, rolledBack: true })
+  })
+
+  it('coordinates owner food entries and bounded histories as the fifth field', async () => {
+    const { database, lifecycle } = fakeConsentHealthExerciseCatalogDatabase(
+      [],
+      [],
+      [],
+      [
+        {
+          id: 'exercise-entry-1',
+          history: [{ id: 'exercise-revision-1', revision: 1 }],
+        },
+      ],
+      [
+        {
+          id: 'food-entry-1',
+          name: 'Active custom food',
+          archived_at: null,
+          history: [
+            { id: 'food-revision-1', revision: 1 },
+            { id: 'food-revision-2', revision: 2 },
+          ],
+        },
+        {
+          id: 'food-entry-2',
+          name: 'Archived custom food',
+          archived_at: '2026-08-11T12:00:00.000Z',
+          history: [],
+        },
+      ],
+    )
+    const service = new PortableExportDatabaseSnapshotService(database)
+    const session = service.createConsentHealthCatalogSnapshot(
+      '11111111-1111-4111-8111-111111111111',
+      { batchRows: 1 },
+    )
+    const observedFoods: Array<Record<string, unknown>> = []
+
+    for await (const _ of session.consentEvents) {
+      // Complete field one.
+    }
+    for await (const _ of session.healthRecords) {
+      // Complete field two.
+    }
+    for await (const _ of session.healthRecordRevisions) {
+      // Complete field three.
+    }
+    for await (const entry of session.exerciseCatalog) {
+      for await (const _ of entry.history) {
+        // Complete field four and its nested history.
+      }
+    }
+    for await (const entry of session.foodCatalog) {
+      const value = { ...entry, history: [] as Array<Record<string, unknown>> }
+      for await (const revision of entry.history) value.history.push(revision)
+      observedFoods.push(value)
+    }
+    expect(lifecycle.committed).toBe(false)
+
+    await session.complete()
+
+    expect(observedFoods).toEqual([
+      {
+        id: 'food-entry-1',
+        name: 'Active custom food',
+        archived_at: null,
+        history: [
+          { id: 'food-revision-1', revision: 1 },
+          { id: 'food-revision-2', revision: 2 },
+        ],
+      },
+      {
+        id: 'food-entry-2',
+        name: 'Archived custom food',
+        archived_at: '2026-08-11T12:00:00.000Z',
+        history: [],
+      },
+    ])
+    expect(lifecycle).toMatchObject({
+      accountQueries: 1,
+      streamCount: 1,
+      committed: true,
+      rolledBack: false,
+    })
+    await expect(session.receipt).resolves.toEqual({
+      batchRows: 1,
+      maximumPayloadBytes: portableExportSnapshotMaximumPayloadBytes,
+      consentEvents: { batchCount: 0, rowCount: 0 },
+      healthRecords: { batchCount: 0, rowCount: 0 },
+      healthRecordRevisions: { batchCount: 0, rowCount: 0 },
+      exerciseCatalog: { batchCount: 1, rowCount: 1 },
+      exerciseCatalogRevisions: { batchCount: 1, rowCount: 1 },
+      foodCatalog: { batchCount: 2, rowCount: 2 },
+      foodCatalogRevisions: { batchCount: 2, rowCount: 2 },
+    })
+  })
+
+  it('fails the coordinated root when food catalog history is skipped', async () => {
+    const { database, lifecycle } = fakeConsentHealthExerciseCatalogDatabase(
+      [],
+      [],
+      [],
+      [],
+      [
+        {
+          id: 'food-entry-1',
+          history: [{ id: 'food-revision-1', revision: 1 }],
+        },
+        { id: 'food-entry-2', history: [] },
+      ],
+    )
+    const service = new PortableExportDatabaseSnapshotService(database)
+    const session = service.createConsentHealthCatalogSnapshot(
+      '11111111-1111-4111-8111-111111111111',
+      { batchRows: 1 },
+    )
+    for await (const _ of session.consentEvents) {
+      // Empty field boundary.
+    }
+    for await (const _ of session.healthRecords) {
+      // Empty field boundary.
+    }
+    for await (const _ of session.healthRecordRevisions) {
+      // Empty field boundary.
+    }
+    for await (const _ of session.exerciseCatalog) {
+      // Empty field boundary.
+    }
+    const entries = session.foodCatalog[Symbol.asyncIterator]()
+    await expect(entries.next()).resolves.toMatchObject({
+      done: false,
+      value: { id: 'food-entry-1' },
+    })
+    const receiptFailure = session.receipt.catch((error: unknown) => error)
+    let streamFailure: unknown
+
+    try {
+      await entries.next()
+    } catch (error) {
+      streamFailure = error
+    }
+
+    expect(streamFailure).toMatchObject({
+      message: 'portable export food catalog history must complete',
+    })
+    expect(await receiptFailure).toBe(streamFailure)
     expect(lifecycle).toMatchObject({ committed: false, rolledBack: true })
   })
 

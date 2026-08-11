@@ -202,7 +202,7 @@ purpose：`terms,privacy,health_data,ai_plan_explanation,food_photo_analysis,pro
 
 `id,user_id,name,aliases text[],category,tracking_mode,equipment text[],equipment_notes,revision,idempotency_key,request_hash,archived_at,created_at,updated_at`。
 
-活动名称唯一索引为 `(user_id,lower(btrim(name))) WHERE archived_at IS NULL`；允许归档旧定义后重新建立同名新定义。`(id,user_id)` 唯一供所有权复合引用；当前列表按 user/updated_at 部分索引。
+活动名称唯一索引为 `(user_id,lower(btrim(name))) WHERE archived_at IS NULL`；允许归档旧定义后重新建立同名新定义。`(id,user_id)` 唯一供所有权复合引用；当前列表按 user/updated_at 部分索引。迁移 0033 另建 `(user_id,created_at,id)` 非部分索引，服务包含归档条目的稳定隐私导出。
 
 ### 8.2 `user_exercise_catalog_revisions`
 
@@ -237,7 +237,7 @@ FK → nutrition_meals 级联删除；唯一 `(meal_id,position)`。fiber 可空
 
 `id,user_id,name,aliases[],category`，五类每 100g 营养，`reference,default_amount,default_unit,default_grams,revision,idempotency_key,request_hash,archived_at,created_at,updated_at`。
 
-活动名称唯一规则、幂等规则和 `(id,user_id)` 所有权规则与动作目录一致。
+活动名称唯一规则、幂等规则和 `(id,user_id)` 所有权规则与动作目录一致。迁移 0034 另建 `(user_id,created_at,id)` 非部分索引，不能用只覆盖活动定义的 updated_at 部分索引替代。
 
 ### 9.6 `user_food_catalog_revisions`
 
@@ -367,7 +367,7 @@ kind 覆盖对象删除、提供方处置、备份日志等持久副作用。`de
 
 ### 16.1 `schema_migrations`
 
-`name text` 主键、`checksum char`、`applied_at timestamptz`。当前 30 行，名称从 `0001` 连续至 `0030_portable_export_archive_safe_size.sql`。checksum 用于检测已应用迁移文件被改写。
+`name text` 主键、`checksum char`、`applied_at timestamptz`。当前 34 行，名称从 `0001` 连续至 `0034_portable_export_food_catalog_index.sql`。checksum 用于检测已应用迁移文件被改写。
 
 ### 16.2 当前迁移演进主题
 
@@ -379,6 +379,7 @@ kind 覆盖对象删除、提供方处置、备份日志等持久副作用。`de
 | 0015–0019 | 身份抑制、照片保留/删除证据、目录定义              |
 | 0020–0024 | 管理员支持与审计、OIDC、计划证据与关联             |
 | 0025–0030 | 洞察/回看数据、本人计划体验与归档保管/安全整数边界 |
+| 0031–0034 | 便携归档健康、训练及两个自定义目录的全历史索引     |
 
 迁移只能前向追加；不得在共享历史中重写已应用 SQL。生产发布前应先在备份副本演练、核对 checksum、外键和索引，再滚动应用。
 
@@ -436,7 +437,7 @@ intent 创建 → 验证一次性 token 与确认短语 → users 状态关闭 �
 
 ### 19.5 便携归档保管
 
-`privacy_export_archives` 保存 owner、幂等 UUID、请求哈希、v4 格式、状态、确定性 `.json.enc` 键、非秘密密钥引用、SHA-256/大小、生成/下载期限和受控失败/处置。主路径为 queued → generating → available → deletion_pending → disposed；queued/generating 可进入 failed 或 deletion_pending。数据库触发器阻止跳级、回滚、同状态替换证据和时间倒退。available 必须同时具备对象键、密钥引用、摘要、正且不超过 `Number.MAX_SAFE_INTEGER` 的字节数及晚于 available_at 的 download_expires_at；disposed 清除对象键/密钥引用但可保留聚合摘要收据。内部预约服务在事务中锁定 active owner，以 `INSERT ... ON CONFLICT DO NOTHING` 收敛并发；相同请求指纹只读取现有状态，不同请求指纹冲突，读取同时限定 active owner 与 archive UUID。对象键和一小时生成期限均由服务端产生。内部只读流事务能按末 UUID 锚点分页同意事件、健康记录与健康修订；数据库子查询比较完整 `(accepted_at,id)`、`(occurred_at,created_at,id)` 或 `(changed_at,revision,id)`，避免客户端时间精度损失并固定总序。同意事件复用既有 `(user_id,accepted_at DESC,id DESC)` 历史索引的反向扫描，不新增重复升序索引；迁移 0031 新增 `health_record_revisions (user_id,changed_at,revision,id)` 索引。三种源默认每批 25 行、最大 100 行；投影都由数据库编码为 JSON 文本并按 `octet_length` 实施最大 64 KiB 的 UTF-8 单行交付门禁，超限 payload 不跨入应用进程。同步 v4 同意查询同样按 `(accepted_at,id)` 升序，保证同时间事件确定顺序。描述驱动多集合协调器在同一只读 repeatable-read 事务中只校验一次 active owner，按 v4 顺序依次交付 `consentEvents`、`healthRecords` 与 `healthRecordRevisions`，各字段以私有边界结束。最后边界之后事务保持打开，只有 JSON 根物理 EOF 才显式推进事务 EOF 并提交；活动字段、字段之间或后续 JSON 取消都会回滚，并以统一收据分别报告三集合批次与行数。真实 PostgreSQL 已证明同时间同意 UUID 总序、跨 owner 排除、跨字段并发隔离、三懒数组 eager/lazy 字节相同和字段间取消同根失败。其他集合/嵌套关系、公开路由、租约执行器和归档状态协调仍未实现。
+`privacy_export_archives` 保存 owner、幂等 UUID、请求哈希、v4 格式、状态、确定性 `.json.enc` 键、非秘密密钥引用、SHA-256/大小、生成/下载期限和受控失败/处置。主路径为 queued → generating → available → deletion_pending → disposed；queued/generating 可进入 failed 或 deletion_pending。数据库触发器阻止跳级、回滚、同状态替换证据和时间倒退。available 必须同时具备对象键、密钥引用、摘要、正且不超过 `Number.MAX_SAFE_INTEGER` 的字节数及晚于 available_at 的 download_expires_at；disposed 清除对象键/密钥引用但可保留聚合摘要收据。内部预约服务在事务中锁定 active owner，以 `INSERT ... ON CONFLICT DO NOTHING` 收敛并发；相同请求指纹只读取现有状态，不同请求指纹冲突，读取同时限定 active owner 与 archive UUID。对象键和一小时生成期限均由服务端产生。内部只读流事务按末 UUID 锚点分页同意事件、健康记录、健康修订与两个 owner 自定义目录；数据库子查询恢复完整排序元组，避免客户端时间精度损失并固定总序。前三个简单源与两个条目/history 分层目录源都由 PostgreSQL 编码 JSON 文本，并按 `octet_length` 实施最大 64 KiB 的 UTF-8 单元素交付门禁。描述驱动协调器在同一只读 `REPEATABLE READ` 事务中只校验一次 active owner，按 v4 顺序交付 `consentEvents`、`healthRecords`、`healthRecordRevisions`、`exerciseCatalog` 与 `foodCatalog`；每个字段和嵌套 history 都必须恰好一次完整结束。最后边界之后事务保持打开，只有 JSON 根物理 EOF 才显式推进事务 EOF 并提交；活动字段、字段之间或后续 JSON 取消都会以最深具体错误回滚，并由统一收据分别报告五个字段及两个目录 history 的批次与行数。真实 PostgreSQL 已证明跨 owner/starter 排除、跨字段并发隔离、五字段 eager/lazy 字节相同和最深 history 取消同根失败。workouts、后续集合/媒体、公开路由、租约执行器和归档状态协调仍未接入该根事务。
 
 训练同步投影按 `(started_at,created_at,id)` 升序输出顶层 workout；`UNIQUE (workout_id,position)`、`UNIQUE (exercise_id,position)` 与 `UNIQUE (workout_id,revision)` 分别保证当前关系表动作、组和修订内部顺序。活动列表继续使用部分降序索引；迁移 0032 另建非部分 `(user_id,started_at,created_at,id)` 索引，服务包含软删除记录的便携导出全历史扫描。内部 `createWorkoutRevisionHeaderLayerSnapshot()` 在一次 active-owner、只读 repeatable-read 根事务中读取 workout 头，为每个头依次暴露一次性动作/组关系图和 revision 头子流。revision 查询通过 `workout_revisions → workout_sessions` 同时绑定父 workout、冗余 history owner 与认证 owner，只选择 `id,action,revision,changed_at`；应用只保留末 revision UUID，锚点子查询在同 owner/workout 内恢复唯一 `revision`。真实数据库已证明软删除 workout 的 history 可读、其他 owner 排除、打开根快照后的并发修订追加不可见，实际 SQL 可使用既有非部分 `(user_id,workout_id,revision desc)` 或唯一 `(workout_id,revision)` 索引。关系图必须先完整结束，history 才能启动；最后边界后仍须显式 `complete()` 才提交，乱序、跳过、重复、提前停止和取消按最深活动子流优先回滚同一根事务。数据库实测还证明 API 合法的 30 个动作 × 50 组关系图在不含 history 时单项 JSON 已超过 64 KiB，且 `workout_revisions.snapshot` 保存完整聚合、修订数量没有上限。
 
@@ -444,7 +445,7 @@ intent 创建 → 验证一次性 token 与确认短语 → users 状态关闭 �
 
 `createWorkoutRevisionSnapshot()` 让 shape 与正文共享同一只读 repeatable-read 事务。shape 还要求 exercise `id` 在 revision 内唯一、set `id` 在父 exercise 内唯一；ID 只需符合规范 UUID 文本结构，不锁定特定版本。根页以 `jsonb_set(snapshot,'{exercises}','[]')` 形成一个有界骨架，动作页以 `jsonb_set(exercise_json,'{sets}','[]')` 形成骨架，set 页交付原对象；三者都在 PostgreSQL 内编码并执行 64 KiB UTF-8 门禁。动作和组页面只携上一元素 UUID，在相同 target CTE 内恢复 ordinality 后继续读取，应用和收据不暴露 ordinality。空数组键在 Node 中原地替换为懒数组，保留 JSONB 解析键序；真实数据库证明反序 position 快照物化后与直接 `SELECT snapshot` 的 JSON 字节相同。
 
-数据库训练来源现在提供关系优先与 JSONB `history→exercises` 两种共享字段顺序；`createPortableExportWorkoutJsonSource()` 把七层迭代器递归标记为 JSON 懒数组，真实 PostgreSQL 已完成完整 `workouts` 逐字节对账。动作目录则已进入跨顶层协调：迁移 0033 为全量活动/归档条目新增 `(user_id,created_at,id)` 非部分索引，条目查询交付含 `history: []` 的同步键序骨架；每个条目再通过既有 `(user_id,entry_id,revision DESC)` 索引反向读取 revision 升序子流。条目和修订分别执行 64 KiB 门禁，锚点只保存末 UUID并在同一 owner/entry 快照内恢复完整排序值。四字段 JSON 已与同步投影逐字节对账；下一数据库工作是以同一模式有界化 `foodCatalog`，再连接 workouts。
+数据库训练来源现在提供关系优先与 JSONB `history→exercises` 两种共享字段顺序；`createPortableExportWorkoutJsonSource()` 把七层迭代器递归标记为 JSON 懒数组，真实 PostgreSQL 已完成完整 `workouts` 逐字节对账。动作与食物目录都已进入跨顶层协调：迁移 0033、0034 分别为全量活动/归档条目新增 `(user_id,created_at,id)` 非部分索引，条目查询交付含 `history: []` 的同步键序骨架；每个条目再通过既有 `(user_id,entry_id,revision DESC)` 索引反向读取 revision 升序子流。条目和修订分别执行 64 KiB 门禁，锚点只保存末 UUID 并在同一 owner/entry 快照内恢复完整排序值。五字段 JSON 已与同步投影逐字节对账；下一数据库工作是让 workout 七层 row factory 复用协调根现有 `PoolClient`，不得另开事务。
 
 ## 20. 安全与隐私控制
 

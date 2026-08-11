@@ -226,6 +226,27 @@ export type PortableExportConsentHealthExerciseCatalogSnapshotSession = {
   cancel: (error: unknown) => Promise<void>
 }
 
+export type PortableExportFoodCatalogSnapshotEntry = Record<string, unknown> & {
+  history: AsyncIterable<Record<string, unknown>>
+}
+
+export type PortableExportConsentHealthCatalogSnapshotReceipt =
+  PortableExportConsentHealthExerciseCatalogSnapshotReceipt & {
+    foodCatalog: PortableExportHealthHistorySnapshotCollectionReceipt
+    foodCatalogRevisions: PortableExportHealthHistorySnapshotCollectionReceipt
+  }
+
+export type PortableExportConsentHealthCatalogSnapshotSession = {
+  consentEvents: AsyncIterable<Record<string, unknown>>
+  healthRecords: AsyncIterable<Record<string, unknown>>
+  healthRecordRevisions: AsyncIterable<Record<string, unknown>>
+  exerciseCatalog: AsyncIterable<PortableExportExerciseCatalogSnapshotEntry>
+  foodCatalog: AsyncIterable<PortableExportFoodCatalogSnapshotEntry>
+  receipt: Promise<PortableExportConsentHealthCatalogSnapshotReceipt>
+  complete: () => Promise<void>
+  cancel: (error: unknown) => Promise<void>
+}
+
 type BoundedSnapshotRow = QueryResultRow & {
   id: string
   payload_text: string | null
@@ -699,6 +720,173 @@ async function* exerciseCatalogPageRows(
       }
     }
 
+    anchorId = page.rows.at(-1)!.id
+    if (page.rows.length < batchRows) break
+  }
+}
+
+export const portableExportFoodCatalogEntryPageQuery = `WITH page AS MATERIALIZED (
+         SELECT entry.id, entry.created_at,
+                ((to_jsonb(entry) - 'user_id' - 'idempotency_key' - 'request_hash')
+                  || jsonb_build_object('history', '[]'::jsonb))::text AS payload_text
+         FROM user_food_catalog_entries AS entry
+         WHERE entry.user_id = $1
+           AND (
+             $2::uuid IS NULL
+             OR (entry.created_at, entry.id) > (
+               SELECT anchor.created_at, anchor.id
+               FROM user_food_catalog_entries AS anchor
+               WHERE anchor.user_id = $1 AND anchor.id = $2::uuid
+             )
+           )
+         ORDER BY entry.created_at, entry.id
+         LIMIT $3
+       )
+       SELECT id,
+              CASE WHEN octet_length(payload_text) <= $4 THEN payload_text ELSE NULL END
+                AS payload_text,
+              octet_length(payload_text) AS payload_byte_length
+       FROM page
+       ORDER BY created_at, id`
+
+export const portableExportFoodCatalogRevisionPageQuery = `WITH page AS MATERIALIZED (
+         SELECT history.id, history.revision,
+                (to_jsonb(history) - 'user_id' - 'entry_id')::text AS payload_text
+         FROM user_food_catalog_revisions AS history
+         INNER JOIN user_food_catalog_entries AS entry ON entry.id = history.entry_id
+         WHERE entry.user_id = $1
+           AND history.user_id = $1
+           AND history.entry_id = $2
+           AND (
+             $3::uuid IS NULL
+             OR history.revision > (
+               SELECT anchor.revision
+               FROM user_food_catalog_revisions AS anchor
+               INNER JOIN user_food_catalog_entries AS anchor_entry
+                 ON anchor_entry.id = anchor.entry_id
+               WHERE anchor_entry.user_id = $1
+                 AND anchor.user_id = $1
+                 AND anchor.entry_id = $2
+                 AND anchor.id = $3::uuid
+             )
+           )
+         ORDER BY history.revision
+         LIMIT $4
+       )
+       SELECT id,
+              CASE WHEN octet_length(payload_text) <= $5 THEN payload_text ELSE NULL END
+                AS payload_text,
+              octet_length(payload_text) AS payload_byte_length
+       FROM page
+       ORDER BY revision`
+
+async function* foodCatalogRevisionPageRows(
+  client: PoolClient,
+  userId: string,
+  entryId: string,
+  batchRows: number,
+  maximumPayloadBytes: number,
+  stats: MutableSnapshotStats,
+  signal?: AbortSignal,
+): AsyncGenerator<Record<string, unknown>> {
+  throwIfAborted(signal)
+  let anchorId: string | null = null
+  while (true) {
+    throwIfAborted(signal)
+    const page: QueryResult<BoundedSnapshotRow> = await client.query<BoundedSnapshotRow>(
+      portableExportFoodCatalogRevisionPageQuery,
+      [userId, entryId, anchorId, batchRows, maximumPayloadBytes],
+    )
+    if (page.rows.length === 0) break
+    yield* boundedPagePayloads(
+      page.rows,
+      batchRows,
+      maximumPayloadBytes,
+      stats,
+      'food catalog revision',
+      signal,
+    )
+    anchorId = page.rows.at(-1)!.id
+    if (page.rows.length < batchRows) break
+  }
+}
+
+async function* foodCatalogPageRows(
+  client: PoolClient,
+  userId: string,
+  batchRows: number,
+  maximumPayloadBytes: number,
+  entryStats: MutableSnapshotStats,
+  revisionStats: MutableSnapshotStats,
+  signal?: AbortSignal,
+  failRoot?: (error: unknown) => Promise<unknown>,
+): AsyncGenerator<PortableExportFoodCatalogSnapshotEntry> {
+  throwIfAborted(signal)
+  let anchorId: string | null = null
+  while (true) {
+    throwIfAborted(signal)
+    const page: QueryResult<BoundedSnapshotRow> = await client.query<BoundedSnapshotRow>(
+      portableExportFoodCatalogEntryPageQuery,
+      [userId, anchorId, batchRows, maximumPayloadBytes],
+    )
+    if (page.rows.length === 0) break
+    for (const header of boundedPagePayloads(
+      page.rows,
+      batchRows,
+      maximumPayloadBytes,
+      entryStats,
+      'food catalog entry',
+      signal,
+    )) {
+      if (
+        !Object.hasOwn(header, 'history') ||
+        !Array.isArray(header.history) ||
+        header.history.length !== 0
+      ) {
+        throw new Error('portable export snapshot returned an invalid food catalog entry page')
+      }
+      const entryId = header.id as string
+      let historyStarted = false
+      let historyCompleted = false
+      const history: AsyncIterable<Record<string, unknown>> = {
+        [Symbol.asyncIterator]: () =>
+          (async function* () {
+            if (historyStarted) {
+              const error = new Error(
+                'portable export food catalog history must be read once in order',
+              )
+              throw failRoot ? await failRoot(error) : error
+            }
+            historyStarted = true
+            let failure: unknown
+            try {
+              yield* foodCatalogRevisionPageRows(
+                client,
+                userId,
+                entryId,
+                batchRows,
+                maximumPayloadBytes,
+                revisionStats,
+                signal,
+              )
+              historyCompleted = true
+            } catch (error) {
+              failure = error
+              throw failRoot ? await failRoot(error) : error
+            } finally {
+              if (!historyCompleted && failure === undefined) {
+                const error = new Error('portable export food catalog history did not complete')
+                throw failRoot ? await failRoot(error) : error
+              }
+            }
+          })(),
+      }
+      header.history = history
+      yield header as PortableExportFoodCatalogSnapshotEntry
+      if (!historyStarted || !historyCompleted) {
+        throw new Error('portable export food catalog history must complete')
+      }
+    }
     anchorId = page.rows.at(-1)!.id
     if (page.rows.length < batchRows) break
   }
@@ -3514,6 +3702,36 @@ const consentHealthExerciseCatalogSnapshotDefinitions = (revisionStats: MutableS
     },
   ] as const
 
+const consentHealthCatalogSnapshotDefinitions = (
+  exerciseRevisionStats: MutableSnapshotStats,
+  foodRevisionStats: MutableSnapshotStats,
+) =>
+  [
+    ...consentHealthExerciseCatalogSnapshotDefinitions(exerciseRevisionStats),
+    {
+      name: 'foodCatalog',
+      rowFactory: (
+        client: PoolClient,
+        userId: string,
+        batchRows: number,
+        maximumPayloadBytes: number,
+        entryStats: MutableSnapshotStats,
+        signal?: AbortSignal,
+        failRoot?: (error: unknown) => Promise<unknown>,
+      ) =>
+        foodCatalogPageRows(
+          client,
+          userId,
+          batchRows,
+          maximumPayloadBytes,
+          entryStats,
+          foodRevisionStats,
+          signal,
+          failRoot,
+        ),
+    },
+  ] as const
+
 @Injectable()
 export class PortableExportDatabaseSnapshotService {
   constructor(private readonly database: DatabaseService) {}
@@ -3677,5 +3895,25 @@ export class PortableExportDatabaseSnapshotService {
     return Object.assign(session, {
       receipt,
     }) as PortableExportConsentHealthExerciseCatalogSnapshotSession
+  }
+
+  createConsentHealthCatalogSnapshot(
+    userId: string,
+    options: PortableExportDatabaseSnapshotOptions = {},
+  ): PortableExportConsentHealthCatalogSnapshotSession {
+    const exerciseRevisionStats: MutableSnapshotStats = { batchCount: 0, rowCount: 0 }
+    const foodRevisionStats: MutableSnapshotStats = { batchCount: 0, rowCount: 0 }
+    const session = createCoordinatedSnapshotSession(
+      this.database,
+      userId,
+      options,
+      consentHealthCatalogSnapshotDefinitions(exerciseRevisionStats, foodRevisionStats),
+    )
+    const receipt = session.receipt.then((baseReceipt) => ({
+      ...baseReceipt,
+      exerciseCatalogRevisions: { ...exerciseRevisionStats },
+      foodCatalogRevisions: { ...foodRevisionStats },
+    }))
+    return Object.assign(session, { receipt }) as PortableExportConsentHealthCatalogSnapshotSession
   }
 }
