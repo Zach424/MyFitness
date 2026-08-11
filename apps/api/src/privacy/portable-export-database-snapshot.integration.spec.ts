@@ -33,6 +33,7 @@ import {
   createPortableExportJsonStream,
   portableExportJsonAsyncArray,
 } from './portable-export-json-stream'
+import { createPortableExportNutritionMealJsonSource } from './portable-export-nutrition-meal-json-source'
 import { createPortableExportWorkoutJsonSource } from './portable-export-workout-json-source'
 
 describe('portable export bounded PostgreSQL snapshot', () => {
@@ -549,7 +550,7 @@ describe('portable export bounded PostgreSQL snapshot', () => {
       )
     }
 
-    return { mealId, secretMarker }
+    return { mealId, secretMarker, firstItemId: items[0]?.id }
   }
 
   const materializeNutritionMeals = async (
@@ -891,6 +892,153 @@ describe('portable export bounded PostgreSQL snapshot', () => {
     })
     expect(JSON.stringify(streamFailure)).not.toContain(secretMarker)
     expect(await receiptFailure).toBe(streamFailure)
+  })
+
+  it('serializes the complete lazy nutrition meals array byte-for-byte in PostgreSQL JSONB field order', async () => {
+    const userId = await createUser()
+    await createNutritionMealBoundaryFixture(userId, 2, 2)
+    const direct = await pool.query<{ payload: Record<string, unknown> }>(
+      `SELECT (
+         to_jsonb(meal) || jsonb_build_object(
+           'items', COALESCE((
+             SELECT jsonb_agg(to_jsonb(item) - 'meal_id' ORDER BY item.position)
+             FROM nutrition_meal_items AS item WHERE item.meal_id = meal.id
+           ), '[]'::jsonb),
+           'history', COALESCE((
+             SELECT jsonb_agg(
+               (to_jsonb(history) - 'user_id' - 'meal_id') ORDER BY history.revision
+             )
+             FROM nutrition_meal_revisions AS history WHERE history.meal_id = meal.id
+           ), '[]'::jsonb)
+         )
+       ) AS payload
+       FROM (
+         SELECT id, meal_type, title, source_kind, source_metadata, occurred_at, timezone,
+                note, revision, deleted_at, created_at, updated_at
+         FROM nutrition_meals WHERE user_id = $1 ORDER BY occurred_at, created_at, id
+       ) AS meal`,
+      [userId],
+    )
+    const eager = privacyExportSchema.parse({
+      schemaVersion: privacyExportSchemaVersion,
+      generatedAt: '2026-08-11T03:30:00.000Z',
+      accountId: userId,
+      data: {
+        account: { id: userId, status: 'active' },
+        identities: [],
+        profile: null,
+        goal: null,
+        consentEvents: [],
+        healthRecords: [],
+        healthRecordRevisions: [],
+        exerciseCatalog: [],
+        foodCatalog: [],
+        workouts: [],
+        nutritionMeals: direct.rows.map((row) => row.payload),
+        nutritionFavorites: [],
+        weeklyPlans: [],
+        aiExplanationRuns: [],
+        foodPhotoAnalyses: [],
+        progressPhotos: [],
+      },
+    })
+    const expected = serializePortableExport(eager, Number.MAX_SAFE_INTEGER)
+    const layer = snapshots.createNutritionMealLayerSnapshot(userId, { batchRows: 1 })
+    const mealSource = createPortableExportNutritionMealJsonSource(layer)
+    const json = createPortableExportJsonStream(
+      {
+        ...eager,
+        data: { ...eager.data, nutritionMeals: mealSource.nutritionMeals as never },
+      },
+      { chunkBytes: 31, lifecycle: mealSource },
+    )
+    let layerSettled = false
+    void layer.receipt.finally(() => {
+      layerSettled = true
+    })
+    const chunks: Buffer[] = []
+
+    for await (const chunk of json.bytes) {
+      expect(chunk.length).toBeLessThanOrEqual(31)
+      chunks.push(Buffer.from(chunk))
+    }
+
+    expect(Buffer.concat(chunks)).toEqual(expected)
+    expect(layerSettled).toBe(true)
+    await expect(layer.receipt).resolves.toMatchObject({
+      batchRows: 1,
+      meals: { batchCount: 1, rowCount: 1 },
+      mealItems: { batchCount: 2, rowCount: 2 },
+      mealRevisions: { batchCount: 2, rowCount: 2 },
+      mealRevisionSnapshotRoots: { batchCount: 2, rowCount: 2 },
+      mealRevisionSnapshotItems: { batchCount: 4, rowCount: 4 },
+    })
+    await expect(json.receipt).resolves.toEqual({
+      schemaVersion: privacyExportSchemaVersion,
+      chunkBytes: 31,
+      byteLength: expected.length,
+      sha256: createHash('sha256').update(expected).digest('hex'),
+    })
+  })
+
+  it('cancels the nutrition meal transaction from an active immutable snapshot item', async () => {
+    const userId = await createUser()
+    const { firstItemId } = await createNutritionMealBoundaryFixture(userId, 1, 2)
+    if (firstItemId === undefined) throw new Error('nutrition meal item fixture was not created')
+    const eager = privacyExportSchema.parse({
+      schemaVersion: privacyExportSchemaVersion,
+      generatedAt: '2026-08-11T03:40:00.000Z',
+      accountId: userId,
+      data: {
+        account: { id: userId, status: 'active' },
+        identities: [],
+        profile: null,
+        goal: null,
+        consentEvents: [],
+        healthRecords: [],
+        healthRecordRevisions: [],
+        exerciseCatalog: [],
+        foodCatalog: [],
+        workouts: [],
+        nutritionMeals: [],
+        nutritionFavorites: [],
+        weeklyPlans: [],
+        aiExplanationRuns: [],
+        foodPhotoAnalyses: [],
+        progressPhotos: [],
+      },
+    })
+    const layer = snapshots.createNutritionMealLayerSnapshot(userId, { batchRows: 1 })
+    const mealSource = createPortableExportNutritionMealJsonSource(layer)
+    const json = createPortableExportJsonStream(
+      {
+        ...eager,
+        data: { ...eager.data, nutritionMeals: mealSource.nutritionMeals as never },
+      },
+      { chunkBytes: 1, lifecycle: mealSource },
+    )
+    const iterator = json.bytes[Symbol.asyncIterator]()
+    let prefix = ''
+    while (prefix.split(firstItemId).length - 1 < 2) {
+      const next = await iterator.next()
+      if (next.done) throw new Error('immutable nutrition meal item fixture was not reached')
+      prefix += next.value.toString('utf8')
+    }
+    const jsonFailure = json.receipt.catch((error: unknown) => error)
+    const layerFailure = layer.receipt.catch((error: unknown) => error)
+    let returnFailure: unknown
+
+    try {
+      await iterator.return?.()
+    } catch (error) {
+      returnFailure = error
+    }
+
+    expect(await layerFailure).toBe(returnFailure)
+    expect(await jsonFailure).toBe(returnFailure)
+    expect(returnFailure).toMatchObject({
+      message: 'portable export nutrition meal revision snapshot items did not complete',
+    })
   })
 
   it('keeps one owner snapshot stable across keyset pages without timestamp round-trips', async () => {
