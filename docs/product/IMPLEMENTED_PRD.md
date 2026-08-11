@@ -32,11 +32,11 @@
 - 原生 Apple Health、Health Connect 或穿戴设备自动同步。
 - 照片人体测量、姿态诊断、精确体脂率或“好坏体态”判断。
 - AI 自动修改计划、自动确认事实、自动写入餐食或自动提高训练量。
-- 持久化 Personal Model、Pattern/Hypothesis 生命周期、Weekly Cognitive Review、用户校准事件和模型修订闭环。
+- 持久化或用户可见的 Personal Model、Pattern/Hypothesis 生命周期、Weekly Cognitive Review、用户校准和模型修订闭环。
 - 基于长期个人模型自动执行 Contextual Decision，或把相关性、短期状态和用户未确认推断当作稳定人格标签。
 - 用户端离线写入队列；网络结果不确定时不会在后台自动重放请求。
 
-仓库已实现 Personal Model P1a 内部共享契约：三个严格 claim、首批证据引用、可复算置信收据、显式 Unknown、active-only 决策资格和四选一反馈事件。该契约尚未被数据库、API 或客户端使用，因此不构成用户可见的个人模型、每周认知回顾或自动适应功能。
+仓库已实现 Personal Model P1a/P1b 内部共享契约：三个严格 claim、首批证据引用、可复算置信收据、显式 Unknown、active-only 决策资格、四选一反馈事件、不可变完整修订、精确反馈 revised/no-op 结果，以及结构化 Weekly Cognitive Review revision/current/history 信封。低覆盖条目可以保存用户异议但仍无决策资格；回顾拒绝跨 owner、未来、重复引用和自由叙事字段。上述契约尚未被数据库、API、派生服务或客户端使用，因此不构成用户可见的个人模型、每周认知回顾或自动适应功能。
 
 ## 3. 用户、权限与信任边界
 

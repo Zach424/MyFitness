@@ -1,6 +1,13 @@
 export const personalModelContractVersion = 'personal-model-contract-v1' as const
 export const personalModelConfidencePolicyVersion = 'personal-model-confidence-v1' as const
 export const personalModelUnknownReceiptVersion = 'personal-model-unknown-v1' as const
+export const personalModelItemRevisionVersion = 'personal-model-item-revision-v1' as const
+export const personalModelFeedbackTransitionVersion =
+  'personal-model-feedback-transition-v1' as const
+export const weeklyCognitiveReviewVersion = 'weekly-cognitive-review-v1' as const
+export const weeklyCognitiveReviewEnvelopeVersion = 'weekly-cognitive-review-envelope-v1' as const
+export const weeklyCognitiveReviewHistoryPageVersion =
+  'weekly-cognitive-review-history-page-v1' as const
 
 export const personalModelKinds = [
   'goal',
@@ -96,8 +103,25 @@ export const personalModelUnknownReasons = [
   'stale_evidence',
 ] as const
 
+export const personalModelRevisionActions = [
+  'created',
+  'evidence_accumulated',
+  'evidence_contradicted',
+  'user_confirmed',
+  'user_marked_temporary',
+  'user_disagreed',
+  'user_uncertain',
+  'superseded',
+  'invalidated',
+] as const
+
+export const personalModelFeedbackNoOpReasons = ['feedback_already_current'] as const
+
+export const weeklyCognitiveReviewQuestionKeys = ['collect_more_evidence'] as const
+
 export const personalModelMaximumObservationWeeks = 8
 export const personalModelMinimumActiveObservationWeeks = 4
 export const personalModelMinimumActiveWorkoutCount = 6
 export const personalModelMaximumWorkoutEvidenceCount = 800
 export const personalModelFeedbackNoteMaximumLength = 300
+export const weeklyCognitiveReviewMaximumHistoryPageSize = 50

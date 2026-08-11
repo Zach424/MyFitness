@@ -4,9 +4,15 @@ import {
   personalModelConfidenceReceiptSchema,
   personalModelDecisionInputSchema,
   personalModelEvidenceSetSchema,
+  personalModelFeedbackApplicationSchema,
   personalModelFeedbackEventSchema,
+  personalModelFeedbackTransitionResultSchema,
+  personalModelItemRevisionSchema,
   personalModelItemSchema,
   personalModelUnknownReceiptSchema,
+  weeklyCognitiveReviewEnvelopeSchema,
+  weeklyCognitiveReviewHistoryPageSchema,
+  weeklyCognitiveReviewRevisionSchema,
 } from './personal-model'
 
 const userId = '11111111-1111-4111-8111-111111111111'
@@ -494,6 +500,408 @@ describe('personal model contract', () => {
     )
     expect(
       personalModelItemSchema.safeParse({ ...behavior, feedbackState: 'temporary' }).success,
+    ).toBe(false)
+  })
+
+  it('accepts low-confidence user disagreement without granting decision eligibility', () => {
+    const item = behaviorItem()
+    const references = workoutReferences(4)
+    const disputedCandidate = {
+      ...item,
+      status: 'disputed',
+      feedbackState: 'disagreed',
+      observedFrom: '2026-07-13T00:00:00.000Z',
+      confidence: {
+        ...longitudinalConfidence(4, 4),
+        level: 'insufficient',
+        comparedWindowCount: 0,
+        stableWindowCount: 0,
+        limitations: ['limited_coverage', 'user_disputed'],
+      },
+      evidenceSet: evidenceSet(references, '2026-07-13T00:00:00.000Z'),
+      claim: {
+        ...item.claim,
+        observationWindow: {
+          ...item.claim.observationWindow,
+          startDate: '2026-07-13',
+          completeWeeks: 4,
+        },
+        weeklyRecordedSessionCounts: [1, 1, 1, 1],
+        qualifyingWorkoutCount: 4,
+        recordedWeekCount: 4,
+        minimumSessionsPerWeek: 1,
+        maximumSessionsPerWeek: 1,
+      },
+    }
+    expect(personalModelItemSchema.safeParse(disputedCandidate).success).toBe(true)
+    expect(personalModelDecisionInputSchema.safeParse(disputedCandidate).success).toBe(false)
+  })
+
+  it('binds immutable revision envelopes to the complete snapshot and exact predecessor', () => {
+    const item = behaviorItem()
+    const revision = {
+      schemaVersion: 'personal-model-item-revision-v1',
+      id: uuidFor(600),
+      userId,
+      itemId,
+      revision: 1,
+      previousRevision: null,
+      action: 'created',
+      snapshot: item,
+      derivationFingerprint: 'b'.repeat(64),
+      feedbackEventId: null,
+      changedAt: observedThrough,
+    }
+    expect(personalModelItemRevisionSchema.safeParse(revision).success).toBe(true)
+    expect(
+      personalModelItemRevisionSchema.safeParse({ ...revision, previousRevision: 1 }).success,
+    ).toBe(false)
+    expect(
+      personalModelItemRevisionSchema.safeParse({
+        ...revision,
+        itemId: uuidFor(601),
+      }).success,
+    ).toBe(false)
+    expect(
+      personalModelItemRevisionSchema.safeParse({
+        ...revision,
+        action: 'evidence_accumulated',
+      }).success,
+    ).toBe(false)
+  })
+
+  it('requires feedback to target the exact current non-terminal revision', () => {
+    const item = behaviorItem()
+    const event = {
+      id: uuidFor(610),
+      userId,
+      itemId,
+      itemRevision: 1,
+      choice: 'disagree',
+      reasonCode: 'not_representative',
+      note: null,
+      contextValidUntil: null,
+      createdAt: '2026-08-10T00:30:00.000Z',
+    }
+    expect(personalModelFeedbackApplicationSchema.safeParse({ item, event }).success).toBe(true)
+    expect(
+      personalModelFeedbackApplicationSchema.safeParse({
+        item,
+        event: { ...event, itemRevision: 2 },
+      }).success,
+    ).toBe(false)
+    expect(
+      personalModelFeedbackApplicationSchema.safeParse({
+        item: { ...item, status: 'invalidated', validTo: observedThrough },
+        event,
+      }).success,
+    ).toBe(false)
+  })
+
+  it('validates revised feedback transitions and exact feedback action mapping', () => {
+    const previousItem = behaviorItem()
+    const event = {
+      id: uuidFor(620),
+      userId,
+      itemId,
+      itemRevision: 1,
+      choice: 'disagree',
+      reasonCode: 'not_representative',
+      note: null,
+      contextValidUntil: null,
+      createdAt: '2026-08-10T00:30:00.000Z',
+    }
+    const snapshot = {
+      ...previousItem,
+      status: 'disputed',
+      feedbackState: 'disagreed',
+      revision: 2,
+      confidence: { ...previousItem.confidence, limitations: ['user_disputed'] },
+      updatedAt: '2026-08-10T01:00:00.000Z',
+    }
+    const revision = {
+      schemaVersion: 'personal-model-item-revision-v1',
+      id: uuidFor(621),
+      userId,
+      itemId,
+      revision: 2,
+      previousRevision: 1,
+      action: 'user_disagreed',
+      snapshot,
+      derivationFingerprint: 'c'.repeat(64),
+      feedbackEventId: event.id,
+      changedAt: snapshot.updatedAt,
+    }
+    const result = {
+      schemaVersion: 'personal-model-feedback-transition-v1',
+      outcome: 'revised',
+      event,
+      previousItem,
+      revision,
+    }
+    expect(personalModelFeedbackTransitionResultSchema.safeParse(result).success).toBe(true)
+    expect(
+      personalModelFeedbackTransitionResultSchema.safeParse({
+        ...result,
+        revision: { ...revision, action: 'user_confirmed' },
+      }).success,
+    ).toBe(false)
+    expect(
+      personalModelFeedbackTransitionResultSchema.safeParse({
+        ...result,
+        event: { ...event, itemRevision: 2 },
+      }).success,
+    ).toBe(false)
+    expect(
+      personalModelFeedbackTransitionResultSchema.safeParse({
+        ...result,
+        revision: {
+          ...revision,
+          snapshot: { ...snapshot, updatedAt: '2026-08-10T00:15:00.000Z' },
+          changedAt: '2026-08-10T00:15:00.000Z',
+        },
+      }).success,
+    ).toBe(false)
+  })
+
+  it('only returns feedback no-op when the exact feedback state is already current', () => {
+    const currentItem = {
+      ...behaviorItem(),
+      status: 'disputed',
+      feedbackState: 'disagreed',
+      confidence: { ...behaviorItem().confidence, limitations: ['user_disputed'] },
+    }
+    const event = {
+      id: uuidFor(630),
+      userId,
+      itemId,
+      itemRevision: 1,
+      choice: 'disagree',
+      reasonCode: null,
+      note: null,
+      contextValidUntil: null,
+      createdAt: '2026-08-10T00:30:00.000Z',
+    }
+    const result = {
+      schemaVersion: 'personal-model-feedback-transition-v1',
+      outcome: 'no_op',
+      event,
+      currentItem,
+      reason: 'feedback_already_current',
+      resultFingerprint: 'd'.repeat(64),
+    }
+    expect(personalModelFeedbackTransitionResultSchema.safeParse(result).success).toBe(true)
+    expect(
+      personalModelFeedbackTransitionResultSchema.safeParse({
+        ...result,
+        event: { ...event, choice: 'matches_me' },
+      }).success,
+    ).toBe(false)
+    const temporaryEvent = {
+      ...event,
+      choice: 'temporary_context' as const,
+      contextValidUntil: '2026-08-31T00:00:00.000Z',
+    }
+    expect(
+      personalModelFeedbackTransitionResultSchema.safeParse({
+        ...result,
+        event: temporaryEvent,
+        currentItem: {
+          ...currentItem,
+          status: 'active',
+          feedbackState: 'temporary',
+          validTo: '2026-08-30T00:00:00.000Z',
+          confidence: behaviorItem().confidence,
+        },
+      }).success,
+    ).toBe(false)
+  })
+
+  const reviewReference = (id: number, kind: 'behavior' | 'baseline' | 'pattern' = 'behavior') => ({
+    ownerUserId: userId,
+    itemId: uuidFor(id),
+    itemRevision: 2,
+    kind,
+    status: 'active' as const,
+    subjectKey:
+      kind === 'baseline'
+        ? 'training.recorded_session_duration'
+        : kind === 'pattern'
+          ? 'training.sleep_rpe_pattern'
+          : 'training.recorded_frequency',
+    derivedAt: '2026-08-09T12:00:00.000Z',
+    evidenceFingerprint: 'e'.repeat(64),
+  })
+
+  const weeklyReview = () => ({
+    schemaVersion: 'weekly-cognitive-review-v1' as const,
+    id: uuidFor(700),
+    reviewId: uuidFor(701),
+    userId,
+    weekStart: '2026-08-03',
+    weekEndExclusive: '2026-08-10',
+    timezone: 'Asia/Shanghai',
+    observedThrough: observedThrough,
+    revision: 1,
+    evidenceWatermark: 'f'.repeat(64),
+    modelWatermark: '1'.repeat(64),
+    reviewFingerprint: '2'.repeat(64),
+    content: {
+      recentChanges: [reviewReference(710)],
+      baselineDeviations: [reviewReference(711, 'baseline')],
+      newPatterns: [],
+      modelRevisions: [],
+      unknowns: [],
+      verificationQuestion: null,
+    },
+    generatedAt: observedThrough,
+  })
+
+  it('accepts only bounded structured weekly review cards and no free narrative facts', () => {
+    const review = weeklyReview()
+    expect(weeklyCognitiveReviewRevisionSchema.safeParse(review).success).toBe(true)
+    expect(
+      weeklyCognitiveReviewRevisionSchema.safeParse({
+        ...review,
+        content: {
+          ...review.content,
+          recentChanges: [
+            reviewReference(710),
+            reviewReference(712),
+            reviewReference(713),
+            reviewReference(714),
+          ],
+        },
+      }).success,
+    ).toBe(false)
+    expect(
+      weeklyCognitiveReviewRevisionSchema.safeParse({
+        ...review,
+        content: { ...review.content, narrative: '模型自由补充的事实' },
+      }).success,
+    ).toBe(false)
+  })
+
+  it('rejects cross-owner, future and duplicate item revisions in weekly review', () => {
+    const review = weeklyReview()
+    expect(
+      weeklyCognitiveReviewRevisionSchema.safeParse({
+        ...review,
+        content: {
+          ...review.content,
+          recentChanges: [{ ...review.content.recentChanges[0], ownerUserId: uuidFor(799) }],
+        },
+      }).success,
+    ).toBe(false)
+    expect(
+      weeklyCognitiveReviewRevisionSchema.safeParse({
+        ...review,
+        content: {
+          ...review.content,
+          recentChanges: [
+            { ...review.content.recentChanges[0], derivedAt: '2026-08-10T01:00:00.000Z' },
+          ],
+        },
+      }).success,
+    ).toBe(false)
+    expect(
+      weeklyCognitiveReviewRevisionSchema.safeParse({
+        ...review,
+        content: {
+          ...review.content,
+          modelRevisions: [review.content.recentChanges[0]],
+        },
+      }).success,
+    ).toBe(false)
+  })
+
+  it('requires review kind roles, Monday boundaries and at least one card', () => {
+    const review = weeklyReview()
+    expect(
+      weeklyCognitiveReviewRevisionSchema.safeParse({ ...review, weekStart: '2026-08-04' }).success,
+    ).toBe(false)
+    expect(
+      weeklyCognitiveReviewRevisionSchema.safeParse({
+        ...review,
+        content: {
+          ...review.content,
+          baselineDeviations: [reviewReference(711, 'behavior')],
+        },
+      }).success,
+    ).toBe(false)
+    expect(
+      weeklyCognitiveReviewRevisionSchema.safeParse({
+        ...review,
+        content: {
+          recentChanges: [],
+          baselineDeviations: [],
+          newPatterns: [],
+          modelRevisions: [],
+          unknowns: [],
+          verificationQuestion: null,
+        },
+      }).success,
+    ).toBe(false)
+  })
+
+  it('keeps current review envelopes and history pages revision-consistent', () => {
+    const first = weeklyReview()
+    const second = {
+      ...first,
+      id: uuidFor(702),
+      revision: 2,
+      reviewFingerprint: '3'.repeat(64),
+      generatedAt: '2026-08-10T01:00:00.000Z',
+    }
+    expect(
+      weeklyCognitiveReviewEnvelopeSchema.safeParse({
+        schemaVersion: 'weekly-cognitive-review-envelope-v1',
+        userId,
+        weekStart: second.weekStart,
+        timezone: second.timezone,
+        observedThrough: second.observedThrough,
+        generatedAt: second.generatedAt,
+        review: second,
+      }).success,
+    ).toBe(true)
+    expect(
+      weeklyCognitiveReviewEnvelopeSchema.safeParse({
+        schemaVersion: 'weekly-cognitive-review-envelope-v1',
+        userId,
+        weekStart: second.weekStart,
+        timezone: second.timezone,
+        observedThrough: second.observedThrough,
+        generatedAt: second.generatedAt,
+        review: null,
+      }).success,
+    ).toBe(true)
+    expect(
+      weeklyCognitiveReviewEnvelopeSchema.safeParse({
+        schemaVersion: 'weekly-cognitive-review-envelope-v1',
+        userId: uuidFor(799),
+        weekStart: second.weekStart,
+        timezone: second.timezone,
+        observedThrough: second.observedThrough,
+        generatedAt: second.generatedAt,
+        review: second,
+      }).success,
+    ).toBe(false)
+    const page = {
+      schemaVersion: 'weekly-cognitive-review-history-page-v1',
+      userId,
+      reviewId: first.reviewId,
+      items: [second, first],
+      nextCursor: null,
+    }
+    expect(weeklyCognitiveReviewHistoryPageSchema.safeParse(page).success).toBe(true)
+    expect(
+      weeklyCognitiveReviewHistoryPageSchema.safeParse({ ...page, items: [first, second] }).success,
+    ).toBe(false)
+    expect(
+      weeklyCognitiveReviewHistoryPageSchema.safeParse({
+        ...page,
+        items: [second, { ...first, reviewId: uuidFor(799) }],
+      }).success,
     ).toBe(false)
   })
 })

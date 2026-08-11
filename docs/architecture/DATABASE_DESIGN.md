@@ -478,7 +478,7 @@ intent 创建 → 验证一次性 token 与确认短语 → users 状态关闭 �
 - 当前本地数据操作表有 179 个 job/attempt，来自测试和演示；应通过状态分布、失败码和死信而不是总行数判断健康。
 - 归档表与状态机已存在，但请求仓储、执行任务、加密对象、下载授权和到期扫描尚未实现；表结构不能被描述为用户可用的异步导出。
 - 没有设备原生同步表、社交表、支付表或医疗病历表；这些不属于当前实现。
-- 当前没有 `personal_model_items`、模型修订、证据引用、用户校准或 Weekly Cognitive Review 持久表。P1a 已在共享 contracts 固定三个 claim、EvidenceReference、置信、Unknown 和反馈事件，但未形成仓储授权；在 P1b 不可变修订/回顾、所有者隔离、来源更正/删除传播及便携导出语义通过验证前，不得建立任意 JSON“用户画像”表替代正式设计。
+- 当前没有 `personal_model_items`、模型修订、证据引用、用户校准或 Weekly Cognitive Review 持久表。P1a/P1b 已在共享 contracts 固定三个 claim、EvidenceReference、置信、Unknown、反馈事件、完整修订快照、反馈 revised/no-op 和结构化周回顾信封，但未形成仓储授权；下一阶段必须先以 `personal_model_items` 与 `personal_model_item_revisions` 的 owner 复合键、不可变历史和真实 PostgreSQL 并发证明建立最小内核。在来源更正/删除传播、便携导出和账号擦除语义通过验证前，不得建立任意 JSON“用户画像”表替代正式设计。
 - 备份物理删除时限属于生产保留政策和演练证据，不能只由主数据库 receipt 状态推断。
 
 ## 22. 运行核对查询

@@ -14,9 +14,11 @@ import {
   personalModelEvidenceWithdrawalReasons,
   personalModelFeedbackChoices,
   personalModelFeedbackNoteMaximumLength,
+  personalModelFeedbackNoOpReasons,
   personalModelFeedbackReasonCodes,
   personalModelFeedbackStates,
   personalModelKinds,
+  personalModelItemRevisionVersion,
   personalModelMaximumObservationWeeks,
   personalModelMaximumWorkoutEvidenceCount,
   personalModelMinimumActiveObservationWeeks,
@@ -26,6 +28,13 @@ import {
   personalModelSubjectKeys,
   personalModelUnknownReasons,
   personalModelUnknownReceiptVersion,
+  personalModelFeedbackTransitionVersion,
+  personalModelRevisionActions,
+  weeklyCognitiveReviewEnvelopeVersion,
+  weeklyCognitiveReviewHistoryPageVersion,
+  weeklyCognitiveReviewMaximumHistoryPageSize,
+  weeklyCognitiveReviewQuestionKeys,
+  weeklyCognitiveReviewVersion,
 } from './personal-model.constants'
 import { workoutSourceKindSchema } from './workout'
 
@@ -51,6 +60,9 @@ export const personalModelSubjectKeySchema = z.enum(personalModelSubjectKeys)
 export const personalModelFeedbackChoiceSchema = z.enum(personalModelFeedbackChoices)
 export const personalModelFeedbackReasonCodeSchema = z.enum(personalModelFeedbackReasonCodes)
 export const personalModelUnknownReasonSchema = z.enum(personalModelUnknownReasons)
+export const personalModelRevisionActionSchema = z.enum(personalModelRevisionActions)
+export const personalModelFeedbackNoOpReasonSchema = z.enum(personalModelFeedbackNoOpReasons)
+export const weeklyCognitiveReviewQuestionKeySchema = z.enum(weeklyCognitiveReviewQuestionKeys)
 
 const offsetDateTimeSchema = z.string().datetime({ offset: true })
 const localDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -544,9 +556,8 @@ export const personalModelItemSchema = z
       addIssue(ctx, ['confidence', 'limitations'], 'disputed items must disclose user dispute')
     }
 
-    const activeForDecision = item.status === 'active' || item.status === 'disputed'
-    if (activeForDecision && !['moderate', 'high'].includes(item.confidence.level)) {
-      addIssue(ctx, ['confidence', 'level'], 'active or disputed items require moderate confidence')
+    if (item.status === 'active' && !['moderate', 'high'].includes(item.confidence.level)) {
+      addIssue(ctx, ['confidence', 'level'], 'active items require moderate confidence')
     }
 
     if (item.claimSchemaVersion === 'training_availability_constraint_v1') {
@@ -601,12 +612,8 @@ export const personalModelItemSchema = z
     if (item.status === 'candidate' && eligible) {
       addIssue(ctx, ['status'], 'eligible deterministic observations must not remain candidate')
     }
-    if ((item.status === 'active' || item.status === 'disputed') && !eligible) {
-      addIssue(
-        ctx,
-        ['status'],
-        'insufficient deterministic observations cannot be active or disputed',
-      )
+    if (item.status === 'active' && !eligible) {
+      addIssue(ctx, ['status'], 'insufficient deterministic observations cannot be active')
     }
     if (item.status === 'candidate' && !['insufficient', 'low'].includes(item.confidence.level)) {
       addIssue(
@@ -703,6 +710,446 @@ export const personalModelFeedbackEventSchema = z
     }
   })
 
+const personalModelFeedbackStateForChoice = (
+  choice: z.infer<typeof personalModelFeedbackChoiceSchema>,
+) =>
+  ({
+    matches_me: 'confirmed',
+    temporary_context: 'temporary',
+    disagree: 'disagreed',
+    uncertain: 'uncertain',
+  })[choice] as z.infer<typeof personalModelFeedbackStateSchema>
+
+const personalModelRevisionActionForChoice = (
+  choice: z.infer<typeof personalModelFeedbackChoiceSchema>,
+) =>
+  ({
+    matches_me: 'user_confirmed',
+    temporary_context: 'user_marked_temporary',
+    disagree: 'user_disagreed',
+    uncertain: 'user_uncertain',
+  })[choice] as z.infer<typeof personalModelRevisionActionSchema>
+
+export const personalModelItemRevisionSchema = z
+  .object({
+    schemaVersion: z.literal(personalModelItemRevisionVersion),
+    id: z.string().uuid(),
+    userId: z.string().uuid(),
+    itemId: z.string().uuid(),
+    revision: z.number().int().positive(),
+    previousRevision: z.number().int().positive().nullable(),
+    action: personalModelRevisionActionSchema,
+    snapshot: personalModelItemSchema,
+    derivationFingerprint: sha256Schema,
+    feedbackEventId: z.string().uuid().nullable(),
+    changedAt: offsetDateTimeSchema,
+  })
+  .strict()
+  .superRefine((revision, ctx) => {
+    if (
+      revision.snapshot.id !== revision.itemId ||
+      revision.snapshot.userId !== revision.userId ||
+      revision.snapshot.revision !== revision.revision
+    ) {
+      addIssue(ctx, ['snapshot'], 'revision snapshot identity must match its revision envelope')
+    }
+    if (revision.snapshot.updatedAt !== revision.changedAt) {
+      addIssue(ctx, ['changedAt'], 'revision changedAt must match the snapshot update time')
+    }
+
+    if (revision.action === 'created') {
+      if (revision.revision !== 1 || revision.previousRevision !== null) {
+        addIssue(
+          ctx,
+          ['previousRevision'],
+          'created revisions must start at one without a predecessor',
+        )
+      }
+    } else if (revision.previousRevision !== revision.revision - 1) {
+      addIssue(ctx, ['previousRevision'], 'revision predecessor must be exactly revision minus one')
+    }
+
+    const feedbackAction = revision.action.startsWith('user_')
+    if (feedbackAction !== (revision.feedbackEventId !== null)) {
+      addIssue(
+        ctx,
+        ['feedbackEventId'],
+        'user feedback revisions require an event and non-feedback revisions must not have one',
+      )
+    }
+
+    const expectedFeedbackStates: Partial<
+      Record<z.infer<typeof personalModelRevisionActionSchema>, string>
+    > = {
+      user_confirmed: 'confirmed',
+      user_marked_temporary: 'temporary',
+      user_disagreed: 'disagreed',
+      user_uncertain: 'uncertain',
+    }
+    const expectedFeedbackState = expectedFeedbackStates[revision.action]
+    if (expectedFeedbackState && revision.snapshot.feedbackState !== expectedFeedbackState) {
+      addIssue(ctx, ['snapshot', 'feedbackState'], 'revision action must match snapshot feedback')
+    }
+    if (revision.action === 'user_disagreed' && revision.snapshot.status !== 'disputed') {
+      addIssue(ctx, ['snapshot', 'status'], 'user disagreement must produce a disputed snapshot')
+    }
+    if (revision.action === 'superseded' && revision.snapshot.status !== 'superseded') {
+      addIssue(ctx, ['snapshot', 'status'], 'superseded action must produce a superseded snapshot')
+    }
+    if (revision.action === 'invalidated' && revision.snapshot.status !== 'invalidated') {
+      addIssue(
+        ctx,
+        ['snapshot', 'status'],
+        'invalidated action must produce an invalidated snapshot',
+      )
+    }
+    if (
+      revision.action === 'evidence_contradicted' &&
+      !revision.snapshot.confidence.limitations.includes('conflicting_evidence')
+    ) {
+      addIssue(
+        ctx,
+        ['snapshot', 'confidence', 'limitations'],
+        'contradicted evidence revisions must disclose conflicting evidence',
+      )
+    }
+  })
+
+export const personalModelFeedbackApplicationSchema = z
+  .object({
+    item: personalModelItemSchema,
+    event: personalModelFeedbackEventSchema,
+  })
+  .strict()
+  .superRefine((application, ctx) => {
+    if (
+      application.event.userId !== application.item.userId ||
+      application.event.itemId !== application.item.id ||
+      application.event.itemRevision !== application.item.revision
+    ) {
+      addIssue(ctx, ['event'], 'feedback must target the exact owner, item and current revision')
+    }
+    if (application.item.status === 'superseded' || application.item.status === 'invalidated') {
+      addIssue(ctx, ['item', 'status'], 'terminal personal model items cannot accept feedback')
+    }
+    if (Date.parse(application.event.createdAt) < Date.parse(application.item.updatedAt)) {
+      addIssue(ctx, ['event', 'createdAt'], 'feedback must not precede the target revision')
+    }
+  })
+
+const revisedFeedbackTransitionSchema = z
+  .object({
+    schemaVersion: z.literal(personalModelFeedbackTransitionVersion),
+    outcome: z.literal('revised'),
+    event: personalModelFeedbackEventSchema,
+    previousItem: personalModelItemSchema,
+    revision: personalModelItemRevisionSchema,
+  })
+  .strict()
+
+const noOpFeedbackTransitionSchema = z
+  .object({
+    schemaVersion: z.literal(personalModelFeedbackTransitionVersion),
+    outcome: z.literal('no_op'),
+    event: personalModelFeedbackEventSchema,
+    currentItem: personalModelItemSchema,
+    reason: personalModelFeedbackNoOpReasonSchema,
+    resultFingerprint: sha256Schema,
+  })
+  .strict()
+
+export const personalModelFeedbackTransitionResultSchema = z
+  .discriminatedUnion('outcome', [revisedFeedbackTransitionSchema, noOpFeedbackTransitionSchema])
+  .superRefine((result, ctx) => {
+    const item = result.outcome === 'revised' ? result.previousItem : result.currentItem
+    if (
+      result.event.userId !== item.userId ||
+      result.event.itemId !== item.id ||
+      result.event.itemRevision !== item.revision
+    ) {
+      addIssue(ctx, ['event'], 'feedback transition must target the exact current item revision')
+    }
+    if (item.status === 'superseded' || item.status === 'invalidated') {
+      addIssue(ctx, ['event'], 'feedback transition cannot target a terminal item')
+    }
+    if (Date.parse(result.event.createdAt) < Date.parse(item.updatedAt)) {
+      addIssue(ctx, ['event', 'createdAt'], 'feedback transition must not predate its target')
+    }
+
+    const expectedFeedbackState = personalModelFeedbackStateForChoice(result.event.choice)
+    if (result.outcome === 'no_op') {
+      if (result.currentItem.feedbackState !== expectedFeedbackState) {
+        addIssue(ctx, ['currentItem', 'feedbackState'], 'no-op requires feedback already current')
+      }
+      if (result.event.choice === 'disagree' && result.currentItem.status !== 'disputed') {
+        addIssue(ctx, ['currentItem', 'status'], 'disagreement no-op requires a disputed item')
+      }
+      if (
+        result.event.choice === 'temporary_context' &&
+        result.currentItem.validTo !== result.event.contextValidUntil
+      ) {
+        addIssue(
+          ctx,
+          ['currentItem', 'validTo'],
+          'temporary feedback no-op requires the same validity end',
+        )
+      }
+      return
+    }
+
+    if (
+      result.revision.userId !== item.userId ||
+      result.revision.itemId !== item.id ||
+      result.revision.previousRevision !== item.revision ||
+      result.revision.revision !== item.revision + 1
+    ) {
+      addIssue(ctx, ['revision'], 'feedback revision must follow the exact previous item')
+    }
+    if (result.revision.feedbackEventId !== result.event.id) {
+      addIssue(ctx, ['revision', 'feedbackEventId'], 'feedback revision must cite the event')
+    }
+    if (Date.parse(result.revision.changedAt) < Date.parse(result.event.createdAt)) {
+      addIssue(ctx, ['revision', 'changedAt'], 'feedback revision must not predate its event')
+    }
+    if (result.revision.action !== personalModelRevisionActionForChoice(result.event.choice)) {
+      addIssue(
+        ctx,
+        ['revision', 'action'],
+        'feedback choice must map to the matching revision action',
+      )
+    }
+    if (result.revision.snapshot.feedbackState !== expectedFeedbackState) {
+      addIssue(
+        ctx,
+        ['revision', 'snapshot', 'feedbackState'],
+        'feedback state must match the event',
+      )
+    }
+    if (
+      result.event.choice === 'temporary_context' &&
+      result.revision.snapshot.validTo !== result.event.contextValidUntil
+    ) {
+      addIssue(
+        ctx,
+        ['revision', 'snapshot', 'validTo'],
+        'temporary feedback revision must use the event validity end',
+      )
+    }
+  })
+
+const weeklyReviewItemReferenceCoreSchema = z
+  .object({
+    ownerUserId: z.string().uuid(),
+    itemId: z.string().uuid(),
+    itemRevision: z.number().int().positive(),
+    subjectKey: z.string().regex(/^[a-z][a-z0-9_.-]{2,119}$/),
+    derivedAt: offsetDateTimeSchema,
+    evidenceFingerprint: sha256Schema,
+  })
+  .strict()
+
+const weeklyReviewRecentChangeReferenceSchema = weeklyReviewItemReferenceCoreSchema.extend({
+  kind: z.enum(['goal', 'constraint', 'behavior', 'state']),
+  status: z.literal('active'),
+})
+
+const weeklyReviewBaselineReferenceSchema = weeklyReviewItemReferenceCoreSchema.extend({
+  kind: z.literal('baseline'),
+  status: z.literal('active'),
+})
+
+const weeklyReviewPatternReferenceSchema = weeklyReviewItemReferenceCoreSchema.extend({
+  kind: z.literal('pattern'),
+  status: z.literal('active'),
+})
+
+const weeklyReviewModelRevisionReferenceSchema = weeklyReviewItemReferenceCoreSchema.extend({
+  kind: personalModelKindSchema,
+  status: personalModelStatusSchema,
+})
+
+const weeklyReviewVerificationReferenceSchema = weeklyReviewItemReferenceCoreSchema.extend({
+  kind: z.enum(['pattern', 'hypothesis']),
+  status: z.enum(['candidate', 'active', 'disputed']),
+})
+
+export const weeklyCognitiveReviewContentSchema = z
+  .object({
+    recentChanges: z.array(weeklyReviewRecentChangeReferenceSchema).max(3),
+    baselineDeviations: z.array(weeklyReviewBaselineReferenceSchema).max(2),
+    newPatterns: z.array(weeklyReviewPatternReferenceSchema).max(1),
+    modelRevisions: z.array(weeklyReviewModelRevisionReferenceSchema).max(3),
+    unknowns: z.array(personalModelUnknownReceiptSchema).max(2),
+    verificationQuestion: z
+      .object({
+        questionKey: weeklyCognitiveReviewQuestionKeySchema,
+        item: weeklyReviewVerificationReferenceSchema,
+      })
+      .strict()
+      .nullable(),
+  })
+  .strict()
+  .superRefine((content, ctx) => {
+    const cardCount =
+      content.recentChanges.length +
+      content.baselineDeviations.length +
+      content.newPatterns.length +
+      content.modelRevisions.length +
+      content.unknowns.length +
+      (content.verificationQuestion === null ? 0 : 1)
+    if (cardCount === 0) {
+      addIssue(ctx, [], 'weekly cognitive review must contain at least one structured card')
+    }
+  })
+
+const weeklyReviewReferences = (content: z.infer<typeof weeklyCognitiveReviewContentSchema>) => [
+  ...content.recentChanges,
+  ...content.baselineDeviations,
+  ...content.newPatterns,
+  ...content.modelRevisions,
+  ...(content.verificationQuestion === null ? [] : [content.verificationQuestion.item]),
+]
+
+export const weeklyCognitiveReviewRevisionSchema = z
+  .object({
+    schemaVersion: z.literal(weeklyCognitiveReviewVersion),
+    id: z.string().uuid(),
+    reviewId: z.string().uuid(),
+    userId: z.string().uuid(),
+    weekStart: localDateSchema,
+    weekEndExclusive: localDateSchema,
+    timezone: ianaTimezoneSchema,
+    observedThrough: offsetDateTimeSchema,
+    revision: z.number().int().positive(),
+    evidenceWatermark: sha256Schema,
+    modelWatermark: sha256Schema,
+    reviewFingerprint: sha256Schema,
+    content: weeklyCognitiveReviewContentSchema,
+    generatedAt: offsetDateTimeSchema,
+  })
+  .strict()
+  .superRefine((review, ctx) => {
+    if (new Date(`${review.weekStart}T00:00:00.000Z`).getUTCDay() !== 1) {
+      addIssue(ctx, ['weekStart'], 'weekly cognitive review must start on Monday')
+    }
+    if (daysBetweenLocalDates(review.weekStart, review.weekEndExclusive) !== 7) {
+      addIssue(ctx, ['weekEndExclusive'], 'weekly cognitive review must span seven local days')
+    }
+    if (Date.parse(review.generatedAt) < Date.parse(review.observedThrough)) {
+      addIssue(ctx, ['generatedAt'], 'weekly review generation must follow its evidence cutoff')
+    }
+
+    const references = weeklyReviewReferences(review.content)
+    if (references.some((reference) => reference.ownerUserId !== review.userId)) {
+      addIssue(ctx, ['content'], 'every weekly review item reference must have the review owner')
+    }
+    if (
+      references.some(
+        (reference) => Date.parse(reference.derivedAt) > Date.parse(review.observedThrough),
+      )
+    ) {
+      addIssue(
+        ctx,
+        ['content'],
+        'weekly review cannot cite item revisions derived after its cutoff',
+      )
+    }
+    if (
+      new Set(references.map((reference) => `${reference.itemId}:${reference.itemRevision}`))
+        .size !== references.length
+    ) {
+      addIssue(ctx, ['content'], 'weekly review item revision references must be unique')
+    }
+    if (review.content.unknowns.some((unknown) => unknown.userId !== review.userId)) {
+      addIssue(ctx, ['content', 'unknowns'], 'weekly review unknown receipts must have the owner')
+    }
+    if (
+      review.content.unknowns.some(
+        (unknown) => Date.parse(unknown.evaluatedAt) > Date.parse(review.observedThrough),
+      )
+    ) {
+      addIssue(ctx, ['content', 'unknowns'], 'weekly review cannot cite future unknown receipts')
+    }
+  })
+
+export const weeklyCognitiveReviewEnvelopeSchema = z
+  .object({
+    schemaVersion: z.literal(weeklyCognitiveReviewEnvelopeVersion),
+    userId: z.string().uuid(),
+    weekStart: localDateSchema,
+    timezone: ianaTimezoneSchema,
+    observedThrough: offsetDateTimeSchema,
+    generatedAt: offsetDateTimeSchema,
+    review: weeklyCognitiveReviewRevisionSchema.nullable(),
+  })
+  .strict()
+  .superRefine((envelope, ctx) => {
+    if (new Date(`${envelope.weekStart}T00:00:00.000Z`).getUTCDay() !== 1) {
+      addIssue(ctx, ['weekStart'], 'weekly review envelope must start on Monday')
+    }
+    if (Date.parse(envelope.generatedAt) < Date.parse(envelope.observedThrough)) {
+      addIssue(ctx, ['generatedAt'], 'review envelope cannot predate its evidence cutoff')
+    }
+    if (
+      envelope.review &&
+      Date.parse(envelope.generatedAt) < Date.parse(envelope.review.generatedAt)
+    ) {
+      addIssue(ctx, ['generatedAt'], 'review envelope cannot predate its revision')
+    }
+    if (
+      envelope.review &&
+      (envelope.review.userId !== envelope.userId ||
+        envelope.review.weekStart !== envelope.weekStart ||
+        envelope.review.timezone !== envelope.timezone ||
+        envelope.review.observedThrough !== envelope.observedThrough)
+    ) {
+      addIssue(
+        ctx,
+        ['review'],
+        'review envelope identity and evidence cutoff must match its revision',
+      )
+    }
+  })
+
+export const weeklyCognitiveReviewHistoryPageSchema = z
+  .object({
+    schemaVersion: z.literal(weeklyCognitiveReviewHistoryPageVersion),
+    userId: z.string().uuid(),
+    reviewId: z.string().uuid(),
+    items: z
+      .array(weeklyCognitiveReviewRevisionSchema)
+      .min(1)
+      .max(weeklyCognitiveReviewMaximumHistoryPageSize),
+    nextCursor: z.string().min(1).max(512).nullable(),
+  })
+  .strict()
+  .superRefine((page, ctx) => {
+    if (page.items.some((item) => item.userId !== page.userId || item.reviewId !== page.reviewId)) {
+      addIssue(ctx, ['items'], 'weekly review history must have one owner and review identity')
+    }
+    for (let index = 1; index < page.items.length; index += 1) {
+      if (page.items[index - 1]!.revision <= page.items[index]!.revision) {
+        addIssue(ctx, ['items', index, 'revision'], 'weekly review history must be newest first')
+        break
+      }
+    }
+    if (new Set(page.items.map((item) => item.revision)).size !== page.items.length) {
+      addIssue(ctx, ['items'], 'weekly review history revisions must be unique')
+    }
+    const first = page.items[0]
+    if (
+      first &&
+      page.items.some(
+        (item) =>
+          item.weekStart !== first.weekStart ||
+          item.weekEndExclusive !== first.weekEndExclusive ||
+          item.timezone !== first.timezone,
+      )
+    ) {
+      addIssue(ctx, ['items'], 'weekly review history must describe one local week')
+    }
+  })
+
 export type PersonalModelKind = z.infer<typeof personalModelKindSchema>
 export type PersonalModelStatus = z.infer<typeof personalModelStatusSchema>
 export type PersonalModelEvidenceReference = z.infer<typeof personalModelEvidenceReferenceSchema>
@@ -711,3 +1158,16 @@ export type PersonalModelConfidenceReceipt = z.infer<typeof personalModelConfide
 export type PersonalModelItem = z.infer<typeof personalModelItemSchema>
 export type PersonalModelUnknownReceipt = z.infer<typeof personalModelUnknownReceiptSchema>
 export type PersonalModelFeedbackEvent = z.infer<typeof personalModelFeedbackEventSchema>
+export type PersonalModelItemRevision = z.infer<typeof personalModelItemRevisionSchema>
+export type PersonalModelFeedbackApplication = z.infer<
+  typeof personalModelFeedbackApplicationSchema
+>
+export type PersonalModelFeedbackTransitionResult = z.infer<
+  typeof personalModelFeedbackTransitionResultSchema
+>
+export type WeeklyCognitiveReviewContent = z.infer<typeof weeklyCognitiveReviewContentSchema>
+export type WeeklyCognitiveReviewRevision = z.infer<typeof weeklyCognitiveReviewRevisionSchema>
+export type WeeklyCognitiveReviewEnvelope = z.infer<typeof weeklyCognitiveReviewEnvelopeSchema>
+export type WeeklyCognitiveReviewHistoryPage = z.infer<
+  typeof weeklyCognitiveReviewHistoryPageSchema
+>
