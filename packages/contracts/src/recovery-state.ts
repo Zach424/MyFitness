@@ -5,6 +5,10 @@ import {
   recoveryConfidenceValues,
   recoveryConsistencyValues,
   recoveryEvidenceWindows,
+  recoveryStateFactorLabelMaximumLength,
+  recoveryStateLabelMaximumLength,
+  recoveryStateLimitationMaximumLength,
+  recoveryStateNoteMaximumLength,
   recoveryStatePolicyVersion,
   recoveryStateValues,
   subjectiveRecoveryMetrics,
@@ -68,7 +72,7 @@ export const recoveryEvidenceReferenceSchema = z
 export const recoveryStateFactorSchema = z
   .object({
     metric: subjectiveRecoveryMetricSchema,
-    label: z.string().min(1),
+    label: z.string().min(1).max(recoveryStateFactorLabelMaximumLength),
     recentScore: z.number().int().min(0).max(100),
     baselineScore: z.number().int().min(0).max(100).nullable(),
     changeFromBaseline: z.number().int().min(-100).max(100).nullable(),
@@ -98,8 +102,8 @@ export const recoveryStateEstimateSchema = z
     changeFromBaseline: z.number().int().min(-100).max(100).nullable(),
     confidence: recoveryConfidenceSchema,
     consistency: recoveryConsistencySchema,
-    label: z.string().min(1),
-    note: z.string().min(1),
+    label: z.string().min(1).max(recoveryStateLabelMaximumLength),
+    note: z.string().min(1).max(recoveryStateNoteMaximumLength),
     coverage: z
       .object({
         recent: recoveryWindowCoverageSchema,
@@ -109,7 +113,7 @@ export const recoveryStateEstimateSchema = z
       .strict(),
     factors: z.array(recoveryStateFactorSchema).max(subjectiveRecoveryMetrics.length),
     evidence: z.array(recoveryEvidenceReferenceSchema).max(148),
-    limitations: z.array(z.string().min(1)).min(1).max(5),
+    limitations: z.array(z.string().min(1).max(recoveryStateLimitationMaximumLength)).min(1).max(5),
   })
   .strict()
   .superRefine((estimate, ctx) => {

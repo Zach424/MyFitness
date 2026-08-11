@@ -92,7 +92,7 @@ Real local browser/API fault injection commits one link and one user closure bef
 
 ## Revision-bound outcome review
 
-Newly generated plans preserve the complete `subjective-recovery-state-v1` snapshot that produced their planning readiness projection. The snapshot includes temporal windows, personal baseline, coverage, confidence, consistency and exact health-record evidence references. The shared contract checks that the persisted state projects to the same nullable readiness score and planning-impact fingerprint. Historical payloads without this field remain readable and are labelled as legacy summaries; the API does not reconstruct them from later records.
+Newly generated plans preserve the complete `subjective-recovery-state-v1` snapshot that produced their planning readiness projection. The snapshot includes temporal windows, personal baseline, coverage, confidence, consistency and exact health-record evidence references. The shared contract checks that the persisted state projects to the same nullable readiness score and planning-impact fingerprint. Historical payloads without this field remain readable and are labelled as legacy summaries; the API does not reconstruct them from later records. System-generated factor labels, state labels, notes and each limitation are bounded to 60, 80, 320 and 240 characters respectively. The contract does not truncate or silently repair oversized values; current deterministic output remains compatible, while abnormal persisted content fails closed.
 
 For an exact `accepted` aggregate, `GET /plans/weekly/:planId/history/:revision/outcome` computes a non-persisted `plan-outcome-review-v1` projection. The weekly list intentionally carries only navigation metadata and does not calculate or embed this projection. Its start is the immutable `changed_at` of the exact accepted revision; its scheduled end is exactly seven days later; `observedThrough` is the earlier of that end and the current read time. The read model compares the accepted snapshot with the closest preceding `generated` snapshot by stable activity ID to expose adopted substitutions. It does not infer motivation from notes.
 
@@ -123,6 +123,8 @@ The dedicated outcome page reads the system outcome and user reflection under se
 周计划属于 owner 数据且没有软删除。便携归档包含当前计划、全部不可变 `weekly_plan_revisions`、活动与已关闭 `plan_workout_links`，以及每个精确计划修订的当前体验反思。顶层计划按 owner 唯一 `week_start`，history 按唯一 revision，reflection 按唯一 plan_revision；link 必须按 `(linked_at,id)`，因为多个已关闭关联可以共享时间戳。迁移 0036 提供 `(user_id,plan_id,linked_at,id)` 非部分索引，不依赖只覆盖活动行的部分唯一索引。
 
 `inspectWeeklyPlanShape()` 只返回 revision、各集合计数、UTF-8 字节、时间戳碰撞数和结构布尔，不返回 owner/plan/link UUID 或计划正文。共享 Schema 合法的 7 天、每日至多 8 个活动、每活动至多 6 个选项计划已经让当前 payload 和单条 revision 超过 64 KiB；修订与已关闭关联数量又没有总上限。因此异步来源必须递归拆分 days/session/activities/options、nutritionFocuses、reasons 与 evidence，并让 current/revision 共用兼容规则；history、links 和 reflections 也必须分别分页。本轮只固定形状和总序，尚未输出正文或接入第九协调字段。
+
+其中 `evidence` 不再含无界内部生成标量：factor label、state label、note 和每条 limitation 的字符上限由共享契约固定为 60/80/320/240。测试以 148 条证据引用、四个最大 factor、五条最大 limitation 和多字节中文正文证明整个合法 `planEvidence` 低于 64 KiB，因此后续递归计划来源可以把 evidence 作为有界叶节点。该证明只覆盖当前 `subjective-recovery-state-v1` 合法形状，不放宽其他计划正文，也不替代单元素 PostgreSQL 门禁。
 
 ## Known limitations
 

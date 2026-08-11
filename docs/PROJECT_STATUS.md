@@ -2,7 +2,7 @@
 
 最后审阅：2026-08-11
 
-阶段：内部 Alpha，可在本地完整运行。第 179 轮被归类为 K（Infrastructure）：新增无正文 `inspectWeeklyPlanShape()`，在 active-owner、只读 repeatable-read 会话内统计周计划头、当前 payload、history、workout links 与体验反思的计数、UTF-8 字节和结构布尔，不返回账号/计划 UUID 或计划正文。真实 PostgreSQL 以共享 Schema 合法的 7 天 × 8 活动 × 6 选项计划证明当前 payload 与单条 revision 均可超过 64 KiB；四条完整 history 和 400 条同时间已关闭 link 的聚合也超过门禁，而空 payload 头、单日、evidence、单 link 与单 reflection 仍低于门禁。因此 weeklyPlans 不能作为第九普通行源，必须递归拆分 payload 与 revision snapshot，并分别 keyset history/links/reflections。同步 link 总序补为 `(linked_at,id)`，迁移 0036 提供 `(user_id,plan_id,linked_at,id)` 非部分索引并由真实计划命中。八字段协调来源不变；本轮未输出 weeklyPlans 正文，也未改公开同步下载。AI/照片集合、媒体、KMS、租约执行器、下载授权与用户入口仍缺失，R-013 保持中等级开放。完整单元为 101 个文件、569/569 项，完整集成为 23 个文件、130/130 项，浏览器套件仍为 95 项；完整 strict 类型与生产构建通过，构建只有既登记的 308 KiB 与 Taro/webpack 警告。生产依赖仍为 0 个 critical/high、9 个已登记 moderate。`docs/` 当前 381 份 Markdown，待迁移总量保持 191；第 090–179 轮与 ADR-0085–0173 保持连续受保护。
+阶段：内部 Alpha，可在本地完整运行。第 180 轮被归类为 K（Infrastructure）：共享 `subjective-recovery-state-v1` 契约现在对内部生成的 factor label、state label、note 和每条 limitation 分别设置 60、80、320、240 字符上限，不截断、不改字段或策略版本。现有确定性引擎输出全部落在边界内；异常超长持久值会失败关闭，避免周计划证据在后续递归导出前仍含无界标量。最大 148 条证据引用、四个最大 factor、五条最大 limitation 与多字节中文正文组成的合法 `planEvidence` 已证明低于 64 KiB；OpenAPI 同步公开全部上限。第 179 轮 weeklyPlans 形状证据与八字段协调来源保持不变，本轮没有继续实现计划递归导出、公开同步下载或外部基础设施。项目主线从下一轮切换为 Evidence → Personal Model Item → Weekly Review → User Feedback → Model Revision 的个人认知镜子最小闭环；极端规模导出、部署和非必要运维强化暂停，除非出现数据丢失、安全、隐私或核心阻塞。完整单元为 101 个文件、571/571 项，完整集成为 23 个文件、130/130 项，浏览器套件仍为 95 项；完整 strict 类型与生产构建通过，构建只有既登记的 308 KiB 与 Taro/webpack 警告。生产依赖仍为 0 个 critical/high、9 个已登记 moderate。`docs/` 当前 383 份 Markdown，待迁移总量保持 191；第 090–180 轮与 ADR-0085–0174 保持连续受保护。
 
 主要交付目标：微信小程序 + 响应式 H5
 
@@ -24,7 +24,7 @@ MyFitness / 衡迹把身体、训练、饮食与恢复记录转化为安全、�
 | AI 服务           | 部分完成                   | 崩溃安全运行、对抗性文本/视觉校验器及 23 项评估                   | 专家语料和获批提供方金丝雀         |
 | 原生 App/设备     | 已延期                     | 第二阶段决策                                                      | 达到 MVP 留存门禁                  |
 | 隐私/合规         | 部分完成，本地持久证据     | 按目的照片同意、共享 50 MiB 分阶段导出门禁、删除及恢复回放        | 生产保留、提供方和法务审查         |
-| 测试/可观测性     | 部分完成                   | 569 项单元、130 项集成、95 项浏览器测试、中文文档及客户端质量门禁 | 账号获批后接入集中遥测             |
+| 测试/可观测性     | 部分完成                   | 571 项单元、130 项集成、95 项浏览器测试、中文文档及客户端质量门禁 | 账号获批后接入集中遥测             |
 | 部署              | 部分完成，源码/准入就绪    | 不可变 Actions、标签/main/CI 及服务端、客户端、环境门禁           | 批准材料、资源开通与金丝雀         |
 
 状态词汇：`已完成`表示已通过当前阶段验证，`部分完成`表示可用但仍缺少已命名门禁，`待实现`表示尚未实现，`已延期`表示有意排除在当前版本之外。
@@ -42,6 +42,7 @@ MyFitness / 衡迹把身体、训练、饮食与恢复记录转化为安全、�
 - 根命令 `pnpm ops:measure-portable-export` 只接受回环 PostgreSQL，并用随机合成账号和有界数量的无媒体已确认健康记录运行真实便携导出链。严格 `myfitness-portable-export-measurement/v1` 收据只输出夹具规模、接受字节数或固定拒绝码、耗时、进程内存快照、运行时与三项固定限制，不包含账号标识或健康内容；`finally` 删除合成账号及其级联数据。该收据用于复现本地风险，不代表隔离内存分析、生产容量或 SLA。
 - 异步归档由共享最小收据/状态机、迁移 0029–0036、内部预约服务、只读 repeatable-read 流事务、八个已协调字段、递归增量 v4 JSON、认证加密和私有 multipart writer 组成。协调器在一个事务内依次交付同意事件、健康记录、健康修订、两个 owner 自定义目录、完整 workouts、完整 `nutritionMeals` 与当前 owner `nutritionFavorites`；两个目录以条目/history 分层，workouts 复用七层递归状态机，餐食复用 meal/current items/history/revision snapshot items 状态机，收藏按复合主键直接 keyset。全部来源共享一次 active-owner 结论、逐元素 64 KiB 门禁和统一早停错误。JSON 物理 EOF 才显式提交；真实 PostgreSQL 已证明八字段并发隔离、eager/lazy 字节等价和嵌套/简单字段取消同根失败。后续集合和媒体仍未完成；没有 KMS、租约执行器、公开路由、下载授权或 UI。
 - 周计划异步边界现有严格无正文 shape 收据：顶层计划按 owner 唯一 week_start，history 按唯一 revision，体验反思按唯一 plan_revision；workout links 的同步顺序补为 `(linked_at,id)`，迁移 0036 的非部分 `(user_id,plan_id,linked_at,id)` 索引支持全历史 keyset。合法最大结构证明当前 payload、单 revision、history 聚合和 closed links 聚合都能超过 64 KiB，而单日与单关系仍可门禁；weeklyPlans 因此尚未进入八字段协调根，下一步必须设计 current/revision payload 的共同递归分层与三类子集合生命周期。
+- `subjective-recovery-state-v1` 的系统生成文本现在由共享契约固定字符上限：factor label 60、state label 80、note 320、单条 limitation 240。规则不执行截断，现有确定性引擎保持兼容，异常超长存量值在读取/导出契约处失败关闭。含 148 条引用与全部多字节中文上界的最大计划证据仍低于 64 KiB，因此 evidence 可以作为后续计划递归来源的有界叶节点；这不代表 weeklyPlans 已进入异步归档。
 - 训练同步导出按 `(started_at, created_at, id)` 固定顶层总序；当前关系表按 position，revision history 按 revision，修订内部数组按 JSON ordinality。内部关系优先 `createWorkoutRevisionSnapshotLayerSnapshot()` 保持第 169 轮调用约束；新增 JSON 序 `createWorkoutRevisionSnapshotJsonLayerSnapshot()` 复用同一状态机，却按 JSONB 的 `history→exercises` 键序开放字段。workout、当前 exercise 和 revision 分别由 PostgreSQL 交付含空数组或 `snapshot: null` 的骨架，`createPortableExportWorkoutJsonSource()` 原位替换为递归懒节点。真实数据库已证明一个含当前关系和两条完整修订的 `workouts` 数组与同步 v4 逐字节相同。该来源仍是独立事务，未进入跨顶层协调或公开路由。
 - JSON 字节源的递归 `PortableExportJsonValue<T>` 保留根 Schema 字段，并允许每个数组使用 eager 值或私有懒节点。八字段适配器包装 consent/health/revision/exerciseCatalog/foodCatalog/workouts/nutritionMeals/nutritionFavorites，两个目录 history、workout 七层关系以及餐食三段嵌套数组均递归包装为私有懒节点；收藏是普通私有懒数组。同一协调数据库会话拥有 JSON 根生命周期。物理 EOF 才完成根事务，任意嵌套或普通字段早停都会抛出并复用协调根错误。真实 PostgreSQL 证明完整八字段懒正文与同步 v4 逐字节相同。
 - 每次导出操作获得单调递增的页面内存代次和纯函数式“已挂载/当前保管责任”提交谓词。卸载、当前概览刷新、撤销恢复进入、账号擦除开始和登出都会使代次失效并清除忙碌状态。延迟适配器在令牌/网络工作前、临时响应读取后、校验后以及 H5 锚点点击或 WeApp 保存前立即检查回调。过期 H5 Blob URL 会被撤销；跨边界完成的 WeApp 持久保存会尽力调用 `removeSavedFile` 回滚。过期操作不发布错误、成功或导出选择，也不会自动重启。
@@ -189,4 +190,4 @@ MyFitness / 衡迹把身体、训练、饮食与恢复记录转化为安全、�
 
 ## 首要下一步
 
-下一轮应先固定 `weeklyPlans` 当前 payload 与 revision snapshot 的共同递归契约：以 PostgreSQL JSONB 原键序拆分 days/session/activities/options、nutritionFocuses、reasons 和 evidence，明确长标量与旧版 snapshot 的兼容规则，并让每层在正文交付前执行 64 KiB 门禁。暂不同时接入 history、links、reflections 或第九协调字段，先证明一个当前计划与一个不可变 snapshot 可逐字节重建且最深 option 取消同根。同步公开下载仍不切换；租约执行器、真实 KMS、云存储、账号、域名、设备与付费 API 继续停放。
+下一轮先重新审查 `IMPLEMENTED_PRD.md`、`PRODUCT_BRIEF.md`、`RISK_REGISTER.md`、`ROADMAP.md` 及现有 architecture/database/contracts/API，形成 Personal Model 的概念边界、证据关系、状态机、置信演进、修订与用户校准规则，并把路线图改写为 Evidence → Personal Model Item → Weekly Review → User Feedback → Model Revision 的最小闭环。首个实现只选择少数确定性场景，不建立大而全 AI Agent，也不让 LLM 成为数据库事实来源。周计划递归导出、部署、云资源和非必要运维强化暂停；若出现数据丢失、安全、隐私或认知闭环阻塞，再单独恢复相应关键修复。

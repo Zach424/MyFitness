@@ -4451,8 +4451,8 @@
                           "type": "string",
                           "enum": ["unknown", "aligned", "mixed"]
                         },
-                        "label": { "type": "string", "minLength": 1 },
-                        "note": { "type": "string", "minLength": 1 },
+                        "label": { "type": "string", "minLength": 1, "maxLength": 80 },
+                        "note": { "type": "string", "minLength": 1, "maxLength": 320 },
                         "coverage": {
                           "type": "object",
                           "properties": {
@@ -4554,7 +4554,7 @@
                                   "recovery.soreness"
                                 ]
                               },
-                              "label": { "type": "string", "minLength": 1 },
+                              "label": { "type": "string", "minLength": 1, "maxLength": 60 },
                               "recentScore": { "type": "integer", "minimum": 0, "maximum": 100 },
                               "baselineScore": {
                                 "nullable": true,
@@ -4648,7 +4648,7 @@
                           "minItems": 1,
                           "maxItems": 5,
                           "type": "array",
-                          "items": { "type": "string", "minLength": 1 }
+                          "items": { "type": "string", "minLength": 1, "maxLength": 240 }
                         }
                       },
                       "required": [
@@ -8988,8 +8988,8 @@
                               "type": "string",
                               "enum": ["unknown", "aligned", "mixed"]
                             },
-                            "label": { "type": "string", "minLength": 1 },
-                            "note": { "type": "string", "minLength": 1 },
+                            "label": { "type": "string", "minLength": 1, "maxLength": 80 },
+                            "note": { "type": "string", "minLength": 1, "maxLength": 320 },
                             "coverage": {
                               "type": "object",
                               "properties": {
@@ -9099,7 +9099,7 @@
                                       "recovery.soreness"
                                     ]
                                   },
-                                  "label": { "type": "string", "minLength": 1 },
+                                  "label": { "type": "string", "minLength": 1, "maxLength": 60 },
                                   "recentScore": {
                                     "type": "integer",
                                     "minimum": 0,
@@ -9205,7 +9205,7 @@
                               "minItems": 1,
                               "maxItems": 5,
                               "type": "array",
-                              "items": { "type": "string", "minLength": 1 }
+                              "items": { "type": "string", "minLength": 1, "maxLength": 240 }
                             }
                           },
                           "required": [
@@ -9594,8 +9594,8 @@
                                     "type": "string",
                                     "enum": ["unknown", "aligned", "mixed"]
                                   },
-                                  "label": { "type": "string", "minLength": 1 },
-                                  "note": { "type": "string", "minLength": 1 },
+                                  "label": { "type": "string", "minLength": 1, "maxLength": 80 },
+                                  "note": { "type": "string", "minLength": 1, "maxLength": 320 },
                                   "coverage": {
                                     "type": "object",
                                     "properties": {
@@ -9713,7 +9713,11 @@
                                             "recovery.soreness"
                                           ]
                                         },
-                                        "label": { "type": "string", "minLength": 1 },
+                                        "label": {
+                                          "type": "string",
+                                          "minLength": 1,
+                                          "maxLength": 60
+                                        },
                                         "recentScore": {
                                           "type": "integer",
                                           "minimum": 0,
@@ -9822,7 +9826,7 @@
                                     "minItems": 1,
                                     "maxItems": 5,
                                     "type": "array",
-                                    "items": { "type": "string", "minLength": 1 }
+                                    "items": { "type": "string", "minLength": 1, "maxLength": 240 }
                                   }
                                 },
                                 "required": [
@@ -10809,8 +10813,8 @@
                               "type": "string",
                               "enum": ["unknown", "aligned", "mixed"]
                             },
-                            "label": { "type": "string", "minLength": 1 },
-                            "note": { "type": "string", "minLength": 1 },
+                            "label": { "type": "string", "minLength": 1, "maxLength": 80 },
+                            "note": { "type": "string", "minLength": 1, "maxLength": 320 },
                             "coverage": {
                               "type": "object",
                               "properties": {
@@ -10920,7 +10924,7 @@
                                       "recovery.soreness"
                                     ]
                                   },
-                                  "label": { "type": "string", "minLength": 1 },
+                                  "label": { "type": "string", "minLength": 1, "maxLength": 60 },
                                   "recentScore": {
                                     "type": "integer",
                                     "minimum": 0,
@@ -11026,7 +11030,7 @@
                               "minItems": 1,
                               "maxItems": 5,
                               "type": "array",
-                              "items": { "type": "string", "minLength": 1 }
+                              "items": { "type": "string", "minLength": 1, "maxLength": 240 }
                             }
                           },
                           "required": [
@@ -11272,8 +11276,8 @@
                               "type": "string",
                               "enum": ["unknown", "aligned", "mixed"]
                             },
-                            "label": { "type": "string", "minLength": 1 },
-                            "note": { "type": "string", "minLength": 1 },
+                            "label": { "type": "string", "minLength": 1, "maxLength": 80 },
+                            "note": { "type": "string", "minLength": 1, "maxLength": 320 },
                             "coverage": {
                               "type": "object",
                               "properties": {
@@ -11383,7 +11387,7 @@
                                       "recovery.soreness"
                                     ]
                                   },
-                                  "label": { "type": "string", "minLength": 1 },
+                                  "label": { "type": "string", "minLength": 1, "maxLength": 60 },
                                   "recentScore": {
                                     "type": "integer",
                                     "minimum": 0,
@@ -11489,7 +11493,7 @@
                               "minItems": 1,
                               "maxItems": 5,
                               "type": "array",
-                              "items": { "type": "string", "minLength": 1 }
+                              "items": { "type": "string", "minLength": 1, "maxLength": 240 }
                             }
                           },
                           "required": [
@@ -12336,8 +12340,8 @@
                                     "type": "string",
                                     "enum": ["unknown", "aligned", "mixed"]
                                   },
-                                  "label": { "type": "string", "minLength": 1 },
-                                  "note": { "type": "string", "minLength": 1 },
+                                  "label": { "type": "string", "minLength": 1, "maxLength": 80 },
+                                  "note": { "type": "string", "minLength": 1, "maxLength": 320 },
                                   "coverage": {
                                     "type": "object",
                                     "properties": {
@@ -12455,7 +12459,11 @@
                                             "recovery.soreness"
                                           ]
                                         },
-                                        "label": { "type": "string", "minLength": 1 },
+                                        "label": {
+                                          "type": "string",
+                                          "minLength": 1,
+                                          "maxLength": 60
+                                        },
                                         "recentScore": {
                                           "type": "integer",
                                           "minimum": 0,
@@ -12564,7 +12572,7 @@
                                     "minItems": 1,
                                     "maxItems": 5,
                                     "type": "array",
-                                    "items": { "type": "string", "minLength": 1 }
+                                    "items": { "type": "string", "minLength": 1, "maxLength": 240 }
                                   }
                                 },
                                 "required": [

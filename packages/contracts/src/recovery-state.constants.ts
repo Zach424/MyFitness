@@ -16,3 +16,8 @@ export const recoveryStateValues = [
 export const recoveryConfidenceValues = ['insufficient', 'low', 'moderate'] as const
 export const recoveryConsistencyValues = ['unknown', 'aligned', 'mixed'] as const
 export const recoveryEvidenceWindows = ['recent', 'baseline'] as const
+
+export const recoveryStateFactorLabelMaximumLength = 60
+export const recoveryStateLabelMaximumLength = 80
+export const recoveryStateNoteMaximumLength = 320
+export const recoveryStateLimitationMaximumLength = 240
