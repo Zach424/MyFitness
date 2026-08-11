@@ -451,6 +451,12 @@ intent 创建 → 验证一次性 token 与确认短语 → users 状态关闭 �
 
 这些统计只回答存储与传输结构能否安全拆分，不判断餐食是否健康、营养数据是否准确，也不能成为删除或截断用户历史的依据。
 
+`createNutritionMealLayerSnapshot()` 已实现该四层读取：meal 头使用迁移 0035 三元 keyset，当前 item 使用 `(meal_id,position)` 唯一索引，revision 头使用既有 owner/meal/revision 索引，snapshot items 直接按 JSON ordinality 分页。数据库先交付 meal 双空数组、revision 空 snapshot 和 snapshot 空 items 骨架，再逐元素执行 64 KiB 门禁；非数组 snapshot 在正文前返回固定不可分解错误。五段收据只含批次与行数，不含 owner、meal、revision 或 food 内容。该会话仍是独立事务，下一步只增加递归 JSON 适配，不在同一轮改变跨字段协调权。
+
+这种分层读取把大餐记录拆成可中断的小批次，同时保持同一数据库快照中的顺序与内容一致；即使取消发生在最深层，外层游标和事务也会随之关闭，不遗留半开的读取资源。
+
+边界检查只验证结构、顺序和字节上限，不推断营养结论，也不把历史估算值改写成用户确认事实。这样既能降低导出时的内存峰值，又能保留来源、时间与修订证据，便于用户复核和纠正。
+
 ## 20. 安全与隐私控制
 
 - 所有访问 token、intent token 和 receipt token 只保存哈希。

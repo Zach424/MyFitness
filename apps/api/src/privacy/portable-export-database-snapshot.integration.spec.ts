@@ -10,10 +10,14 @@ import { runMigrations } from '../database/migrate'
 import { serializePortableExport } from './portable-export-artifact'
 import {
   PortableExportDatabaseSnapshotService,
+  PortableExportNutritionMealRevisionSnapshotNotDecomposableError,
+  type PortableExportNutritionMealLayerSnapshotMeal,
   PortableExportSnapshotPayloadTooLargeError,
   PortableExportWorkoutRevisionSnapshotNotDecomposableError,
   portableExportExerciseCatalogEntryPageQuery,
   portableExportFoodCatalogEntryPageQuery,
+  portableExportNutritionMealItemPageQuery,
+  portableExportNutritionMealRevisionHeaderPageQuery,
   portableExportSnapshotMaximumPayloadBytes,
   portableExportWorkoutExerciseHeaderPageQuery,
   portableExportWorkoutHeaderPageQuery,
@@ -414,12 +418,16 @@ describe('portable export bounded PostgreSQL snapshot', () => {
     ...extra,
   })
 
-  const createNutritionMealBoundaryFixture = async (userId: string, revisionCount = 4) => {
+  const createNutritionMealBoundaryFixture = async (
+    userId: string,
+    revisionCount = 4,
+    itemCount = 30,
+  ) => {
     const mealId = randomUUID()
     const secretMarker = `meal-shape-${randomUUID()}`
     const occurredAt = '2026-08-11T02:30:00.000Z'
     const createdAt = '2026-08-11T02:31:00.000Z'
-    const items = Array.from({ length: 30 }, (_, index) => ({
+    const items = Array.from({ length: itemCount }, (_, index) => ({
       id: randomUUID(),
       position: index + 1,
       food: {
@@ -544,6 +552,29 @@ describe('portable export bounded PostgreSQL snapshot', () => {
     return { mealId, secretMarker }
   }
 
+  const materializeNutritionMeals = async (
+    meals: AsyncIterable<PortableExportNutritionMealLayerSnapshotMeal>,
+  ) => {
+    const values: Array<Record<string, unknown>> = []
+    for await (const meal of meals) {
+      const value = { ...meal.header }
+      const items: Array<Record<string, unknown>> = []
+      for await (const item of meal.items) items.push(item)
+      value.items = items
+      const history: Array<Record<string, unknown>> = []
+      for await (const revision of meal.history) {
+        const snapshot = { ...revision.snapshot }
+        const snapshotItems: Array<Record<string, unknown>> = []
+        for await (const item of revision.snapshot.items) snapshotItems.push(item)
+        snapshot.items = snapshotItems
+        history.push({ ...revision, snapshot })
+      }
+      value.history = history
+      values.push(value)
+    }
+    return values
+  }
+
   beforeAll(async () => {
     await runMigrations(config.databaseUrl)
   })
@@ -616,6 +647,250 @@ describe('portable export bounded PostgreSQL snapshot', () => {
       await client.query('ROLLBACK')
       client.release()
     }
+  })
+
+  it('streams complete meals in stable owner order with byte-compatible revision snapshots', async () => {
+    const userId = await createUser()
+    const otherUserId = await createUser()
+    const firstMealId = (await createNutritionMealBoundaryFixture(userId, 2, 2)).mealId
+    const secondMealId = (await createNutritionMealBoundaryFixture(userId, 2, 2)).mealId
+    await createNutritionMealBoundaryFixture(otherUserId, 2, 2)
+    const expectedStableIds = [firstMealId, secondMealId].sort()
+
+    const stable = snapshots.createNutritionMealLayerSnapshot(userId, { batchRows: 1 })
+    const stableIterator = stable.meals[Symbol.asyncIterator]()
+    const first = await stableIterator.next()
+    if (first.done) throw new Error('nutrition meal fixture was not returned')
+    const firstValues = await materializeNutritionMeals(
+      (async function* () {
+        yield first.value
+      })(),
+    )
+    const concurrentMealId = (await createNutritionMealBoundaryFixture(userId, 2, 2)).mealId
+    const remainingValues = await materializeNutritionMeals({
+      [Symbol.asyncIterator]: () => stableIterator,
+    })
+    const stableValues = [...firstValues, ...remainingValues]
+
+    expect(stableValues.map((meal) => meal.id)).toEqual(expectedStableIds)
+    expect(stableValues.map((meal) => meal.id)).not.toContain(concurrentMealId)
+    for (const meal of stableValues) {
+      expect((meal.items as Array<Record<string, unknown>>).map((item) => item.position)).toEqual([
+        1, 2,
+      ])
+      expect(
+        (meal.history as Array<Record<string, unknown>>).map((revision) => revision.revision),
+      ).toEqual([1, 2])
+      for (const revision of meal.history as Array<Record<string, unknown>>) {
+        expect(
+          (
+            (revision.snapshot as Record<string, unknown>).items as Array<Record<string, unknown>>
+          ).map((item) => item.position),
+        ).toEqual([1, 2])
+      }
+    }
+    await stable.complete()
+    await expect(stable.receipt).resolves.toEqual({
+      batchRows: 1,
+      maximumPayloadBytes: portableExportSnapshotMaximumPayloadBytes,
+      meals: { batchCount: 2, rowCount: 2 },
+      mealItems: { batchCount: 4, rowCount: 4 },
+      mealRevisions: { batchCount: 4, rowCount: 4 },
+      mealRevisionSnapshotRoots: { batchCount: 4, rowCount: 4 },
+      mealRevisionSnapshotItems: { batchCount: 8, rowCount: 8 },
+    })
+
+    const planClient = await pool.connect()
+    try {
+      await planClient.query('BEGIN')
+      await planClient.query('SET LOCAL enable_seqscan = off')
+      const itemPlan = await planClient.query<{ 'QUERY PLAN': unknown }>(
+        `EXPLAIN (FORMAT JSON, COSTS OFF) ${portableExportNutritionMealItemPageQuery}`,
+        [userId, firstMealId, null, 2, portableExportSnapshotMaximumPayloadBytes],
+      )
+      expect(JSON.stringify(itemPlan.rows[0]?.['QUERY PLAN'])).toContain(
+        'nutrition_meal_items_meal_id_position_key',
+      )
+      const revisionPlan = await planClient.query<{ 'QUERY PLAN': unknown }>(
+        `EXPLAIN (FORMAT JSON, COSTS OFF) ${portableExportNutritionMealRevisionHeaderPageQuery}`,
+        [userId, firstMealId, null, 2, portableExportSnapshotMaximumPayloadBytes],
+      )
+      expect(JSON.stringify(revisionPlan.rows[0]?.['QUERY PLAN'])).toMatch(
+        /nutrition_meal_revisions_(user_meal_idx|meal_id_revision_key)/,
+      )
+    } finally {
+      await planClient.query('ROLLBACK')
+      planClient.release()
+    }
+
+    const eager = await pool.query<{ payload: Record<string, unknown> }>(
+      `SELECT (
+         to_jsonb(meal) || jsonb_build_object(
+           'items', COALESCE((
+             SELECT jsonb_agg(to_jsonb(item) - 'meal_id' ORDER BY item.position)
+             FROM nutrition_meal_items AS item WHERE item.meal_id = meal.id
+           ), '[]'::jsonb),
+           'history', COALESCE((
+             SELECT jsonb_agg(
+               (to_jsonb(history) - 'user_id' - 'meal_id') ORDER BY history.revision
+             )
+             FROM nutrition_meal_revisions AS history WHERE history.meal_id = meal.id
+           ), '[]'::jsonb)
+         )
+       ) AS payload
+       FROM (
+         SELECT id, meal_type, title, source_kind, source_metadata, occurred_at, timezone,
+                note, revision, deleted_at, created_at, updated_at
+         FROM nutrition_meals WHERE user_id = $1 ORDER BY occurred_at, created_at, id
+       ) AS meal`,
+      [userId],
+    )
+    const complete = snapshots.createNutritionMealLayerSnapshot(userId, { batchRows: 2 })
+    const completeValues = await materializeNutritionMeals(complete.meals)
+    await complete.complete()
+
+    expect(JSON.stringify(completeValues)).toBe(
+      JSON.stringify(eager.rows.map((row) => row.payload)),
+    )
+    expect(completeValues.map((meal) => meal.id)).toEqual(
+      [...expectedStableIds, concurrentMealId].sort(),
+    )
+    await expect(complete.receipt).resolves.toMatchObject({
+      meals: { rowCount: 3 },
+      mealItems: { rowCount: 6 },
+      mealRevisions: { rowCount: 6 },
+      mealRevisionSnapshotRoots: { rowCount: 6 },
+      mealRevisionSnapshotItems: { rowCount: 12 },
+    })
+  })
+
+  it('cancels a meal root from an active immutable snapshot item', async () => {
+    const userId = await createUser()
+    await createNutritionMealBoundaryFixture(userId, 2, 2)
+    const session = snapshots.createNutritionMealLayerSnapshot(userId, { batchRows: 1 })
+    const meals = session.meals[Symbol.asyncIterator]()
+    const meal = await meals.next()
+    if (meal.done) throw new Error('nutrition meal cancellation fixture was not returned')
+    for await (const _ of meal.value.items) {
+      // Reach history in the required JSON field order.
+    }
+    const history = meal.value.history[Symbol.asyncIterator]()
+    const revision = await history.next()
+    if (revision.done) throw new Error('nutrition meal revision fixture was not returned')
+    const snapshotItems = revision.value.snapshot.items[Symbol.asyncIterator]()
+    await expect(snapshotItems.next()).resolves.toMatchObject({ done: false })
+    const cancellation = new Error('nutrition meal snapshot cancelled by lease owner')
+    const receiptFailure = session.receipt.catch((error: unknown) => error)
+
+    await session.cancel(cancellation)
+
+    expect(await receiptFailure).toBe(cancellation)
+    await expect(snapshotItems.next()).resolves.toEqual({ done: true, value: undefined })
+    await expect(history.next()).resolves.toEqual({ done: true, value: undefined })
+    await expect(meals.next()).rejects.toBe(cancellation)
+  })
+
+  it('rejects meal history before current items complete', async () => {
+    const userId = await createUser()
+    await createNutritionMealBoundaryFixture(userId, 1, 2)
+    const session = snapshots.createNutritionMealLayerSnapshot(userId, { batchRows: 1 })
+    const meals = session.meals[Symbol.asyncIterator]()
+    const meal = await meals.next()
+    if (meal.done) throw new Error('nutrition meal order fixture was not returned')
+    const receiptFailure = session.receipt.catch((error: unknown) => error)
+    let historyFailure: unknown
+
+    try {
+      await meal.value.history[Symbol.asyncIterator]().next()
+    } catch (error) {
+      historyFailure = error
+    }
+
+    expect(historyFailure).toMatchObject({
+      message: 'portable export nutrition meal items must complete before history',
+    })
+    expect(await receiptFailure).toBe(historyFailure)
+  })
+
+  it('fails closed for a non-array immutable meal snapshot', async () => {
+    const userId = await createUser()
+    const { mealId } = await createNutritionMealBoundaryFixture(userId, 1, 1)
+    await pool.query(
+      `UPDATE nutrition_meal_revisions
+       SET snapshot = jsonb_set(snapshot, '{items}', '{}'::jsonb)
+       WHERE meal_id = $1 AND revision = 1`,
+      [mealId],
+    )
+    const session = snapshots.createNutritionMealLayerSnapshot(userId, { batchRows: 1 })
+    const receiptFailure = session.receipt.catch((error: unknown) => error)
+    let streamFailure: unknown
+
+    try {
+      for await (const meal of session.meals) {
+        for await (const _ of meal.items) {
+          // Reach the immutable revision.
+        }
+        for await (const _ of meal.history) {
+          // The invalid root must fail before revision content is exposed.
+        }
+      }
+    } catch (error) {
+      streamFailure = error
+    }
+
+    expect(streamFailure).toBeInstanceOf(
+      PortableExportNutritionMealRevisionSnapshotNotDecomposableError,
+    )
+    expect(streamFailure).toMatchObject({
+      code: 'portable_export_nutrition_meal_revision_snapshot_not_decomposable',
+    })
+    expect(await receiptFailure).toBe(streamFailure)
+  })
+
+  it('withholds an oversized immutable meal snapshot item inside PostgreSQL', async () => {
+    const userId = await createUser()
+    const { mealId } = await createNutritionMealBoundaryFixture(userId, 1, 1)
+    const secretMarker = `meal-snapshot-item-must-not-cross-${randomUUID()}`
+    await pool.query(
+      `UPDATE nutrition_meal_revisions
+       SET snapshot = jsonb_set(
+         snapshot,
+         '{items,0,secret}',
+         to_jsonb($2::text),
+         true
+       )
+       WHERE meal_id = $1 AND revision = 1`,
+      [mealId, `${secretMarker}-${'z'.repeat(8_192)}`],
+    )
+    const session = snapshots.createNutritionMealLayerSnapshot(userId, {
+      batchRows: 1,
+      maximumPayloadBytes: 4_096,
+    })
+    const receiptFailure = session.receipt.catch((error: unknown) => error)
+    let streamFailure: unknown
+
+    try {
+      for await (const meal of session.meals) {
+        for await (const _ of meal.items) {
+          // Reach history in field order.
+        }
+        for await (const revision of meal.history) {
+          for await (const _ of revision.snapshot.items) {
+            // Oversized content must never be yielded.
+          }
+        }
+      }
+    } catch (error) {
+      streamFailure = error
+    }
+
+    expect(streamFailure).toBeInstanceOf(PortableExportSnapshotPayloadTooLargeError)
+    expect(streamFailure).toMatchObject({
+      code: 'portable_export_snapshot_payload_too_large',
+      maximumBytes: 4_096,
+    })
+    expect(JSON.stringify(streamFailure)).not.toContain(secretMarker)
+    expect(await receiptFailure).toBe(streamFailure)
   })
 
   it('keeps one owner snapshot stable across keyset pages without timestamp round-trips', async () => {

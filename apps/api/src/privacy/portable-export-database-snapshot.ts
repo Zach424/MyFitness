@@ -54,6 +54,37 @@ export type PortableExportNutritionMealShapeReceipt = {
   historyAggregateExceedsPayloadBoundary: boolean
 }
 
+export type PortableExportNutritionMealRevisionSnapshotValue = Record<string, unknown> & {
+  items: AsyncIterable<Record<string, unknown>>
+}
+
+export type PortableExportNutritionMealRevision = Record<string, unknown> & {
+  snapshot: PortableExportNutritionMealRevisionSnapshotValue
+}
+
+export type PortableExportNutritionMealLayerSnapshotMeal = {
+  header: Record<string, unknown>
+  items: AsyncIterable<Record<string, unknown>>
+  history: AsyncIterable<PortableExportNutritionMealRevision>
+}
+
+export type PortableExportNutritionMealLayerSnapshotReceipt = {
+  batchRows: number
+  maximumPayloadBytes: number
+  meals: PortableExportHealthHistorySnapshotCollectionReceipt
+  mealItems: PortableExportHealthHistorySnapshotCollectionReceipt
+  mealRevisions: PortableExportHealthHistorySnapshotCollectionReceipt
+  mealRevisionSnapshotRoots: PortableExportHealthHistorySnapshotCollectionReceipt
+  mealRevisionSnapshotItems: PortableExportHealthHistorySnapshotCollectionReceipt
+}
+
+export type PortableExportNutritionMealLayerSnapshotSession = {
+  meals: AsyncIterable<PortableExportNutritionMealLayerSnapshotMeal>
+  receipt: Promise<PortableExportNutritionMealLayerSnapshotReceipt>
+  complete: () => Promise<void>
+  cancel: (error: unknown) => Promise<void>
+}
+
 export type PortableExportWorkoutExerciseLayerSnapshotWorkout = {
   header: Record<string, unknown>
   exercises: AsyncIterable<Record<string, unknown>>
@@ -343,6 +374,15 @@ export class PortableExportWorkoutRevisionSnapshotNotDecomposableError extends E
   constructor() {
     super('portable export workout revision snapshot is not decomposable')
     this.name = 'PortableExportWorkoutRevisionSnapshotNotDecomposableError'
+  }
+}
+
+export class PortableExportNutritionMealRevisionSnapshotNotDecomposableError extends Error {
+  readonly code = 'portable_export_nutrition_meal_revision_snapshot_not_decomposable'
+
+  constructor() {
+    super('portable export nutrition meal revision snapshot is not decomposable')
+    this.name = 'PortableExportNutritionMealRevisionSnapshotNotDecomposableError'
   }
 }
 
@@ -1459,6 +1499,330 @@ const mapNutritionMealShape = (
   revisionSnapshotsHaveItemArrays: row.revision_snapshots_have_item_arrays,
   historyAggregateExceedsPayloadBoundary: row.history_aggregate_exceeds_payload_boundary,
 })
+
+export const portableExportNutritionMealHeaderPageQuery = `WITH page AS MATERIALIZED (
+         SELECT id, meal_type, title, source_kind, source_metadata, occurred_at, timezone,
+                note, revision, deleted_at, created_at, updated_at
+         FROM nutrition_meals
+         WHERE user_id = $1
+           AND (
+             $2::uuid IS NULL
+             OR (occurred_at, created_at, id) > (
+               SELECT occurred_at, created_at, id
+               FROM nutrition_meals
+               WHERE user_id = $1 AND id = $2::uuid
+             )
+           )
+         ORDER BY occurred_at, created_at, id
+         LIMIT $3
+       ), encoded AS MATERIALIZED (
+         SELECT id, occurred_at, created_at,
+                (
+                  to_jsonb(page)
+                  || jsonb_build_object('items', '[]'::jsonb, 'history', '[]'::jsonb)
+                )::text AS payload_text
+         FROM page
+       )
+       SELECT id,
+              CASE WHEN octet_length(payload_text) <= $4 THEN payload_text ELSE NULL END
+                AS payload_text,
+              octet_length(payload_text) AS payload_byte_length
+       FROM encoded
+       ORDER BY occurred_at, created_at, id`
+
+async function* nutritionMealHeaderPageRows(
+  client: PoolClient,
+  userId: string,
+  batchRows: number,
+  maximumPayloadBytes: number,
+  stats: MutableSnapshotStats,
+  signal?: AbortSignal,
+): AsyncGenerator<Record<string, unknown>> {
+  throwIfAborted(signal)
+  let anchorId: string | null = null
+  while (true) {
+    throwIfAborted(signal)
+    const page: QueryResult<BoundedSnapshotRow> = await client.query<BoundedSnapshotRow>(
+      portableExportNutritionMealHeaderPageQuery,
+      [userId, anchorId, batchRows, maximumPayloadBytes],
+    )
+    if (page.rows.length === 0) break
+    yield* boundedPagePayloads(
+      page.rows,
+      batchRows,
+      maximumPayloadBytes,
+      stats,
+      'nutrition meal header',
+      signal,
+    )
+    anchorId = page.rows.at(-1)!.id
+    if (page.rows.length < batchRows) break
+  }
+}
+
+export const portableExportNutritionMealItemPageQuery = `WITH page AS MATERIALIZED (
+         SELECT item.id, item.position, item.food_key, item.food_name, item.food_category,
+                item.energy_kcal_per_100g, item.protein_g_per_100g,
+                item.carbohydrate_g_per_100g, item.fat_g_per_100g,
+                item.fiber_g_per_100g, item.reference, item.display_amount,
+                item.display_unit, item.canonical_grams
+         FROM nutrition_meal_items AS item
+         INNER JOIN nutrition_meals AS meal ON meal.id = item.meal_id
+         WHERE meal.user_id = $1
+           AND item.meal_id = $2
+           AND (
+             $3::uuid IS NULL
+             OR item.position > (
+               SELECT anchor.position
+               FROM nutrition_meal_items AS anchor
+               INNER JOIN nutrition_meals AS anchor_meal ON anchor_meal.id = anchor.meal_id
+               WHERE anchor_meal.user_id = $1
+                 AND anchor.meal_id = $2
+                 AND anchor.id = $3::uuid
+             )
+           )
+         ORDER BY item.position
+         LIMIT $4
+       ), encoded AS MATERIALIZED (
+         SELECT id, position, to_jsonb(page)::text AS payload_text
+         FROM page
+       )
+       SELECT id,
+              CASE WHEN octet_length(payload_text) <= $5 THEN payload_text ELSE NULL END
+                AS payload_text,
+              octet_length(payload_text) AS payload_byte_length
+       FROM encoded
+       ORDER BY position`
+
+async function* nutritionMealItemPageRows(
+  client: PoolClient,
+  userId: string,
+  mealId: string,
+  batchRows: number,
+  maximumPayloadBytes: number,
+  stats: MutableSnapshotStats,
+  signal?: AbortSignal,
+): AsyncGenerator<Record<string, unknown>> {
+  throwIfAborted(signal)
+  let anchorId: string | null = null
+  while (true) {
+    throwIfAborted(signal)
+    const page: QueryResult<BoundedSnapshotRow> = await client.query<BoundedSnapshotRow>(
+      portableExportNutritionMealItemPageQuery,
+      [userId, mealId, anchorId, batchRows, maximumPayloadBytes],
+    )
+    if (page.rows.length === 0) break
+    yield* boundedPagePayloads(
+      page.rows,
+      batchRows,
+      maximumPayloadBytes,
+      stats,
+      'nutrition meal item',
+      signal,
+    )
+    anchorId = page.rows.at(-1)!.id
+    if (page.rows.length < batchRows) break
+  }
+}
+
+export const portableExportNutritionMealRevisionHeaderPageQuery = `WITH page AS MATERIALIZED (
+         SELECT history.id, history.action, history.revision,
+                NULL::jsonb AS snapshot, history.changed_at
+         FROM nutrition_meal_revisions AS history
+         INNER JOIN nutrition_meals AS meal ON meal.id = history.meal_id
+         WHERE meal.user_id = $1
+           AND history.user_id = $1
+           AND history.meal_id = $2
+           AND (
+             $3::uuid IS NULL
+             OR history.revision > (
+               SELECT anchor.revision
+               FROM nutrition_meal_revisions AS anchor
+               INNER JOIN nutrition_meals AS anchor_meal ON anchor_meal.id = anchor.meal_id
+               WHERE anchor_meal.user_id = $1
+                 AND anchor.user_id = $1
+                 AND anchor.meal_id = $2
+                 AND anchor.id = $3::uuid
+             )
+           )
+         ORDER BY history.revision
+         LIMIT $4
+       ), encoded AS MATERIALIZED (
+         SELECT id, revision, to_jsonb(page)::text AS payload_text
+         FROM page
+       )
+       SELECT id,
+              CASE WHEN octet_length(payload_text) <= $5 THEN payload_text ELSE NULL END
+                AS payload_text,
+              octet_length(payload_text) AS payload_byte_length
+       FROM encoded
+       ORDER BY revision`
+
+async function* nutritionMealRevisionHeaderPageRows(
+  client: PoolClient,
+  userId: string,
+  mealId: string,
+  batchRows: number,
+  maximumPayloadBytes: number,
+  stats: MutableSnapshotStats,
+  signal?: AbortSignal,
+): AsyncGenerator<Record<string, unknown>> {
+  throwIfAborted(signal)
+  let anchorId: string | null = null
+  while (true) {
+    throwIfAborted(signal)
+    const page: QueryResult<BoundedSnapshotRow> = await client.query<BoundedSnapshotRow>(
+      portableExportNutritionMealRevisionHeaderPageQuery,
+      [userId, mealId, anchorId, batchRows, maximumPayloadBytes],
+    )
+    if (page.rows.length === 0) break
+    yield* boundedPagePayloads(
+      page.rows,
+      batchRows,
+      maximumPayloadBytes,
+      stats,
+      'nutrition meal revision header',
+      signal,
+    )
+    anchorId = page.rows.at(-1)!.id
+    if (page.rows.length < batchRows) break
+  }
+}
+
+type NutritionMealRevisionSnapshotRootRow = BoundedSnapshotRow & {
+  decomposable: boolean
+}
+
+export const portableExportNutritionMealRevisionSnapshotRootQuery = `WITH target AS MATERIALIZED (
+         SELECT history.meal_id AS id, history.snapshot,
+                jsonb_typeof(history.snapshot) = 'object'
+                  AND jsonb_typeof(history.snapshot->'items') = 'array' AS decomposable
+         FROM nutrition_meal_revisions AS history
+         INNER JOIN nutrition_meals AS meal ON meal.id = history.meal_id
+         WHERE meal.user_id = $1
+           AND history.user_id = $1
+           AND history.meal_id = $2
+           AND history.id = $3
+       ), encoded AS MATERIALIZED (
+         SELECT id, decomposable,
+                CASE
+                  WHEN decomposable THEN jsonb_set(snapshot, '{items}', '[]'::jsonb)::text
+                  ELSE NULL
+                END AS payload_text
+         FROM target
+       )
+       SELECT id, decomposable,
+              CASE
+                WHEN decomposable AND octet_length(payload_text) <= $4 THEN payload_text
+                ELSE NULL
+              END AS payload_text,
+              CASE WHEN decomposable THEN octet_length(payload_text) ELSE 0 END
+                AS payload_byte_length
+       FROM encoded`
+
+const readNutritionMealRevisionSnapshotRoot = async (
+  client: PoolClient,
+  userId: string,
+  mealId: string,
+  revisionId: string,
+  maximumPayloadBytes: number,
+  stats: MutableSnapshotStats,
+  signal?: AbortSignal,
+) => {
+  throwIfAborted(signal)
+  const result = await client.query<NutritionMealRevisionSnapshotRootRow>(
+    portableExportNutritionMealRevisionSnapshotRootQuery,
+    [userId, mealId, revisionId, maximumPayloadBytes],
+  )
+  const row = result.rows[0]
+  if (!row) throw new NotFoundException('nutrition meal revision snapshot not found')
+  if (!row.decomposable) {
+    throw new PortableExportNutritionMealRevisionSnapshotNotDecomposableError()
+  }
+  const roots = [
+    ...boundedPagePayloads(
+      [row],
+      1,
+      maximumPayloadBytes,
+      stats,
+      'nutrition meal revision snapshot root',
+      signal,
+    ),
+  ]
+  if (roots.length !== 1 || !Array.isArray(roots[0]!.items) || roots[0]!.items.length !== 0) {
+    throw new Error('portable export snapshot returned an invalid nutrition meal revision root')
+  }
+  return roots[0]!
+}
+
+type NutritionMealRevisionSnapshotItemRow = BoundedSnapshotRow & {
+  ordinality: number
+}
+
+export const portableExportNutritionMealRevisionSnapshotItemPageQuery = `WITH target AS MATERIALIZED (
+         SELECT history.snapshot
+         FROM nutrition_meal_revisions AS history
+         INNER JOIN nutrition_meals AS meal ON meal.id = history.meal_id
+         WHERE meal.user_id = $1
+           AND history.user_id = $1
+           AND history.meal_id = $2
+           AND history.id = $3
+       ), item_rows AS MATERIALIZED (
+         SELECT item.value AS item_json,
+                item.value->>'id' AS id,
+                item.ordinality::integer AS ordinality
+         FROM target
+         CROSS JOIN LATERAL jsonb_array_elements(target.snapshot->'items')
+           WITH ORDINALITY AS item(value, ordinality)
+       ), page AS MATERIALIZED (
+         SELECT id, ordinality, item_json::text AS payload_text
+         FROM item_rows
+         WHERE ordinality > $4
+         ORDER BY ordinality
+         LIMIT $5
+       )
+       SELECT id, ordinality,
+              CASE WHEN octet_length(payload_text) <= $6 THEN payload_text ELSE NULL END
+                AS payload_text,
+              octet_length(payload_text) AS payload_byte_length
+       FROM page
+       ORDER BY ordinality`
+
+async function* nutritionMealRevisionSnapshotItemPageRows(
+  client: PoolClient,
+  userId: string,
+  mealId: string,
+  revisionId: string,
+  batchRows: number,
+  maximumPayloadBytes: number,
+  stats: MutableSnapshotStats,
+  signal?: AbortSignal,
+): AsyncGenerator<Record<string, unknown>> {
+  throwIfAborted(signal)
+  let anchorOrdinality = 0
+  while (true) {
+    throwIfAborted(signal)
+    const page = await client.query<NutritionMealRevisionSnapshotItemRow>(
+      portableExportNutritionMealRevisionSnapshotItemPageQuery,
+      [userId, mealId, revisionId, anchorOrdinality, batchRows, maximumPayloadBytes],
+    )
+    if (page.rows.length === 0) break
+    yield* boundedPagePayloads(
+      page.rows,
+      batchRows,
+      maximumPayloadBytes,
+      stats,
+      'nutrition meal revision snapshot item',
+      signal,
+    )
+    const nextAnchor = page.rows.at(-1)!.ordinality
+    if (!Number.isSafeInteger(nextAnchor) || nextAnchor <= anchorOrdinality) {
+      throw new Error('portable export nutrition meal snapshot returned an invalid item order')
+    }
+    anchorOrdinality = nextAnchor
+    if (page.rows.length < batchRows) break
+  }
+}
 
 export const portableExportWorkoutRevisionSnapshotShapeQuery = `WITH target AS MATERIALIZED (
          SELECT history.id, history.workout_id, history.user_id, history.revision, history.snapshot
@@ -3437,6 +3801,469 @@ const createWorkoutRevisionLayerSnapshotSession = (
     | PortableExportWorkoutRevisionSnapshotLayerSession
 }
 
+type NutritionMealLayerSnapshotItem =
+  | {
+      kind: 'meal'
+      value: PortableExportNutritionMealLayerSnapshotMeal
+    }
+  | {
+      kind: 'boundary'
+    }
+
+const createNutritionMealLayerSnapshotSession = (
+  database: DatabaseService,
+  userId: string,
+  options: PortableExportDatabaseSnapshotOptions,
+): PortableExportNutritionMealLayerSnapshotSession => {
+  const batchRows = validateBatchRows(options.batchRows ?? portableExportSnapshotDefaultBatchRows)
+  const maximumPayloadBytes = validateMaximumPayloadBytes(
+    options.maximumPayloadBytes ?? portableExportSnapshotMaximumPayloadBytes,
+  )
+  const mealStats: MutableSnapshotStats = { batchCount: 0, rowCount: 0 }
+  const mealItemStats: MutableSnapshotStats = { batchCount: 0, rowCount: 0 }
+  const mealRevisionStats: MutableSnapshotStats = { batchCount: 0, rowCount: 0 }
+  const mealRevisionSnapshotRootStats: MutableSnapshotStats = { batchCount: 0, rowCount: 0 }
+  const mealRevisionSnapshotItemStats: MutableSnapshotStats = { batchCount: 0, rowCount: 0 }
+  let resolveReceipt!: (receipt: PortableExportNutritionMealLayerSnapshotReceipt) => void
+  let rejectReceipt!: (error: unknown) => void
+  const receipt = new Promise<PortableExportNutritionMealLayerSnapshotReceipt>(
+    (resolve, reject) => {
+      resolveReceipt = resolve
+      rejectReceipt = reject
+    },
+  )
+  let finalized = false
+  let finalizedError: unknown
+  let mealsStarted = false
+  let mealsReachedBoundary = false
+  let activeMealItemIterator: AsyncIterator<Record<string, unknown>, void, undefined> | undefined
+  let activeHistoryIterator:
+    AsyncIterator<PortableExportNutritionMealRevision, void, undefined> | undefined
+  let activeSnapshotItemIterator:
+    AsyncIterator<Record<string, unknown>, void, undefined> | undefined
+  let transactionIterator: AsyncIterator<NutritionMealLayerSnapshotItem, void, undefined>
+  let failLayer!: (rootError: unknown) => Promise<unknown>
+
+  const transactionItems = database.streamReadOnlyRepeatableRead(
+    async function* (client): AsyncGenerator<NutritionMealLayerSnapshotItem> {
+      throwIfAborted(options.signal)
+      await assertActiveAccount(client, userId)
+
+      for await (const header of nutritionMealHeaderPageRows(
+        client,
+        userId,
+        batchRows,
+        maximumPayloadBytes,
+        mealStats,
+        options.signal,
+      )) {
+        const mealId = header.id
+        if (
+          typeof mealId !== 'string' ||
+          mealId.length === 0 ||
+          !Array.isArray(header.items) ||
+          header.items.length !== 0 ||
+          !Array.isArray(header.history) ||
+          header.history.length !== 0
+        ) {
+          throw new Error('portable export nutrition meal layer returned an invalid meal')
+        }
+
+        let itemsStarted = false
+        let itemsCompleted = false
+        const items: AsyncIterable<Record<string, unknown>> = {
+          [Symbol.asyncIterator]: () => {
+            if (itemsStarted) {
+              return (async function* () {
+                throw await failLayer(
+                  new Error(
+                    'portable export nutrition meal items must be read once before history',
+                  ),
+                )
+              })()
+            }
+            itemsStarted = true
+            const sourceIterator = nutritionMealItemPageRows(
+              client,
+              userId,
+              mealId,
+              batchRows,
+              maximumPayloadBytes,
+              mealItemStats,
+              options.signal,
+            )[Symbol.asyncIterator]()
+            let iterator!: AsyncGenerator<Record<string, unknown>, void, undefined>
+            iterator = (async function* () {
+              let sourceError: unknown
+              try {
+                while (true) {
+                  const next = await sourceIterator.next()
+                  if (next.done) {
+                    itemsCompleted = true
+                    return
+                  }
+                  yield next.value
+                }
+              } catch (error) {
+                sourceError = error
+                throw error
+              } finally {
+                if (activeMealItemIterator === iterator) activeMealItemIterator = undefined
+                if (!itemsCompleted) {
+                  let cleanupError: unknown
+                  try {
+                    await sourceIterator.return?.(undefined)
+                  } catch (error) {
+                    cleanupError = error
+                  }
+                  if (!finalized) {
+                    const rootError =
+                      sourceError ??
+                      new Error('portable export nutrition meal items did not complete')
+                    throw await failLayer(
+                      cleanupError === undefined
+                        ? rootError
+                        : new AggregateError(
+                            [rootError, cleanupError],
+                            'portable export nutrition meal item source and cleanup both failed',
+                          ),
+                    )
+                  }
+                  if (cleanupError !== undefined) throw cleanupError
+                }
+              }
+            })()
+            activeMealItemIterator = iterator
+            return iterator
+          },
+        }
+
+        let historyStarted = false
+        let historyCompleted = false
+        let suppressSnapshotRootFailure = false
+        const history: AsyncIterable<PortableExportNutritionMealRevision> = {
+          [Symbol.asyncIterator]: () => {
+            if (!itemsStarted || !itemsCompleted) {
+              return (async function* () {
+                throw await failLayer(
+                  new Error('portable export nutrition meal items must complete before history'),
+                )
+              })()
+            }
+            if (historyStarted) {
+              return (async function* () {
+                throw await failLayer(
+                  new Error(
+                    'portable export nutrition meal history must be read once before the next meal',
+                  ),
+                )
+              })()
+            }
+            historyStarted = true
+            const historySourceIterator = nutritionMealRevisionHeaderPageRows(
+              client,
+              userId,
+              mealId,
+              batchRows,
+              maximumPayloadBytes,
+              mealRevisionStats,
+              options.signal,
+            )[Symbol.asyncIterator]()
+            let historyIterator!: AsyncGenerator<
+              PortableExportNutritionMealRevision,
+              void,
+              undefined
+            >
+            historyIterator = (async function* () {
+              let historySourceError: unknown
+              try {
+                while (true) {
+                  const nextRevision = await historySourceIterator.next()
+                  if (nextRevision.done) {
+                    historyCompleted = true
+                    return
+                  }
+                  const revisionHeader = nextRevision.value
+                  const revisionId = revisionHeader.id
+                  if (
+                    typeof revisionId !== 'string' ||
+                    revisionId.length === 0 ||
+                    revisionHeader.snapshot !== null
+                  ) {
+                    throw new Error(
+                      'portable export nutrition meal layer returned an invalid revision',
+                    )
+                  }
+                  const snapshotRoot = await readNutritionMealRevisionSnapshotRoot(
+                    client,
+                    userId,
+                    mealId,
+                    revisionId,
+                    maximumPayloadBytes,
+                    mealRevisionSnapshotRootStats,
+                    options.signal,
+                  )
+                  let snapshotItemsStarted = false
+                  let snapshotItemsCompleted = false
+                  const snapshotItems: AsyncIterable<Record<string, unknown>> = {
+                    [Symbol.asyncIterator]: () => {
+                      if (snapshotItemsStarted) {
+                        return (async function* () {
+                          throw await failLayer(
+                            new Error(
+                              'portable export nutrition meal revision snapshot items must be read once before the next revision',
+                            ),
+                          )
+                        })()
+                      }
+                      snapshotItemsStarted = true
+                      const snapshotItemSourceIterator = nutritionMealRevisionSnapshotItemPageRows(
+                        client,
+                        userId,
+                        mealId,
+                        revisionId,
+                        batchRows,
+                        maximumPayloadBytes,
+                        mealRevisionSnapshotItemStats,
+                        options.signal,
+                      )[Symbol.asyncIterator]()
+                      let snapshotItemIterator!: AsyncGenerator<
+                        Record<string, unknown>,
+                        void,
+                        undefined
+                      >
+                      snapshotItemIterator = (async function* () {
+                        let snapshotItemSourceError: unknown
+                        try {
+                          while (true) {
+                            const nextItem = await snapshotItemSourceIterator.next()
+                            if (nextItem.done) {
+                              snapshotItemsCompleted = true
+                              return
+                            }
+                            yield nextItem.value
+                          }
+                        } catch (error) {
+                          snapshotItemSourceError = error
+                          throw error
+                        } finally {
+                          if (activeSnapshotItemIterator === snapshotItemIterator) {
+                            activeSnapshotItemIterator = undefined
+                          }
+                          if (!snapshotItemsCompleted) {
+                            let cleanupError: unknown
+                            try {
+                              await snapshotItemSourceIterator.return?.(undefined)
+                            } catch (error) {
+                              cleanupError = error
+                            }
+                            if (!finalized && !suppressSnapshotRootFailure) {
+                              const rootError =
+                                snapshotItemSourceError ??
+                                new Error(
+                                  'portable export nutrition meal revision snapshot items did not complete',
+                                )
+                              throw await failLayer(
+                                cleanupError === undefined
+                                  ? rootError
+                                  : new AggregateError(
+                                      [rootError, cleanupError],
+                                      'portable export nutrition meal revision snapshot item source and cleanup both failed',
+                                    ),
+                              )
+                            }
+                            if (cleanupError !== undefined) throw cleanupError
+                          }
+                        }
+                      })()
+                      activeSnapshotItemIterator = snapshotItemIterator
+                      return snapshotItemIterator
+                    },
+                  }
+                  snapshotRoot.items = snapshotItems
+                  yield {
+                    ...revisionHeader,
+                    snapshot: snapshotRoot as PortableExportNutritionMealRevisionSnapshotValue,
+                  }
+                  if (!snapshotItemsStarted || !snapshotItemsCompleted) {
+                    throw new Error(
+                      'portable export nutrition meal revision snapshot items must complete before the next revision',
+                    )
+                  }
+                }
+              } catch (error) {
+                historySourceError = error
+                throw error
+              } finally {
+                if (activeHistoryIterator === historyIterator) activeHistoryIterator = undefined
+                if (!historyCompleted) {
+                  suppressSnapshotRootFailure = true
+                  const cleanupErrors: unknown[] = []
+                  try {
+                    await activeSnapshotItemIterator?.return?.(undefined)
+                  } catch (error) {
+                    cleanupErrors.push(error)
+                  } finally {
+                    activeSnapshotItemIterator = undefined
+                  }
+                  try {
+                    await historySourceIterator.return?.(undefined)
+                  } catch (error) {
+                    cleanupErrors.push(error)
+                  } finally {
+                    suppressSnapshotRootFailure = false
+                  }
+                  if (!finalized) {
+                    const rootError =
+                      historySourceError ??
+                      new Error('portable export nutrition meal history did not complete')
+                    throw await failLayer(
+                      cleanupErrors.length === 0
+                        ? rootError
+                        : new AggregateError(
+                            [rootError, ...cleanupErrors],
+                            'portable export nutrition meal history and nested cleanup both failed',
+                          ),
+                    )
+                  }
+                  if (cleanupErrors.length === 1) throw cleanupErrors[0]
+                  if (cleanupErrors.length > 1) {
+                    throw new AggregateError(
+                      cleanupErrors,
+                      'portable export nutrition meal history cleanup failed',
+                    )
+                  }
+                }
+              }
+            })()
+            activeHistoryIterator = historyIterator
+            return historyIterator
+          },
+        }
+
+        yield { kind: 'meal', value: { header, items, history } }
+        if (!itemsStarted || !itemsCompleted) {
+          throw new Error('portable export nutrition meal items must complete before history')
+        }
+        if (!historyStarted || !historyCompleted) {
+          throw new Error(
+            'portable export nutrition meal history must complete before the next meal',
+          )
+        }
+      }
+
+      throwIfAborted(options.signal)
+      yield { kind: 'boundary' }
+    },
+  )
+  transactionIterator = transactionItems[Symbol.asyncIterator]()
+
+  const fail = async (rootError: unknown) => {
+    if (finalized) return finalizedError ?? rootError
+    finalized = true
+    const cleanupErrors: unknown[] = []
+    try {
+      await activeSnapshotItemIterator?.return?.(undefined)
+    } catch (error) {
+      cleanupErrors.push(error)
+    } finally {
+      activeSnapshotItemIterator = undefined
+    }
+    try {
+      await activeHistoryIterator?.return?.(undefined)
+    } catch (error) {
+      cleanupErrors.push(error)
+    } finally {
+      activeHistoryIterator = undefined
+    }
+    try {
+      await activeMealItemIterator?.return?.(undefined)
+    } catch (error) {
+      cleanupErrors.push(error)
+    } finally {
+      activeMealItemIterator = undefined
+    }
+    try {
+      await transactionIterator.return?.(undefined)
+    } catch (error) {
+      cleanupErrors.push(error)
+    }
+    finalizedError =
+      cleanupErrors.length === 0
+        ? rootError
+        : new AggregateError(
+            [rootError, ...cleanupErrors],
+            'portable export nutrition meal layer and nested cleanup both failed',
+          )
+    rejectReceipt(finalizedError)
+    return finalizedError
+  }
+  failLayer = fail
+
+  const meals: AsyncIterable<PortableExportNutritionMealLayerSnapshotMeal> = {
+    [Symbol.asyncIterator]: () =>
+      (async function* () {
+        if (mealsStarted) {
+          throw await fail(new Error('portable export nutrition meal layer must be read once'))
+        }
+        mealsStarted = true
+        try {
+          while (true) {
+            const next = await transactionIterator.next()
+            if (next.done) {
+              throw new Error('portable export nutrition meal layer ended before its boundary')
+            }
+            if (next.value.kind === 'boundary') {
+              mealsReachedBoundary = true
+              return
+            }
+            yield next.value.value
+          }
+        } catch (error) {
+          throw await fail(error)
+        } finally {
+          if (!mealsReachedBoundary && !finalized) {
+            await fail(new Error('portable export nutrition meal layer did not complete'))
+          }
+        }
+      })(),
+  }
+
+  const complete = async () => {
+    if (finalized || !mealsStarted || !mealsReachedBoundary) {
+      throw await fail(
+        new Error('portable export nutrition meal layer cannot commit before it completes'),
+      )
+    }
+    try {
+      const next = await transactionIterator.next()
+      if (!next.done) {
+        throw new Error('portable export nutrition meal layer returned data after its boundary')
+      }
+      finalized = true
+      resolveReceipt({
+        batchRows,
+        maximumPayloadBytes,
+        meals: { ...mealStats },
+        mealItems: { ...mealItemStats },
+        mealRevisions: { ...mealRevisionStats },
+        mealRevisionSnapshotRoots: { ...mealRevisionSnapshotRootStats },
+        mealRevisionSnapshotItems: { ...mealRevisionSnapshotItemStats },
+      })
+    } catch (error) {
+      throw await fail(error)
+    }
+  }
+
+  const cancel = async (error: unknown) => {
+    const rootError = error ?? new Error('portable export nutrition meal layer was cancelled')
+    const finalError = await fail(rootError)
+    if (finalError !== rootError) throw finalError
+  }
+
+  return { meals, receipt, complete, cancel }
+}
+
 type CoordinatedWorkoutSnapshotStats = {
   exercises: MutableSnapshotStats
   sets: MutableSnapshotStats
@@ -4102,6 +4929,13 @@ export class PortableExportDatabaseSnapshotService {
     }
     if (!receipt) throw new NotFoundException('nutrition meal not found')
     return receipt
+  }
+
+  createNutritionMealLayerSnapshot(
+    userId: string,
+    options: PortableExportDatabaseSnapshotOptions = {},
+  ): PortableExportNutritionMealLayerSnapshotSession {
+    return createNutritionMealLayerSnapshotSession(this.database, userId, options)
   }
 
   createHealthHistorySnapshot(
