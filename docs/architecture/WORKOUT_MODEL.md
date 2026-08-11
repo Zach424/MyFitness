@@ -56,7 +56,9 @@ Migration `0023_user_exercise_catalog.sql` adds tracking/equipment snapshot colu
 
 Migration `0024_exercise_insight_index.sql` adds `(workout_id, exercise_key)` lookup support for the read projection. It stores no duplicate trend data.
 
-便携归档的内部读取保持当前关系图与修订证据的所有权语义。`createWorkoutRevisionHeaderLayerSnapshot()` 在一次 active-owner、只读 `REPEATABLE READ` 根事务中按 `(started_at,created_at,id)` 读取包含软删除记录的 workout 头，再按父级唯一 `position` 读取九个动作标量和十一个 set 标量。关系图必须恰好一次且完整结束，history 才能按父级唯一 `revision` 输出 `id,action,revision,changed_at`；私有边界后还需显式 `complete()` 才提交。乱序、跳过、重复、提前停止或取消会先关闭最深活动来源，再关闭根事务。修订头不包含不可变 `snapshot`，该层也未接入公开 v4；下一层必须完整递归分解可能超过 64 KiB 的 snapshot。
+便携归档的内部读取保持当前关系图与修订证据的所有权语义。`createWorkoutRevisionHeaderLayerSnapshot()` 在一次 active-owner、只读 `REPEATABLE READ` 根事务中按 `(started_at,created_at,id)` 读取包含软删除记录的 workout 头，再按父级唯一 `position` 读取九个动作标量和十一个 set 标量。关系图必须恰好一次且完整结束，history 才能按父级唯一 `revision` 输出 `id,action,revision,changed_at`；私有边界后还需显式 `complete()` 才提交。乱序、跳过、重复、提前停止或取消会先关闭最深活动来源，再关闭根事务。
+
+`inspectWorkoutRevisionSnapshotShape()` 对单个不可变 snapshot 形成无正文的分解前置收据：沿精确 owner/workout/revision 父链验证根身份，以严格键集区分 `legacy|extended|mixed`，检查数组/计数/position 唯一，并在 PostgreSQL 内计算根头、最大动作头和最大 set 的 UTF-8 字节数。Workout 契约只要求 position 唯一，不要求输入数组升序；修订保存接受对象的原数组，所以合法 `[2,1]` 必须按 JSON ordinality 保留，只报告顺序不匹配而不能重排。该收据不是完整领域验证，也不输出 snapshot；下一层仍须按原始数组顺序递归连接 history，才能称为训练快照流式化。
 
 ## Exercise catalog and history boundary
 

@@ -102,6 +102,25 @@ export type PortableExportWorkoutRevisionHeaderLayerSnapshotSession = {
   cancel: (error: unknown) => Promise<void>
 }
 
+export const portableExportWorkoutRevisionSnapshotShapeSchemaVersion =
+  'myfitness-portable-export-workout-revision-snapshot-shape/v1' as const
+
+export type PortableExportWorkoutRevisionSnapshotShapeReceipt = {
+  schemaVersion: typeof portableExportWorkoutRevisionSnapshotShapeSchemaVersion
+  revision: number
+  compatibility: 'legacy' | 'extended' | 'mixed'
+  rootHeaderBytes: number
+  exerciseCount: number
+  setCount: number
+  legacyExerciseCount: number
+  extendedExerciseCount: number
+  maximumExerciseHeaderBytes: number
+  maximumSetBytes: number
+  exerciseStorageOrderMatchesPosition: boolean
+  setStorageOrderMatchesPosition: boolean
+  decomposable: boolean
+}
+
 export type PortableExportHealthHistorySnapshotCollectionReceipt = {
   batchCount: number
   rowCount: number
@@ -703,6 +722,266 @@ async function* workoutRevisionHeaderPageRows(
     if (page.rows.length < batchRows) break
   }
 }
+
+type WorkoutRevisionSnapshotShapeRow = QueryResultRow & {
+  revision: number
+  compatibility: 'legacy' | 'extended' | 'mixed'
+  root_header_bytes: number
+  exercise_count: number
+  set_count: number
+  legacy_exercise_count: number
+  extended_exercise_count: number
+  maximum_exercise_header_bytes: number
+  maximum_set_bytes: number
+  exercise_storage_order_matches_position: boolean
+  set_storage_order_matches_position: boolean
+  decomposable: boolean
+}
+
+export const portableExportWorkoutRevisionSnapshotShapeQuery = `WITH target AS MATERIALIZED (
+         SELECT history.id, history.workout_id, history.user_id, history.revision, history.snapshot
+         FROM workout_revisions AS history
+         INNER JOIN workout_sessions AS workout ON workout.id = history.workout_id
+         WHERE workout.user_id = $1
+           AND history.user_id = $1
+           AND history.workout_id = $2
+           AND history.id = $3
+       ), exercise_rows AS MATERIALIZED (
+         SELECT target.id AS revision_id,
+                exercise.value AS exercise_json,
+                exercise.ordinality::integer AS exercise_ordinality,
+                CASE
+                  WHEN exercise.value->>'position' ~ '^[1-9][0-9]*$'
+                    THEN (exercise.value->>'position')::integer
+                  ELSE NULL
+                END AS exercise_position
+         FROM target
+         CROSS JOIN LATERAL jsonb_array_elements(
+           CASE
+             WHEN jsonb_typeof(target.snapshot->'exercises') = 'array'
+               THEN target.snapshot->'exercises'
+             ELSE '[]'::jsonb
+           END
+         ) WITH ORDINALITY AS exercise(value, ordinality)
+       ), exercise_order AS MATERIALIZED (
+         SELECT exercise_rows.*,
+                lag(exercise_position) OVER (
+                  PARTITION BY revision_id ORDER BY exercise_ordinality
+                ) AS previous_exercise_position
+         FROM exercise_rows
+       ), set_rows AS MATERIALIZED (
+         SELECT exercise_order.revision_id,
+                exercise_order.exercise_ordinality,
+                set_row.value AS set_json,
+                set_row.ordinality::integer AS set_ordinality,
+                CASE
+                  WHEN set_row.value->>'position' ~ '^[1-9][0-9]*$'
+                    THEN (set_row.value->>'position')::integer
+                  ELSE NULL
+                END AS set_position
+         FROM exercise_order
+         CROSS JOIN LATERAL jsonb_array_elements(
+           CASE
+             WHEN jsonb_typeof(exercise_order.exercise_json->'sets') = 'array'
+               THEN exercise_order.exercise_json->'sets'
+             ELSE '[]'::jsonb
+           END
+         ) WITH ORDINALITY AS set_row(value, ordinality)
+       ), set_order AS MATERIALIZED (
+         SELECT set_rows.*,
+                lag(set_position) OVER (
+                  PARTITION BY revision_id, exercise_ordinality ORDER BY set_ordinality
+                ) AS previous_set_position
+         FROM set_rows
+       ), exercise_stats AS MATERIALIZED (
+         SELECT target.id AS revision_id,
+                count(exercise_order.exercise_json)::integer AS exercise_count,
+                count(*) FILTER (
+                  WHERE exercise_order.exercise_json IS NOT NULL
+                    AND NOT (
+                      exercise_order.exercise_json
+                      ?| ARRAY['trackingMode', 'equipment', 'equipmentNotes']::text[]
+                    )
+                )::integer AS legacy_exercise_count,
+                count(*) FILTER (
+                  WHERE exercise_order.exercise_json IS NOT NULL
+                    AND exercise_order.exercise_json
+                      ?| ARRAY['trackingMode', 'equipment', 'equipmentNotes']::text[]
+                )::integer AS extended_exercise_count,
+                COALESCE(
+                  max(octet_length((exercise_order.exercise_json - 'sets')::text)),
+                  0
+                )::integer AS maximum_exercise_header_bytes,
+                COALESCE(
+                  bool_and(
+                    exercise_order.exercise_position IS NOT NULL
+                    AND (
+                      exercise_order.previous_exercise_position IS NULL
+                      OR exercise_order.exercise_position > exercise_order.previous_exercise_position
+                    )
+                  ),
+                  false
+                ) AS exercise_storage_order_matches_position,
+                COALESCE(
+                  bool_and(
+                    jsonb_typeof(exercise_order.exercise_json) = 'object'
+                    AND exercise_order.exercise_json
+                      ?& ARRAY['id', 'position', 'exerciseKey', 'name', 'category', 'sets']::text[]
+                    AND NOT EXISTS (
+                      SELECT 1
+                      FROM jsonb_object_keys(
+                        CASE
+                          WHEN jsonb_typeof(exercise_order.exercise_json) = 'object'
+                            THEN exercise_order.exercise_json
+                          ELSE '{}'::jsonb
+                        END
+                      ) AS exercise_key(key)
+                      WHERE exercise_key.key <> ALL (
+                        ARRAY[
+                          'id', 'position', 'exerciseKey', 'name', 'category', 'trackingMode',
+                          'equipment', 'equipmentNotes', 'notes', 'sets'
+                        ]::text[]
+                      )
+                    )
+                    AND jsonb_typeof(exercise_order.exercise_json->'sets') = 'array'
+                    AND jsonb_array_length(
+                      CASE
+                        WHEN jsonb_typeof(exercise_order.exercise_json->'sets') = 'array'
+                          THEN exercise_order.exercise_json->'sets'
+                        ELSE '[]'::jsonb
+                      END
+                    ) BETWEEN 1 AND 50
+                    AND exercise_order.exercise_position BETWEEN 1 AND 50
+                  ),
+                  false
+                )
+                AND count(exercise_order.exercise_json) BETWEEN 1 AND 30
+                AND count(DISTINCT exercise_order.exercise_position)
+                  = count(exercise_order.exercise_json) AS exercises_decomposable
+         FROM target
+         LEFT JOIN exercise_order ON exercise_order.revision_id = target.id
+         GROUP BY target.id
+       ), set_parent_stats AS MATERIALIZED (
+         SELECT revision_id,
+                exercise_ordinality,
+                count(set_json)::integer AS set_count,
+                COALESCE(
+                  bool_and(
+                    jsonb_typeof(set_json) = 'object'
+                    AND set_json
+                      ?& ARRAY['id', 'position', 'kind', 'canonicalLoadKg', 'completed']::text[]
+                    AND NOT EXISTS (
+                      SELECT 1
+                      FROM jsonb_object_keys(
+                        CASE
+                          WHEN jsonb_typeof(set_json) = 'object' THEN set_json
+                          ELSE '{}'::jsonb
+                        END
+                      ) AS set_key(key)
+                      WHERE set_key.key <> ALL (
+                        ARRAY[
+                          'id', 'position', 'kind', 'reps', 'load', 'loadUnit',
+                          'canonicalLoadKg', 'durationSeconds', 'distanceMeters', 'rpe', 'completed'
+                        ]::text[]
+                      )
+                    )
+                    AND set_position BETWEEN 1 AND 100
+                  ),
+                  false
+                )
+                AND count(DISTINCT set_position) = count(set_json) AS sets_decomposable,
+                COALESCE(
+                  bool_and(
+                    set_position IS NOT NULL
+                    AND (previous_set_position IS NULL OR set_position > previous_set_position)
+                  ),
+                  false
+                ) AS set_storage_order_matches_position,
+                COALESCE(max(octet_length(set_json::text)), 0)::integer AS maximum_set_bytes
+         FROM set_order
+         GROUP BY revision_id, exercise_ordinality
+       ), set_stats AS MATERIALIZED (
+         SELECT target.id AS revision_id,
+                COALESCE(sum(set_parent_stats.set_count), 0)::integer AS set_count,
+                COALESCE(max(set_parent_stats.maximum_set_bytes), 0)::integer AS maximum_set_bytes,
+                COALESCE(bool_and(set_parent_stats.sets_decomposable), false)
+                  AS sets_decomposable,
+                COALESCE(bool_and(set_parent_stats.set_storage_order_matches_position), false)
+                  AS set_storage_order_matches_position
+         FROM target
+         LEFT JOIN set_parent_stats ON set_parent_stats.revision_id = target.id
+         GROUP BY target.id
+       )
+       SELECT target.revision,
+              CASE
+                WHEN exercise_stats.legacy_exercise_count = exercise_stats.exercise_count
+                  THEN 'legacy'
+                WHEN exercise_stats.extended_exercise_count = exercise_stats.exercise_count
+                  THEN 'extended'
+                ELSE 'mixed'
+              END AS compatibility,
+              octet_length((target.snapshot - 'exercises')::text)::integer AS root_header_bytes,
+              exercise_stats.exercise_count,
+              set_stats.set_count,
+              exercise_stats.legacy_exercise_count,
+              exercise_stats.extended_exercise_count,
+              exercise_stats.maximum_exercise_header_bytes,
+              set_stats.maximum_set_bytes,
+              exercise_stats.exercise_storage_order_matches_position,
+              set_stats.set_storage_order_matches_position,
+              (
+                jsonb_typeof(target.snapshot) = 'object'
+                AND target.snapshot
+                  ?& ARRAY[
+                    'id', 'userId', 'title', 'status', 'source', 'exercises', 'summary',
+                    'startedAt', 'endedAt', 'timezone', 'painLevel', 'fatigue', 'note',
+                    'revision', 'createdAt', 'updatedAt'
+                  ]::text[]
+                AND NOT EXISTS (
+                  SELECT 1
+                  FROM jsonb_object_keys(target.snapshot) AS root_key(key)
+                  WHERE root_key.key <> ALL (
+                    ARRAY[
+                      'id', 'userId', 'title', 'status', 'source', 'exercises', 'summary',
+                      'startedAt', 'endedAt', 'timezone', 'painLevel', 'fatigue', 'note',
+                      'revision', 'createdAt', 'updatedAt'
+                    ]::text[]
+                  )
+                )
+                AND target.snapshot->>'id' = target.workout_id::text
+                AND target.snapshot->>'userId' = target.user_id::text
+                AND target.snapshot->>'revision' ~ '^[1-9][0-9]*$'
+                AND (target.snapshot->>'revision')::integer = target.revision
+                AND jsonb_typeof(target.snapshot->'source') = 'object'
+                AND jsonb_typeof(target.snapshot->'summary') = 'object'
+                AND jsonb_typeof(target.snapshot->'exercises') = 'array'
+                AND exercise_stats.exercises_decomposable
+                AND set_stats.sets_decomposable
+                AND octet_length((target.snapshot - 'exercises')::text) <= $4
+                AND exercise_stats.maximum_exercise_header_bytes <= $4
+                AND set_stats.maximum_set_bytes <= $4
+              ) AS decomposable
+       FROM target
+       INNER JOIN exercise_stats ON exercise_stats.revision_id = target.id
+       INNER JOIN set_stats ON set_stats.revision_id = target.id`
+
+const mapWorkoutRevisionSnapshotShape = (
+  row: WorkoutRevisionSnapshotShapeRow,
+): PortableExportWorkoutRevisionSnapshotShapeReceipt => ({
+  schemaVersion: portableExportWorkoutRevisionSnapshotShapeSchemaVersion,
+  revision: row.revision,
+  compatibility: row.compatibility,
+  rootHeaderBytes: row.root_header_bytes,
+  exerciseCount: row.exercise_count,
+  setCount: row.set_count,
+  legacyExerciseCount: row.legacy_exercise_count,
+  extendedExerciseCount: row.extended_exercise_count,
+  maximumExerciseHeaderBytes: row.maximum_exercise_header_bytes,
+  maximumSetBytes: row.maximum_set_bytes,
+  exerciseStorageOrderMatchesPosition: row.exercise_storage_order_matches_position,
+  setStorageOrderMatchesPosition: row.set_storage_order_matches_position,
+  decomposable: row.decomposable,
+})
 
 async function* healthRecordRows(
   client: PoolClient,
@@ -2091,6 +2370,30 @@ export class PortableExportDatabaseSnapshotService {
     options: PortableExportDatabaseSnapshotOptions = {},
   ): PortableExportWorkoutRevisionHeaderLayerSnapshotSession {
     return createWorkoutRevisionHeaderLayerSnapshotSession(this.database, userId, options)
+  }
+
+  async inspectWorkoutRevisionSnapshotShape(
+    userId: string,
+    workoutId: string,
+    revisionId: string,
+  ): Promise<PortableExportWorkoutRevisionSnapshotShapeReceipt> {
+    const rows = this.database.streamReadOnlyRepeatableRead(
+      async function* (client): AsyncGenerator<PortableExportWorkoutRevisionSnapshotShapeReceipt> {
+        await assertActiveAccount(client, userId)
+        const result = await client.query<WorkoutRevisionSnapshotShapeRow>(
+          portableExportWorkoutRevisionSnapshotShapeQuery,
+          [userId, workoutId, revisionId, portableExportSnapshotMaximumPayloadBytes],
+        )
+        if (result.rows[0]) yield mapWorkoutRevisionSnapshotShape(result.rows[0])
+      },
+    )
+    let receipt: PortableExportWorkoutRevisionSnapshotShapeReceipt | undefined
+    for await (const row of rows) {
+      if (receipt) throw new Error('workout revision snapshot shape returned multiple rows')
+      receipt = row
+    }
+    if (!receipt) throw new NotFoundException('workout revision snapshot not found')
+    return receipt
   }
 
   createHealthHistorySnapshot(

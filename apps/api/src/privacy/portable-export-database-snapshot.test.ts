@@ -162,6 +162,40 @@ const fakeWorkoutExerciseLayerDatabase = (
   return { database, lifecycle }
 }
 
+const fakeWorkoutRevisionSnapshotShapeDatabase = (row?: Record<string, unknown>) => {
+  const lifecycle = {
+    accountQueries: 0,
+    shapeQueries: 0,
+    committed: false,
+    rolledBack: false,
+  }
+  const database = {
+    streamReadOnlyRepeatableRead: (operation: (client: PoolClient) => AsyncIterable<unknown>) => {
+      const client = {
+        query: async (sql: string, parameters: unknown[]) => {
+          if (sql.startsWith('SELECT id FROM users')) {
+            lifecycle.accountQueries += 1
+            return { rows: [{ id: parameters[0] }] }
+          }
+          lifecycle.shapeQueries += 1
+          return { rows: row ? [row] : [] }
+        },
+      } as unknown as PoolClient
+      return (async function* () {
+        let completed = false
+        try {
+          for await (const value of operation(client)) yield value
+          completed = true
+          lifecycle.committed = true
+        } finally {
+          if (!completed) lifecycle.rolledBack = true
+        }
+      })()
+    },
+  } as unknown as DatabaseService
+  return { database, lifecycle }
+}
+
 describe('portable export database snapshot session', () => {
   it('publishes a bounded receipt only after every row is consumed', async () => {
     const service = new PortableExportDatabaseSnapshotService(
@@ -838,6 +872,73 @@ describe('portable export database snapshot session', () => {
     await expect(exercises.next()).resolves.toEqual({ done: true, value: undefined })
     await expect(workouts.next()).rejects.toBe(cancellation)
     expect(lifecycle).toMatchObject({ committed: false, rolledBack: true })
+  })
+
+  it('maps a bounded workout revision snapshot shape receipt without identifiers or content', async () => {
+    const { database, lifecycle } = fakeWorkoutRevisionSnapshotShapeDatabase({
+      revision: 2,
+      compatibility: 'mixed',
+      root_header_bytes: 512,
+      exercise_count: 3,
+      set_count: 8,
+      legacy_exercise_count: 1,
+      extended_exercise_count: 2,
+      maximum_exercise_header_bytes: 384,
+      maximum_set_bytes: 192,
+      exercise_storage_order_matches_position: false,
+      set_storage_order_matches_position: true,
+      decomposable: true,
+    })
+    const service = new PortableExportDatabaseSnapshotService(database)
+
+    const receipt = await service.inspectWorkoutRevisionSnapshotShape(
+      '11111111-1111-4111-8111-111111111111',
+      '22222222-2222-4222-8222-222222222222',
+      '33333333-3333-4333-8333-333333333333',
+    )
+
+    expect(receipt).toEqual({
+      schemaVersion: 'myfitness-portable-export-workout-revision-snapshot-shape/v1',
+      revision: 2,
+      compatibility: 'mixed',
+      rootHeaderBytes: 512,
+      exerciseCount: 3,
+      setCount: 8,
+      legacyExerciseCount: 1,
+      extendedExerciseCount: 2,
+      maximumExerciseHeaderBytes: 384,
+      maximumSetBytes: 192,
+      exerciseStorageOrderMatchesPosition: false,
+      setStorageOrderMatchesPosition: true,
+      decomposable: true,
+    })
+    expect(receipt).not.toHaveProperty('workoutId')
+    expect(receipt).not.toHaveProperty('revisionId')
+    expect(lifecycle).toEqual({
+      accountQueries: 1,
+      shapeQueries: 1,
+      committed: true,
+      rolledBack: false,
+    })
+  })
+
+  it('returns one owner-safe not-found result for a missing revision snapshot shape', async () => {
+    const { database, lifecycle } = fakeWorkoutRevisionSnapshotShapeDatabase()
+    const service = new PortableExportDatabaseSnapshotService(database)
+
+    await expect(
+      service.inspectWorkoutRevisionSnapshotShape(
+        '11111111-1111-4111-8111-111111111111',
+        '22222222-2222-4222-8222-222222222222',
+        '33333333-3333-4333-8333-333333333333',
+      ),
+    ).rejects.toThrowError('workout revision snapshot not found')
+    expect(lifecycle).toEqual({
+      accountQueries: 1,
+      shapeQueries: 1,
+      committed: true,
+      rolledBack: false,
+    })
   })
 
   it('rejects invalid batch and payload limits before opening a database stream', () => {
