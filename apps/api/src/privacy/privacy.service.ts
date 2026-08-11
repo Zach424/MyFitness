@@ -366,7 +366,7 @@ export class PrivacyService {
          FROM (
            SELECT id, title, status, source_kind, source_metadata, started_at, ended_at,
                   timezone, pain_level, fatigue, note, revision, deleted_at, created_at, updated_at
-           FROM workout_sessions WHERE user_id = $1 ORDER BY started_at, created_at
+           FROM workout_sessions WHERE user_id = $1 ORDER BY started_at, created_at, id
          ) AS workout`,
         userId,
       )

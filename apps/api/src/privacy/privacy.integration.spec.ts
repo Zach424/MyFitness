@@ -4,6 +4,7 @@ import type { INestApplication } from '@nestjs/common'
 import {
   accountDeletionConfirmationPhrase,
   consentVersions,
+  createWorkoutSchema,
   foodPhotoConsentVersion,
   maximumPrivacyExportBytes,
   privacyExportTooLargeCode,
@@ -21,6 +22,7 @@ import { DataOperationsService } from '../operations/data-operations.service'
 import { ObjectStorageService } from '../operations/object-storage.service'
 import { ErasureLedgerService } from './erasure-ledger.service'
 import * as portableExportArtifact from './portable-export-artifact'
+import { portableExportSnapshotMaximumPayloadBytes } from './portable-export-database-snapshot'
 
 describe('privacy ownership API with PostgreSQL and private media', () => {
   const config = getRuntimeConfig()
@@ -273,6 +275,168 @@ describe('privacy ownership API with PostgreSQL and private media', () => {
       .set('Authorization', `Bearer ${token}`)
       .expect(204)
   })
+
+  it('exports workouts in a total order while preserving a legal aggregate above the row gate', async () => {
+    const { token, userId } = await createUser()
+    const workoutIds = [randomUUID(), randomUUID()].sort()
+    const [firstWorkoutId, secondWorkoutId] = workoutIds
+    const sharedStartedAt = '2026-08-10T00:00:00.000001Z'
+    const sharedCreatedAt = '2026-08-10T01:00:00.000001Z'
+    const largeInput = createWorkoutSchema.parse({
+      title: '训练'.repeat(50),
+      source: {
+        kind: 'imported',
+        metadata: { provider: '来源'.repeat(40), externalId: 'e'.repeat(160) },
+      },
+      exercises: Array.from({ length: 30 }, (_, exerciseIndex) => ({
+        position: exerciseIndex + 1,
+        exerciseKey: `exercise_${exerciseIndex + 1}`,
+        name: '动作'.repeat(40),
+        category: 'strength' as const,
+        trackingMode: 'reps_load' as const,
+        equipment: ['bodyweight', 'dumbbells', 'barbell', 'kettlebell', 'bench', 'other'] as const,
+        equipmentNotes: '器械'.repeat(60),
+        notes: '说明'.repeat(150),
+        sets: Array.from({ length: 50 }, (_, setIndex) => ({
+          position: setIndex + 1,
+          kind: 'working' as const,
+          reps: 1_000,
+          load: 1_000,
+          loadUnit: 'kg' as const,
+          durationSeconds: 86_400,
+          distanceMeters: 500_000,
+          rpe: 10,
+          completed: true,
+        })),
+      })),
+      startedAt: sharedStartedAt,
+      endedAt: '2026-08-10T00:45:00.000001Z',
+      timezone: 'Asia/Shanghai',
+      painLevel: 0,
+      fatigue: 5,
+      note: '记录'.repeat(250),
+    })
+
+    for (const workoutId of [...workoutIds].reverse()) {
+      const isLarge = workoutId === firstWorkoutId
+      await pool.query(
+        `INSERT INTO workout_sessions (
+           id, user_id, title, status, source_kind, source_metadata,
+           started_at, ended_at, timezone, pain_level, fatigue, note,
+           revision, idempotency_key, request_hash, created_at, updated_at
+         ) VALUES (
+           $1, $2, $3, 'completed', $4, $5::jsonb,
+           $6, $7, 'Asia/Shanghai', 0, 5, $8,
+           $9, $10, $11, $12, $12
+         )`,
+        [
+          workoutId,
+          userId,
+          isLarge ? largeInput.title : '同时间训练',
+          isLarge ? largeInput.source.kind : 'manual',
+          JSON.stringify(isLarge ? largeInput.source.metadata : {}),
+          sharedStartedAt,
+          isLarge ? largeInput.endedAt : '2026-08-10T00:30:00.000001Z',
+          isLarge ? largeInput.note : null,
+          isLarge ? 2 : 1,
+          `privacy-workout-${workoutId}`,
+          '0'.repeat(64),
+          sharedCreatedAt,
+        ],
+      )
+    }
+
+    await pool.query(
+      `INSERT INTO workout_exercises (
+         id, workout_id, position, exercise_key, name, category,
+         tracking_mode, equipment, equipment_notes, notes
+       )
+       SELECT gen_random_uuid(), $1, position, 'exercise_' || position, $2,
+              'strength', 'reps_load', $3::text[], $4, $5
+       FROM generate_series(1, 30) AS position
+       ORDER BY position DESC`,
+      [
+        firstWorkoutId,
+        '动作'.repeat(40),
+        [...largeInput.exercises[0]!.equipment!],
+        largeInput.exercises[0]!.equipmentNotes,
+        largeInput.exercises[0]!.notes,
+      ],
+    )
+    await pool.query(
+      `INSERT INTO workout_sets (
+         id, exercise_id, position, kind, reps, display_load, display_load_unit,
+         canonical_load_kg, duration_seconds, distance_meters, rpe, completed
+       )
+       SELECT gen_random_uuid(), exercise.id, set_position, 'working', 1000, 1000, 'kg',
+              1000, 86400, 500000, 10, TRUE
+       FROM workout_exercises AS exercise
+       CROSS JOIN generate_series(1, 50) AS set_position
+       WHERE exercise.workout_id = $1
+       ORDER BY exercise.position DESC, set_position DESC`,
+      [firstWorkoutId],
+    )
+    const smallExerciseId = randomUUID()
+    await pool.query(
+      `INSERT INTO workout_exercises (
+         id, workout_id, position, exercise_key, name, category, tracking_mode, equipment
+       ) VALUES ($1, $2, 1, 'small_exercise', '小训练', 'strength', 'reps_load', '{bodyweight}')`,
+      [smallExerciseId, secondWorkoutId],
+    )
+    await pool.query(
+      `INSERT INTO workout_sets (
+         id, exercise_id, position, kind, reps, canonical_load_kg, completed
+       ) VALUES (gen_random_uuid(), $1, 1, 'working', 1, NULL, TRUE)`,
+      [smallExerciseId],
+    )
+    await pool.query(
+      `INSERT INTO workout_revisions (id, workout_id, user_id, action, revision, snapshot, changed_at)
+       VALUES
+         (gen_random_uuid(), $1, $2, 'updated', 2, $3::jsonb, '2026-08-10T02:00:00.000002Z'),
+         (gen_random_uuid(), $1, $2, 'created', 1, $3::jsonb, '2026-08-10T02:00:00.000001Z'),
+         (gen_random_uuid(), $4, $2, 'created', 1, '{}'::jsonb, '2026-08-10T02:00:00.000001Z')`,
+      [firstWorkoutId, userId, JSON.stringify(largeInput), secondWorkoutId],
+    )
+
+    const expectedOrder = await pool.query<{ id: string }>(
+      `SELECT id FROM workout_sessions
+       WHERE user_id = $1
+       ORDER BY started_at, created_at, id`,
+      [userId],
+    )
+    const exported = await request(app.getHttpServer())
+      .get('/v1/me/privacy/export')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200)
+    const payload = JSON.parse(exported.text) as {
+      data: {
+        workouts: Array<{
+          id: string
+          exercises: Array<{ position: number; sets: Array<{ position: number }> }>
+          history: Array<{ revision: number }>
+        }>
+      }
+    }
+
+    expect(payload.data.workouts.map((workout) => workout.id)).toEqual(
+      expectedOrder.rows.map((workout) => workout.id),
+    )
+    const largeWorkout = payload.data.workouts.find((workout) => workout.id === firstWorkoutId)!
+    expect(largeWorkout.exercises.map((exercise) => exercise.position)).toEqual(
+      Array.from({ length: 30 }, (_, index) => index + 1),
+    )
+    expect(
+      largeWorkout.exercises.every(
+        (exercise) =>
+          exercise.sets.length === 50 &&
+          exercise.sets.every((set, index) => set.position === index + 1),
+      ),
+    ).toBe(true)
+    expect(largeWorkout.history.map((revision) => revision.revision)).toEqual([1, 2])
+    expect(
+      Buffer.byteLength(JSON.stringify({ ...largeWorkout, history: [] }), 'utf8'),
+    ).toBeGreaterThan(portableExportSnapshotMaximumPayloadBytes)
+  }, 30_000)
 
   it('rejects an oversized metadata floor before reading private media objects', async () => {
     const { token, userId } = await createUser()
