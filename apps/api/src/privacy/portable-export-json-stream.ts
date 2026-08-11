@@ -18,6 +18,28 @@ export type PortableExportJsonStreamSession = {
   receipt: Promise<PortableExportJsonStreamReceipt>
 }
 
+const portableExportJsonAsyncArrayTag: unique symbol = Symbol('portableExportJsonAsyncArray')
+
+export type PortableExportJsonAsyncArray<T> = {
+  readonly [portableExportJsonAsyncArrayTag]: true
+  readonly values: Iterable<T> | AsyncIterable<T>
+}
+
+type PortableExportData = PrivacyExport['data']
+
+export type PortableExportJsonSource = Omit<PrivacyExport, 'data'> & {
+  data: {
+    [Key in keyof PortableExportData]: PortableExportData[Key] extends Array<infer Item>
+      ? PortableExportData[Key] | PortableExportJsonAsyncArray<Item>
+      : PortableExportData[Key]
+  }
+}
+
+export const portableExportJsonAsyncArray = <T>(
+  values: Iterable<T> | AsyncIterable<T>,
+): PortableExportJsonAsyncArray<T> =>
+  Object.freeze({ [portableExportJsonAsyncArrayTag]: true as const, values })
+
 const validateChunkBytes = (chunkBytes: number) => {
   if (!Number.isSafeInteger(chunkBytes) || chunkBytes < 1 || chunkBytes > maximumChunkBytes) {
     throw new RangeError(
@@ -82,12 +104,43 @@ function* jsonStringTokens(value: string, targetBytes: number): Generator<string
   yield '"'
 }
 
-function* jsonTokens(
+const isPortableExportJsonAsyncArray = (
+  value: unknown,
+): value is PortableExportJsonAsyncArray<unknown> =>
+  typeof value === 'object' &&
+  value !== null &&
+  (value as Partial<PortableExportJsonAsyncArray<unknown>>)[portableExportJsonAsyncArrayTag] ===
+    true
+
+async function* jsonArrayTokens(
+  values: Iterable<unknown> | AsyncIterable<unknown>,
+  depth: number,
+  targetBytes: number,
+  ancestors: Set<object>,
+): AsyncGenerator<string> {
+  yield '['
+  let index = 0
+  for await (const child of values) {
+    yield index === 0 ? '\n' : ',\n'
+    yield '  '.repeat(depth + 1)
+    yield* jsonTokens(child, depth + 1, targetBytes, ancestors)
+    index += 1
+  }
+  if (index === 0) {
+    yield ']'
+    return
+  }
+  yield '\n'
+  yield '  '.repeat(depth)
+  yield ']'
+}
+
+async function* jsonTokens(
   value: unknown,
   depth: number,
   targetBytes: number,
   ancestors: Set<object>,
-): Generator<string> {
+): AsyncGenerator<string> {
   if (value === null) {
     yield 'null'
     return
@@ -107,20 +160,12 @@ function* jsonTokens(
 
   ancestors.add(value)
   try {
+    if (isPortableExportJsonAsyncArray(value)) {
+      yield* jsonArrayTokens(value.values, depth, targetBytes, ancestors)
+      return
+    }
     if (Array.isArray(value)) {
-      if (value.length === 0) {
-        yield '[]'
-        return
-      }
-      yield '['
-      for (let index = 0; index < value.length; index += 1) {
-        yield index === 0 ? '\n' : ',\n'
-        yield '  '.repeat(depth + 1)
-        yield* jsonTokens(value[index], depth + 1, targetBytes, ancestors)
-      }
-      yield '\n'
-      yield '  '.repeat(depth)
-      yield ']'
+      yield* jsonArrayTokens(value, depth, targetBytes, ancestors)
       return
     }
 
@@ -146,11 +191,14 @@ function* jsonTokens(
   }
 }
 
-function* utf8Chunks(tokens: Iterable<string>, chunkBytes: number): Generator<Buffer> {
+async function* utf8Chunks(
+  tokens: Iterable<string> | AsyncIterable<string>,
+  chunkBytes: number,
+): AsyncGenerator<Buffer> {
   let pending = Buffer.allocUnsafe(chunkBytes)
   let pendingBytes = 0
 
-  for (const token of tokens) {
+  for await (const token of tokens) {
     const encoded = Buffer.from(token, 'utf8')
     let offset = 0
     while (offset < encoded.length) {
@@ -174,7 +222,7 @@ function* utf8Chunks(tokens: Iterable<string>, chunkBytes: number): Generator<Bu
 }
 
 export const createPortableExportJsonStream = (
-  payload: PrivacyExport,
+  payload: PortableExportJsonSource,
   options: { chunkBytes?: number; maximumBytes?: number } = {},
 ): PortableExportJsonStreamSession => {
   const chunkBytes = validateChunkBytes(
@@ -194,11 +242,11 @@ export const createPortableExportJsonStream = (
     let completed = false
 
     try {
-      const tokens = (function* () {
+      const tokens = (async function* () {
         yield* jsonTokens(payload, 0, chunkBytes, new Set())
         yield '\n'
       })()
-      for (const chunk of utf8Chunks(tokens, chunkBytes)) {
+      for await (const chunk of utf8Chunks(tokens, chunkBytes)) {
         if (byteLength > maximumBytes - chunk.length) {
           throw new RangeError('portable export JSON exceeds the configured maximum size')
         }

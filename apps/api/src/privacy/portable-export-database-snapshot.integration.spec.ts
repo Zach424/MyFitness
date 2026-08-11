@@ -1,12 +1,18 @@
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 
+import { privacyExportSchema, privacyExportSchemaVersion } from '@myfitness/contracts'
 import { Pool } from 'pg'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { getRuntimeConfig } from '../config'
 import { DatabaseService } from '../database/database.service'
 import { runMigrations } from '../database/migrate'
+import { serializePortableExport } from './portable-export-artifact'
 import { PortableExportDatabaseSnapshotService } from './portable-export-database-snapshot'
+import {
+  createPortableExportJsonStream,
+  portableExportJsonAsyncArray,
+} from './portable-export-json-stream'
 
 describe('portable export bounded PostgreSQL snapshot', () => {
   const config = getRuntimeConfig()
@@ -126,5 +132,135 @@ describe('portable export bounded PostgreSQL snapshot', () => {
     )
     await expect(cancelledIterator.next()).rejects.toThrowError('snapshot cancelled by lease owner')
     await cancelledReceipt
+  })
+
+  it('feeds the owner snapshot into a byte-compatible complete v4 JSON tree without an array copy', async () => {
+    const userId = await createUser()
+    await createRecord(userId, '2026-08-11T03:00:00.000001Z', 70)
+    await createRecord(userId, '2026-08-11T03:00:00.000002Z', 71)
+    await createRecord(userId, '2026-08-11T03:00:00.000003Z', 72)
+
+    const eagerSnapshot = snapshots.createHealthRecordSnapshot(userId, { batchRows: 2 })
+    const eagerRows: Array<Record<string, unknown>> = []
+    for await (const row of eagerSnapshot.rows) eagerRows.push(row)
+    await expect(eagerSnapshot.receipt).resolves.toEqual({
+      batchRows: 2,
+      batchCount: 2,
+      rowCount: 3,
+    })
+    const eagerPayload = privacyExportSchema.parse({
+      schemaVersion: privacyExportSchemaVersion,
+      generatedAt: '2026-08-11T03:30:00.000Z',
+      accountId: userId,
+      data: {
+        account: { id: userId, status: 'active' },
+        identities: [],
+        profile: null,
+        goal: null,
+        consentEvents: [],
+        healthRecords: eagerRows,
+        healthRecordRevisions: [],
+        exerciseCatalog: [],
+        foodCatalog: [],
+        workouts: [],
+        nutritionMeals: [],
+        nutritionFavorites: [],
+        weeklyPlans: [],
+        aiExplanationRuns: [],
+        foodPhotoAnalyses: [],
+        progressPhotos: [],
+      },
+    })
+    const expected = serializePortableExport(eagerPayload, Number.MAX_SAFE_INTEGER)
+
+    const lazySnapshot = snapshots.createHealthRecordSnapshot(userId, { batchRows: 2 })
+    const json = createPortableExportJsonStream(
+      {
+        ...eagerPayload,
+        data: {
+          ...eagerPayload.data,
+          healthRecords: portableExportJsonAsyncArray(lazySnapshot.rows),
+        },
+      },
+      { chunkBytes: 37 },
+    )
+    const chunks: Buffer[] = []
+    for await (const chunk of json.bytes) {
+      expect(chunk.length).toBeLessThanOrEqual(37)
+      chunks.push(Buffer.from(chunk))
+    }
+
+    expect(Buffer.concat(chunks)).toEqual(expected)
+    await expect(lazySnapshot.receipt).resolves.toEqual({
+      batchRows: 2,
+      batchCount: 2,
+      rowCount: 3,
+    })
+    await expect(json.receipt).resolves.toEqual({
+      schemaVersion: privacyExportSchemaVersion,
+      chunkBytes: 37,
+      byteLength: expected.length,
+      sha256: createHash('sha256').update(expected).digest('hex'),
+    })
+  })
+
+  it('rolls back the database snapshot when the composed JSON consumer stops early', async () => {
+    const userId = await createUser()
+    await createRecord(userId, '2026-08-11T04:00:00.000001Z', 70)
+    await createRecord(userId, '2026-08-11T04:00:00.000002Z', 71)
+    const snapshot = snapshots.createHealthRecordSnapshot(userId, { batchRows: 1 })
+    let yieldedRows = 0
+    const observedRows = (async function* () {
+      for await (const row of snapshot.rows) {
+        yieldedRows += 1
+        yield row
+      }
+    })()
+    const base = privacyExportSchema.parse({
+      schemaVersion: privacyExportSchemaVersion,
+      generatedAt: '2026-08-11T04:30:00.000Z',
+      accountId: userId,
+      data: {
+        account: { id: userId },
+        identities: [],
+        profile: null,
+        goal: null,
+        consentEvents: [],
+        healthRecords: [],
+        healthRecordRevisions: [],
+        exerciseCatalog: [],
+        foodCatalog: [],
+        workouts: [],
+        nutritionMeals: [],
+        nutritionFavorites: [],
+        weeklyPlans: [],
+        aiExplanationRuns: [],
+        foodPhotoAnalyses: [],
+        progressPhotos: [],
+      },
+    })
+    const json = createPortableExportJsonStream(
+      {
+        ...base,
+        data: {
+          ...base.data,
+          healthRecords: portableExportJsonAsyncArray(observedRows),
+        },
+      },
+      { chunkBytes: 32 },
+    )
+    const iterator = json.bytes[Symbol.asyncIterator]()
+    while (yieldedRows === 0) {
+      await expect(iterator.next()).resolves.toMatchObject({ done: false })
+    }
+    const jsonReceiptRejection = expect(json.receipt).rejects.toThrowError(
+      'portable export JSON stream did not complete',
+    )
+    const snapshotReceiptRejection = expect(snapshot.receipt).rejects.toThrowError(
+      'portable export database snapshot did not complete',
+    )
+
+    await iterator.return?.()
+    await Promise.all([jsonReceiptRejection, snapshotReceiptRejection])
   })
 })

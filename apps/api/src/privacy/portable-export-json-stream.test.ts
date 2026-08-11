@@ -14,7 +14,10 @@ import {
   type PortableExportArchiveEnvelopeContext,
 } from './portable-export-archive-envelope'
 import { serializePortableExport } from './portable-export-artifact'
-import { createPortableExportJsonStream } from './portable-export-json-stream'
+import {
+  createPortableExportJsonStream,
+  portableExportJsonAsyncArray,
+} from './portable-export-json-stream'
 
 const fixture = (): PrivacyExport =>
   privacyExportSchema.parse({
@@ -169,5 +172,74 @@ describe('portable export incremental JSON stream', () => {
       serializePortableExport(payload, Number.MAX_SAFE_INTEGER),
     )
     await expect(session.receipt).resolves.toMatchObject({ chunkBytes: 1024 })
+  })
+
+  it('serializes a lazy health record array byte-for-byte without requesting it early', async () => {
+    const eager = fixture()
+    eager.data.healthRecords = [
+      { id: 'first', note: '衡迹\ud800' },
+      { id: 'second', nested: { value: 2 } },
+    ]
+    let requestedRows = 0
+    let sourceCompleted = false
+    const lazyRows = (async function* () {
+      try {
+        for (const row of eager.data.healthRecords) {
+          requestedRows += 1
+          yield row
+        }
+        sourceCompleted = true
+      } finally {
+        // The flag remains false if a consumer abandons this source.
+      }
+    })()
+    const source = {
+      ...eager,
+      data: {
+        ...eager.data,
+        healthRecords: portableExportJsonAsyncArray(lazyRows),
+      },
+    }
+    const session = createPortableExportJsonStream(source, { chunkBytes: 32 })
+    const iterator = session.bytes[Symbol.asyncIterator]()
+
+    const firstChunk = await iterator.next()
+    expect(firstChunk.done).toBe(false)
+    expect(requestedRows).toBe(0)
+    const chunks = [Buffer.from(firstChunk.value!)]
+    while (true) {
+      const next = await iterator.next()
+      if (next.done) break
+      chunks.push(Buffer.from(next.value))
+    }
+
+    const expected = serializePortableExport(eager, Number.MAX_SAFE_INTEGER)
+    expect(Buffer.concat(chunks)).toEqual(expected)
+    expect(requestedRows).toBe(2)
+    expect(sourceCompleted).toBe(true)
+    await expect(session.receipt).resolves.toMatchObject({
+      byteLength: expected.length,
+      sha256: createHash('sha256').update(expected).digest('hex'),
+    })
+  })
+
+  it('rejects JSON and completion receipts when a lazy array source fails', async () => {
+    const sourceError = new Error('lazy health record source failed')
+    const lazyRows = (async function* () {
+      yield { id: 'accepted-prefix' }
+      throw sourceError
+    })()
+    const eager = fixture()
+    const session = createPortableExportJsonStream({
+      ...eager,
+      data: {
+        ...eager.data,
+        healthRecords: portableExportJsonAsyncArray(lazyRows),
+      },
+    })
+    const receiptRejection = expect(session.receipt).rejects.toBe(sourceError)
+
+    await expect(collect(session.bytes)).rejects.toBe(sourceError)
+    await receiptRejection
   })
 })
