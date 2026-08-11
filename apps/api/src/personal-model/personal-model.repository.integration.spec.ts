@@ -278,6 +278,88 @@ describe('PersonalModelRepository with PostgreSQL', () => {
     })
   })
 
+  it('projects exact ordered evidence and rejects late mutation of a revision ledger', async () => {
+    const reference = current.snapshot.evidenceSet.references[0]!
+    const projected = await pool.query<{
+      ordinal: number
+      reference_id: string
+      qualification: string
+      reference: unknown
+    }>(
+      `
+        SELECT ordinal, reference_id, qualification, reference
+        FROM personal_model_evidence_refs
+        WHERE user_id = $1 AND item_id = $2 AND item_revision = $3
+        ORDER BY ordinal
+      `,
+      [userId, itemId, current.revision],
+    )
+    expect(projected.rows).toEqual([
+      {
+        ordinal: 1,
+        reference_id: reference.id,
+        qualification: 'eligible',
+        reference,
+      },
+    ])
+
+    await expect(
+      pool.query(
+        `
+          UPDATE personal_model_evidence_refs
+          SET reference = reference
+          WHERE user_id = $1 AND item_id = $2 AND item_revision = $3 AND ordinal = 1
+        `,
+        [userId, itemId, current.revision],
+      ),
+    ).rejects.toMatchObject({ code: 'P0001' })
+    await expect(
+      pool.query(
+        `
+          DELETE FROM personal_model_evidence_refs
+          WHERE user_id = $1 AND item_id = $2 AND item_revision = $3 AND ordinal = 1
+        `,
+        [userId, itemId, current.revision],
+      ),
+    ).rejects.toMatchObject({ code: 'P0001' })
+
+    const extraReference = {
+      ...reference,
+      id: randomUUID(),
+      aggregateId: randomUUID(),
+    }
+    await expect(
+      pool.query(
+        `
+          INSERT INTO personal_model_evidence_refs (
+            user_id, item_id, item_revision, ordinal,
+            reference_id, evidence_kind, aggregate_id, aggregate_revision,
+            role, source_kind, qualification, withdrawn_reason, reference
+          )
+          VALUES (
+            $1, $2, $3, 2,
+            $4, $5, $6, $7,
+            $8, $9, $10, $11, $12::JSONB
+          )
+        `,
+        [
+          userId,
+          itemId,
+          current.revision,
+          extraReference.id,
+          extraReference.evidenceKind,
+          extraReference.aggregateId,
+          extraReference.aggregateRevision,
+          extraReference.role,
+          extraReference.sourceKind,
+          extraReference.qualification,
+          extraReference.withdrawnReason,
+          JSON.stringify(extraReference),
+        ],
+      ),
+    ).rejects.toMatchObject({ code: 'P0001' })
+  })
+
   it('advances exactly one revision and fails closed for stale or other-owner access', async () => {
     const second = nextRevision(current, '2026-08-10T01:00:00.000Z', 'c'.repeat(64))
     current = await repository.append(userId, itemId, 1, second)
@@ -582,6 +664,30 @@ describe('PersonalModelRepository with PostgreSQL', () => {
   })
 
   it('blocks direct physical item deletion but cascades all history with account deletion', async () => {
+    const projectedHistory = await pool.query<{
+      revision_count: string
+      evidence_count: string
+    }>(
+      `
+        SELECT
+          (
+            SELECT COUNT(*)
+            FROM personal_model_item_revisions
+            WHERE user_id = $1 AND item_id = $2
+          )::TEXT AS revision_count,
+          (
+            SELECT COUNT(*)
+            FROM personal_model_evidence_refs
+            WHERE user_id = $1 AND item_id = $2
+          )::TEXT AS evidence_count
+      `,
+      [userId, itemId],
+    )
+    expect(projectedHistory.rows[0]).toEqual({
+      revision_count: String(current.revision),
+      evidence_count: String(current.revision),
+    })
+
     await expect(
       pool.query('DELETE FROM personal_model_items WHERE user_id = $1 AND id = $2', [
         userId,
@@ -594,6 +700,7 @@ describe('PersonalModelRepository with PostgreSQL', () => {
       item_count: string
       revision_count: string
       feedback_count: string
+      evidence_count: string
     }>(
       `
       SELECT
@@ -607,7 +714,12 @@ describe('PersonalModelRepository with PostgreSQL', () => {
           SELECT COUNT(*)
           FROM personal_model_feedback_events
           WHERE user_id = $1 OR item_id = $2
-        )::TEXT AS feedback_count
+        )::TEXT AS feedback_count,
+        (
+          SELECT COUNT(*)
+          FROM personal_model_evidence_refs
+          WHERE user_id = $1 OR item_id = $2
+        )::TEXT AS evidence_count
     `,
       [userId, itemId],
     )
@@ -615,6 +727,7 @@ describe('PersonalModelRepository with PostgreSQL', () => {
       item_count: '0',
       revision_count: '0',
       feedback_count: '0',
+      evidence_count: '0',
     })
   })
 })

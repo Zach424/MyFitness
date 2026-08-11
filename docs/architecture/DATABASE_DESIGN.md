@@ -79,25 +79,25 @@ erDiagram
 
 本地实例执行 `ANALYZE` 后的 `n_live_tup` 如下。0 表示当前开发实例无活动行，不表示功能或表未实现。
 
-| 领域     | 表                                                                                                          |        本地活动行 |
-| -------- | ----------------------------------------------------------------------------------------------------------- | ----------------: |
-| 迁移     | `schema_migrations`                                                                                         |                38 |
-| 用户身份 | `users` / `auth_identities` / `auth_sessions` / `auth_identity_suppressions`                                |  60 / 60 / 60 / 0 |
-| 资料授权 | `user_profiles` / `user_goals` / `consent_events`                                                           |        3 / 3 / 15 |
-| 健康     | `health_records` / `health_record_revisions`                                                                |             0 / 0 |
-| 训练     | `workout_sessions` / `workout_exercises` / `workout_sets` / `workout_revisions`                             |     2 / 2 / 6 / 2 |
-| 动作目录 | `user_exercise_catalog_entries` / `user_exercise_catalog_revisions`                                         |             0 / 0 |
-| 营养     | `nutrition_meals` / `nutrition_meal_items` / `nutrition_meal_revisions` / `nutrition_favorites`             |     0 / 0 / 0 / 0 |
-| 食物目录 | `user_food_catalog_entries` / `user_food_catalog_revisions`                                                 |             0 / 0 |
-| 餐食照片 | `nutrition_photo_candidates`                                                                                |                 0 |
-| 进度照   | `progress_photos`                                                                                           |                 2 |
-| 计划     | `weekly_plans` / `weekly_plan_revisions` / `plan_workout_links` / `plan_experience_reflections`             |     3 / 4 / 0 / 0 |
-| AI       | `ai_explanation_runs`                                                                                       |                 2 |
-| 个人模型 | `personal_model_items` / `personal_model_item_revisions` / `personal_model_feedback_events`                 |         0 / 0 / 0 |
-| 隐私     | `privacy_erasure_intents` / `privacy_erasure_receipts` / `privacy_export_archives`                          |         0 / 0 / 0 |
-| 持久任务 | `data_operation_jobs` / `data_operation_attempts`                                                           |         179 / 179 |
-| 管理身份 | `admin_operators` / `admin_identities` / `admin_operator_roles` / `admin_sessions` / `admin_oidc_exchanges` | 0 / 0 / 0 / 0 / 0 |
-| 管理审计 | `admin_audit_events`                                                                                        |                 0 |
+| 领域     | 表                                                                                                                           |        本地活动行 |
+| -------- | ---------------------------------------------------------------------------------------------------------------------------- | ----------------: |
+| 迁移     | `schema_migrations`                                                                                                          |                38 |
+| 用户身份 | `users` / `auth_identities` / `auth_sessions` / `auth_identity_suppressions`                                                 |  60 / 60 / 60 / 0 |
+| 资料授权 | `user_profiles` / `user_goals` / `consent_events`                                                                            |        3 / 3 / 15 |
+| 健康     | `health_records` / `health_record_revisions`                                                                                 |             0 / 0 |
+| 训练     | `workout_sessions` / `workout_exercises` / `workout_sets` / `workout_revisions`                                              |     2 / 2 / 6 / 2 |
+| 动作目录 | `user_exercise_catalog_entries` / `user_exercise_catalog_revisions`                                                          |             0 / 0 |
+| 营养     | `nutrition_meals` / `nutrition_meal_items` / `nutrition_meal_revisions` / `nutrition_favorites`                              |     0 / 0 / 0 / 0 |
+| 食物目录 | `user_food_catalog_entries` / `user_food_catalog_revisions`                                                                  |             0 / 0 |
+| 餐食照片 | `nutrition_photo_candidates`                                                                                                 |                 0 |
+| 进度照   | `progress_photos`                                                                                                            |                 2 |
+| 计划     | `weekly_plans` / `weekly_plan_revisions` / `plan_workout_links` / `plan_experience_reflections`                              |     3 / 4 / 0 / 0 |
+| AI       | `ai_explanation_runs`                                                                                                        |                 2 |
+| 个人模型 | `personal_model_items` / `personal_model_item_revisions` / `personal_model_feedback_events` / `personal_model_evidence_refs` |     0 / 0 / 0 / 0 |
+| 隐私     | `privacy_erasure_intents` / `privacy_erasure_receipts` / `privacy_export_archives`                                           |         0 / 0 / 0 |
+| 持久任务 | `data_operation_jobs` / `data_operation_attempts`                                                                            |         179 / 179 |
+| 管理身份 | `admin_operators` / `admin_identities` / `admin_operator_roles` / `admin_sessions` / `admin_oidc_exchanges`                  | 0 / 0 / 0 / 0 / 0 |
+| 管理审计 | `admin_audit_events`                                                                                                         |                 0 |
 
 ## 5. 用户身份、资料与授权
 
@@ -372,6 +372,20 @@ revised 使用两条可延迟关系形成事务闭环：事件的 `result_revisi
 
 反馈文字虽然长度有限，仍可能包含身体、训练安排或个人处境。数据库只为准确保存和本人后续复核而保留这些信息，不为搜索、画像或模型训练建立通用索引。以后进入导出和页面前，还必须补齐用途说明、最小展示、保留期限与删除传播证明。
 
+### 14.5.4 `personal_model_evidence_refs`
+
+每行保存 `user_id,item_id,item_revision,ordinal,reference_id,evidence_kind,aggregate_id,aggregate_revision,role,source_kind,qualification,withdrawn_reason,reference jsonb`。复合外键把它绑定到同 owner 的精确模型修订；ordinal、reference UUID 和 evidence kind/aggregate/revision 在单个模型修订内分别唯一。列级枚举、来源兼容、withdrawn 必须为 context、理由空值关系和 instant/interval 时间形状与 JSON 身份同时受 CHECK 保护。
+
+repository 在插入 revision 后使用一次 JSON 数组展开，按原顺序写入全部引用；create、普通 append 和 feedback revised 共用这一条路径。revision 侧与 evidence 侧各有一个延迟约束触发器，提交时重新聚合 `reference`，要求行数、顺序和 JSON 与 `snapshot.evidenceSet.references` 完全一致，并复核 owner、证据指纹格式以及 included/supporting/contradicting/withdrawn 计数。只插 revision、只插部分引用、晚加额外引用或改变顺序都会整体回滚。
+
+证据行本身不可 UPDATE 或直接 DELETE；账户删除引发的 revision 级联可以清理。迁移会从既有 revision JSON 前向回填，任何不满足当前关系的旧快照都会使迁移失败关闭，而不是静默截断证据。
+
+这张表当前只证明“模型修订声明的引用被完整、可查询地投影”，不证明来源聚合真实存在或仍具资格。`workout_revisions` 已有不可变历史，但 onboarding `user_goals` 仍是覆盖式当前行，没有可供 `onboarding_goal_revision` 使用的历史表；因此 0039 刻意不创建伪多态来源外键，也不自动把来源更正/删除改写成 withdrawn。补齐 goal source revision、goal/workout 复合来源约束和追加式撤回 revision 是下一门禁。
+
+读取时必须区分三层含义。第一层是历史陈述：某次模型修订在形成时引用了哪些材料，这一层由完整快照和有序投影共同证明，之后不得改写。第二层是来源权威：被引用的目标或训练修订是否真实存在、是否属于同一账户、是否正是当时的版本，这一层必须由原业务聚合的不可变历史和复合外键证明。第三层是当前资格：原来源后来是否被更正、撤回或删除，以及旧结论现在是否仍可用于建议，这一层需要来源事件、重新评估和新的模型修订。三层不能互相替代；仅仅查到一条投影行，既不能证明原材料真实，也不能证明它今天仍然合格。
+
+后续来源绑定必须逐类实施并分别验收。建档目标要先保存每次本人确认的完整历史，训练来源则要明确当前删除标记与指定历史版本之间的资格规则。来源发生变化时，后台流程只能读取受影响的当前条目，按照固定规则生成包含撤回理由的新证据集合，再决定条目保持、争议还是失效；旧模型修订及旧投影继续保留当时事实。处理失败必须可以重试且不能产生半条修订，重复事件必须收敛到同一结果，跨账户来源必须在数据库层失败。这样才能同时满足可追溯、更正权和历史不可抵赖，而不是用删除历史换取表面上的“当前正确”。
+
 ## 15. 管理员身份与审计
 
 ### 15.1 `admin_operators`
@@ -404,35 +418,35 @@ revised 使用两条可延迟关系形成事务闭环：事件的 `result_revisi
 
 ### 16.1 `schema_migrations`
 
-`name text` 主键、`checksum char`、`applied_at timestamptz`。当前 38 行，名称从 `0001` 连续至 `0038_personal_model_feedback_event_core.sql`。checksum 用于检测已应用迁移文件被改写。
+`name text` 主键、`checksum char`、`applied_at timestamptz`。当前 39 行，名称从 `0001` 连续至 `0039_personal_model_evidence_projection_core.sql`。checksum 用于检测已应用迁移文件被改写。
 
 ### 16.2 当前迁移演进主题
 
-| 范围      | 主要结构                                           |
-| --------- | -------------------------------------------------- |
-| 0001–0004 | 用户、身份、资料、授权、健康记录与修订             |
-| 0005–0009 | 训练、餐食、周计划及各自历史                       |
-| 0010–0014 | AI 运行、照片、隐私删除、持久数据操作              |
-| 0015–0019 | 身份抑制、照片保留/删除证据、目录定义              |
-| 0020–0024 | 管理员支持与审计、OIDC、计划证据与关联             |
-| 0025–0030 | 洞察/回看数据、本人计划体验与归档保管/安全整数边界 |
-| 0031–0036 | 便携归档健康、训练、目录、餐食与计划关联全历史索引 |
-| 0037–0038 | Personal Model item/revision 与 feedback 最小内核  |
+| 范围      | 主要结构                                                           |
+| --------- | ------------------------------------------------------------------ |
+| 0001–0004 | 用户、身份、资料、授权、健康记录与修订                             |
+| 0005–0009 | 训练、餐食、周计划及各自历史                                       |
+| 0010–0014 | AI 运行、照片、隐私删除、持久数据操作                              |
+| 0015–0019 | 身份抑制、照片保留/删除证据、目录定义                              |
+| 0020–0024 | 管理员支持与审计、OIDC、计划证据与关联                             |
+| 0025–0030 | 洞察/回看数据、本人计划体验与归档保管/安全整数边界                 |
+| 0031–0036 | 便携归档健康、训练、目录、餐食与计划关联全历史索引                 |
+| 0037–0039 | Personal Model item/revision、feedback 与 evidence projection 内核 |
 
 迁移只能前向追加；不得在共享历史中重写已应用 SQL。生产发布前应先在备份副本演练、核对 checksum、外键和索引，再滚动应用。
 
 ## 17. 外键删除策略
 
-| 父实体                              | 子实体                                           | 主要策略                                         |
-| ----------------------------------- | ------------------------------------------------ | ------------------------------------------------ |
-| `users`                             | 资料、目标、会话、身份、授权、业务聚合、照片、AI | 账户级删除时级联清理                             |
-| `users`                             | Personal Model item、revision 与 feedback 历史   | 账户级删除时级联；日常直接物理删除由触发器拒绝   |
-| `users`                             | `privacy_export_archives`                        | RESTRICT；先处置私有对象并删除保管行             |
-| 当前聚合                            | 子项与 revision                                  | 聚合物理删除时级联；普通用户删除只先软删         |
-| `weekly_plans` / `workout_sessions` | `plan_workout_links`                             | 复合所有权 FK；账户删除最终级联                  |
-| `consent_events`                    | AI/照片运行                                      | 保持明确授权引用；正常撤回不删除事件             |
-| `privacy_erasure_receipts`          | data jobs                                        | receipt 可被保留或解除引用；任务不会丢失尝试证据 |
-| `admin_operators`                   | 管理身份、角色、会话、审计 operator 引用         | 身份数据级联；审计需保持不可变语义               |
+| 父实体                              | 子实体                                                   | 主要策略                                         |
+| ----------------------------------- | -------------------------------------------------------- | ------------------------------------------------ |
+| `users`                             | 资料、目标、会话、身份、授权、业务聚合、照片、AI         | 账户级删除时级联清理                             |
+| `users`                             | Personal Model item、revision、feedback 与 evidence 历史 | 账户级删除时级联；日常直接物理删除由触发器拒绝   |
+| `users`                             | `privacy_export_archives`                                | RESTRICT；先处置私有对象并删除保管行             |
+| 当前聚合                            | 子项与 revision                                          | 聚合物理删除时级联；普通用户删除只先软删         |
+| `weekly_plans` / `workout_sessions` | `plan_workout_links`                                     | 复合所有权 FK；账户删除最终级联                  |
+| `consent_events`                    | AI/照片运行                                              | 保持明确授权引用；正常撤回不删除事件             |
+| `privacy_erasure_receipts`          | data jobs                                                | receipt 可被保留或解除引用；任务不会丢失尝试证据 |
+| `admin_operators`                   | 管理身份、角色、会话、审计 operator 引用                 | 身份数据级联；审计需保持不可变语义               |
 
 ## 18. 关键索引策略
 
@@ -442,7 +456,7 @@ revised 使用两条可延迟关系形成事务闭环：事件的 `result_revisi
 
 ### 18.2 历史
 
-所有 revision 表有 `(aggregate_id,revision)` 唯一约束，并有 `(user_id,aggregate_id,revision desc)` 读取索引，防止跨用户历史查询。Personal Model revision 使用 `(user_id,item_id,revision desc)`；feedback 使用 `(user_id,item_id,created_at desc,id desc)`，并由 target/result 复合外键锁定同一历史链归属。
+所有 revision 表有 `(aggregate_id,revision)` 唯一约束，并有 `(user_id,aggregate_id,revision desc)` 读取索引，防止跨用户历史查询。Personal Model revision 使用 `(user_id,item_id,revision desc)`；feedback 使用 `(user_id,item_id,created_at desc,id desc)`；evidence projection 使用 owner/item/revision/ordinal 与 owner/evidence kind/aggregate revision 两条索引，分别支持还原有序证据和后续来源影响查询。当前来源索引不等于来源外键或撤回传播已经实现。
 
 ### 18.3 幂等
 
@@ -462,7 +476,7 @@ revised 使用两条可延迟关系形成事务闭环：事件的 `result_revisi
 
 创建 → 当前 revision 1 + revision 快照 → 更正增加 revision → 用户删除写 deleted_at 与 deleted 修订 → 当前列表/洞察排除 → 账户级删除时当前与历史物理清除。
 
-Personal Model item 创建时在同一事务写入 revision 1 并发布当前指针；后续更新锁定 item、校验期望 revision、只追加完整快照并把指针精确推进一位。反馈 revised 在同一事务追加事件、结果 revision 并推进指针；no-op 只追加结果收据。当前阶段不支持普通物理删除，只有账户级 owner 级联可清理 item、revision 与 feedback；来源传播和便携导出生命周期留待后续迁移。
+Personal Model item 创建时在同一事务写入 revision 1、全部有序 evidence projection 并发布当前指针；后续普通更新与反馈 revised 都只追加完整快照和对应证据行，再把指针精确推进一位。反馈 no-op 只追加结果收据，不复制 revision 或证据。当前阶段不支持普通物理删除，只有账户级 owner 级联可清理 item、revision、feedback 与 evidence；来源传播和便携导出生命周期留待后续迁移。
 
 ### 19.2 临时餐食照片
 
@@ -510,7 +524,7 @@ intent 创建 → 验证一次性 token 与确认短语 → users 状态关闭 �
 - 管理支持查询不直接 JOIN 返回健康内容，只做有上限的计数和状态摘要。
 - admin 审计表有数据库级不可变触发器；普通 revision 表通过应用只追加策略和唯一 revision 约束保护。
 - JSONB 用于需要版本化的聚合快照或提供方详情；进入 JSONB 前仍由严格 Zod Schema 校验，不接受任意模型原文直接持久化。
-- Personal Model 仓储在写入和读取时都执行共享完整 Schema 校验；数据库检查只负责 owner、subject、revision 链、核心枚举与原子发布等持久边界，不能替代 claim/evidence 的完整契约校验。
+- Personal Model 仓储在写入和读取时都执行共享完整 Schema 校验；数据库再负责 owner、subject、revision 链、核心枚举、原子发布及证据 JSON/顺序/计数投影，仍不能替代 claim、IANA 时区或来源资格的完整契约校验。
 - Personal Model feedback 的 note、reason 和 temporary 时限属于敏感用户校准信息；日志与指标不得记录正文。事件 ID 只用于仓储幂等和内部关联，不是公开授权凭据。
 
 ## 21. 当前限制与后续设计风险
@@ -521,7 +535,7 @@ intent 创建 → 验证一次性 token 与确认短语 → users 状态关闭 �
 - 当前本地数据操作表有 179 个 job/attempt，来自测试和演示；应通过状态分布、失败码和死信而不是总行数判断健康。
 - 归档表与状态机已存在，但请求仓储、执行任务、加密对象、下载授权和到期扫描尚未实现；表结构不能被描述为用户可用的异步导出。
 - 没有设备原生同步表、社交表、支付表或医疗病历表；这些不属于当前实现。
-- `personal_model_items`、`personal_model_item_revisions` 与 `personal_model_feedback_events` 已建立 owner 复合键、不可变历史、原子当前指针、反馈结果绑定和真实 PostgreSQL 并发证明，但仍只是内部 P2a/P2b 持久内核。证据引用、Weekly Cognitive Review、来源更正/删除传播、列表、便携导出和公开 API 尚未持久化；在这些语义通过验证前，不得把三张表描述为用户可用的“认知镜子”，也不得建立任意 JSON“用户画像”旁路。
+- `personal_model_items`、`personal_model_item_revisions`、`personal_model_feedback_events` 与 `personal_model_evidence_refs` 已建立 owner 复合键、不可变历史、原子当前指针、反馈结果和证据投影绑定，但仍只是内部 P2a–P2c 持久内核。证据来源权威/撤回、Weekly Cognitive Review、列表、便携导出和公开 API 尚未完成；在这些语义通过验证前，不得把四张表描述为用户可用的“认知镜子”，也不得建立任意 JSON“用户画像”旁路。
 - 备份物理删除时限属于生产保留政策和演练证据，不能只由主数据库 receipt 状态推断。
 
 ## 22. 运行核对查询

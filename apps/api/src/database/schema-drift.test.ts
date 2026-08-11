@@ -59,6 +59,11 @@ import {
   progressPhotoViews,
   personalModelClaimSchemaVersions,
   personalModelContractVersion,
+  personalModelEvidenceKinds,
+  personalModelEvidenceQualificationStates,
+  personalModelEvidenceRoles,
+  personalModelEvidenceSources,
+  personalModelEvidenceWithdrawalReasons,
   personalModelFeedbackChoices,
   personalModelFeedbackNoOpReasons,
   personalModelFeedbackReasonCodes,
@@ -180,6 +185,10 @@ const personalModelItemRevisionMigrationPath = path.resolve(
 const personalModelFeedbackEventMigrationPath = path.resolve(
   __dirname,
   '../../../../infra/postgres/migrations/0038_personal_model_feedback_event_core.sql',
+)
+const personalModelEvidenceProjectionMigrationPath = path.resolve(
+  __dirname,
+  '../../../../infra/postgres/migrations/0039_personal_model_evidence_projection_core.sql',
 )
 
 describe('health-record migration drift', () => {
@@ -534,6 +543,36 @@ describe('health-record migration drift', () => {
       'personal_model_feedback_events_target_guard',
       'personal_model_feedback_events_immutable',
       'feedback events are append-only',
+    ]) {
+      expect(migration).toContain(boundary)
+    }
+  })
+
+  it('projects every Personal Model revision evidence reference into an immutable ordered ledger', async () => {
+    const migration = await readFile(personalModelEvidenceProjectionMigrationPath, 'utf8')
+    for (const value of [
+      ...personalModelEvidenceKinds,
+      ...personalModelEvidenceRoles,
+      ...personalModelEvidenceSources,
+      ...personalModelEvidenceQualificationStates,
+      ...personalModelEvidenceWithdrawalReasons,
+    ]) {
+      expect(migration, `${value} is missing from the evidence projection migration`).toContain(
+        `'${value}'`,
+      )
+    }
+    for (const boundary of [
+      'CREATE TABLE personal_model_evidence_refs',
+      'personal_model_evidence_refs_revision_fk',
+      'personal_model_evidence_refs_revision_ordinal_unique',
+      'personal_model_evidence_refs_revision_reference_unique',
+      'personal_model_evidence_refs_revision_aggregate_unique',
+      'INSERT INTO personal_model_evidence_refs',
+      'personal_model_item_revisions_evidence_projection_guard',
+      'personal_model_evidence_refs_projection_guard',
+      'personal model evidence projection does not match revision snapshot',
+      'personal_model_evidence_refs_immutable',
+      'personal model evidence references are append-only',
     ]) {
       expect(migration).toContain(boundary)
     }

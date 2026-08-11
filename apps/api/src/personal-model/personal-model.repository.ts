@@ -164,6 +164,40 @@ const lockCurrentRevision = async (
   return { currentRevision: item.current_revision, revision: mapRevisionRow(revision) }
 }
 
+const insertEvidenceReferences = async (
+  client: PoolClient,
+  revision: PersonalModelItemRevision,
+): Promise<void> => {
+  await client.query(
+    `
+      INSERT INTO personal_model_evidence_refs (
+        user_id, item_id, item_revision, ordinal,
+        reference_id, evidence_kind, aggregate_id, aggregate_revision,
+        role, source_kind, qualification, withdrawn_reason, reference
+      )
+      SELECT
+        $1, $2, $3, evidence.ordinality::INTEGER,
+        (evidence.reference ->> 'id')::UUID,
+        evidence.reference ->> 'evidenceKind',
+        (evidence.reference ->> 'aggregateId')::UUID,
+        (evidence.reference ->> 'aggregateRevision')::INTEGER,
+        evidence.reference ->> 'role',
+        evidence.reference ->> 'sourceKind',
+        evidence.reference ->> 'qualification',
+        evidence.reference ->> 'withdrawnReason',
+        evidence.reference
+      FROM jsonb_array_elements($4::JSONB)
+        WITH ORDINALITY AS evidence(reference, ordinality)
+    `,
+    [
+      revision.userId,
+      revision.itemId,
+      revision.revision,
+      JSON.stringify(revision.snapshot.evidenceSet.references),
+    ],
+  )
+}
+
 const insertRevision = async (
   client: PoolClient,
   revision: PersonalModelItemRevision,
@@ -200,6 +234,7 @@ const insertRevision = async (
 
   const stored = result.rows[0]
   if (!stored) throw new Error('personal model revision insert returned no row')
+  await insertEvidenceReferences(client, revision)
   return mapRevisionRow(stored)
 }
 

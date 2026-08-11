@@ -32,11 +32,11 @@
 - 原生 Apple Health、Health Connect 或穿戴设备自动同步。
 - 照片人体测量、姿态诊断、精确体脂率或“好坏体态”判断。
 - AI 自动修改计划、自动确认事实、自动写入餐食或自动提高训练量。
-- 用户可见的 Personal Model、Pattern/Hypothesis 生命周期、Weekly Cognitive Review、用户校准和模型修订闭环；当前只有内部 item/revision/feedback 持久内核。
+- 用户可见的 Personal Model、Pattern/Hypothesis 生命周期、Weekly Cognitive Review、用户校准和模型修订闭环；当前只有内部 item/revision/feedback/evidence projection 持久内核。
 - 基于长期个人模型自动执行 Contextual Decision，或把相关性、短期状态和用户未确认推断当作稳定人格标签。
 - 用户端离线写入队列；网络结果不确定时不会在后台自动重放请求。
 
-仓库已实现 Personal Model P1a/P1b 内部共享契约，以及 P2a item/revision 和 P2b feedback 最小 PostgreSQL 内核。复合 owner 外键、不可变触发器和延迟原子发布保护完整历史链；追加式反馈行保存四选一动作与 revised/no-op 收据，双向延迟外键保证 revised 事件和结果 revision 不可分离。仓储锁定 item 后重新读取 current，支持相同事件与结果安全重放，拒绝过期目标、跨 owner 请求、事件身份换内容和直接反馈 revision 旁路。低覆盖异议仍无决策资格；证据/回顾关系、来源传播、便携导出、API、派生服务和客户端尚未接入，因此不构成用户可见的个人模型、每周认知回顾或自动适应功能。
+仓库已实现 Personal Model P1a/P1b 内部共享契约，以及 P2a item/revision、P2b feedback 和 P2c 首个 evidence projection PostgreSQL 内核。复合 owner 外键、不可变触发器和延迟原子发布保护完整历史链；追加式反馈与结果 revision 不可分离；每个新 revision 又必须在同一事务把完整有序 EvidenceReference 投影成不可变行，提交时核对快照数组、身份、顺序、资格及支持/反对/撤回计数。仓储所有 revision 写入路径共用该投影，晚加、漏加、改写和账户残留均受真实数据库测试保护。低覆盖异议仍无决策资格；onboarding goal 不可变来源历史、goal/workout 来源资格与撤回传播、回顾、便携导出、API、派生服务和客户端尚未接入，因此不构成用户可见的个人模型、每周认知回顾或自动适应功能。
 
 ## 3. 用户、权限与信任边界
 

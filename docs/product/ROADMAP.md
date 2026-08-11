@@ -2,7 +2,7 @@
 
 路线图按受控迭代组织。一轮可以跨越多个工作会话，但只有在实现、验证、档案更新和提交全部完成后才结束。
 
-进度快照（2026-08-11）：第 0–185 轮已在本地完成。Personal Model P0/P1 契约与 P2a/P2b item/revision/feedback 最小 PostgreSQL 内核已经受门禁保护：追加事件、精确 current 目标、revised 双向延迟外键、no-op 收据、带偏移时间语义对账后的同事件幂等重放和账户删除均通过真实数据库验证。完整单元为 595 项、集成为 141 项、浏览器为 95 项。生产依赖为 0 个 critical/high、9 个 moderate。下一阶段进入 P2c 证据引用与来源撤回持久边界；除数据丢失、安全、隐私或认知闭环阻塞外，极端规模导出、部署与非必要运维强化暂停。
+进度快照（2026-08-12）：第 0–186 轮已在本地完成。Personal Model P0/P1 契约与 P2a–P2c revision/feedback/evidence projection 内核已经受门禁保护：每个模型修订在同一事务投影完整有序证据，提交时复核快照 JSON 与资格计数，且账户删除无残留。完整单元为 596 项、集成为 142 项、浏览器为 95 项。生产依赖为 0 个 critical/high、9 个 moderate。下一阶段先补 onboarding goal 不可变历史，再绑定 goal/workout 来源资格和撤回传播；除数据丢失、安全、隐私或认知闭环阻塞外，极端规模导出、部署与非必要运维强化暂停。
 
 ## 认知镜子主线
 
@@ -10,7 +10,7 @@
 | ---- | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | P0   | Personal Model 领域与架构基线       | 八类认知、证据角色、不可变修订、状态机、置信收据、用户校准和每周回顾边界受文档门禁保护                                  |
 | P1   | 共享领域契约                        | P1a 核心 item/claim/evidence/confidence/feedback 与 P1b 不可变 revision、反馈转换、Weekly Cognitive Review 信封均已实现 |
-| P2   | 持久化与所有者隔离                  | P2a item/revision 与 P2b feedback 事务已完成；证据/回顾、来源撤回、普通删除/导出仍待实现                                |
+| P2   | 持久化与所有者隔离                  | P2a/P2b 已完成，P2c 证据投影首片完成；来源权威/撤回、回顾、普通删除/导出仍待实现                                        |
 | P3   | Evidence → Personal Model Item      | 先实现“可训练约束与已记录训练行为并列”和“已记录课次时长基线”，满足覆盖门槛且不推断依从性、动机或偏好                    |
 | P4   | Weekly Cognitive Review             | 服务端固定选择少量条目和精确修订，客户端区分首次失败、空状态、刷新旧快照并可回到证据来源                                |
 | P5   | User Feedback → Model Revision      | 用户可选择“符合我、暂时情况、不同意、不确定”，反馈绑定精确修订并形成不可变后续修订，不自动提高置信                      |
@@ -208,6 +208,7 @@ P0–P5 是首个最小闭环：Evidence → Personal Model Item → Weekly Revi
 | 183  | Personal Model P1b 修订与回顾契约     | 完整快照、精确前驱、反馈 revised/no-op、低置信异议与结构化周回顾门禁，通过         |
 | 184  | Personal Model P2a item/revision 内核 | 复合 owner、不可变历史、原子当前指针、并发冲突与账户删除 PostgreSQL 证明，通过     |
 | 185  | Personal Model P2b 反馈事务           | 追加事件、双向结果外键、精确 current、幂等重放与账户删除 PostgreSQL 证明，通过     |
+| 186  | Personal Model P2c 证据投影首片       | 有序完整引用、快照/计数延迟门禁、全 revision 路径与账户删除 PostgreSQL 证明，通过  |
 
 托管共享环境部署、封闭测试强化与发布继续作为正式发布门禁，但在真实身份、数据保管、遥测、域名、预算、责任人与备案材料就绪前不占用本地迭代编号。原生 App 与 HealthKit/Health Connect/华为设备同步继续等待 MVP 留存门禁。
 
