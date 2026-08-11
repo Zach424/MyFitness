@@ -258,6 +258,17 @@ const fakeWorkoutExerciseLayerDatabase = (
             lifecycle.accountQueries += 1
             return { rows: [{ id: parameters[0] }] }
           }
+          if (
+            sql.includes('FROM consent_events') ||
+            sql.includes('FROM health_records') ||
+            sql.includes('FROM health_record_revisions') ||
+            sql.includes('FROM user_exercise_catalog_entries') ||
+            sql.includes('FROM user_exercise_catalog_revisions') ||
+            sql.includes('FROM user_food_catalog_entries') ||
+            sql.includes('FROM user_food_catalog_revisions')
+          ) {
+            return { rows: [] }
+          }
           const boundedRows = (
             values: Array<Record<string, unknown>>,
             maximumPayloadBytes: number,
@@ -2200,6 +2211,81 @@ describe('portable export database snapshot session', () => {
     })
     expect(await receiptFailure).toBe(streamFailure)
     expect(lifecycle).toMatchObject({ committed: false, rolledBack: true })
+  })
+
+  it('reuses the coordinated client for a complete JSON-ordered workout sixth field', async () => {
+    const revisionId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1'
+    const snapshotExerciseId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1'
+    const snapshotSetId = 'cccccccc-cccc-4ccc-8ccc-ccccccccccc1'
+    const { database, lifecycle } = fakeWorkoutExerciseLayerDatabase(
+      [{ id: 'workout-1', history: [], exercises: [] }],
+      { 'workout-1': [{ id: 'exercise-current', sets: [] }] },
+      { 'exercise-current': [{ id: 'set-current' }] },
+      { 'workout-1': [{ id: revisionId, revision: 1, snapshot: null }] },
+      {
+        [revisionId]: {
+          id: 'workout-1',
+          revision: 1,
+          exercises: [
+            {
+              id: snapshotExerciseId,
+              sets: [{ id: snapshotSetId }],
+            },
+          ],
+        },
+      },
+    )
+    const session = new PortableExportDatabaseSnapshotService(
+      database,
+    ).createConsentHealthCatalogWorkoutSnapshot('11111111-1111-4111-8111-111111111111', {
+      batchRows: 1,
+    })
+    const observed: string[] = []
+
+    for await (const _ of session.consentEvents) observed.push('consent')
+    for await (const _ of session.healthRecords) observed.push('health')
+    for await (const _ of session.healthRecordRevisions) observed.push('health-revision')
+    for await (const _ of session.exerciseCatalog) observed.push('exercise-catalog')
+    for await (const _ of session.foodCatalog) observed.push('food-catalog')
+    for await (const workout of session.workouts) {
+      observed.push(workout.header.id as string)
+      for await (const revision of workout.history) {
+        observed.push(revision.id as string)
+        for await (const exercise of revision.snapshot.exercises) {
+          observed.push(exercise.id as string)
+          for await (const set of exercise.sets) observed.push(set.id as string)
+        }
+      }
+      for await (const exercise of workout.exercises) {
+        observed.push(exercise.header.id as string)
+        for await (const set of exercise.sets) observed.push(set.id as string)
+      }
+    }
+    await session.complete()
+
+    expect(observed).toEqual([
+      'workout-1',
+      revisionId,
+      snapshotExerciseId,
+      snapshotSetId,
+      'exercise-current',
+      'set-current',
+    ])
+    expect(lifecycle).toMatchObject({
+      accountQueries: 1,
+      streamCount: 1,
+      committed: true,
+      rolledBack: false,
+    })
+    await expect(session.receipt).resolves.toMatchObject({
+      workouts: { batchCount: 1, rowCount: 1 },
+      workoutExercises: { batchCount: 1, rowCount: 1 },
+      workoutSets: { batchCount: 1, rowCount: 1 },
+      workoutRevisions: { batchCount: 1, rowCount: 1 },
+      workoutRevisionSnapshotRoots: { batchCount: 1, rowCount: 1 },
+      workoutRevisionSnapshotExercises: { batchCount: 1, rowCount: 1 },
+      workoutRevisionSnapshotSets: { batchCount: 1, rowCount: 1 },
+    })
   })
 
   it('fails closed when a coordinated collection is skipped', async () => {

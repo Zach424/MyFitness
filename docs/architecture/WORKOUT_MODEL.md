@@ -60,7 +60,7 @@ Migration `0024_exercise_insight_index.sql` adds `(workout_id, exercise_key)` lo
 
 `inspectWorkoutRevisionSnapshotShape()` 对单个不可变 snapshot 形成无正文的分解前置收据：沿精确 owner/workout/revision 父链验证根身份，以严格键集区分 `legacy|extended|mixed`，检查数组/计数/position 唯一，并在 PostgreSQL 内计算根头、最大动作头和最大 set 的 UTF-8 字节数。Workout 契约只要求 position 唯一，不要求输入数组升序；修订保存接受对象的原数组，所以合法 `[2,1]` 必须按 JSON ordinality 保留，只报告顺序不匹配而不能重排。该收据不是完整领域验证，也不输出 snapshot；下一层仍须按原始数组顺序递归连接 history，才能称为训练快照流式化。
 
-`createWorkoutRevisionSnapshot()`、关系优先多修订会话与 JSON 序会话共用单 revision 根→exercise→set 节点。同步 JSONB 的 workout 实际先枚举 `history` 再枚举 `exercises`，所以 JSON 会话在共享状态机中采用该顺序；关系优先旧入口保持不变。workout、当前动作与修订信封由 PostgreSQL 交付保留懒字段键位的骨架，Node 适配器只原位替换现有值，并递归包装 snapshot 动作/组。合法反序 position 继续按 JSON ordinality，当前修订 snapshot 必须完整结束才能推进。真实 PostgreSQL 已证明完整 `workouts` 数组与同步 v4 逐字节相同；它仍是内部独立事务来源。
+`createWorkoutRevisionSnapshot()`、关系优先多修订会话与 JSON 序会话共用单 revision 根→exercise→set 节点。同步 JSONB 的 workout 实际先枚举 `history` 再枚举 `exercises`，所以 JSON 会话在共享状态机中采用该顺序；关系优先旧入口保持不变。workout、当前动作与修订信封由 PostgreSQL 交付保留懒字段键位的骨架，Node 适配器只原位替换现有值，并递归包装 snapshot 动作/组。合法反序 position 继续按 JSON ordinality，当前修订 snapshot 必须完整结束才能推进。第六字段通过内部现有 `PoolClient` 适配器复用跨顶层协调事务与 owner 结论，不复制七层状态机；独立入口仍保持原事务行为。真实 PostgreSQL 已证明食物目录后的并发训练新增不可见、完整六字段与同步 v4 逐字节相同，活动不可变 set 取消仍由最深错误关闭统一根。
 
 ## Exercise catalog and history boundary
 

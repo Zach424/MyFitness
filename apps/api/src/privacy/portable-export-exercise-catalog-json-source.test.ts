@@ -6,12 +6,15 @@ import { describe, expect, it } from 'vitest'
 import type {
   PortableExportConsentHealthCatalogSnapshotReceipt,
   PortableExportConsentHealthCatalogSnapshotSession,
+  PortableExportConsentHealthCatalogWorkoutSnapshotReceipt,
+  PortableExportConsentHealthCatalogWorkoutSnapshotSession,
   PortableExportConsentHealthExerciseCatalogSnapshotReceipt,
   PortableExportConsentHealthExerciseCatalogSnapshotSession,
 } from './portable-export-database-snapshot'
 import { serializePortableExport } from './portable-export-artifact'
 import {
   createPortableExportConsentHealthCatalogJsonSource,
+  createPortableExportConsentHealthCatalogWorkoutJsonSource,
   createPortableExportConsentHealthExerciseCatalogJsonSource,
 } from './portable-export-exercise-catalog-json-source'
 import {
@@ -37,9 +40,22 @@ const emptyCatalogReceipt = (): PortableExportConsentHealthCatalogSnapshotReceip
   foodCatalogRevisions: { batchCount: 0, rowCount: 0 },
 })
 
+const emptyCatalogWorkoutReceipt =
+  (): PortableExportConsentHealthCatalogWorkoutSnapshotReceipt => ({
+    ...emptyCatalogReceipt(),
+    workouts: { batchCount: 0, rowCount: 0 },
+    workoutExercises: { batchCount: 0, rowCount: 0 },
+    workoutSets: { batchCount: 0, rowCount: 0 },
+    workoutRevisions: { batchCount: 0, rowCount: 0 },
+    workoutRevisionSnapshotRoots: { batchCount: 0, rowCount: 0 },
+    workoutRevisionSnapshotExercises: { batchCount: 0, rowCount: 0 },
+    workoutRevisionSnapshotSets: { batchCount: 0, rowCount: 0 },
+  })
+
 const exportFixture = (
   exerciseCatalog: Array<Record<string, unknown>>,
   foodCatalog: Array<Record<string, unknown>> = [],
+  workouts: Array<Record<string, unknown>> = [],
 ) =>
   privacyExportSchema.parse({
     schemaVersion: privacyExportSchemaVersion,
@@ -55,7 +71,7 @@ const exportFixture = (
       healthRecordRevisions: [{ id: 'health-revision-1' }],
       exerciseCatalog,
       foodCatalog,
-      workouts: [],
+      workouts,
       nutritionMeals: [],
       nutritionFavorites: [],
       weeklyPlans: [],
@@ -353,5 +369,99 @@ describe('portable export exercise catalog JSON source', () => {
     expect(cancelObservedHistoryClosed).toBe(true)
     expect(completed).toBe(false)
     expect(await receiptFailure).toBe(cancelledWith)
+  })
+
+  it('streams the complete sixth workout field after both catalogs byte-for-byte', async () => {
+    let completed = false
+    let cancelled = false
+    const snapshotSet = { id: 'snapshot-set-1', position: 1 }
+    const currentSet = { id: 'current-set-1', position: 1 }
+    const workoutExpected = {
+      id: 'workout-1',
+      history: [
+        {
+          id: 'revision-1',
+          revision: 1,
+          snapshot: {
+            id: 'workout-1',
+            exercises: [{ id: 'snapshot-exercise-1', sets: [snapshotSet] }],
+          },
+        },
+      ],
+      exercises: [{ id: 'current-exercise-1', sets: [currentSet] }],
+    }
+    const session = {
+      consentEvents: (async function* () {
+        yield { id: 'consent-1' }
+      })(),
+      healthRecords: (async function* () {
+        yield { id: 'health-1' }
+      })(),
+      healthRecordRevisions: (async function* () {
+        yield { id: 'health-revision-1' }
+      })(),
+      exerciseCatalog: (async function* () {})(),
+      foodCatalog: (async function* () {})(),
+      workouts: (async function* () {
+        yield {
+          header: { id: workoutExpected.id, history: [], exercises: [] },
+          history: (async function* () {
+            yield {
+              id: 'revision-1',
+              revision: 1,
+              snapshot: {
+                id: 'workout-1',
+                exercises: (async function* () {
+                  yield {
+                    id: 'snapshot-exercise-1',
+                    sets: (async function* () {
+                      yield snapshotSet
+                    })(),
+                  }
+                })(),
+              },
+            }
+          })(),
+          exercises: (async function* () {
+            yield {
+              header: { id: 'current-exercise-1', sets: [] },
+              sets: (async function* () {
+                yield currentSet
+              })(),
+            }
+          })(),
+        }
+      })(),
+      receipt: Promise.resolve(emptyCatalogWorkoutReceipt()),
+      complete: async () => {
+        completed = true
+      },
+      cancel: async () => {
+        cancelled = true
+      },
+    } as PortableExportConsentHealthCatalogWorkoutSnapshotSession
+    const source = createPortableExportConsentHealthCatalogWorkoutJsonSource(session)
+    const eager = exportFixture([], [], [workoutExpected])
+    const expected = serializePortableExport(eager, Number.MAX_SAFE_INTEGER)
+    const payload: PortableExportJsonSource = {
+      ...eager,
+      data: {
+        ...eager.data,
+        consentEvents: source.consentEvents as never,
+        healthRecords: source.healthRecords as never,
+        healthRecordRevisions: source.healthRecordRevisions as never,
+        exerciseCatalog: source.exerciseCatalog as never,
+        foodCatalog: source.foodCatalog as never,
+        workouts: source.workouts as never,
+      },
+    }
+    const json = createPortableExportJsonStream(payload, { chunkBytes: 31, lifecycle: source })
+    const chunks: Buffer[] = []
+
+    for await (const chunk of json.bytes) chunks.push(Buffer.from(chunk))
+
+    expect(Buffer.concat(chunks)).toEqual(expected)
+    expect(completed).toBe(true)
+    expect(cancelled).toBe(false)
   })
 })

@@ -3,6 +3,7 @@ import type {
   PortableExportWorkoutRevisionSnapshotLayerReceipt,
   PortableExportWorkoutRevisionSnapshotLayerRevision,
   PortableExportWorkoutRevisionSnapshotLayerSession,
+  PortableExportWorkoutRevisionSnapshotLayerWorkout,
   PortableExportWorkoutRevisionSnapshotValue,
   PortableExportWorkoutSetLayerSnapshotExercise,
 } from './portable-export-database-snapshot'
@@ -74,9 +75,9 @@ async function* currentExerciseJsonValues(
 }
 
 async function* workoutJsonValues(
-  session: PortableExportWorkoutRevisionSnapshotLayerSession,
+  workouts: AsyncIterable<PortableExportWorkoutRevisionSnapshotLayerWorkout>,
 ): AsyncGenerator<Record<string, unknown>> {
-  for await (const workout of session.workouts) {
+  for await (const workout of workouts) {
     replaceArrayPlaceholder(workout.header, 'history', revisionJsonValues(workout.history))
     replaceArrayPlaceholder(
       workout.header,
@@ -87,10 +88,15 @@ async function* workoutJsonValues(
   }
 }
 
+export const createPortableExportWorkoutJsonArray = (
+  workouts: AsyncIterable<PortableExportWorkoutRevisionSnapshotLayerWorkout>,
+): PortableExportJsonAsyncArray<Record<string, unknown>> =>
+  portableExportJsonAsyncArray(workoutJsonValues(workouts))
+
 export const createPortableExportWorkoutJsonSource = (
   session: PortableExportWorkoutRevisionSnapshotLayerSession,
 ): PortableExportWorkoutJsonSourceSession => ({
-  workouts: portableExportJsonAsyncArray(workoutJsonValues(session)),
+  workouts: createPortableExportWorkoutJsonArray(session.workouts),
   receipt: session.receipt,
   complete: session.complete,
   cancel: session.cancel,

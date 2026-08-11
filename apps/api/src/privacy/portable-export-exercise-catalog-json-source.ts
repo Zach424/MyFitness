@@ -1,5 +1,6 @@
 import type {
   PortableExportConsentHealthCatalogSnapshotSession,
+  PortableExportConsentHealthCatalogWorkoutSnapshotSession,
   PortableExportConsentHealthExerciseCatalogSnapshotSession,
   PortableExportExerciseCatalogSnapshotEntry,
 } from './portable-export-database-snapshot'
@@ -7,6 +8,7 @@ import {
   portableExportJsonAsyncArray,
   type PortableExportJsonAsyncArray,
 } from './portable-export-json-stream'
+import { createPortableExportWorkoutJsonArray } from './portable-export-workout-json-source'
 
 export type PortableExportConsentHealthExerciseCatalogJsonSource = {
   consentEvents: PortableExportJsonAsyncArray<Record<string, unknown>>
@@ -24,6 +26,14 @@ export type PortableExportConsentHealthCatalogJsonSource =
     receipt: PortableExportConsentHealthCatalogSnapshotSession['receipt']
     complete: PortableExportConsentHealthCatalogSnapshotSession['complete']
     cancel: PortableExportConsentHealthCatalogSnapshotSession['cancel']
+  }
+
+export type PortableExportConsentHealthCatalogWorkoutJsonSource =
+  PortableExportConsentHealthCatalogJsonSource & {
+    workouts: PortableExportJsonAsyncArray<Record<string, unknown>>
+    receipt: PortableExportConsentHealthCatalogWorkoutSnapshotSession['receipt']
+    complete: PortableExportConsentHealthCatalogWorkoutSnapshotSession['complete']
+    cancel: PortableExportConsentHealthCatalogWorkoutSnapshotSession['cancel']
   }
 
 const catalogJsonValues = async function* (
@@ -59,6 +69,20 @@ export const createPortableExportConsentHealthCatalogJsonSource = (
   healthRecordRevisions: portableExportJsonAsyncArray(session.healthRecordRevisions),
   exerciseCatalog: portableExportJsonAsyncArray(catalogJsonValues(session.exerciseCatalog)),
   foodCatalog: portableExportJsonAsyncArray(catalogJsonValues(session.foodCatalog)),
+  receipt: session.receipt,
+  complete: session.complete,
+  cancel: session.cancel,
+})
+
+export const createPortableExportConsentHealthCatalogWorkoutJsonSource = (
+  session: PortableExportConsentHealthCatalogWorkoutSnapshotSession,
+): PortableExportConsentHealthCatalogWorkoutJsonSource => ({
+  consentEvents: portableExportJsonAsyncArray(session.consentEvents),
+  healthRecords: portableExportJsonAsyncArray(session.healthRecords),
+  healthRecordRevisions: portableExportJsonAsyncArray(session.healthRecordRevisions),
+  exerciseCatalog: portableExportJsonAsyncArray(catalogJsonValues(session.exerciseCatalog)),
+  foodCatalog: portableExportJsonAsyncArray(catalogJsonValues(session.foodCatalog)),
+  workouts: createPortableExportWorkoutJsonArray(session.workouts),
   receipt: session.receipt,
   complete: session.complete,
   cancel: session.cancel,

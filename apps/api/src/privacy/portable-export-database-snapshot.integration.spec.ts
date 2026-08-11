@@ -22,6 +22,7 @@ import {
 } from './portable-export-database-snapshot'
 import {
   createPortableExportConsentHealthCatalogJsonSource,
+  createPortableExportConsentHealthCatalogWorkoutJsonSource,
   createPortableExportConsentHealthExerciseCatalogJsonSource,
 } from './portable-export-exercise-catalog-json-source'
 import {
@@ -3398,6 +3399,314 @@ describe('portable export bounded PostgreSQL snapshot', () => {
     expect(await jsonFailure).toBe(returnFailure)
     expect(returnFailure).toMatchObject({
       message: 'portable export food catalog history did not complete',
+    })
+  })
+
+  it('streams complete workouts as the sixth field in the coordinated v4 snapshot', async () => {
+    const userId = await createUser()
+    const foodEntryId = await createFoodCatalogEntry(userId, '2026-08-11T05:40:00.000001Z', {
+      name: 'Workout boundary food',
+    })
+    await createFoodCatalogRevision(userId, foodEntryId, 1, '2026-08-11T05:41:00.000001Z')
+    const workoutId = await createWorkout(userId, '2026-08-11T05:42:00.000001Z')
+    const currentExerciseId = await createWorkoutExercise(workoutId, 1)
+    await createWorkoutSet(currentExerciseId, 1)
+    const revisionSnapshot = workoutRevisionSnapshot(userId, workoutId, 1, [
+      {
+        id: randomUUID(),
+        position: 1,
+        exerciseKey: 'coordinated_history',
+        name: '协调历史动作',
+        category: 'strength',
+        sets: [
+          {
+            id: randomUUID(),
+            position: 1,
+            kind: 'working',
+            reps: 10,
+            canonicalLoadKg: null,
+            completed: true,
+          },
+        ],
+      },
+    ])
+    await createWorkoutRevision(
+      userId,
+      workoutId,
+      1,
+      '2026-08-11T05:43:00.000001Z',
+      'created',
+      revisionSnapshot,
+    )
+
+    const materializeWorkouts = async (
+      workouts: AsyncIterable<
+        ReturnType<
+          typeof snapshots.createConsentHealthCatalogWorkoutSnapshot
+        >['workouts'] extends AsyncIterable<infer Workout>
+          ? Workout
+          : never
+      >,
+    ) => {
+      const values: Array<Record<string, unknown>> = []
+      for await (const workout of workouts) {
+        const header = { ...workout.header }
+        const history: Array<Record<string, unknown>> = []
+        for await (const revision of workout.history) {
+          const snapshotValue = {
+            ...revision.snapshot,
+            exercises: [] as Array<Record<string, unknown>>,
+          }
+          for await (const exercise of revision.snapshot.exercises) {
+            const exerciseValue = { ...exercise, sets: [] as Array<Record<string, unknown>> }
+            for await (const set of exercise.sets) exerciseValue.sets.push(set)
+            snapshotValue.exercises.push(exerciseValue)
+          }
+          history.push({ ...revision, snapshot: snapshotValue })
+        }
+        header.history = history
+        const exercises: Array<Record<string, unknown>> = []
+        for await (const exercise of workout.exercises) {
+          const exerciseValue = {
+            ...exercise.header,
+            sets: [] as Array<Record<string, unknown>>,
+          }
+          for await (const set of exercise.sets) exerciseValue.sets.push(set)
+          exercises.push(exerciseValue)
+        }
+        header.exercises = exercises
+        values.push(header)
+      }
+      return values
+    }
+
+    const stable = snapshots.createConsentHealthCatalogWorkoutSnapshot(userId, { batchRows: 1 })
+    for await (const _ of stable.consentEvents) {
+      // Establish the root transaction.
+    }
+    for await (const _ of stable.healthRecords) {
+      // Reach field two.
+    }
+    for await (const _ of stable.healthRecordRevisions) {
+      // Reach field three.
+    }
+    for await (const entry of stable.exerciseCatalog) {
+      for await (const _ of entry.history) {
+        // Reach field four.
+      }
+    }
+    for await (const entry of stable.foodCatalog) {
+      for await (const _ of entry.history) {
+        // Reach field five.
+      }
+    }
+    const concurrentWorkoutId = await createWorkout(
+      userId,
+      '2026-08-11T05:42:00.000002Z',
+      '2026-08-11T05:42:00.000002Z',
+      { title: 'Concurrent workout' },
+    )
+    const stableWorkouts = await materializeWorkouts(stable.workouts)
+    expect(stableWorkouts.map((workout) => workout.id)).toEqual([workoutId])
+    expect(stableWorkouts.some((workout) => workout.id === concurrentWorkoutId)).toBe(false)
+    await stable.complete()
+    await expect(stable.receipt).resolves.toMatchObject({
+      foodCatalog: { batchCount: 1, rowCount: 1 },
+      foodCatalogRevisions: { batchCount: 1, rowCount: 1 },
+      workouts: { batchCount: 1, rowCount: 1 },
+      workoutExercises: { batchCount: 1, rowCount: 1 },
+      workoutSets: { batchCount: 1, rowCount: 1 },
+      workoutRevisions: { batchCount: 1, rowCount: 1 },
+      workoutRevisionSnapshotRoots: { batchCount: 1, rowCount: 1 },
+      workoutRevisionSnapshotExercises: { batchCount: 1, rowCount: 1 },
+      workoutRevisionSnapshotSets: { batchCount: 1, rowCount: 1 },
+    })
+
+    const eager = snapshots.createConsentHealthCatalogWorkoutSnapshot(userId, { batchRows: 2 })
+    const consentEvents: Array<Record<string, unknown>> = []
+    const healthRecords: Array<Record<string, unknown>> = []
+    const healthRecordRevisions: Array<Record<string, unknown>> = []
+    const exerciseCatalog: Array<Record<string, unknown>> = []
+    const foodCatalog: Array<Record<string, unknown>> = []
+    for await (const row of eager.consentEvents) consentEvents.push(row)
+    for await (const row of eager.healthRecords) healthRecords.push(row)
+    for await (const row of eager.healthRecordRevisions) healthRecordRevisions.push(row)
+    for await (const entry of eager.exerciseCatalog) {
+      const value = { ...entry, history: [] as Array<Record<string, unknown>> }
+      for await (const revision of entry.history) value.history.push(revision)
+      exerciseCatalog.push(value)
+    }
+    for await (const entry of eager.foodCatalog) {
+      const value = { ...entry, history: [] as Array<Record<string, unknown>> }
+      for await (const revision of entry.history) value.history.push(revision)
+      foodCatalog.push(value)
+    }
+    const workouts = await materializeWorkouts(eager.workouts)
+    await eager.complete()
+    expect(workouts.map((workout) => workout.id)).toEqual([workoutId, concurrentWorkoutId])
+
+    const eagerPayload = privacyExportSchema.parse({
+      schemaVersion: privacyExportSchemaVersion,
+      generatedAt: '2026-08-11T05:45:00.000Z',
+      accountId: userId,
+      data: {
+        account: { id: userId, status: 'active' },
+        identities: [],
+        profile: null,
+        goal: null,
+        consentEvents,
+        healthRecords,
+        healthRecordRevisions,
+        exerciseCatalog,
+        foodCatalog,
+        workouts,
+        nutritionMeals: [],
+        nutritionFavorites: [],
+        weeklyPlans: [],
+        aiExplanationRuns: [],
+        foodPhotoAnalyses: [],
+        progressPhotos: [],
+      },
+    })
+    const expected = serializePortableExport(eagerPayload, Number.MAX_SAFE_INTEGER)
+    const lazy = snapshots.createConsentHealthCatalogWorkoutSnapshot(userId, { batchRows: 2 })
+    const source = createPortableExportConsentHealthCatalogWorkoutJsonSource(lazy)
+    const json = createPortableExportJsonStream(
+      {
+        ...eagerPayload,
+        data: {
+          ...eagerPayload.data,
+          consentEvents: source.consentEvents as never,
+          healthRecords: source.healthRecords as never,
+          healthRecordRevisions: source.healthRecordRevisions as never,
+          exerciseCatalog: source.exerciseCatalog as never,
+          foodCatalog: source.foodCatalog as never,
+          workouts: source.workouts as never,
+        },
+      },
+      { chunkBytes: 47, lifecycle: source },
+    )
+    const chunks: Buffer[] = []
+    for await (const chunk of json.bytes) chunks.push(Buffer.from(chunk))
+
+    expect(Buffer.concat(chunks)).toEqual(expected)
+    await expect(lazy.receipt).resolves.toMatchObject({
+      workouts: { rowCount: 2 },
+      workoutExercises: { rowCount: 1 },
+      workoutSets: { rowCount: 1 },
+      workoutRevisions: { rowCount: 1 },
+      workoutRevisionSnapshotRoots: { rowCount: 1 },
+      workoutRevisionSnapshotExercises: { rowCount: 1 },
+      workoutRevisionSnapshotSets: { rowCount: 1 },
+    })
+    await expect(json.receipt).resolves.toEqual({
+      schemaVersion: privacyExportSchemaVersion,
+      chunkBytes: 47,
+      byteLength: expected.length,
+      sha256: createHash('sha256').update(expected).digest('hex'),
+    })
+  })
+
+  it('cancels the six-field root from an active immutable workout set', async () => {
+    const userId = await createUser()
+    const workoutId = await createWorkout(userId, '2026-08-11T05:50:00.000001Z')
+    const firstSetId = randomUUID()
+    const revisionSnapshot = workoutRevisionSnapshot(userId, workoutId, 1, [
+      {
+        id: randomUUID(),
+        position: 1,
+        exerciseKey: 'coordinated_cancel',
+        name: 'Coordinated cancellation fixture',
+        category: 'strength',
+        sets: [
+          {
+            id: firstSetId,
+            position: 1,
+            kind: 'working',
+            reps: 10,
+            canonicalLoadKg: null,
+            completed: true,
+          },
+          {
+            id: randomUUID(),
+            position: 2,
+            kind: 'working',
+            reps: 8,
+            canonicalLoadKg: null,
+            completed: true,
+          },
+        ],
+      },
+    ])
+    await createWorkoutRevision(
+      userId,
+      workoutId,
+      1,
+      '2026-08-11T05:51:00.000001Z',
+      'created',
+      revisionSnapshot,
+    )
+    const base = privacyExportSchema.parse({
+      schemaVersion: privacyExportSchemaVersion,
+      generatedAt: '2026-08-11T05:52:00.000Z',
+      accountId: userId,
+      data: {
+        account: { id: userId },
+        identities: [],
+        profile: null,
+        goal: null,
+        consentEvents: [],
+        healthRecords: [],
+        healthRecordRevisions: [],
+        exerciseCatalog: [],
+        foodCatalog: [],
+        workouts: [],
+        nutritionMeals: [],
+        nutritionFavorites: [],
+        weeklyPlans: [],
+        aiExplanationRuns: [],
+        foodPhotoAnalyses: [],
+        progressPhotos: [],
+      },
+    })
+    const snapshot = snapshots.createConsentHealthCatalogWorkoutSnapshot(userId, { batchRows: 1 })
+    const source = createPortableExportConsentHealthCatalogWorkoutJsonSource(snapshot)
+    const json = createPortableExportJsonStream(
+      {
+        ...base,
+        data: {
+          ...base.data,
+          consentEvents: source.consentEvents as never,
+          healthRecords: source.healthRecords as never,
+          healthRecordRevisions: source.healthRecordRevisions as never,
+          exerciseCatalog: source.exerciseCatalog as never,
+          foodCatalog: source.foodCatalog as never,
+          workouts: source.workouts as never,
+        },
+      },
+      { chunkBytes: 1, lifecycle: source },
+    )
+    const iterator = json.bytes[Symbol.asyncIterator]()
+    let prefix = ''
+    while (!prefix.includes(firstSetId)) {
+      const next = await iterator.next()
+      if (next.done) throw new Error('coordinated workout set fixture was not reached')
+      prefix += next.value.toString('utf8')
+    }
+    const jsonFailure = json.receipt.catch((error: unknown) => error)
+    const snapshotFailure = snapshot.receipt.catch((error: unknown) => error)
+    let returnFailure: unknown
+
+    try {
+      await iterator.return?.()
+    } catch (error) {
+      returnFailure = error
+    }
+
+    expect(await snapshotFailure).toBe(returnFailure)
+    expect(await jsonFailure).toBe(returnFailure)
+    expect(returnFailure).toMatchObject({
+      message: 'portable export workout revision snapshot sets did not complete',
     })
   })
 })
