@@ -57,6 +57,15 @@ import {
   progressPhotoRetentionModes,
   progressPhotoStatuses,
   progressPhotoViews,
+  personalModelClaimSchemaVersions,
+  personalModelContractVersion,
+  personalModelFeedbackStates,
+  personalModelItemRevisionVersion,
+  personalModelKinds,
+  personalModelRevisionActions,
+  personalModelSources,
+  personalModelStatuses,
+  personalModelSubjectKeys,
 } from '@myfitness/contracts'
 import { describe, expect, it } from 'vitest'
 
@@ -159,6 +168,10 @@ const portableExportNutritionMealIndexMigrationPath = path.resolve(
 const portableExportPlanWorkoutLinkIndexMigrationPath = path.resolve(
   __dirname,
   '../../../../infra/postgres/migrations/0036_portable_export_plan_workout_link_index.sql',
+)
+const personalModelItemRevisionMigrationPath = path.resolve(
+  __dirname,
+  '../../../../infra/postgres/migrations/0037_personal_model_item_revision_core.sql',
 )
 
 describe('health-record migration drift', () => {
@@ -454,5 +467,38 @@ describe('health-record migration drift', () => {
     }
     expect(migration).toContain('BEFORE UPDATE OR DELETE ON admin_audit_events')
     expect(migration).toContain('admin audit events are append-only')
+  })
+
+  it('locks Personal Model owner, revision and immutable snapshot boundaries', async () => {
+    const migration = await readFile(personalModelItemRevisionMigrationPath, 'utf8')
+    for (const value of [
+      personalModelContractVersion,
+      personalModelItemRevisionVersion,
+      ...personalModelKinds,
+      ...personalModelStatuses,
+      ...personalModelSources,
+      ...personalModelClaimSchemaVersions,
+      ...personalModelSubjectKeys,
+      ...personalModelFeedbackStates,
+      ...personalModelRevisionActions,
+    ]) {
+      expect(migration, `${value} is missing from the Personal Model migration`).toContain(
+        `'${value}'`,
+      )
+    }
+    for (const boundary of [
+      'personal_model_items_owner_identity_subject_unique',
+      'personal_model_item_revisions_owner_item_subject_fk',
+      'personal_model_item_revisions_previous_fk',
+      'personal_model_items_current_revision_fk',
+      'personal_model_item_revisions_feedback_persistence_pending_check',
+      'DEFERRABLE INITIALLY DEFERRED',
+      'personal_model_items_mutation_guard',
+      'personal_model_item_revisions_immutable',
+      'personal_model_item_revisions_current_guard',
+      'ON DELETE CASCADE',
+    ]) {
+      expect(migration).toContain(boundary)
+    }
   })
 })

@@ -1,6 +1,6 @@
 # 个人认知模型
 
-状态：第 183 轮完成 P1a/P1b 共享契约；尚未实现持久化、API、确定性派生或客户端闭环
+状态：第 184 轮完成 P2a item/revision 最小持久内核；反馈/证据/回顾持久化、API、确定性派生和客户端闭环仍未实现
 
 ## 1. 目标与边界
 
@@ -113,7 +113,7 @@ erDiagram
   weekly_cognitive_review_revisions }o--o{ personal_model_item_revisions : summarizes
 ```
 
-这是后续迁移的候选结构，不是当前数据库事实。P1a/P1b 已锁定 item/evidence/confidence/feedback、不可变 revision、反馈转换和 review 信封；下一阶段才以 PostgreSQL 约束所有者、revision、追加事件和状态不变量。
+第 184 轮已落地 `personal_model_items` 与 `personal_model_item_revisions`；其余三类表仍是候选结构。当前数据库已约束 item 所有者、稳定主题、current revision、完整快照、精确前驱和追加历史，但 feedback/evidence/review 仍没有独立持久关系。
 
 ### 4.4 P1a/P1b 共享契约
 
@@ -130,7 +130,15 @@ erDiagram
 - 低覆盖条目允许在用户不同意后保持 `disputed`，从而保存真实异议；它仍不能通过 active-only 决策输入，不会因异议获得统计资格。
 - Weekly Cognitive Review 只包含六类结构化卡片。条目引用绑定 owner、`itemId + itemRevision`、推导时刻和证据指纹；拒绝未来、跨 owner、重复引用和自由叙事字段。回顾 revision 固定周一开始的七个本地日，current 信封与最大 50 条、最新优先 history 页保持身份一致。
 
-P1a/P1b 仍只是内部数据契约：没有数据库表、事务命令、请求/响应分页、OpenAPI、派生器或客户端。不得从导出类型推断用户已能看到、校准或生成个人认知回顾。
+P1a/P1b 仍只是内部数据契约，本身不表示已经有数据库、请求/响应分页、OpenAPI、派生器或客户端。不得从导出类型推断用户已能看到、校准或生成个人认知回顾。
+
+第 184 轮新增 P2a 内部持久内核：item 表只保存 owner、稳定主题和 current revision 指针；revision 表保存 P1b 完整快照、动作、指纹和变化时刻。复合 owner 外键、精确前驱自引用、延迟 current revision 外键与事务结束门禁共同阻止跨 owner、断链或未发布 revision。repository 在 `FOR UPDATE` 锁下按 expected revision 原子追加并推进 current，且所有读回对象重新通过严格共享 Schema。
+
+这不表示完整 P2 已完成。反馈事件表尚不存在，因此数据库和 repository 暂时拒绝四种用户动作 revision，避免保存没有权威事件的悬空引用；独立证据引用、周回顾、便携导出和普通清单/删除也尚未接入。直接删除 item 被触发器拒绝，账户删除可以级联清除 item 与历史，但备份和导出仍是后续门禁。
+
+这里的“当前”只代表某个条目已经发布的最新修订，不代表系统掌握了用户完整、永久或唯一的真实状态。数据库可以证明一条历史属于谁、前后顺序是否连续、内容是否被直接改写，却不能证明观察是否充分、结论是否准确或用户是否认同。后续反馈、来源撤回和回顾流程必须继续保留这些不确定性，任何展示层都要让用户看见依据、时间、限制与更正入口。
+
+持久化也不改变资料权威顺序：健康、训练、饮食、计划和本人反思仍由原有记录负责，个人模型只保存带出处的派生认识。来源被更正、撤回或删除时，后续服务必须重新判断条目是否仍然成立、应当争议还是失效，不能因为历史已经写入数据库就拒绝纠正。
 
 这些契约的目的不是替用户下结论，而是让每一项认识都有明确来源、适用时间、反对证据和修改历史。后续任何存储或界面都必须保留“系统观察”“本人确认”“证据不足”“用户不同意”的差异；不能因为技术结构完整，就把有限记录包装成完整、永久或不可质疑的个人真相。
 
@@ -326,7 +334,7 @@ R-032 继续覆盖“个人状态账本被误解为完整真相”。R-033 新�
 | P0 领域基线            | 本文、ADR、路线图与风险重排                         | 八类边界、状态机、证据和首批场景完成受检；本轮完成             |
 | P1a 核心共享契约       | item/claim/evidence/confidence/feedback 严格 Schema | 三个 claim、Unknown、决策资格和边界测试通过；已完成            |
 | P1b 修订与回顾契约     | item revision、feedback transition、review 信封     | 不可变快照、动作、精确引用、状态转换和回顾数量门禁通过；已完成 |
-| P2 持久内核            | 前四张模型表、owner/revision/追加事件与 repository  | 真实 PostgreSQL 证明隔离、并发、修订、撤销与账号删除           |
+| P2 持久内核            | item/revision 已完成；feedback/evidence/review 待续 | P2a 已证明隔离、并发、不可变修订和账号删除；其余表待完成       |
 | P3 首批派生            | 安排约束、8 周记录频率、训练时长基线                | 确定性夹具、时区完整周、最低覆盖和 no-op 指纹通过              |
 | P4 Mirror 读取         | “关于我”摘要、详情、历史、证据追溯                  | 未读/空/失败分离，移动端无障碍与隐私路径通过                   |
 | P5 周回顾与反馈        | 少量回顾、四选一反馈、模型修订                      | 精确 revision、过期反馈冲突、temporary/disputed 语义通过       |
@@ -338,8 +346,8 @@ R-032 继续覆盖“个人状态账本被误解为完整真相”。R-033 新�
 
 ## 15. 待决策与下一步
 
-下一轮进入 P2 的第一个最小持久化切片：先设计并迁移 `personal_model_items` 与 `personal_model_item_revisions`，用 owner 复合键、正 revision、current 指针、完整快照和真实 PostgreSQL 测试证明跨 owner 隔离、不可变历史与乐观并发。反馈事件、证据引用和 Weekly Cognitive Review 表继续拆到后续轮次；仍不开放 API 或客户端。
+下一轮实现 P2b 用户反馈持久化：新增追加式 `personal_model_feedback_events`，把 P1b feedback application 与 revised/no-op 结果放进同一事务，并用精确 owner/item/revision、事件唯一性和并发测试证明一个反馈不会产生多条 revision。P2b 通过前继续拒绝 user action revision；证据引用、Weekly Cognitive Review、API 与客户端仍拆到后续轮次。
 
 后续待真实数据或用户研究决定：材料变化阈值、长期 Pattern 的最低非重叠窗口、Hypothesis 的高置信上限、周回顾卡片数量理解度，以及 Contextual Decision 的安全升级阈值。缺少证据时保持保守默认，不臆造产品基准。
 
-本设计的领域取舍记录在 [ADR-0175](decisions/0175-evidence-backed-revisable-personal-model.md)，P1a 核心契约记录在 [ADR-0176](decisions/0176-personal-model-core-contract.md)，P1b 修订、反馈转换与回顾契约记录在 [ADR-0177](decisions/0177-personal-model-revision-and-weekly-review-contract.md)；实施状态以[项目状态](../PROJECT_STATUS.md)和[已实现产品需求文档](../product/IMPLEMENTED_PRD.md)为准。
+本设计的领域取舍记录在 [ADR-0175](decisions/0175-evidence-backed-revisable-personal-model.md)，P1a 核心契约记录在 [ADR-0176](decisions/0176-personal-model-core-contract.md)，P1b 修订、反馈转换与回顾契约记录在 [ADR-0177](decisions/0177-personal-model-revision-and-weekly-review-contract.md)，P2a item/revision 持久内核记录在 [ADR-0178](decisions/0178-personal-model-item-revision-persistence-core.md)；实施状态以[项目状态](../PROJECT_STATUS.md)和[已实现产品需求文档](../product/IMPLEMENTED_PRD.md)为准。

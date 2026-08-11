@@ -411,7 +411,7 @@ Content-Type: application/json
 - 响应对象为严格 Schema；客户端应拒绝错误类型和不满足跨字段不变量的响应。
 - revision、source、timezone、occurredAt 和历史快照是健康数据可追责性的组成部分，不得在未来兼容层中静默丢弃。
 - OpenAPI 当前以内联 Schema 为主，没有复用 components；生成 SDK 前应以契约测试验证 nullable、联合类型和自定义跨字段约束。
-- 当前 OpenAPI 不包含 `/v1/mirror`、`/v1/personal-model` 或 Weekly Cognitive Review 路由。P1a/P1b 的 item、EvidenceReference、Unknown、feedback event、完整 revision、反馈转换和 review current/history 信封只是内部共享契约，尚无请求/响应分页、幂等命令、事务或授权语义；[个人认知模型](../architecture/PERSONAL_MODEL.md) 中的路径仍是候选设计，不能被客户端、文档或部署材料描述为已实现接口。
+- 当前 OpenAPI 不包含 `/v1/mirror`、`/v1/personal-model` 或 Weekly Cognitive Review 路由。P1a/P1b 的 item、EvidenceReference、Unknown、feedback event、完整 revision、反馈转换和 review current/history 信封是内部共享契约；P2a 已新增只供内部后续服务组合的 item/revision PostgreSQL 仓储，但没有控制器、模块装配或 HTTP 授权语义。请求/响应分页、幂等命令、反馈事务与错误映射仍未定义；[个人认知模型](../architecture/PERSONAL_MODEL.md) 中的路径继续是候选设计，不能被客户端、文档或部署材料描述为已实现接口。
 
 ## 19. 参考
 
