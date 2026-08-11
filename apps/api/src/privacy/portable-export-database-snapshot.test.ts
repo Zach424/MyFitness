@@ -93,6 +93,62 @@ const fakeHealthHistoryDatabase = (
   return { database, lifecycle }
 }
 
+const fakeWorkoutExerciseLayerDatabase = (
+  workouts: Array<Record<string, unknown>>,
+  exercisesByWorkout: Readonly<Record<string, Array<Record<string, unknown>>>>,
+) => {
+  const lifecycle = {
+    accountQueries: 0,
+    streamCount: 0,
+    committed: false,
+    rolledBack: false,
+  }
+  const database = {
+    streamReadOnlyRepeatableRead: (operation: (client: PoolClient) => AsyncIterable<unknown>) => {
+      lifecycle.streamCount += 1
+      const client = {
+        query: async (sql: string, parameters: unknown[]) => {
+          if (sql.startsWith('SELECT id FROM users')) {
+            lifecycle.accountQueries += 1
+            return { rows: [{ id: parameters[0] }] }
+          }
+          const isExercisePage = sql.includes('FROM workout_exercises AS exercise')
+          const values = isExercisePage
+            ? (exercisesByWorkout[parameters[1] as string] ?? [])
+            : workouts
+          const anchorId = parameters[isExercisePage ? 2 : 1] as string | null
+          const batchRows = parameters[isExercisePage ? 3 : 2] as number
+          const maximumPayloadBytes = parameters[isExercisePage ? 4 : 3] as number
+          const anchorIndex = anchorId ? values.findIndex((value) => value.id === anchorId) : -1
+          return {
+            rows: values.slice(anchorIndex + 1, anchorIndex + 1 + batchRows).map((payload) => {
+              const payloadText = JSON.stringify(payload)
+              const payloadByteLength = Buffer.byteLength(payloadText)
+              return {
+                id: payload.id,
+                payload_text: payloadByteLength <= maximumPayloadBytes ? payloadText : null,
+                payload_byte_length: payloadByteLength,
+              }
+            }),
+          }
+        },
+      } as unknown as PoolClient
+
+      return (async function* () {
+        let completed = false
+        try {
+          for await (const value of operation(client)) yield value
+          completed = true
+          lifecycle.committed = true
+        } finally {
+          if (!completed) lifecycle.rolledBack = true
+        }
+      })()
+    },
+  } as unknown as DatabaseService
+  return { database, lifecycle }
+}
+
 describe('portable export database snapshot session', () => {
   it('publishes a bounded receipt only after every row is consumed', async () => {
     const service = new PortableExportDatabaseSnapshotService(
@@ -180,6 +236,136 @@ describe('portable export database snapshot session', () => {
       batchCount: 2,
       rowCount: 3,
     })
+  })
+
+  it('keeps workout headers and their exercise headers in one root-owned stream', async () => {
+    const { database, lifecycle } = fakeWorkoutExerciseLayerDatabase(
+      [{ id: 'workout-1' }, { id: 'workout-2' }],
+      {
+        'workout-1': [{ id: 'exercise-1' }, { id: 'exercise-2' }],
+        'workout-2': [{ id: 'exercise-3' }],
+      },
+    )
+    const service = new PortableExportDatabaseSnapshotService(database)
+    const session = service.createWorkoutExerciseLayerSnapshot(
+      '11111111-1111-4111-8111-111111111111',
+      { batchRows: 1 },
+    )
+    const observed: Array<{ workoutId: unknown; exerciseIds: unknown[] }> = []
+
+    for await (const workout of session.workouts) {
+      const exerciseIds: unknown[] = []
+      for await (const exercise of workout.exercises) exerciseIds.push(exercise.id)
+      observed.push({ workoutId: workout.header.id, exerciseIds })
+    }
+    expect(lifecycle.committed).toBe(false)
+
+    await session.complete()
+
+    expect(observed).toEqual([
+      { workoutId: 'workout-1', exerciseIds: ['exercise-1', 'exercise-2'] },
+      { workoutId: 'workout-2', exerciseIds: ['exercise-3'] },
+    ])
+    expect(lifecycle).toMatchObject({
+      accountQueries: 1,
+      streamCount: 1,
+      committed: true,
+      rolledBack: false,
+    })
+    await expect(session.receipt).resolves.toEqual({
+      batchRows: 1,
+      maximumPayloadBytes: portableExportSnapshotMaximumPayloadBytes,
+      workoutHeaders: { batchCount: 2, rowCount: 2 },
+      workoutExercises: { batchCount: 3, rowCount: 3 },
+    })
+  })
+
+  it('fails the root transaction when a workout exercise field is skipped', async () => {
+    const { database, lifecycle } = fakeWorkoutExerciseLayerDatabase(
+      [{ id: 'workout-1' }, { id: 'workout-2' }],
+      { 'workout-1': [{ id: 'exercise-1' }], 'workout-2': [] },
+    )
+    const service = new PortableExportDatabaseSnapshotService(database)
+    const session = service.createWorkoutExerciseLayerSnapshot(
+      '11111111-1111-4111-8111-111111111111',
+    )
+    const workouts = session.workouts[Symbol.asyncIterator]()
+    await expect(workouts.next()).resolves.toMatchObject({ done: false })
+    const receiptFailure = session.receipt.catch((error: unknown) => error)
+    let streamFailure: unknown
+
+    try {
+      await workouts.next()
+    } catch (error) {
+      streamFailure = error
+    }
+
+    expect(streamFailure).toMatchObject({
+      message: 'portable export workout exercises must complete before the next workout',
+    })
+    expect(await receiptFailure).toBe(streamFailure)
+    expect(lifecycle).toMatchObject({ committed: false, rolledBack: true })
+  })
+
+  it('closes the root transaction when an active workout exercise field stops early', async () => {
+    const { database, lifecycle } = fakeWorkoutExerciseLayerDatabase([{ id: 'workout-1' }], {
+      'workout-1': [{ id: 'exercise-1' }, { id: 'exercise-2' }],
+    })
+    const service = new PortableExportDatabaseSnapshotService(database)
+    const session = service.createWorkoutExerciseLayerSnapshot(
+      '11111111-1111-4111-8111-111111111111',
+      { batchRows: 1 },
+    )
+    const workouts = session.workouts[Symbol.asyncIterator]()
+    const workout = await workouts.next()
+    expect(workout).toMatchObject({ done: false })
+    if (workout.done) throw new Error('workout fixture was not returned')
+    const exercises = workout.value.exercises[Symbol.asyncIterator]()
+    await expect(exercises.next()).resolves.toMatchObject({ done: false })
+    const receiptFailure = session.receipt.catch((error: unknown) => error)
+    let streamFailure: unknown
+
+    try {
+      await exercises.return?.()
+    } catch (error) {
+      streamFailure = error
+    }
+
+    expect(streamFailure).toMatchObject({
+      message: 'portable export workout exercises did not complete',
+    })
+    expect(await receiptFailure).toBe(streamFailure)
+    expect(lifecycle).toMatchObject({ committed: false, rolledBack: true })
+  })
+
+  it('rejects repeated consumption of a completed workout exercise field', async () => {
+    const { database, lifecycle } = fakeWorkoutExerciseLayerDatabase([{ id: 'workout-1' }], {
+      'workout-1': [{ id: 'exercise-1' }],
+    })
+    const service = new PortableExportDatabaseSnapshotService(database)
+    const session = service.createWorkoutExerciseLayerSnapshot(
+      '11111111-1111-4111-8111-111111111111',
+    )
+    const workouts = session.workouts[Symbol.asyncIterator]()
+    const workout = await workouts.next()
+    if (workout.done) throw new Error('workout fixture was not returned')
+    for await (const _ of workout.value.exercises) {
+      // Consume the permitted exercise field once.
+    }
+    const receiptFailure = session.receipt.catch((error: unknown) => error)
+    let repeatedFailure: unknown
+
+    try {
+      await workout.value.exercises[Symbol.asyncIterator]().next()
+    } catch (error) {
+      repeatedFailure = error
+    }
+
+    expect(repeatedFailure).toMatchObject({
+      message: 'portable export workout exercises must be read once before the next workout',
+    })
+    expect(await receiptFailure).toBe(repeatedFailure)
+    expect(lifecycle).toMatchObject({ committed: false, rolledBack: true })
   })
 
   it('rejects invalid batch and payload limits before opening a database stream', () => {

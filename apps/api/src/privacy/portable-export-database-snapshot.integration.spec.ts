@@ -12,6 +12,7 @@ import {
   PortableExportDatabaseSnapshotService,
   PortableExportSnapshotPayloadTooLargeError,
   portableExportSnapshotMaximumPayloadBytes,
+  portableExportWorkoutExerciseHeaderPageQuery,
   portableExportWorkoutHeaderPageQuery,
 } from './portable-export-database-snapshot'
 import {
@@ -129,6 +130,32 @@ describe('portable export bounded PostgreSQL snapshot', () => {
         `workout-header-${randomUUID()}`,
         options.deletedAt ?? null,
         createdAt,
+      ],
+    )
+    return id
+  }
+
+  const createWorkoutExercise = async (
+    workoutId: string,
+    position: number,
+    options: { id?: string; name?: string } = {},
+  ) => {
+    const id = options.id ?? randomUUID()
+    await pool.query(
+      `INSERT INTO workout_exercises (
+         id, workout_id, position, exercise_key, name, category, notes,
+         tracking_mode, equipment, equipment_notes
+       ) VALUES (
+         $1, $2, $3, $4, $5, 'strength', $6,
+         'reps_load', ARRAY['bodyweight']::text[], NULL
+       )`,
+      [
+        id,
+        workoutId,
+        position,
+        `fixture_${id.replaceAll('-', '')}`,
+        options.name ?? `Exercise ${position}`,
+        `exercise position ${position}`,
       ],
     )
     return id
@@ -332,6 +359,152 @@ describe('portable export bounded PostgreSQL snapshot', () => {
 
     expect(streamFailure).toBe(cancellation)
     expect(await receiptFailure).toBe(cancellation)
+  })
+
+  it('keeps workout headers and ordered exercise headers in one root-owned snapshot', async () => {
+    const userId = await createUser()
+    const otherUserId = await createUser()
+    const firstWorkoutId = await createWorkout(
+      userId,
+      '2026-08-11T01:36:00.000001Z',
+      '2026-08-11T01:36:00.000002Z',
+      { deletedAt: '2026-08-11T01:39:00.000001Z' },
+    )
+    const secondWorkoutId = await createWorkout(
+      userId,
+      '2026-08-11T01:37:00.000001Z',
+      '2026-08-11T01:37:00.000002Z',
+    )
+    const otherWorkoutId = await createWorkout(otherUserId, '2026-08-11T01:38:00.000001Z')
+    const firstWorkoutExerciseIds = [
+      await createWorkoutExercise(firstWorkoutId, 2),
+      await createWorkoutExercise(firstWorkoutId, 1),
+    ]
+    const secondWorkoutExerciseId = await createWorkoutExercise(secondWorkoutId, 1)
+    await createWorkoutExercise(otherWorkoutId, 1)
+
+    const session = snapshots.createWorkoutExerciseLayerSnapshot(userId, { batchRows: 1 })
+    const workouts = session.workouts[Symbol.asyncIterator]()
+    const firstWorkout = await workouts.next()
+    expect(firstWorkout).toMatchObject({ done: false, value: { header: { id: firstWorkoutId } } })
+    expect(firstWorkout.value!.header.deleted_at).not.toBeNull()
+
+    const firstExercises = firstWorkout.value!.exercises[Symbol.asyncIterator]()
+    const firstExercise = await firstExercises.next()
+    expect(firstExercise).toMatchObject({ done: false, value: { position: 1 } })
+
+    const concurrentFirstExerciseId = await createWorkoutExercise(firstWorkoutId, 3)
+    const concurrentSecondExerciseId = await createWorkoutExercise(secondWorkoutId, 2)
+    const firstExerciseRows = firstExercise.done ? [] : [firstExercise.value]
+    for await (const exercise of { [Symbol.asyncIterator]: () => firstExercises }) {
+      firstExerciseRows.push(exercise)
+    }
+
+    const secondWorkout = await workouts.next()
+    expect(secondWorkout).toMatchObject({ done: false, value: { header: { id: secondWorkoutId } } })
+    const secondExerciseRows: Array<Record<string, unknown>> = []
+    for await (const exercise of secondWorkout.value!.exercises) secondExerciseRows.push(exercise)
+    await expect(workouts.next()).resolves.toEqual({ done: true, value: undefined })
+
+    expect(firstExerciseRows.map((exercise) => exercise.id)).toEqual(
+      [...firstWorkoutExerciseIds].reverse(),
+    )
+    expect(firstExerciseRows.map((exercise) => exercise.position)).toEqual([1, 2])
+    expect(firstExerciseRows.map((exercise) => exercise.id)).not.toContain(
+      concurrentFirstExerciseId,
+    )
+    expect(secondExerciseRows.map((exercise) => exercise.id)).toEqual([secondWorkoutExerciseId])
+    expect(secondExerciseRows.map((exercise) => exercise.id)).not.toContain(
+      concurrentSecondExerciseId,
+    )
+    expect(Object.keys(firstExerciseRows[0]!).sort()).toEqual(
+      [
+        'id',
+        'position',
+        'exercise_key',
+        'name',
+        'category',
+        'notes',
+        'tracking_mode',
+        'equipment',
+        'equipment_notes',
+      ].sort(),
+    )
+    expect(firstExerciseRows[0]).not.toHaveProperty('sets')
+
+    let receiptSettled = false
+    void session.receipt.then(
+      () => {
+        receiptSettled = true
+      },
+      () => {
+        receiptSettled = true
+      },
+    )
+    await Promise.resolve()
+    expect(receiptSettled).toBe(false)
+
+    await session.complete()
+    await expect(session.receipt).resolves.toEqual({
+      batchRows: 1,
+      maximumPayloadBytes: portableExportSnapshotMaximumPayloadBytes,
+      workoutHeaders: { batchCount: 2, rowCount: 2 },
+      workoutExercises: { batchCount: 3, rowCount: 3 },
+    })
+  })
+
+  it('uses the workout position index for the actual exercise header page query', async () => {
+    const userId = await createUser()
+    const workoutId = await createWorkout(userId, '2026-08-11T01:40:00.000001Z')
+    await createWorkoutExercise(workoutId, 1)
+    const definition = await pool.query<{ index_definition: string; predicate: string | null }>(
+      `SELECT pg_get_indexdef(indexrelid) AS index_definition,
+              pg_get_expr(indpred, indrelid) AS predicate
+       FROM pg_index
+       WHERE indexrelid = 'workout_exercises_workout_id_position_key'::regclass`,
+    )
+    expect(definition.rows).toEqual([
+      expect.objectContaining({
+        index_definition: expect.stringContaining('(workout_id, "position")'),
+        predicate: null,
+      }),
+    ])
+
+    const client = await pool.connect()
+    try {
+      await client.query('BEGIN')
+      await client.query('SET LOCAL enable_seqscan = off')
+      const plan = await client.query<{ 'QUERY PLAN': unknown }>(
+        `EXPLAIN (FORMAT JSON, COSTS OFF) ${portableExportWorkoutExerciseHeaderPageQuery}`,
+        [userId, workoutId, null, 2, portableExportSnapshotMaximumPayloadBytes],
+      )
+      expect(JSON.stringify(plan.rows[0]?.['QUERY PLAN'])).toContain(
+        'workout_exercises_workout_id_position_key',
+      )
+    } finally {
+      await client.query('ROLLBACK')
+      client.release()
+    }
+  })
+
+  it('closes an active exercise child before cancelling its root snapshot', async () => {
+    const userId = await createUser()
+    const workoutId = await createWorkout(userId, '2026-08-11T01:45:00.000001Z')
+    await createWorkoutExercise(workoutId, 1)
+    await createWorkoutExercise(workoutId, 2)
+    const session = snapshots.createWorkoutExerciseLayerSnapshot(userId, { batchRows: 1 })
+    const workouts = session.workouts[Symbol.asyncIterator]()
+    const workout = await workouts.next()
+    const exercises = workout.value!.exercises[Symbol.asyncIterator]()
+    await expect(exercises.next()).resolves.toMatchObject({ done: false })
+    const cancellation = new Error('workout exercise root cancelled by lease owner')
+    const receiptFailure = session.receipt.catch((error: unknown) => error)
+
+    await session.cancel(cancellation)
+
+    expect(await receiptFailure).toBe(cancellation)
+    await expect(exercises.next()).resolves.toEqual({ done: true, value: undefined })
+    await expect(workouts.next()).rejects.toBe(cancellation)
   })
 
   it('streams one owner revision history across microsecond pages into byte-compatible v4 JSON', async () => {
