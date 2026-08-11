@@ -14,6 +14,7 @@ export const documentationMigrationPolicy = {
     'docs/product/IMPLEMENTED_PRD.md',
     'docs/product/RISK_REGISTER.md',
     'docs/architecture/ARCHITECTURE.md',
+    'docs/architecture/PERSONAL_MODEL.md',
     'docs/architecture/DATABASE_DESIGN.md',
     'docs/api/API_REFERENCE.md',
     'docs/operations/USER_IDENTITY_RUNBOOK.md',

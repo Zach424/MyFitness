@@ -478,6 +478,7 @@ intent 创建 → 验证一次性 token 与确认短语 → users 状态关闭 �
 - 当前本地数据操作表有 179 个 job/attempt，来自测试和演示；应通过状态分布、失败码和死信而不是总行数判断健康。
 - 归档表与状态机已存在，但请求仓储、执行任务、加密对象、下载授权和到期扫描尚未实现；表结构不能被描述为用户可用的异步导出。
 - 没有设备原生同步表、社交表、支付表或医疗病历表；这些不属于当前实现。
+- 当前没有 `personal_model_items`、模型修订、证据引用、用户校准或 Weekly Cognitive Review 持久表。它们只是 [个人认知模型](PERSONAL_MODEL.md) 中的候选边界；在共享契约、所有者隔离、不可变修订、来源更正/删除传播及便携导出语义通过验证前，不得建立任意 JSON“用户画像”表替代正式设计。
 - 备份物理删除时限属于生产保留政策和演练证据，不能只由主数据库 receipt 状态推断。
 
 ## 22. 运行核对查询
@@ -511,5 +512,6 @@ ORDER BY event_object_table, trigger_name;
 - [训练模型](WORKOUT_MODEL.md)
 - [饮食模型](NUTRITION_MODEL.md)
 - [计划模型](PLAN_MODEL.md)
+- [个人认知模型](PERSONAL_MODEL.md)
 - [接口参考文档](../api/API_REFERENCE.md)
 - [已实现产品需求文档](../product/IMPLEMENTED_PRD.md)

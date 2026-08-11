@@ -411,6 +411,7 @@ Content-Type: application/json
 - 响应对象为严格 Schema；客户端应拒绝错误类型和不满足跨字段不变量的响应。
 - revision、source、timezone、occurredAt 和历史快照是健康数据可追责性的组成部分，不得在未来兼容层中静默丢弃。
 - OpenAPI 当前以内联 Schema 为主，没有复用 components；生成 SDK 前应以契约测试验证 nullable、联合类型和自定义跨字段约束。
+- 当前 OpenAPI 不包含 `/v1/mirror`、`/v1/personal-model` 或 Weekly Cognitive Review 路由；[个人认知模型](../architecture/PERSONAL_MODEL.md) 中的路径仅是候选设计，不能被客户端、文档或部署材料描述为已实现接口。
 
 ## 19. 参考
 
@@ -419,3 +420,4 @@ Content-Type: application/json
 - [已实现产品需求文档](../product/IMPLEMENTED_PRD.md)
 - [数据库设计文档](../architecture/DATABASE_DESIGN.md)
 - [架构基线](../architecture/ARCHITECTURE.md)
+- [个人认知模型](../architecture/PERSONAL_MODEL.md)

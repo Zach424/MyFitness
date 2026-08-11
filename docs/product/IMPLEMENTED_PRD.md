@@ -32,6 +32,8 @@
 - 原生 Apple Health、Health Connect 或穿戴设备自动同步。
 - 照片人体测量、姿态诊断、精确体脂率或“好坏体态”判断。
 - AI 自动修改计划、自动确认事实、自动写入餐食或自动提高训练量。
+- 持久化 Personal Model、Pattern/Hypothesis 生命周期、Weekly Cognitive Review、用户校准事件和模型修订闭环。
+- 基于长期个人模型自动执行 Contextual Decision，或把相关性、短期状态和用户未确认推断当作稳定人格标签。
 - 用户端离线写入队列；网络结果不确定时不会在后台自动重放请求。
 
 ## 3. 用户、权限与信任边界
