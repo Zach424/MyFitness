@@ -440,6 +440,8 @@ intent 创建 → 验证一次性 token 与确认短语 → users 状态关闭 �
 
 训练同步投影按 `(started_at,created_at,id)` 升序输出顶层 workout；`UNIQUE (workout_id,position)`、`UNIQUE (exercise_id,position)` 与 `UNIQUE (workout_id,revision)` 分别保证动作、组和修订内部顺序。现有活动列表索引 `(user_id,started_at DESC,created_at DESC,id DESC) WHERE deleted_at IS NULL` 不能覆盖便携导出包含软删除记录的全历史扫描。数据库实测还证明 API 合法的 30 个动作 × 50 组关系图在不含 history 时单项 JSON 已超过 64 KiB，且 `workout_revisions.snapshot` 保存完整聚合、修订数量没有上限。未来不能以 workout 为单 payload；需要为全历史顶层 keyset 提供独立索引证据，并把动作、组和修订分层流式编码。
 
+递归 JSON 来源契约已经能表达 workout 对象内的懒 exercises/sets/history，并证明嵌套取消可传播到文件根；数据库仍未提供相应训练来源。本轮没有迁移。下一项数据库工作应把会话头与嵌套关系分离，先为包含软删除记录的 `(user_id,started_at,created_at,id)` 全历史 keyset 建立查询和索引证据，再逐父级读取动作、组和修订。
+
 ## 20. 安全与隐私控制
 
 - 所有访问 token、intent token 和 receipt token 只保存哈希。

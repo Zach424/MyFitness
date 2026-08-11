@@ -36,20 +36,23 @@ export type PortableExportJsonAsyncArray<T> = {
   readonly values: Iterable<T> | AsyncIterable<T>
 }
 
-type PortableExportData = PrivacyExport['data']
-
-export type PortableExportJsonSource = Omit<PrivacyExport, 'data'> & {
-  data: {
-    [Key in keyof PortableExportData]: PortableExportData[Key] extends Array<infer Item>
-      ? PortableExportData[Key] | PortableExportJsonAsyncArray<Item>
-      : PortableExportData[Key]
-  }
-}
-
 export const portableExportJsonAsyncArray = <T>(
   values: Iterable<T> | AsyncIterable<T>,
 ): PortableExportJsonAsyncArray<T> =>
   Object.freeze({ [portableExportJsonAsyncArrayTag]: true as const, values })
+
+type PortableExportJsonPrimitive = null | string | number | boolean
+
+export type PortableExportJsonValue<Value> = Value extends PortableExportJsonPrimitive
+  ? Value
+  : Value extends Array<infer Item>
+    ? | Array<PortableExportJsonValue<Item>>
+      | PortableExportJsonAsyncArray<PortableExportJsonValue<Item>>
+    : Value extends Record<string, unknown>
+      ? { [Key in keyof Value]: PortableExportJsonValue<Value[Key]> }
+      : never
+
+export type PortableExportJsonSource = PortableExportJsonValue<PrivacyExport>
 
 const validateChunkBytes = (chunkBytes: number) => {
   if (!Number.isSafeInteger(chunkBytes) || chunkBytes < 1 || chunkBytes > maximumChunkBytes) {

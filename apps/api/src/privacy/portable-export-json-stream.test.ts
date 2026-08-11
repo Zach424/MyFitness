@@ -17,6 +17,7 @@ import { serializePortableExport } from './portable-export-artifact'
 import {
   createPortableExportJsonStream,
   portableExportJsonAsyncArray,
+  type PortableExportJsonSource,
 } from './portable-export-json-stream'
 
 const fixture = (): PrivacyExport =>
@@ -220,6 +221,155 @@ describe('portable export incremental JSON stream', () => {
     await expect(session.receipt).resolves.toMatchObject({
       byteLength: expected.length,
       sha256: createHash('sha256').update(expected).digest('hex'),
+    })
+  })
+
+  it('serializes recursively lazy workout arrays byte-for-byte and only on traversal', async () => {
+    const eager = fixture()
+    const eagerWorkout = {
+      id: 'nested-workout',
+      exercises: [
+        {
+          position: 1,
+          name: '深蹲',
+          sets: [
+            { position: 1, reps: 8, completed: true },
+            { position: 2, reps: 6, completed: false },
+          ],
+        },
+        {
+          position: 2,
+          name: '步行',
+          sets: [{ position: 1, duration_seconds: 900, completed: true }],
+        },
+      ],
+      history: [
+        { revision: 1, action: 'created' },
+        { revision: 2, action: 'updated' },
+      ],
+    }
+    eager.data.workouts = [eagerWorkout]
+    let requestedExercises = 0
+    let requestedSets = 0
+    let requestedHistory = 0
+    const lazyExercises = (async function* () {
+      for (const exercise of eagerWorkout.exercises) {
+        requestedExercises += 1
+        const lazySets = (async function* () {
+          for (const set of exercise.sets) {
+            requestedSets += 1
+            yield set
+          }
+        })()
+        yield { ...exercise, sets: portableExportJsonAsyncArray(lazySets) }
+      }
+    })()
+    const lazyHistory = (async function* () {
+      for (const revision of eagerWorkout.history) {
+        requestedHistory += 1
+        yield revision
+      }
+    })()
+    const source: PortableExportJsonSource = {
+      ...eager,
+      data: {
+        ...eager.data,
+        workouts: [
+          {
+            id: eagerWorkout.id,
+            exercises: portableExportJsonAsyncArray(lazyExercises),
+            history: portableExportJsonAsyncArray(lazyHistory),
+          },
+        ],
+      },
+    }
+    const session = createPortableExportJsonStream(source, { chunkBytes: 29 })
+    const iterator = session.bytes[Symbol.asyncIterator]()
+
+    const firstChunk = await iterator.next()
+    expect(firstChunk.done).toBe(false)
+    expect(requestedExercises).toBe(0)
+    expect(requestedSets).toBe(0)
+    expect(requestedHistory).toBe(0)
+    const chunks = [Buffer.from(firstChunk.value!)]
+    while (true) {
+      const next = await iterator.next()
+      if (next.done) break
+      chunks.push(Buffer.from(next.value))
+    }
+
+    const expected = serializePortableExport(eager, Number.MAX_SAFE_INTEGER)
+    expect(Buffer.concat(chunks)).toEqual(expected)
+    expect(requestedExercises).toBe(2)
+    expect(requestedSets).toBe(3)
+    expect(requestedHistory).toBe(2)
+    await expect(session.receipt).resolves.toMatchObject({
+      byteLength: expected.length,
+      sha256: createHash('sha256').update(expected).digest('hex'),
+    })
+  })
+
+  it('closes an active nested lazy array before cancelling the JSON root', async () => {
+    const eager = fixture()
+    let requestedSets = 0
+    let nestedClosed = false
+    let rootCompleted = false
+    let cancelledWith: unknown
+    const lazySets = (async function* () {
+      try {
+        requestedSets += 1
+        yield { position: 1, reps: 8, completed: true }
+        requestedSets += 1
+        yield { position: 2, reps: 6, completed: false }
+      } finally {
+        nestedClosed = true
+      }
+    })()
+    const source: PortableExportJsonSource = {
+      ...eager,
+      data: {
+        ...eager.data,
+        workouts: [
+          {
+            id: 'cancelled-workout',
+            exercises: [
+              {
+                position: 1,
+                sets: portableExportJsonAsyncArray(lazySets),
+              },
+            ],
+            history: [],
+          },
+        ],
+      },
+    }
+    const session = createPortableExportJsonStream(source, {
+      chunkBytes: 1,
+      lifecycle: {
+        complete: () => {
+          rootCompleted = true
+        },
+        cancel: (error) => {
+          expect(nestedClosed).toBe(true)
+          cancelledWith = error
+        },
+      },
+    })
+    const iterator = session.bytes[Symbol.asyncIterator]()
+    while (requestedSets === 0) {
+      await expect(iterator.next()).resolves.toMatchObject({ done: false })
+    }
+    expect(requestedSets).toBe(1)
+    expect(nestedClosed).toBe(false)
+    const receiptFailure = session.receipt.catch((error: unknown) => error)
+
+    await iterator.return?.()
+
+    expect(nestedClosed).toBe(true)
+    expect(rootCompleted).toBe(false)
+    expect(await receiptFailure).toBe(cancelledWith)
+    expect(cancelledWith).toMatchObject({
+      message: 'portable export JSON stream did not complete',
     })
   })
 
