@@ -36,6 +36,24 @@ export type PortableExportConsentEventSnapshotSession = PortableExportDatabaseSn
 export type PortableExportWorkoutHeaderSnapshotReceipt = PortableExportDatabaseSnapshotReceipt
 export type PortableExportWorkoutHeaderSnapshotSession = PortableExportDatabaseSnapshotSession
 
+export const portableExportNutritionMealShapeSchemaVersion =
+  'myfitness-portable-export-nutrition-meal-shape/v1' as const
+
+export type PortableExportNutritionMealShapeReceipt = {
+  schemaVersion: typeof portableExportNutritionMealShapeSchemaVersion
+  mealRevision: number
+  currentItemCount: number
+  revisionCount: number
+  headerBytes: number
+  currentItemPayloadBytes: number
+  maximumCurrentItemBytes: number
+  revisionPayloadBytes: number
+  maximumRevisionPayloadBytes: number
+  maximumRevisionItemCount: number
+  revisionSnapshotsHaveItemArrays: boolean
+  historyAggregateExceedsPayloadBoundary: boolean
+}
+
 export type PortableExportWorkoutExerciseLayerSnapshotWorkout = {
   header: Record<string, unknown>
   exercises: AsyncIterable<Record<string, unknown>>
@@ -1346,6 +1364,101 @@ type WorkoutRevisionSnapshotShapeRow = QueryResultRow & {
   set_storage_order_matches_position: boolean
   decomposable: boolean
 }
+
+type NutritionMealShapeRow = QueryResultRow & {
+  meal_revision: number
+  current_item_count: number
+  revision_count: number
+  header_bytes: number
+  current_item_payload_bytes: number
+  maximum_current_item_bytes: number
+  revision_payload_bytes: number
+  maximum_revision_payload_bytes: number
+  maximum_revision_item_count: number
+  revision_snapshots_have_item_arrays: boolean
+  history_aggregate_exceeds_payload_boundary: boolean
+}
+
+export const portableExportNutritionMealShapeQuery = `WITH target AS MATERIALIZED (
+         SELECT id, meal_type, title, source_kind, source_metadata, occurred_at, timezone,
+                note, revision, deleted_at, created_at, updated_at
+         FROM nutrition_meals
+         WHERE user_id = $1 AND id = $2
+       ), item_stats AS MATERIALIZED (
+         SELECT count(item.id)::integer AS current_item_count,
+                COALESCE(sum(octet_length((to_jsonb(item) - 'meal_id')::text)), 0)::double precision
+                  AS current_item_payload_bytes,
+                COALESCE(max(octet_length((to_jsonb(item) - 'meal_id')::text)), 0)::integer
+                  AS maximum_current_item_bytes
+         FROM target
+         LEFT JOIN nutrition_meal_items AS item ON item.meal_id = target.id
+       ), revision_stats AS MATERIALIZED (
+         SELECT count(history.id)::integer AS revision_count,
+                COALESCE(
+                  sum(octet_length((to_jsonb(history) - 'user_id' - 'meal_id')::text)),
+                  0
+                )::double precision AS revision_payload_bytes,
+                COALESCE(
+                  max(octet_length((to_jsonb(history) - 'user_id' - 'meal_id')::text)),
+                  0
+                )::integer AS maximum_revision_payload_bytes,
+                COALESCE(
+                  max(
+                    CASE
+                      WHEN jsonb_typeof(history.snapshot->'items') = 'array'
+                        THEN jsonb_array_length(history.snapshot->'items')
+                      ELSE 0
+                    END
+                  ),
+                  0
+                )::integer AS maximum_revision_item_count,
+                COALESCE(
+                  bool_and(
+                    jsonb_typeof(history.snapshot) = 'object'
+                    AND jsonb_typeof(history.snapshot->'items') = 'array'
+                  ),
+                  false
+                ) AS revision_snapshots_have_item_arrays
+         FROM target
+         LEFT JOIN nutrition_meal_revisions AS history ON history.meal_id = target.id
+       )
+       SELECT target.revision AS meal_revision,
+              item_stats.current_item_count,
+              revision_stats.revision_count,
+              octet_length(
+                (
+                  to_jsonb(target)
+                  || jsonb_build_object('items', '[]'::jsonb, 'history', '[]'::jsonb)
+                )::text
+              )::integer AS header_bytes,
+              item_stats.current_item_payload_bytes,
+              item_stats.maximum_current_item_bytes,
+              revision_stats.revision_payload_bytes,
+              revision_stats.maximum_revision_payload_bytes,
+              revision_stats.maximum_revision_item_count,
+              revision_stats.revision_snapshots_have_item_arrays,
+              revision_stats.revision_payload_bytes > $3
+                AS history_aggregate_exceeds_payload_boundary
+       FROM target
+       CROSS JOIN item_stats
+       CROSS JOIN revision_stats`
+
+const mapNutritionMealShape = (
+  row: NutritionMealShapeRow,
+): PortableExportNutritionMealShapeReceipt => ({
+  schemaVersion: portableExportNutritionMealShapeSchemaVersion,
+  mealRevision: row.meal_revision,
+  currentItemCount: row.current_item_count,
+  revisionCount: row.revision_count,
+  headerBytes: row.header_bytes,
+  currentItemPayloadBytes: row.current_item_payload_bytes,
+  maximumCurrentItemBytes: row.maximum_current_item_bytes,
+  revisionPayloadBytes: row.revision_payload_bytes,
+  maximumRevisionPayloadBytes: row.maximum_revision_payload_bytes,
+  maximumRevisionItemCount: row.maximum_revision_item_count,
+  revisionSnapshotsHaveItemArrays: row.revision_snapshots_have_item_arrays,
+  historyAggregateExceedsPayloadBoundary: row.history_aggregate_exceeds_payload_boundary,
+})
 
 export const portableExportWorkoutRevisionSnapshotShapeQuery = `WITH target AS MATERIALIZED (
          SELECT history.id, history.workout_id, history.user_id, history.revision, history.snapshot
@@ -3965,6 +4078,29 @@ export class PortableExportDatabaseSnapshotService {
       receipt = row
     }
     if (!receipt) throw new NotFoundException('workout revision snapshot not found')
+    return receipt
+  }
+
+  async inspectNutritionMealShape(
+    userId: string,
+    mealId: string,
+  ): Promise<PortableExportNutritionMealShapeReceipt> {
+    const rows = this.database.streamReadOnlyRepeatableRead(
+      async function* (client): AsyncGenerator<PortableExportNutritionMealShapeReceipt> {
+        await assertActiveAccount(client, userId)
+        const result = await client.query<NutritionMealShapeRow>(
+          portableExportNutritionMealShapeQuery,
+          [userId, mealId, portableExportSnapshotMaximumPayloadBytes],
+        )
+        if (result.rows[0]) yield mapNutritionMealShape(result.rows[0])
+      },
+    )
+    let receipt: PortableExportNutritionMealShapeReceipt | undefined
+    for await (const row of rows) {
+      if (receipt) throw new Error('nutrition meal shape returned multiple rows')
+      receipt = row
+    }
+    if (!receipt) throw new NotFoundException('nutrition meal not found')
     return receipt
   }
 

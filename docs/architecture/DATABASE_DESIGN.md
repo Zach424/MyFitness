@@ -445,7 +445,11 @@ intent 创建 → 验证一次性 token 与确认短语 → users 状态关闭 �
 
 `createWorkoutRevisionSnapshot()` 让 shape 与正文共享同一只读 repeatable-read 事务。shape 还要求 exercise `id` 在 revision 内唯一、set `id` 在父 exercise 内唯一；ID 只需符合规范 UUID 文本结构，不锁定特定版本。根页以 `jsonb_set(snapshot,'{exercises}','[]')` 形成一个有界骨架，动作页以 `jsonb_set(exercise_json,'{sets}','[]')` 形成骨架，set 页交付原对象；三者都在 PostgreSQL 内编码并执行 64 KiB UTF-8 门禁。动作和组页面只携上一元素 UUID，在相同 target CTE 内恢复 ordinality 后继续读取，应用和收据不暴露 ordinality。空数组键在 Node 中原地替换为懒数组，保留 JSONB 解析键序；真实数据库证明反序 position 快照物化后与直接 `SELECT snapshot` 的 JSON 字节相同。
 
-数据库训练来源提供关系优先与 JSONB `history→exercises` 两种共享字段顺序；完整 JSON 模式现在通过内部现有 `PoolClient` 适配器复用六字段协调根，不另开事务或重复 active-owner 查询。七层状态机与各层统计不复制，完成时把 workout 头、当前动作/组、修订和快照三层收据合并进统一根收据；最深层失败先关闭 workout 会话，再以同一错误关闭协调事务。真实 PostgreSQL 已证明前五字段结束后的并发训练新增不可见、六字段逐字节对账和活动不可变 set 同根取消。下一数据库工作是审计 `nutritionMeals` 的顶层/关系/修订顺序、软删除范围、索引和最大合法聚合边界。
+数据库训练来源提供关系优先与 JSONB `history→exercises` 两种共享字段顺序；完整 JSON 模式现在通过内部现有 `PoolClient` 适配器复用六字段协调根，不另开事务或重复 active-owner 查询。七层状态机与各层统计不复制，完成时把 workout 头、当前动作/组、修订和快照三层收据合并进统一根收据；最深层失败先关闭 workout 会话，再以同一错误关闭协调事务。真实 PostgreSQL 已证明前五字段结束后的并发训练新增不可见、六字段逐字节对账和活动不可变 set 同根取消。
+
+餐食同步导出按 `(occurred_at,created_at,id)` 固定覆盖软删除记录的顶层总序；迁移 0035 的非部分 `(user_id,occurred_at,created_at,id)` 索引支持该保管读取。`inspectNutritionMealShape()` 在 active-owner、只读 repeatable-read 会话内分别统计 meal 空数组骨架、当前 item payload 和每条 revision payload，只返回计数、字节数及 snapshot items 形状布尔，不聚合或返回餐食正文。真实 PostgreSQL 的 30-item、4-revision 合法夹具证明 revision payload 总量超过 64 KiB，而 meal 头、当前 items 总量和单 revision 分别低于门禁。下一数据库工作是按 meal→当前 items→history 头→revision snapshot items 分层，并保留当前 item position、history revision 与不可变 JSON ordinality。
+
+这些统计只回答存储与传输结构能否安全拆分，不判断餐食是否健康、营养数据是否准确，也不能成为删除或截断用户历史的依据。
 
 ## 20. 安全与隐私控制
 

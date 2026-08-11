@@ -425,7 +425,7 @@ export class PrivacyService {
          FROM (
            SELECT id, meal_type, title, source_kind, source_metadata, occurred_at, timezone,
                   note, revision, deleted_at, created_at, updated_at
-           FROM nutrition_meals WHERE user_id = $1 ORDER BY occurred_at, created_at
+           FROM nutrition_meals WHERE user_id = $1 ORDER BY occurred_at, created_at, id
          ) AS meal`,
         userId,
       )

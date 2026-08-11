@@ -50,6 +50,8 @@ Selecting a definition copies its current values into the existing meal draft/sn
 
 异步便携归档只把 `user_food_catalog_entries` 视为 owner 数据，包含活动与归档定义及其不可变修订；代码内置 starter 参考目录属于共享产品常量，不复制进用户数据包。条目按 `(created_at,id)`、history 按 revision 做两层 keyset，PostgreSQL 先交付 `history: []` 骨架，再由 Node 原位挂载修订子流；迁移 0034 的非部分 owner 索引覆盖归档定义。条目与每条修订各自执行 64 KiB UTF-8 门禁，并与同意、健康和动作目录共享同一个只读 `REPEATABLE READ` 事实时刻。该结构不验证用户填写的营养事实，也不改变餐食快照、收藏或照片候选边界。
 
+餐食 owner 导出必须覆盖当前与软删除 meal、当前 items 和全部不可变修订。顶层稳定顺序为 `(occurred_at,created_at,id)`，迁移 0035 提供非部分 owner 索引；当前关系保持 position，history 保持 revision，修订 snapshot 内的 items 保持 JSON ordinality。`inspectNutritionMealShape()` 只输出修订号、计数、各层字节数和 shape 布尔，不输出 owner/meal UUID 或饮食正文。30 个契约上限条目与 4 份完整修订已经让 history payload 总量超过 64 KiB，禁止把同步 `jsonb_agg(history)` 复制为异步单行来源；后续必须把 meal 头、当前 items、history 头和 snapshot items 分层并逐元素门禁。该结论只是存储/传输边界，不验证营养准确性，也不产生饮食建议。
+
 The definition register is a dedicated H5/WeApp route; the meal page refreshes active entries on show and searches owner aliases. Food-photo candidates remain limited to the controlled starter catalog. Barcode/provider search, branded variants, recipes, non-gram household conversion rules and catalog reconciliation are deferred.
 
 `GET /v1/food-catalog/:entryId/history` accepts `limit` (default 20, maximum 50) and an opaque UUID/revision cursor. The API validates the exact owner entry and anchor before returning `revision < boundary` newest first. The register initially renders 10 versions through the shared definition ledger and explicitly loads older pages; archive remains owner-readable. Pagination does not verify the user-confirmed nutrient values or reference.

@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto'
 
-import { privacyExportSchema, privacyExportSchemaVersion } from '@myfitness/contracts'
+import { mealSchema, privacyExportSchema, privacyExportSchemaVersion } from '@myfitness/contracts'
 import { Pool } from 'pg'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
@@ -414,6 +414,136 @@ describe('portable export bounded PostgreSQL snapshot', () => {
     ...extra,
   })
 
+  const createNutritionMealBoundaryFixture = async (userId: string, revisionCount = 4) => {
+    const mealId = randomUUID()
+    const secretMarker = `meal-shape-${randomUUID()}`
+    const occurredAt = '2026-08-11T02:30:00.000Z'
+    const createdAt = '2026-08-11T02:31:00.000Z'
+    const items = Array.from({ length: 30 }, (_, index) => ({
+      id: randomUUID(),
+      position: index + 1,
+      food: {
+        foodKey: `boundary_${String(index + 1).padStart(2, '0')}_${'x'.repeat(100)}`.slice(0, 100),
+        name: `${secretMarker}-${index + 1}-${'n'.repeat(100)}`.slice(0, 100),
+        category: 'custom' as const,
+        nutrientsPer100g: {
+          energyKcal: 1_000,
+          proteinG: 100,
+          carbohydrateG: 100,
+          fatG: 100,
+          fiberG: 100,
+        },
+        reference: 'r'.repeat(200),
+      },
+      serving: { amount: 10_000, unit: 'serving' as const, grams: 10_000 },
+      summary: {
+        energyKcal: 100_000,
+        proteinG: 10_000,
+        carbohydrateG: 10_000,
+        fatG: 10_000,
+        fiberG: 10_000,
+      },
+    }))
+
+    await pool.query(
+      `INSERT INTO nutrition_meals (
+         id, user_id, meal_type, title, source_kind, source_metadata, occurred_at, timezone,
+         note, revision, idempotency_key, request_hash, created_at, updated_at
+       ) VALUES (
+         $1, $2, 'dinner', $3, 'manual', $4::jsonb, $5::timestamptz, 'Asia/Shanghai',
+         $6, $7, $8, repeat('m', 64), $9::timestamptz, $9::timestamptz
+       )`,
+      [
+        mealId,
+        userId,
+        `${secretMarker}-${'t'.repeat(80)}`.slice(0, 80),
+        JSON.stringify({ provider: 'p'.repeat(80), externalId: 'e'.repeat(160) }),
+        occurredAt,
+        'o'.repeat(500),
+        revisionCount,
+        `meal-shape-${randomUUID()}`,
+        createdAt,
+      ],
+    )
+
+    for (const item of items) {
+      await pool.query(
+        `INSERT INTO nutrition_meal_items (
+           id, meal_id, position, food_key, food_name, food_category,
+           energy_kcal_per_100g, protein_g_per_100g, carbohydrate_g_per_100g,
+           fat_g_per_100g, fiber_g_per_100g, reference,
+           display_amount, display_unit, canonical_grams
+         ) VALUES (
+           $1, $2, $3, $4, $5, $6,
+           $7, $8, $9, $10, $11, $12,
+           $13, $14, $15
+         )`,
+        [
+          item.id,
+          mealId,
+          item.position,
+          item.food.foodKey,
+          item.food.name,
+          item.food.category,
+          item.food.nutrientsPer100g.energyKcal,
+          item.food.nutrientsPer100g.proteinG,
+          item.food.nutrientsPer100g.carbohydrateG,
+          item.food.nutrientsPer100g.fatG,
+          item.food.nutrientsPer100g.fiberG,
+          item.food.reference,
+          item.serving.amount,
+          item.serving.unit,
+          item.serving.grams,
+        ],
+      )
+    }
+
+    for (let revision = 1; revision <= revisionCount; revision += 1) {
+      const snapshot = mealSchema.parse({
+        id: mealId,
+        userId,
+        mealType: 'dinner',
+        title: `${secretMarker}-${'t'.repeat(80)}`.slice(0, 80),
+        source: {
+          kind: 'manual',
+          metadata: { provider: 'p'.repeat(80), externalId: 'e'.repeat(160) },
+        },
+        items,
+        summary: {
+          energyKcal: 3_000_000,
+          proteinG: 300_000,
+          carbohydrateG: 300_000,
+          fatG: 300_000,
+          fiberG: 300_000,
+        },
+        occurredAt,
+        timezone: 'Asia/Shanghai',
+        note: 'o'.repeat(500),
+        revision,
+        createdAt,
+        updatedAt: `2026-08-11T02:${String(31 + revision).padStart(2, '0')}:00.000Z`,
+      })
+      await pool.query(
+        `INSERT INTO nutrition_meal_revisions (
+           id, meal_id, user_id, action, revision, snapshot, changed_at
+         ) VALUES (
+           $1, $2, $3, $4, $5, $6::jsonb, $7::timestamptz
+         )`,
+        [
+          randomUUID(),
+          mealId,
+          userId,
+          revision === 1 ? 'created' : 'updated',
+          revision,
+          JSON.stringify(snapshot),
+          `2026-08-11T03:${String(revision).padStart(2, '0')}:00.000Z`,
+        ],
+      )
+    }
+
+    return { mealId, secretMarker }
+  }
+
   beforeAll(async () => {
     await runMigrations(config.databaseUrl)
   })
@@ -422,6 +552,70 @@ describe('portable export bounded PostgreSQL snapshot', () => {
     await pool.query('DELETE FROM users WHERE id = ANY($1::uuid[])', [[...users]])
     await database.onModuleDestroy()
     await pool.end()
+  })
+
+  it('audits an unbounded meal history without aggregating its sensitive snapshots', async () => {
+    const userId = await createUser()
+    const otherUserId = await createUser()
+    const { mealId, secretMarker } = await createNutritionMealBoundaryFixture(userId)
+
+    const receipt = await snapshots.inspectNutritionMealShape(userId, mealId)
+
+    expect(receipt).toMatchObject({
+      schemaVersion: 'myfitness-portable-export-nutrition-meal-shape/v1',
+      mealRevision: 4,
+      currentItemCount: 30,
+      revisionCount: 4,
+      maximumRevisionItemCount: 30,
+      revisionSnapshotsHaveItemArrays: true,
+      historyAggregateExceedsPayloadBoundary: true,
+    })
+    expect(receipt.headerBytes).toBeLessThan(portableExportSnapshotMaximumPayloadBytes)
+    expect(receipt.currentItemPayloadBytes).toBeLessThan(portableExportSnapshotMaximumPayloadBytes)
+    expect(receipt.maximumCurrentItemBytes).toBeLessThan(portableExportSnapshotMaximumPayloadBytes)
+    expect(receipt.revisionPayloadBytes).toBeGreaterThan(portableExportSnapshotMaximumPayloadBytes)
+    expect(receipt.maximumRevisionPayloadBytes).toBeLessThan(
+      portableExportSnapshotMaximumPayloadBytes,
+    )
+    expect(JSON.stringify(receipt)).not.toContain(secretMarker)
+    expect(JSON.stringify(receipt)).not.toContain(userId)
+    expect(JSON.stringify(receipt)).not.toContain(mealId)
+    await expect(snapshots.inspectNutritionMealShape(otherUserId, mealId)).rejects.toThrowError(
+      'nutrition meal not found',
+    )
+
+    const definition = await pool.query<{ index_definition: string; predicate: string | null }>(
+      `SELECT pg_get_indexdef(indexrelid) AS index_definition,
+              pg_get_expr(indpred, indrelid) AS predicate
+       FROM pg_index
+       WHERE indexrelid = 'nutrition_meals_user_export_idx'::regclass`,
+    )
+    expect(definition.rows).toEqual([
+      expect.objectContaining({
+        index_definition: expect.stringContaining('(user_id, occurred_at, created_at, id)'),
+        predicate: null,
+      }),
+    ])
+
+    const client = await pool.connect()
+    try {
+      await client.query('BEGIN')
+      await client.query('SET LOCAL enable_seqscan = off')
+      const plan = await client.query<{ 'QUERY PLAN': unknown }>(
+        `EXPLAIN (FORMAT JSON, COSTS OFF)
+         SELECT id, occurred_at, created_at
+         FROM nutrition_meals
+         WHERE user_id = $1
+         ORDER BY occurred_at, created_at, id`,
+        [userId],
+      )
+      expect(JSON.stringify(plan.rows[0]?.['QUERY PLAN'])).toContain(
+        'nutrition_meals_user_export_idx',
+      )
+    } finally {
+      await client.query('ROLLBACK')
+      client.release()
+    }
   })
 
   it('keeps one owner snapshot stable across keyset pages without timestamp round-trips', async () => {
