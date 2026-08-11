@@ -52,6 +52,8 @@ Selecting a definition copies its current values into the existing meal draft/sn
 
 餐食 owner 导出覆盖当前与软删除 meal、当前 items 和全部不可变修订。顶层稳定顺序为 `(occurred_at,created_at,id)`，迁移 0035 提供非部分 owner 索引；当前关系保持 position，history 保持 revision，修订 snapshot 内的 items 保持 JSON ordinality。`inspectNutritionMealShape()` 只输出修订号、计数、各层字节数和 shape 布尔，不输出 owner/meal UUID 或饮食正文。30 个契约上限条目与 4 份完整修订已经让 history payload 总量超过 64 KiB，因此正文实现按 meal 头、当前 items、history 头和 snapshot items 分层并逐元素门禁，禁止退回同步 `jsonb_agg(history)` 单行来源。该结论只是存储/传输边界，不验证营养准确性，也不产生饮食建议。
 
+收藏是当前 owner 的独立快照，没有软删除或修订历史；取消收藏会删除 `(user_id,food_key)` 行。异步便携归档精确导出同步十四字段对象，按 `food_key` 升序 keyset，并用既有复合主键完成隔离、总序和查询计划。每行在 PostgreSQL 中先执行 64 KiB UTF-8 门禁，JSON 层只暴露普通懒数组，不增加伪造身份字段。收藏接入与餐食、目录共享同一 repeatable-read 事实时刻，但不会把目录当前值反向覆盖收藏快照，也不推断饮食质量或生成建议。
+
 餐食会话已完成上述分层。同步 JSONB 中 `items` 位于 `history` 之前，所以调用方必须先完整消费当前 items，再读取 revision；每条 revision 的 snapshot items 又必须在下一 revision 前完成。数据库空骨架保留原键序，当前 items 按 position、revision 按 revision、snapshot items 按不可变 JSON ordinality；五层都执行 64 KiB 门禁。`createPortableExportNutritionMealJsonSource()` 只把这些既有占位字段原位包装为私有递归懒数组，创建后零预取。七字段协调入口通过现有 `PoolClient` 复用一次 active-owner、只读 repeatable-read 根，餐食会话不再建立第二事实时刻；完整结束才合并五段收据，最深层取消沿同一错误回滚协调根。真实数据库证明完整七字段懒正文与同步投影逐字节相同，并证明非法 snapshot、超限叶和最深层取消不会泄露正文或提交部分事实。该来源尚未进入公开下载，也不改变用户确认营养事实的地位。
 
 The definition register is a dedicated H5/WeApp route; the meal page refreshes active entries on show and searches owner aliases. Food-photo candidates remain limited to the controlled starter catalog. Barcode/provider search, branded variants, recipes, non-gram household conversion rules and catalog reconciliation are deferred.

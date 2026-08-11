@@ -1,5 +1,6 @@
 import type {
   PortableExportConsentHealthCatalogSnapshotSession,
+  PortableExportConsentHealthCatalogWorkoutNutritionFavoriteSnapshotSession,
   PortableExportConsentHealthCatalogWorkoutNutritionSnapshotSession,
   PortableExportConsentHealthCatalogWorkoutSnapshotSession,
   PortableExportConsentHealthExerciseCatalogSnapshotSession,
@@ -44,6 +45,14 @@ export type PortableExportConsentHealthCatalogWorkoutNutritionJsonSource =
     receipt: PortableExportConsentHealthCatalogWorkoutNutritionSnapshotSession['receipt']
     complete: PortableExportConsentHealthCatalogWorkoutNutritionSnapshotSession['complete']
     cancel: PortableExportConsentHealthCatalogWorkoutNutritionSnapshotSession['cancel']
+  }
+
+export type PortableExportConsentHealthCatalogWorkoutNutritionFavoriteJsonSource =
+  PortableExportConsentHealthCatalogWorkoutNutritionJsonSource & {
+    nutritionFavorites: PortableExportJsonAsyncArray<Record<string, unknown>>
+    receipt: PortableExportConsentHealthCatalogWorkoutNutritionFavoriteSnapshotSession['receipt']
+    complete: PortableExportConsentHealthCatalogWorkoutNutritionFavoriteSnapshotSession['complete']
+    cancel: PortableExportConsentHealthCatalogWorkoutNutritionFavoriteSnapshotSession['cancel']
   }
 
 const catalogJsonValues = async function* (
@@ -108,6 +117,22 @@ export const createPortableExportConsentHealthCatalogWorkoutNutritionJsonSource 
   foodCatalog: portableExportJsonAsyncArray(catalogJsonValues(session.foodCatalog)),
   workouts: createPortableExportWorkoutJsonArray(session.workouts),
   nutritionMeals: createPortableExportNutritionMealJsonArray(session.nutritionMeals),
+  receipt: session.receipt,
+  complete: session.complete,
+  cancel: session.cancel,
+})
+
+export const createPortableExportConsentHealthCatalogWorkoutNutritionFavoriteJsonSource = (
+  session: PortableExportConsentHealthCatalogWorkoutNutritionFavoriteSnapshotSession,
+): PortableExportConsentHealthCatalogWorkoutNutritionFavoriteJsonSource => ({
+  consentEvents: portableExportJsonAsyncArray(session.consentEvents),
+  healthRecords: portableExportJsonAsyncArray(session.healthRecords),
+  healthRecordRevisions: portableExportJsonAsyncArray(session.healthRecordRevisions),
+  exerciseCatalog: portableExportJsonAsyncArray(catalogJsonValues(session.exerciseCatalog)),
+  foodCatalog: portableExportJsonAsyncArray(catalogJsonValues(session.foodCatalog)),
+  workouts: createPortableExportWorkoutJsonArray(session.workouts),
+  nutritionMeals: createPortableExportNutritionMealJsonArray(session.nutritionMeals),
+  nutritionFavorites: portableExportJsonAsyncArray(session.nutritionFavorites),
   receipt: session.receipt,
   complete: session.complete,
   cancel: session.cancel,

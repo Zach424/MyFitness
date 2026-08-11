@@ -16,6 +16,7 @@ import {
   PortableExportWorkoutRevisionSnapshotNotDecomposableError,
   portableExportExerciseCatalogEntryPageQuery,
   portableExportFoodCatalogEntryPageQuery,
+  portableExportNutritionFavoritePageQuery,
   portableExportNutritionMealItemPageQuery,
   portableExportNutritionMealRevisionHeaderPageQuery,
   portableExportSnapshotMaximumPayloadBytes,
@@ -26,6 +27,7 @@ import {
 } from './portable-export-database-snapshot'
 import {
   createPortableExportConsentHealthCatalogJsonSource,
+  createPortableExportConsentHealthCatalogWorkoutNutritionFavoriteJsonSource,
   createPortableExportConsentHealthCatalogWorkoutNutritionJsonSource,
   createPortableExportConsentHealthCatalogWorkoutJsonSource,
   createPortableExportConsentHealthExerciseCatalogJsonSource,
@@ -552,6 +554,38 @@ describe('portable export bounded PostgreSQL snapshot', () => {
     }
 
     return { mealId, secretMarker, firstItemId: items[0]?.id }
+  }
+
+  const createNutritionFavorite = async (
+    userId: string,
+    foodKey: string,
+    options: {
+      foodName?: string
+      reference?: string | null
+      createdAt?: string
+    } = {},
+  ) => {
+    const createdAt = options.createdAt ?? '2026-08-11T06:20:00.000001Z'
+    await pool.query(
+      `INSERT INTO nutrition_favorites (
+         user_id, food_key, food_name, food_category,
+         energy_kcal_per_100g, protein_g_per_100g, carbohydrate_g_per_100g,
+         fat_g_per_100g, fiber_g_per_100g, reference,
+         default_amount, default_unit, default_grams, created_at, updated_at
+       ) VALUES (
+         $1, $2, $3, 'custom',
+         1000, 100, 100, 100, 100, $4,
+         10000, 'serving', 10000, $5::timestamptz, $5::timestamptz
+       )`,
+      [
+        userId,
+        foodKey,
+        options.foodName ?? `Favorite ${foodKey}`.slice(0, 100),
+        options.reference ?? 'User-confirmed favorite',
+        createdAt,
+      ],
+    )
+    return foodKey
   }
 
   const materializeNutritionMeals = async (
@@ -4558,6 +4592,298 @@ describe('portable export bounded PostgreSQL snapshot', () => {
     expect(await jsonFailure).toBe(returnFailure)
     expect(returnFailure).toMatchObject({
       message: 'portable export nutrition meal revision snapshot items did not complete',
+    })
+  })
+
+  it('streams bounded owner nutrition favorites in primary-key order from one stable snapshot', async () => {
+    const userId = await createUser()
+    const otherUserId = await createUser()
+    const firstFoodKey = 'a'.repeat(100)
+    const concurrentFoodKey = 'z'.repeat(100)
+    await createNutritionFavorite(userId, firstFoodKey, {
+      foodName: 'n'.repeat(100),
+      reference: 'r'.repeat(200),
+    })
+    await createNutritionFavorite(otherUserId, firstFoodKey, {
+      foodName: 'Other owner favorite',
+    })
+
+    const limited = snapshots.createNutritionFavoriteSnapshot(userId, {
+      maximumPayloadBytes: 1,
+    })
+    const limitedReceiptFailure = limited.receipt.catch((error: unknown) => error)
+    let limitedFailure: unknown
+    try {
+      for await (const _ of limited.rows) {
+        // The maximum legal row must be refused before its body is published.
+      }
+    } catch (error) {
+      limitedFailure = error
+    }
+    expect(limitedFailure).toBeInstanceOf(PortableExportSnapshotPayloadTooLargeError)
+    expect(limitedFailure).toMatchObject({
+      maximumBytes: 1,
+      actualBytes: expect.any(Number),
+    })
+    expect((limitedFailure as PortableExportSnapshotPayloadTooLargeError).actualBytes).toBeLessThan(
+      portableExportSnapshotMaximumPayloadBytes,
+    )
+    expect(await limitedReceiptFailure).toBe(limitedFailure)
+
+    const stable = snapshots.createNutritionFavoriteSnapshot(userId, { batchRows: 1 })
+    const iterator = stable.rows[Symbol.asyncIterator]()
+    const first = await iterator.next()
+    expect(first).toMatchObject({
+      done: false,
+      value: { food_key: firstFoodKey, food_name: 'n'.repeat(100) },
+    })
+    expect(Object.keys(first.value!).sort()).toEqual(
+      [
+        'food_key',
+        'food_name',
+        'food_category',
+        'energy_kcal_per_100g',
+        'protein_g_per_100g',
+        'carbohydrate_g_per_100g',
+        'fat_g_per_100g',
+        'fiber_g_per_100g',
+        'reference',
+        'default_amount',
+        'default_unit',
+        'default_grams',
+        'created_at',
+        'updated_at',
+      ].sort(),
+    )
+    await createNutritionFavorite(userId, concurrentFoodKey)
+    await expect(iterator.next()).resolves.toEqual({ done: true, value: undefined })
+    await expect(stable.receipt).resolves.toEqual({
+      batchRows: 1,
+      maximumPayloadBytes: portableExportSnapshotMaximumPayloadBytes,
+      batchCount: 1,
+      rowCount: 1,
+    })
+
+    const definition = await pool.query<{ index_definition: string; predicate: string | null }>(
+      `SELECT pg_get_indexdef(indexrelid) AS index_definition,
+              pg_get_expr(indpred, indrelid) AS predicate
+       FROM pg_index
+       WHERE indexrelid = 'nutrition_favorites_pkey'::regclass`,
+    )
+    expect(definition.rows).toEqual([
+      expect.objectContaining({
+        index_definition: expect.stringContaining('(user_id, food_key)'),
+        predicate: null,
+      }),
+    ])
+    const client = await pool.connect()
+    try {
+      await client.query('BEGIN')
+      await client.query('SET LOCAL enable_seqscan = off')
+      const plan = await client.query<{ 'QUERY PLAN': unknown }>(
+        `EXPLAIN (FORMAT JSON, COSTS OFF) ${portableExportNutritionFavoritePageQuery}`,
+        [userId, null, 2, portableExportSnapshotMaximumPayloadBytes],
+      )
+      expect(JSON.stringify(plan.rows[0]?.['QUERY PLAN'])).toContain('nutrition_favorites_pkey')
+    } finally {
+      await client.query('ROLLBACK')
+      client.release()
+    }
+  })
+
+  it('streams nutrition favorites as a stable eighth field and preserves eager JSON bytes', async () => {
+    const userId = await createUser()
+    const firstFoodKey = await createNutritionFavorite(userId, 'favorite_a')
+    const stable = snapshots.createConsentHealthCatalogWorkoutNutritionFavoriteSnapshot(userId, {
+      batchRows: 1,
+    })
+    for await (const _ of stable.consentEvents) {
+      // Establish the root transaction.
+    }
+    for await (const _ of stable.healthRecords) {
+      // Reach field two.
+    }
+    for await (const _ of stable.healthRecordRevisions) {
+      // Reach field three.
+    }
+    for await (const _ of stable.exerciseCatalog) {
+      // Empty field four.
+    }
+    for await (const _ of stable.foodCatalog) {
+      // Empty field five.
+    }
+    for await (const _ of stable.workouts) {
+      // Empty field six.
+    }
+    for await (const _ of stable.nutritionMeals) {
+      // Empty field seven.
+    }
+    const concurrentFoodKey = await createNutritionFavorite(userId, 'favorite_b')
+    const stableFavorites: Array<Record<string, unknown>> = []
+    for await (const favorite of stable.nutritionFavorites) stableFavorites.push(favorite)
+    expect(stableFavorites.map((favorite) => favorite.food_key)).toEqual([firstFoodKey])
+    expect(stableFavorites.some((favorite) => favorite.food_key === concurrentFoodKey)).toBe(false)
+    await stable.complete()
+    await expect(stable.receipt).resolves.toMatchObject({
+      nutritionFavorites: { batchCount: 1, rowCount: 1 },
+    })
+
+    const eager = snapshots.createConsentHealthCatalogWorkoutNutritionFavoriteSnapshot(userId, {
+      batchRows: 2,
+    })
+    const consentEvents: Array<Record<string, unknown>> = []
+    const healthRecords: Array<Record<string, unknown>> = []
+    const healthRecordRevisions: Array<Record<string, unknown>> = []
+    const exerciseCatalog: Array<Record<string, unknown>> = []
+    const foodCatalog: Array<Record<string, unknown>> = []
+    const workouts: Array<Record<string, unknown>> = []
+    const nutritionMeals: Array<Record<string, unknown>> = []
+    const nutritionFavorites: Array<Record<string, unknown>> = []
+    for await (const row of eager.consentEvents) consentEvents.push(row)
+    for await (const row of eager.healthRecords) healthRecords.push(row)
+    for await (const row of eager.healthRecordRevisions) healthRecordRevisions.push(row)
+    for await (const row of eager.exerciseCatalog) exerciseCatalog.push(row)
+    for await (const row of eager.foodCatalog) foodCatalog.push(row)
+    for await (const row of eager.workouts) workouts.push(row as unknown as Record<string, unknown>)
+    for await (const row of eager.nutritionMeals) {
+      nutritionMeals.push(row as unknown as Record<string, unknown>)
+    }
+    for await (const row of eager.nutritionFavorites) nutritionFavorites.push(row)
+    await eager.complete()
+    expect(nutritionFavorites.map((favorite) => favorite.food_key)).toEqual([
+      firstFoodKey,
+      concurrentFoodKey,
+    ])
+
+    const eagerPayload = privacyExportSchema.parse({
+      schemaVersion: privacyExportSchemaVersion,
+      generatedAt: '2026-08-11T06:30:00.000Z',
+      accountId: userId,
+      data: {
+        account: { id: userId, status: 'active' },
+        identities: [],
+        profile: null,
+        goal: null,
+        consentEvents,
+        healthRecords,
+        healthRecordRevisions,
+        exerciseCatalog,
+        foodCatalog,
+        workouts,
+        nutritionMeals,
+        nutritionFavorites,
+        weeklyPlans: [],
+        aiExplanationRuns: [],
+        foodPhotoAnalyses: [],
+        progressPhotos: [],
+      },
+    })
+    const expected = serializePortableExport(eagerPayload, Number.MAX_SAFE_INTEGER)
+    const lazy = snapshots.createConsentHealthCatalogWorkoutNutritionFavoriteSnapshot(userId, {
+      batchRows: 2,
+    })
+    const source = createPortableExportConsentHealthCatalogWorkoutNutritionFavoriteJsonSource(lazy)
+    const json = createPortableExportJsonStream(
+      {
+        ...eagerPayload,
+        data: {
+          ...eagerPayload.data,
+          consentEvents: source.consentEvents as never,
+          healthRecords: source.healthRecords as never,
+          healthRecordRevisions: source.healthRecordRevisions as never,
+          exerciseCatalog: source.exerciseCatalog as never,
+          foodCatalog: source.foodCatalog as never,
+          workouts: source.workouts as never,
+          nutritionMeals: source.nutritionMeals as never,
+          nutritionFavorites: source.nutritionFavorites as never,
+        },
+      },
+      { chunkBytes: 43, lifecycle: source },
+    )
+    const chunks: Buffer[] = []
+    for await (const chunk of json.bytes) chunks.push(Buffer.from(chunk))
+
+    expect(Buffer.concat(chunks)).toEqual(expected)
+    await expect(lazy.receipt).resolves.toMatchObject({
+      nutritionFavorites: { batchCount: 1, rowCount: 2 },
+    })
+    await expect(json.receipt).resolves.toEqual({
+      schemaVersion: privacyExportSchemaVersion,
+      chunkBytes: 43,
+      byteLength: expected.length,
+      sha256: createHash('sha256').update(expected).digest('hex'),
+    })
+  })
+
+  it('cancels the eight-field root from an active nutrition favorite', async () => {
+    const userId = await createUser()
+    const foodKey = await createNutritionFavorite(userId, 'favorite_cancel')
+    const base = privacyExportSchema.parse({
+      schemaVersion: privacyExportSchemaVersion,
+      generatedAt: '2026-08-11T06:40:00.000Z',
+      accountId: userId,
+      data: {
+        account: { id: userId },
+        identities: [],
+        profile: null,
+        goal: null,
+        consentEvents: [],
+        healthRecords: [],
+        healthRecordRevisions: [],
+        exerciseCatalog: [],
+        foodCatalog: [],
+        workouts: [],
+        nutritionMeals: [],
+        nutritionFavorites: [],
+        weeklyPlans: [],
+        aiExplanationRuns: [],
+        foodPhotoAnalyses: [],
+        progressPhotos: [],
+      },
+    })
+    const snapshot = snapshots.createConsentHealthCatalogWorkoutNutritionFavoriteSnapshot(userId, {
+      batchRows: 1,
+    })
+    const source =
+      createPortableExportConsentHealthCatalogWorkoutNutritionFavoriteJsonSource(snapshot)
+    const json = createPortableExportJsonStream(
+      {
+        ...base,
+        data: {
+          ...base.data,
+          consentEvents: source.consentEvents as never,
+          healthRecords: source.healthRecords as never,
+          healthRecordRevisions: source.healthRecordRevisions as never,
+          exerciseCatalog: source.exerciseCatalog as never,
+          foodCatalog: source.foodCatalog as never,
+          workouts: source.workouts as never,
+          nutritionMeals: source.nutritionMeals as never,
+          nutritionFavorites: source.nutritionFavorites as never,
+        },
+      },
+      { chunkBytes: 1, lifecycle: source },
+    )
+    const iterator = json.bytes[Symbol.asyncIterator]()
+    let prefix = ''
+    while (!prefix.includes(foodKey)) {
+      const next = await iterator.next()
+      if (next.done) throw new Error('coordinated nutrition favorite was not reached')
+      prefix += next.value.toString('utf8')
+    }
+    const jsonFailure = json.receipt.catch((error: unknown) => error)
+    const snapshotFailure = snapshot.receipt.catch((error: unknown) => error)
+    let returnFailure: unknown
+
+    try {
+      await iterator.return?.()
+    } catch (error) {
+      returnFailure = error
+    }
+
+    expect(await snapshotFailure).toBe(returnFailure)
+    expect(await jsonFailure).toBe(returnFailure)
+    expect(returnFailure).toMatchObject({
+      message: 'portable export coordinated snapshot did not complete',
     })
   })
 })

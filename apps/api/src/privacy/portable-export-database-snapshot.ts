@@ -35,6 +35,8 @@ export type PortableExportConsentEventSnapshotReceipt = PortableExportDatabaseSn
 export type PortableExportConsentEventSnapshotSession = PortableExportDatabaseSnapshotSession
 export type PortableExportWorkoutHeaderSnapshotReceipt = PortableExportDatabaseSnapshotReceipt
 export type PortableExportWorkoutHeaderSnapshotSession = PortableExportDatabaseSnapshotSession
+export type PortableExportNutritionFavoriteSnapshotReceipt = PortableExportDatabaseSnapshotReceipt
+export type PortableExportNutritionFavoriteSnapshotSession = PortableExportDatabaseSnapshotSession
 
 export const portableExportNutritionMealShapeSchemaVersion =
   'myfitness-portable-export-nutrition-meal-shape/v1' as const
@@ -341,6 +343,25 @@ export type PortableExportConsentHealthCatalogWorkoutNutritionSnapshotSession = 
   cancel: (error: unknown) => Promise<void>
 }
 
+export type PortableExportConsentHealthCatalogWorkoutNutritionFavoriteSnapshotReceipt =
+  PortableExportConsentHealthCatalogWorkoutNutritionSnapshotReceipt & {
+    nutritionFavorites: PortableExportHealthHistorySnapshotCollectionReceipt
+  }
+
+export type PortableExportConsentHealthCatalogWorkoutNutritionFavoriteSnapshotSession = {
+  consentEvents: AsyncIterable<Record<string, unknown>>
+  healthRecords: AsyncIterable<Record<string, unknown>>
+  healthRecordRevisions: AsyncIterable<Record<string, unknown>>
+  exerciseCatalog: AsyncIterable<PortableExportExerciseCatalogSnapshotEntry>
+  foodCatalog: AsyncIterable<PortableExportFoodCatalogSnapshotEntry>
+  workouts: AsyncIterable<PortableExportWorkoutRevisionSnapshotLayerWorkout>
+  nutritionMeals: AsyncIterable<PortableExportNutritionMealLayerSnapshotMeal>
+  nutritionFavorites: AsyncIterable<Record<string, unknown>>
+  receipt: Promise<PortableExportConsentHealthCatalogWorkoutNutritionFavoriteSnapshotReceipt>
+  complete: () => Promise<void>
+  cancel: (error: unknown) => Promise<void>
+}
+
 type BoundedSnapshotRow = QueryResultRow & {
   id: string
   payload_text: string | null
@@ -429,6 +450,7 @@ function* boundedPagePayloads(
   stats: MutableSnapshotStats,
   pageLabel: string,
   signal?: AbortSignal,
+  payloadIdentityKey = 'id',
 ): Generator<Record<string, unknown>> {
   if (rows.length > batchRows) {
     throw new Error('portable export snapshot query exceeded its batch row limit')
@@ -465,7 +487,7 @@ function* boundedPagePayloads(
       payload === null ||
       typeof payload !== 'object' ||
       Array.isArray(payload) ||
-      (payload as Record<string, unknown>).id !== row.id
+      (payload as Record<string, unknown>)[payloadIdentityKey] !== row.id
     ) {
       throw new Error(`portable export snapshot returned an invalid ${pageLabel} page`)
     }
@@ -991,6 +1013,58 @@ async function* foodCatalogPageRows(
       }
     }
     anchorId = page.rows.at(-1)!.id
+    if (page.rows.length < batchRows) break
+  }
+}
+
+export const portableExportNutritionFavoritePageQuery = `WITH page AS MATERIALIZED (
+         SELECT food_key, food_name, food_category, energy_kcal_per_100g,
+                protein_g_per_100g, carbohydrate_g_per_100g, fat_g_per_100g,
+                fiber_g_per_100g, reference, default_amount, default_unit,
+                default_grams, created_at, updated_at
+         FROM nutrition_favorites
+         WHERE user_id = $1
+           AND ($2::text IS NULL OR food_key > $2::text)
+         ORDER BY food_key
+         LIMIT $3
+       ), encoded AS MATERIALIZED (
+         SELECT food_key, to_jsonb(page)::text AS payload_text
+         FROM page
+       )
+       SELECT food_key AS id,
+              CASE WHEN octet_length(payload_text) <= $4 THEN payload_text ELSE NULL END
+                AS payload_text,
+              octet_length(payload_text) AS payload_byte_length
+       FROM encoded
+       ORDER BY food_key`
+
+async function* nutritionFavoritePageRows(
+  client: PoolClient,
+  userId: string,
+  batchRows: number,
+  maximumPayloadBytes: number,
+  stats: MutableSnapshotStats,
+  signal?: AbortSignal,
+): AsyncGenerator<Record<string, unknown>> {
+  throwIfAborted(signal)
+  let anchorFoodKey: string | null = null
+  while (true) {
+    throwIfAborted(signal)
+    const page: QueryResult<BoundedSnapshotRow> = await client.query<BoundedSnapshotRow>(
+      portableExportNutritionFavoritePageQuery,
+      [userId, anchorFoodKey, batchRows, maximumPayloadBytes],
+    )
+    if (page.rows.length === 0) break
+    yield* boundedPagePayloads(
+      page.rows,
+      batchRows,
+      maximumPayloadBytes,
+      stats,
+      'nutrition favorite',
+      signal,
+      'food_key',
+    )
+    anchorFoodKey = page.rows.at(-1)!.id
     if (page.rows.length < batchRows) break
   }
 }
@@ -2630,6 +2704,19 @@ async function* workoutHeaderRows(
   throwIfAborted(signal)
   await assertActiveAccount(client, userId)
   yield* workoutHeaderPageRows(client, userId, batchRows, maximumPayloadBytes, stats, signal)
+}
+
+async function* nutritionFavoriteRows(
+  client: PoolClient,
+  userId: string,
+  batchRows: number,
+  maximumPayloadBytes: number,
+  stats: MutableSnapshotStats,
+  signal?: AbortSignal,
+): AsyncGenerator<Record<string, unknown>> {
+  throwIfAborted(signal)
+  await assertActiveAccount(client, userId)
+  yield* nutritionFavoritePageRows(client, userId, batchRows, maximumPayloadBytes, stats, signal)
 }
 
 type SnapshotRowsFactory = (
@@ -4705,7 +4792,7 @@ const createCoordinatedSnapshotSession = <Collection extends string>(
     } finally {
       activeCollection = undefined
       if (!reachedBoundary && !finalized) {
-        await fail(new Error('portable export coordinated snapshot did not complete'))
+        throw await fail(new Error('portable export coordinated snapshot did not complete'))
       }
     }
   }
@@ -4898,6 +4985,22 @@ const consentHealthCatalogWorkoutNutritionSnapshotDefinitions = (
     },
   ] as const
 
+const consentHealthCatalogWorkoutNutritionFavoriteSnapshotDefinitions = (
+  exerciseRevisionStats: MutableSnapshotStats,
+  foodRevisionStats: MutableSnapshotStats,
+  workoutNestedStats: CoordinatedWorkoutSnapshotStats,
+  nutritionMealNestedStats: CoordinatedNutritionMealSnapshotStats,
+) =>
+  [
+    ...consentHealthCatalogWorkoutNutritionSnapshotDefinitions(
+      exerciseRevisionStats,
+      foodRevisionStats,
+      workoutNestedStats,
+      nutritionMealNestedStats,
+    ),
+    { name: 'nutritionFavorites', rowFactory: nutritionFavoritePageRows },
+  ] as const
+
 @Injectable()
 export class PortableExportDatabaseSnapshotService {
   constructor(private readonly database: DatabaseService) {}
@@ -4928,6 +5031,13 @@ export class PortableExportDatabaseSnapshotService {
     options: PortableExportDatabaseSnapshotOptions = {},
   ): PortableExportWorkoutHeaderSnapshotSession {
     return createSnapshotSession(this.database, userId, options, workoutHeaderRows)
+  }
+
+  createNutritionFavoriteSnapshot(
+    userId: string,
+    options: PortableExportDatabaseSnapshotOptions = {},
+  ): PortableExportNutritionFavoriteSnapshotSession {
+    return createSnapshotSession(this.database, userId, options, nutritionFavoriteRows)
   }
 
   createWorkoutExerciseLayerSnapshot(
@@ -5206,5 +5316,60 @@ export class PortableExportDatabaseSnapshotService {
     return Object.assign(session, {
       receipt,
     }) as PortableExportConsentHealthCatalogWorkoutNutritionSnapshotSession
+  }
+
+  createConsentHealthCatalogWorkoutNutritionFavoriteSnapshot(
+    userId: string,
+    options: PortableExportDatabaseSnapshotOptions = {},
+  ): PortableExportConsentHealthCatalogWorkoutNutritionFavoriteSnapshotSession {
+    const exerciseRevisionStats: MutableSnapshotStats = { batchCount: 0, rowCount: 0 }
+    const foodRevisionStats: MutableSnapshotStats = { batchCount: 0, rowCount: 0 }
+    const workoutNestedStats: CoordinatedWorkoutSnapshotStats = {
+      exercises: { batchCount: 0, rowCount: 0 },
+      sets: { batchCount: 0, rowCount: 0 },
+      revisions: { batchCount: 0, rowCount: 0 },
+      revisionSnapshotRoots: { batchCount: 0, rowCount: 0 },
+      revisionSnapshotExercises: { batchCount: 0, rowCount: 0 },
+      revisionSnapshotSets: { batchCount: 0, rowCount: 0 },
+    }
+    const nutritionMealNestedStats: CoordinatedNutritionMealSnapshotStats = {
+      items: { batchCount: 0, rowCount: 0 },
+      revisions: { batchCount: 0, rowCount: 0 },
+      revisionSnapshotRoots: { batchCount: 0, rowCount: 0 },
+      revisionSnapshotItems: { batchCount: 0, rowCount: 0 },
+    }
+    const session = createCoordinatedSnapshotSession(
+      this.database,
+      userId,
+      options,
+      consentHealthCatalogWorkoutNutritionFavoriteSnapshotDefinitions(
+        exerciseRevisionStats,
+        foodRevisionStats,
+        workoutNestedStats,
+        nutritionMealNestedStats,
+      ),
+    )
+    const receipt = session.receipt.then((baseReceipt) => ({
+      ...baseReceipt,
+      exerciseCatalogRevisions: { ...exerciseRevisionStats },
+      foodCatalogRevisions: { ...foodRevisionStats },
+      workoutExercises: { ...workoutNestedStats.exercises },
+      workoutSets: { ...workoutNestedStats.sets },
+      workoutRevisions: { ...workoutNestedStats.revisions },
+      workoutRevisionSnapshotRoots: { ...workoutNestedStats.revisionSnapshotRoots },
+      workoutRevisionSnapshotExercises: { ...workoutNestedStats.revisionSnapshotExercises },
+      workoutRevisionSnapshotSets: { ...workoutNestedStats.revisionSnapshotSets },
+      nutritionMealItems: { ...nutritionMealNestedStats.items },
+      nutritionMealRevisions: { ...nutritionMealNestedStats.revisions },
+      nutritionMealRevisionSnapshotRoots: {
+        ...nutritionMealNestedStats.revisionSnapshotRoots,
+      },
+      nutritionMealRevisionSnapshotItems: {
+        ...nutritionMealNestedStats.revisionSnapshotItems,
+      },
+    }))
+    return Object.assign(session, {
+      receipt,
+    }) as PortableExportConsentHealthCatalogWorkoutNutritionFavoriteSnapshotSession
   }
 }

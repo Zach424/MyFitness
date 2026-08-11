@@ -6,6 +6,8 @@ import { describe, expect, it } from 'vitest'
 import type {
   PortableExportConsentHealthCatalogSnapshotReceipt,
   PortableExportConsentHealthCatalogSnapshotSession,
+  PortableExportConsentHealthCatalogWorkoutNutritionFavoriteSnapshotReceipt,
+  PortableExportConsentHealthCatalogWorkoutNutritionFavoriteSnapshotSession,
   PortableExportConsentHealthCatalogWorkoutNutritionSnapshotReceipt,
   PortableExportConsentHealthCatalogWorkoutNutritionSnapshotSession,
   PortableExportConsentHealthCatalogWorkoutSnapshotReceipt,
@@ -16,6 +18,7 @@ import type {
 import { serializePortableExport } from './portable-export-artifact'
 import {
   createPortableExportConsentHealthCatalogJsonSource,
+  createPortableExportConsentHealthCatalogWorkoutNutritionFavoriteJsonSource,
   createPortableExportConsentHealthCatalogWorkoutNutritionJsonSource,
   createPortableExportConsentHealthCatalogWorkoutJsonSource,
   createPortableExportConsentHealthExerciseCatalogJsonSource,
@@ -65,11 +68,18 @@ const emptyCatalogWorkoutNutritionReceipt =
     nutritionMealRevisionSnapshotItems: { batchCount: 0, rowCount: 0 },
   })
 
+const emptyCatalogWorkoutNutritionFavoriteReceipt =
+  (): PortableExportConsentHealthCatalogWorkoutNutritionFavoriteSnapshotReceipt => ({
+    ...emptyCatalogWorkoutNutritionReceipt(),
+    nutritionFavorites: { batchCount: 0, rowCount: 0 },
+  })
+
 const exportFixture = (
   exerciseCatalog: Array<Record<string, unknown>>,
   foodCatalog: Array<Record<string, unknown>> = [],
   workouts: Array<Record<string, unknown>> = [],
   nutritionMeals: Array<Record<string, unknown>> = [],
+  nutritionFavorites: Array<Record<string, unknown>> = [],
 ) =>
   privacyExportSchema.parse({
     schemaVersion: privacyExportSchemaVersion,
@@ -87,7 +97,7 @@ const exportFixture = (
       foodCatalog,
       workouts,
       nutritionMeals,
-      nutritionFavorites: [],
+      nutritionFavorites,
       weeklyPlans: [],
       aiExplanationRuns: [],
       foodPhotoAnalyses: [],
@@ -583,6 +593,101 @@ describe('portable export exercise catalog JSON source', () => {
       'meal-item-current',
       'meal-revision-1',
       'meal-item-history',
+    ])
+    expect(completed).toBe(true)
+    expect(cancelled).toBe(false)
+  })
+
+  it('streams nutrition favorites as the eighth coordinated field byte-for-byte', async () => {
+    const traversal: string[] = []
+    let completed = false
+    let cancelled = false
+    const favoriteExpected = {
+      food_key: 'favorite_oats',
+      food_name: 'Oats',
+      food_category: 'staple',
+      energy_kcal_per_100g: 389,
+      protein_g_per_100g: 16.9,
+      carbohydrate_g_per_100g: 66.3,
+      fat_g_per_100g: 6.9,
+      fiber_g_per_100g: 10.6,
+      reference: 'User-confirmed favorite',
+      default_amount: 50,
+      default_unit: 'g',
+      default_grams: 50,
+      created_at: '2026-08-11T11:10:00.000Z',
+      updated_at: '2026-08-11T11:10:00.000Z',
+    }
+    const session = {
+      consentEvents: (async function* () {
+        traversal.push('consent')
+        yield { id: 'consent-1' }
+      })(),
+      healthRecords: (async function* () {
+        traversal.push('health')
+        yield { id: 'health-1' }
+      })(),
+      healthRecordRevisions: (async function* () {
+        traversal.push('health-revision')
+        yield { id: 'health-revision-1' }
+      })(),
+      exerciseCatalog: (async function* () {
+        traversal.push('exercise-catalog')
+      })(),
+      foodCatalog: (async function* () {
+        traversal.push('food-catalog')
+      })(),
+      workouts: (async function* () {
+        traversal.push('workouts')
+      })(),
+      nutritionMeals: (async function* () {
+        traversal.push('nutrition-meals')
+      })(),
+      nutritionFavorites: (async function* () {
+        traversal.push('nutrition-favorite')
+        yield favoriteExpected
+      })(),
+      receipt: Promise.resolve(emptyCatalogWorkoutNutritionFavoriteReceipt()),
+      complete: async () => {
+        completed = true
+      },
+      cancel: async () => {
+        cancelled = true
+      },
+    } as PortableExportConsentHealthCatalogWorkoutNutritionFavoriteSnapshotSession
+    const source =
+      createPortableExportConsentHealthCatalogWorkoutNutritionFavoriteJsonSource(session)
+    const eager = exportFixture([], [], [], [], [favoriteExpected])
+    const expected = serializePortableExport(eager, Number.MAX_SAFE_INTEGER)
+    const payload: PortableExportJsonSource = {
+      ...eager,
+      data: {
+        ...eager.data,
+        consentEvents: source.consentEvents as never,
+        healthRecords: source.healthRecords as never,
+        healthRecordRevisions: source.healthRecordRevisions as never,
+        exerciseCatalog: source.exerciseCatalog as never,
+        foodCatalog: source.foodCatalog as never,
+        workouts: source.workouts as never,
+        nutritionMeals: source.nutritionMeals as never,
+        nutritionFavorites: source.nutritionFavorites as never,
+      },
+    }
+    const json = createPortableExportJsonStream(payload, { chunkBytes: 29, lifecycle: source })
+    const chunks: Buffer[] = []
+
+    for await (const chunk of json.bytes) chunks.push(Buffer.from(chunk))
+
+    expect(Buffer.concat(chunks)).toEqual(expected)
+    expect(traversal).toEqual([
+      'consent',
+      'health',
+      'health-revision',
+      'exercise-catalog',
+      'food-catalog',
+      'workouts',
+      'nutrition-meals',
+      'nutrition-favorite',
     ])
     expect(completed).toBe(true)
     expect(cancelled).toBe(false)

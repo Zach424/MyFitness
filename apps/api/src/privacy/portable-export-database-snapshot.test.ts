@@ -266,7 +266,8 @@ const fakeWorkoutExerciseLayerDatabase = (
             sql.includes('FROM user_exercise_catalog_revisions') ||
             sql.includes('FROM user_food_catalog_entries') ||
             sql.includes('FROM user_food_catalog_revisions') ||
-            sql.includes('FROM nutrition_meals')
+            sql.includes('FROM nutrition_meals') ||
+            sql.includes('FROM nutrition_favorites')
           ) {
             return { rows: [] }
           }
@@ -2214,7 +2215,7 @@ describe('portable export database snapshot session', () => {
     expect(lifecycle).toMatchObject({ committed: false, rolledBack: true })
   })
 
-  it('reuses one coordinated client and owner check through the nutrition meal seventh field', async () => {
+  it('reuses one coordinated client and owner check through the nutrition favorite eighth field', async () => {
     const revisionId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1'
     const snapshotExerciseId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1'
     const snapshotSetId = 'cccccccc-cccc-4ccc-8ccc-ccccccccccc1'
@@ -2238,9 +2239,10 @@ describe('portable export database snapshot session', () => {
     )
     const session = new PortableExportDatabaseSnapshotService(
       database,
-    ).createConsentHealthCatalogWorkoutNutritionSnapshot('11111111-1111-4111-8111-111111111111', {
-      batchRows: 1,
-    })
+    ).createConsentHealthCatalogWorkoutNutritionFavoriteSnapshot(
+      '11111111-1111-4111-8111-111111111111',
+      { batchRows: 1 },
+    )
     const observed: string[] = []
 
     for await (const _ of session.consentEvents) observed.push('consent')
@@ -2263,6 +2265,7 @@ describe('portable export database snapshot session', () => {
       }
     }
     for await (const _ of session.nutritionMeals) observed.push('nutrition-meal')
+    for await (const _ of session.nutritionFavorites) observed.push('nutrition-favorite')
     await session.complete()
 
     expect(observed).toEqual([
@@ -2292,6 +2295,7 @@ describe('portable export database snapshot session', () => {
       nutritionMealRevisions: { batchCount: 0, rowCount: 0 },
       nutritionMealRevisionSnapshotRoots: { batchCount: 0, rowCount: 0 },
       nutritionMealRevisionSnapshotItems: { batchCount: 0, rowCount: 0 },
+      nutritionFavorites: { batchCount: 0, rowCount: 0 },
     })
   })
 
