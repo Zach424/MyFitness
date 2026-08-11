@@ -97,6 +97,7 @@ const fakeWorkoutExerciseLayerDatabase = (
   workouts: Array<Record<string, unknown>>,
   exercisesByWorkout: Readonly<Record<string, Array<Record<string, unknown>>>>,
   setsByExercise: Readonly<Record<string, Array<Record<string, unknown>>>> = {},
+  revisionsByWorkout: Readonly<Record<string, Array<Record<string, unknown>>>> = {},
 ) => {
   const lifecycle = {
     accountQueries: 0,
@@ -113,16 +114,24 @@ const fakeWorkoutExerciseLayerDatabase = (
             lifecycle.accountQueries += 1
             return { rows: [{ id: parameters[0] }] }
           }
+          const isRevisionPage = sql.includes('FROM workout_revisions AS history')
           const isSetPage = sql.includes('FROM workout_sets AS set_row')
           const isExercisePage = sql.includes('FROM workout_exercises AS exercise')
-          const values = isSetPage
-            ? (setsByExercise[parameters[2] as string] ?? [])
-            : isExercisePage
-              ? (exercisesByWorkout[parameters[1] as string] ?? [])
-              : workouts
-          const anchorId = parameters[isSetPage ? 3 : isExercisePage ? 2 : 1] as string | null
-          const batchRows = parameters[isSetPage ? 4 : isExercisePage ? 3 : 2] as number
-          const maximumPayloadBytes = parameters[isSetPage ? 5 : isExercisePage ? 4 : 3] as number
+          const values = isRevisionPage
+            ? (revisionsByWorkout[parameters[1] as string] ?? [])
+            : isSetPage
+              ? (setsByExercise[parameters[2] as string] ?? [])
+              : isExercisePage
+                ? (exercisesByWorkout[parameters[1] as string] ?? [])
+                : workouts
+          const anchorId = parameters[isSetPage ? 3 : isRevisionPage || isExercisePage ? 2 : 1] as
+            string | null
+          const batchRows = parameters[
+            isSetPage ? 4 : isRevisionPage || isExercisePage ? 3 : 2
+          ] as number
+          const maximumPayloadBytes = parameters[
+            isSetPage ? 5 : isRevisionPage || isExercisePage ? 4 : 3
+          ] as number
           const anchorIndex = anchorId ? values.findIndex((value) => value.id === anchorId) : -1
           return {
             rows: values.slice(anchorIndex + 1, anchorIndex + 1 + batchRows).map((payload) => {
@@ -567,6 +576,259 @@ describe('portable export database snapshot session', () => {
     const sets = exercise.value.sets[Symbol.asyncIterator]()
     await expect(sets.next()).resolves.toMatchObject({ done: false })
     const cancellation = new Error('workout set root cancelled by lease owner')
+    const receiptFailure = session.receipt.catch((error: unknown) => error)
+
+    await session.cancel(cancellation)
+
+    expect(await receiptFailure).toBe(cancellation)
+    await expect(sets.next()).resolves.toEqual({ done: true, value: undefined })
+    await expect(exercises.next()).resolves.toEqual({ done: true, value: undefined })
+    await expect(workouts.next()).rejects.toBe(cancellation)
+    expect(lifecycle).toMatchObject({ committed: false, rolledBack: true })
+  })
+
+  it('keeps workout relation rows and ordered revision headers in one committed root stream', async () => {
+    const { database, lifecycle } = fakeWorkoutExerciseLayerDatabase(
+      [{ id: 'workout-1' }],
+      { 'workout-1': [{ id: 'exercise-1' }] },
+      { 'exercise-1': [{ id: 'set-1' }] },
+      {
+        'workout-1': [
+          { id: 'revision-1', action: 'created', revision: 1 },
+          { id: 'revision-2', action: 'updated', revision: 2 },
+        ],
+      },
+    )
+    const service = new PortableExportDatabaseSnapshotService(database)
+    const session = service.createWorkoutRevisionHeaderLayerSnapshot(
+      '11111111-1111-4111-8111-111111111111',
+      { batchRows: 1 },
+    )
+    const observed: Array<{ workoutId: unknown; setIds: unknown[]; revisionIds: unknown[] }> = []
+
+    for await (const workout of session.workouts) {
+      const setIds: unknown[] = []
+      for await (const exercise of workout.exercises) {
+        for await (const set of exercise.sets) setIds.push(set.id)
+      }
+      const revisionIds: unknown[] = []
+      for await (const revision of workout.history) revisionIds.push(revision.id)
+      observed.push({ workoutId: workout.header.id, setIds, revisionIds })
+    }
+    expect(lifecycle.committed).toBe(false)
+
+    await session.complete()
+
+    expect(observed).toEqual([
+      {
+        workoutId: 'workout-1',
+        setIds: ['set-1'],
+        revisionIds: ['revision-1', 'revision-2'],
+      },
+    ])
+    expect(lifecycle).toMatchObject({
+      accountQueries: 1,
+      streamCount: 1,
+      committed: true,
+      rolledBack: false,
+    })
+    await expect(session.receipt).resolves.toEqual({
+      batchRows: 1,
+      maximumPayloadBytes: portableExportSnapshotMaximumPayloadBytes,
+      workoutHeaders: { batchCount: 1, rowCount: 1 },
+      workoutExercises: { batchCount: 1, rowCount: 1 },
+      workoutSets: { batchCount: 1, rowCount: 1 },
+      workoutRevisions: { batchCount: 2, rowCount: 2 },
+    })
+  })
+
+  it('rejects workout revision headers before the relation graph completes', async () => {
+    const { database, lifecycle } = fakeWorkoutExerciseLayerDatabase(
+      [{ id: 'workout-1' }],
+      { 'workout-1': [{ id: 'exercise-1' }] },
+      { 'exercise-1': [{ id: 'set-1' }] },
+      { 'workout-1': [{ id: 'revision-1' }] },
+    )
+    const service = new PortableExportDatabaseSnapshotService(database)
+    const session = service.createWorkoutRevisionHeaderLayerSnapshot(
+      '11111111-1111-4111-8111-111111111111',
+    )
+    const workouts = session.workouts[Symbol.asyncIterator]()
+    const workout = await workouts.next()
+    if (workout.done) throw new Error('workout fixture was not returned')
+    const receiptFailure = session.receipt.catch((error: unknown) => error)
+    let historyFailure: unknown
+
+    try {
+      await workout.value.history[Symbol.asyncIterator]().next()
+    } catch (error) {
+      historyFailure = error
+    }
+
+    expect(historyFailure).toMatchObject({
+      message: 'portable export workout revision headers must be read after exercises complete',
+    })
+    expect(await receiptFailure).toBe(historyFailure)
+    expect(lifecycle).toMatchObject({ committed: false, rolledBack: true })
+  })
+
+  it('fails the root when workout revision headers are skipped before the next workout', async () => {
+    const { database, lifecycle } = fakeWorkoutExerciseLayerDatabase(
+      [{ id: 'workout-1' }, { id: 'workout-2' }],
+      { 'workout-1': [], 'workout-2': [] },
+      {},
+      { 'workout-1': [{ id: 'revision-1' }], 'workout-2': [] },
+    )
+    const service = new PortableExportDatabaseSnapshotService(database)
+    const session = service.createWorkoutRevisionHeaderLayerSnapshot(
+      '11111111-1111-4111-8111-111111111111',
+    )
+    const workouts = session.workouts[Symbol.asyncIterator]()
+    const workout = await workouts.next()
+    if (workout.done) throw new Error('workout fixture was not returned')
+    for await (const _ of workout.value.exercises) {
+      // The empty relation field must still reach physical EOF.
+    }
+    const receiptFailure = session.receipt.catch((error: unknown) => error)
+    let streamFailure: unknown
+
+    try {
+      await workouts.next()
+    } catch (error) {
+      streamFailure = error
+    }
+
+    expect(streamFailure).toMatchObject({
+      message: 'portable export workout revision headers must complete before the next workout',
+    })
+    expect(await receiptFailure).toBe(streamFailure)
+    expect(lifecycle).toMatchObject({ committed: false, rolledBack: true })
+  })
+
+  it('closes the root when an active workout revision header field stops early', async () => {
+    const { database, lifecycle } = fakeWorkoutExerciseLayerDatabase(
+      [{ id: 'workout-1' }],
+      { 'workout-1': [] },
+      {},
+      { 'workout-1': [{ id: 'revision-1' }, { id: 'revision-2' }] },
+    )
+    const service = new PortableExportDatabaseSnapshotService(database)
+    const session = service.createWorkoutRevisionHeaderLayerSnapshot(
+      '11111111-1111-4111-8111-111111111111',
+      { batchRows: 1 },
+    )
+    const workouts = session.workouts[Symbol.asyncIterator]()
+    const workout = await workouts.next()
+    if (workout.done) throw new Error('workout fixture was not returned')
+    for await (const _ of workout.value.exercises) {
+      // Reach the required sibling boundary.
+    }
+    const history = workout.value.history[Symbol.asyncIterator]()
+    await expect(history.next()).resolves.toMatchObject({ done: false })
+    const receiptFailure = session.receipt.catch((error: unknown) => error)
+    let streamFailure: unknown
+
+    try {
+      await history.return?.()
+    } catch (error) {
+      streamFailure = error
+    }
+
+    expect(streamFailure).toMatchObject({
+      message: 'portable export workout revision headers did not complete',
+    })
+    expect(await receiptFailure).toBe(streamFailure)
+    expect(lifecycle).toMatchObject({ committed: false, rolledBack: true })
+  })
+
+  it('rejects repeated consumption of completed workout revision headers', async () => {
+    const { database, lifecycle } = fakeWorkoutExerciseLayerDatabase(
+      [{ id: 'workout-1' }],
+      { 'workout-1': [] },
+      {},
+      { 'workout-1': [{ id: 'revision-1' }] },
+    )
+    const service = new PortableExportDatabaseSnapshotService(database)
+    const session = service.createWorkoutRevisionHeaderLayerSnapshot(
+      '11111111-1111-4111-8111-111111111111',
+    )
+    const workouts = session.workouts[Symbol.asyncIterator]()
+    const workout = await workouts.next()
+    if (workout.done) throw new Error('workout fixture was not returned')
+    for await (const _ of workout.value.exercises) {
+      // Reach the required sibling boundary.
+    }
+    for await (const _ of workout.value.history) {
+      // Consume the permitted history field once.
+    }
+    const receiptFailure = session.receipt.catch((error: unknown) => error)
+    let repeatedFailure: unknown
+
+    try {
+      await workout.value.history[Symbol.asyncIterator]().next()
+    } catch (error) {
+      repeatedFailure = error
+    }
+
+    expect(repeatedFailure).toMatchObject({
+      message: 'portable export workout revision headers must be read once in order',
+    })
+    expect(await receiptFailure).toBe(repeatedFailure)
+    expect(lifecycle).toMatchObject({ committed: false, rolledBack: true })
+  })
+
+  it('cancels an active workout revision header before the workout root', async () => {
+    const { database, lifecycle } = fakeWorkoutExerciseLayerDatabase(
+      [{ id: 'workout-1' }],
+      { 'workout-1': [] },
+      {},
+      { 'workout-1': [{ id: 'revision-1' }, { id: 'revision-2' }] },
+    )
+    const service = new PortableExportDatabaseSnapshotService(database)
+    const session = service.createWorkoutRevisionHeaderLayerSnapshot(
+      '11111111-1111-4111-8111-111111111111',
+      { batchRows: 1 },
+    )
+    const workouts = session.workouts[Symbol.asyncIterator]()
+    const workout = await workouts.next()
+    if (workout.done) throw new Error('workout fixture was not returned')
+    for await (const _ of workout.value.exercises) {
+      // Reach the required sibling boundary.
+    }
+    const history = workout.value.history[Symbol.asyncIterator]()
+    await expect(history.next()).resolves.toMatchObject({ done: false })
+    const cancellation = new Error('workout revision root cancelled by lease owner')
+    const receiptFailure = session.receipt.catch((error: unknown) => error)
+
+    await session.cancel(cancellation)
+
+    expect(await receiptFailure).toBe(cancellation)
+    await expect(history.next()).resolves.toEqual({ done: true, value: undefined })
+    await expect(workouts.next()).rejects.toBe(cancellation)
+    expect(lifecycle).toMatchObject({ committed: false, rolledBack: true })
+  })
+
+  it('cancels an active set before its exercise and workout revision parents', async () => {
+    const { database, lifecycle } = fakeWorkoutExerciseLayerDatabase(
+      [{ id: 'workout-1' }],
+      { 'workout-1': [{ id: 'exercise-1' }] },
+      { 'exercise-1': [{ id: 'set-1' }, { id: 'set-2' }] },
+      { 'workout-1': [{ id: 'revision-1' }] },
+    )
+    const service = new PortableExportDatabaseSnapshotService(database)
+    const session = service.createWorkoutRevisionHeaderLayerSnapshot(
+      '11111111-1111-4111-8111-111111111111',
+      { batchRows: 1 },
+    )
+    const workouts = session.workouts[Symbol.asyncIterator]()
+    const workout = await workouts.next()
+    if (workout.done) throw new Error('workout fixture was not returned')
+    const exercises = workout.value.exercises[Symbol.asyncIterator]()
+    const exercise = await exercises.next()
+    if (exercise.done) throw new Error('exercise fixture was not returned')
+    const sets = exercise.value.sets[Symbol.asyncIterator]()
+    await expect(sets.next()).resolves.toMatchObject({ done: false })
+    const cancellation = new Error('workout revision set cancelled by lease owner')
     const receiptFailure = session.receipt.catch((error: unknown) => error)
 
     await session.cancel(cancellation)

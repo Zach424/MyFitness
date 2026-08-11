@@ -14,6 +14,7 @@ import {
   portableExportSnapshotMaximumPayloadBytes,
   portableExportWorkoutExerciseHeaderPageQuery,
   portableExportWorkoutHeaderPageQuery,
+  portableExportWorkoutRevisionHeaderPageQuery,
   portableExportWorkoutSetPageQuery,
 } from './portable-export-database-snapshot'
 import {
@@ -172,6 +173,29 @@ describe('portable export bounded PostgreSQL snapshot', () => {
          $1, $2, $3, 'working', 10, 20, 'kg', 20, NULL, NULL, 7, true
        )`,
       [id, exerciseId, position],
+    )
+    return id
+  }
+
+  const createWorkoutRevision = async (
+    userId: string,
+    workoutId: string,
+    revision: number,
+    changedAt: string,
+    action: 'created' | 'updated' | 'deleted' = revision === 1 ? 'created' : 'updated',
+  ) => {
+    const id = randomUUID()
+    await pool.query(
+      `INSERT INTO workout_revisions (
+         id, workout_id, user_id, action, revision, snapshot, changed_at
+       ) VALUES (
+         $1, $2, $3, $4, $5::integer,
+         jsonb_build_object(
+           'id', $2::uuid::text, 'revision', $5::integer, 'fixture', 'immutable'
+         ),
+         $6::timestamptz
+       )`,
+      [id, workoutId, userId, action, revision, changedAt],
     )
     return id
   }
@@ -672,6 +696,163 @@ describe('portable export bounded PostgreSQL snapshot', () => {
     expect(await receiptFailure).toBe(cancellation)
     await expect(sets.next()).resolves.toEqual({ done: true, value: undefined })
     await expect(exercises.next()).resolves.toEqual({ done: true, value: undefined })
+    await expect(workouts.next()).rejects.toBe(cancellation)
+  })
+
+  it('keeps workout relation rows and revision headers in one stable owner snapshot', async () => {
+    const userId = await createUser()
+    const otherUserId = await createUser()
+    const workoutId = await createWorkout(
+      userId,
+      '2026-08-11T01:56:00.000001Z',
+      '2026-08-11T01:56:00.000002Z',
+      { deletedAt: '2026-08-11T01:59:00.000001Z' },
+    )
+    const otherWorkoutId = await createWorkout(otherUserId, '2026-08-11T01:57:00.000001Z')
+    const exerciseId = await createWorkoutExercise(workoutId, 1)
+    const setId = await createWorkoutSet(exerciseId, 1)
+    const revisionIds = [
+      await createWorkoutRevision(userId, workoutId, 2, '2026-08-11T01:58:00.000002Z'),
+      await createWorkoutRevision(userId, workoutId, 1, '2026-08-11T01:58:00.000001Z'),
+    ]
+    await createWorkoutRevision(otherUserId, otherWorkoutId, 1, '2026-08-11T01:58:00.000001Z')
+
+    const session = snapshots.createWorkoutRevisionHeaderLayerSnapshot(userId, { batchRows: 1 })
+    const workouts = session.workouts[Symbol.asyncIterator]()
+    const workout = await workouts.next()
+    expect(workout).toMatchObject({ done: false, value: { header: { id: workoutId } } })
+    expect(workout.value!.header.deleted_at).not.toBeNull()
+    const exercises = workout.value!.exercises[Symbol.asyncIterator]()
+    const exercise = await exercises.next()
+    expect(exercise).toMatchObject({
+      done: false,
+      value: { header: { id: exerciseId, position: 1 } },
+    })
+    const setRows: Array<Record<string, unknown>> = []
+    for await (const set of exercise.value!.sets) setRows.push(set)
+    await expect(exercises.next()).resolves.toEqual({ done: true, value: undefined })
+    expect(setRows.map((set) => set.id)).toEqual([setId])
+
+    const history = workout.value!.history[Symbol.asyncIterator]()
+    const firstRevision = await history.next()
+    expect(firstRevision).toMatchObject({
+      done: false,
+      value: { id: revisionIds[1], action: 'created', revision: 1 },
+    })
+    const concurrentRevisionId = await createWorkoutRevision(
+      userId,
+      workoutId,
+      3,
+      '2026-08-11T01:58:00.000003Z',
+    )
+    const historyRows = firstRevision.done ? [] : [firstRevision.value]
+    for await (const revision of { [Symbol.asyncIterator]: () => history }) {
+      historyRows.push(revision)
+    }
+    await expect(workouts.next()).resolves.toEqual({ done: true, value: undefined })
+
+    expect(historyRows.map((revision) => revision.id)).toEqual([...revisionIds].reverse())
+    expect(historyRows.map((revision) => revision.revision)).toEqual([1, 2])
+    expect(historyRows.map((revision) => revision.id)).not.toContain(concurrentRevisionId)
+    expect(Object.keys(historyRows[0]!).sort()).toEqual(
+      ['id', 'action', 'revision', 'changed_at'].sort(),
+    )
+    expect(historyRows[0]).not.toHaveProperty('snapshot')
+    expect(historyRows[0]).not.toHaveProperty('workout_id')
+    expect(historyRows[0]).not.toHaveProperty('user_id')
+
+    let receiptSettled = false
+    void session.receipt.then(
+      () => {
+        receiptSettled = true
+      },
+      () => {
+        receiptSettled = true
+      },
+    )
+    await Promise.resolve()
+    expect(receiptSettled).toBe(false)
+
+    await session.complete()
+    await expect(session.receipt).resolves.toEqual({
+      batchRows: 1,
+      maximumPayloadBytes: portableExportSnapshotMaximumPayloadBytes,
+      workoutHeaders: { batchCount: 1, rowCount: 1 },
+      workoutExercises: { batchCount: 1, rowCount: 1 },
+      workoutSets: { batchCount: 1, rowCount: 1 },
+      workoutRevisions: { batchCount: 2, rowCount: 2 },
+    })
+  })
+
+  it('uses an existing workout revision index for the actual revision header page query', async () => {
+    const userId = await createUser()
+    const workoutId = await createWorkout(userId, '2026-08-11T02:01:00.000001Z')
+    await createWorkoutRevision(userId, workoutId, 1, '2026-08-11T02:02:00.000001Z')
+    const definitions = await pool.query<{
+      index_name: string
+      index_definition: string
+      predicate: string | null
+    }>(
+      `SELECT indexrelid::regclass::text AS index_name,
+              pg_get_indexdef(indexrelid) AS index_definition,
+              pg_get_expr(indpred, indrelid) AS predicate
+       FROM pg_index
+       WHERE indexrelid IN (
+         'workout_revisions_workout_id_revision_key'::regclass,
+         'workout_revisions_user_workout_idx'::regclass
+       )
+       ORDER BY index_name`,
+    )
+    expect(definitions.rows).toEqual([
+      expect.objectContaining({
+        index_name: 'workout_revisions_user_workout_idx',
+        index_definition: expect.stringContaining('(user_id, workout_id, revision DESC)'),
+        predicate: null,
+      }),
+      expect.objectContaining({
+        index_name: 'workout_revisions_workout_id_revision_key',
+        index_definition: expect.stringContaining('(workout_id, revision)'),
+        predicate: null,
+      }),
+    ])
+
+    const client = await pool.connect()
+    try {
+      await client.query('BEGIN')
+      await client.query('SET LOCAL enable_seqscan = off')
+      const plan = await client.query<{ 'QUERY PLAN': unknown }>(
+        `EXPLAIN (FORMAT JSON, COSTS OFF) ${portableExportWorkoutRevisionHeaderPageQuery}`,
+        [userId, workoutId, null, 2, portableExportSnapshotMaximumPayloadBytes],
+      )
+      expect(JSON.stringify(plan.rows[0]?.['QUERY PLAN'])).toMatch(
+        /workout_revisions_(user_workout_idx|workout_id_revision_key)/,
+      )
+    } finally {
+      await client.query('ROLLBACK')
+      client.release()
+    }
+  })
+
+  it('closes an active revision header before cancelling its workout root', async () => {
+    const userId = await createUser()
+    const workoutId = await createWorkout(userId, '2026-08-11T02:05:00.000001Z')
+    await createWorkoutRevision(userId, workoutId, 1, '2026-08-11T02:06:00.000001Z')
+    await createWorkoutRevision(userId, workoutId, 2, '2026-08-11T02:06:00.000002Z')
+    const session = snapshots.createWorkoutRevisionHeaderLayerSnapshot(userId, { batchRows: 1 })
+    const workouts = session.workouts[Symbol.asyncIterator]()
+    const workout = await workouts.next()
+    for await (const _ of workout.value!.exercises) {
+      // Reach the required relation boundary before history.
+    }
+    const history = workout.value!.history[Symbol.asyncIterator]()
+    await expect(history.next()).resolves.toMatchObject({ done: false })
+    const cancellation = new Error('workout revision root cancelled by lease owner')
+    const receiptFailure = session.receipt.catch((error: unknown) => error)
+
+    await session.cancel(cancellation)
+
+    expect(await receiptFailure).toBe(cancellation)
+    await expect(history.next()).resolves.toEqual({ done: true, value: undefined })
     await expect(workouts.next()).rejects.toBe(cancellation)
   })
 
