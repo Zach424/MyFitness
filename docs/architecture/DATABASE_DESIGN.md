@@ -8,7 +8,7 @@
 
 ## 1. 文档范围与实测基线
 
-本文根据 `infra/postgres/migrations`、服务端仓储 SQL 和正在运行的本地 PostgreSQL `information_schema` 交叉整理。基线实例已应用 `0001` 至 `0028` 共 28 个迁移，当前有 39 张基础表/业务表、1 个业务触发器和 1 个触发函数。
+本文根据 `infra/postgres/migrations`、服务端仓储 SQL 和正在运行的本地 PostgreSQL `information_schema` 交叉整理。基线实例已应用 `0001` 至 `0029` 共 29 个迁移，当前有 40 张基础表/业务表、2 个业务触发器和 2 个触发函数。
 
 本地实例中的行数只反映自动化与演示运行产生的临时数据，不是生产容量指标，也不能用于推断真实用户行为。结构、约束和关系才是本文的长期设计事实。
 
@@ -45,6 +45,7 @@
 erDiagram
   users ||--o{ auth_identities : owns
   users ||--o{ auth_sessions : owns
+  users ||--o{ privacy_export_archives : restricts_until_disposed
   users ||--o| user_profiles : has
   users ||--o| user_goals : has
   users ||--o{ consent_events : grants
@@ -90,7 +91,7 @@ erDiagram
 | 进度照   | `progress_photos`                                                                                           |                 2 |
 | 计划     | `weekly_plans` / `weekly_plan_revisions` / `plan_workout_links` / `plan_experience_reflections`             |     3 / 4 / 0 / 0 |
 | AI       | `ai_explanation_runs`                                                                                       |                 2 |
-| 隐私     | `privacy_erasure_intents` / `privacy_erasure_receipts`                                                      |             0 / 0 |
+| 隐私     | `privacy_erasure_intents` / `privacy_erasure_receipts` / `privacy_export_archives`                          |         0 / 0 / 0 |
 | 持久任务 | `data_operation_jobs` / `data_operation_attempts`                                                           |         179 / 179 |
 | 管理身份 | `admin_operators` / `admin_identities` / `admin_operator_roles` / `admin_sessions` / `admin_oidc_exchanges` | 0 / 0 / 0 / 0 / 0 |
 | 管理审计 | `admin_audit_events`                                                                                        |                 0 |
@@ -366,18 +367,18 @@ kind 覆盖对象删除、提供方处置、备份日志等持久副作用。`de
 
 ### 16.1 `schema_migrations`
 
-`name text` 主键、`checksum char`、`applied_at timestamptz`。当前 28 行，名称从 `0001` 连续至 `0028_plan_experience_reflections.sql`。checksum 用于检测已应用迁移文件被改写。
+`name text` 主键、`checksum char`、`applied_at timestamptz`。当前 29 行，名称从 `0001` 连续至 `0029_portable_export_archive_custody.sql`。checksum 用于检测已应用迁移文件被改写。
 
 ### 16.2 当前迁移演进主题
 
-| 范围      | 主要结构                                |
-| --------- | --------------------------------------- |
-| 0001–0004 | 用户、身份、资料、授权、健康记录与修订  |
-| 0005–0009 | 训练、餐食、周计划及各自历史            |
-| 0010–0014 | AI 运行、照片、隐私删除、持久数据操作   |
-| 0015–0019 | 身份抑制、照片保留/删除证据、目录定义   |
-| 0020–0024 | 管理员支持与审计、OIDC、计划证据与关联  |
-| 0025–0028 | 洞察/回看所需数据边界与本人计划体验反思 |
+| 范围      | 主要结构                                  |
+| --------- | ----------------------------------------- |
+| 0001–0004 | 用户、身份、资料、授权、健康记录与修订    |
+| 0005–0009 | 训练、餐食、周计划及各自历史              |
+| 0010–0014 | AI 运行、照片、隐私删除、持久数据操作     |
+| 0015–0019 | 身份抑制、照片保留/删除证据、目录定义     |
+| 0020–0024 | 管理员支持与审计、OIDC、计划证据与关联    |
+| 0025–0029 | 洞察/回看数据、本人计划体验与归档保管边界 |
 
 迁移只能前向追加；不得在共享历史中重写已应用 SQL。生产发布前应先在备份副本演练、核对 checksum、外键和索引，再滚动应用。
 
@@ -386,6 +387,7 @@ kind 覆盖对象删除、提供方处置、备份日志等持久副作用。`de
 | 父实体                              | 子实体                                           | 主要策略                                         |
 | ----------------------------------- | ------------------------------------------------ | ------------------------------------------------ |
 | `users`                             | 资料、目标、会话、身份、授权、业务聚合、照片、AI | 账户级删除时级联清理                             |
+| `users`                             | `privacy_export_archives`                        | RESTRICT；先处置私有对象并删除保管行             |
 | 当前聚合                            | 子项与 revision                                  | 聚合物理删除时级联；普通用户删除只先软删         |
 | `weekly_plans` / `workout_sessions` | `plan_workout_links`                             | 复合所有权 FK；账户删除最终级联                  |
 | `consent_events`                    | AI/照片运行                                      | 保持明确授权引用；正常撤回不删除事件             |
@@ -432,6 +434,10 @@ reserved → ready → analysis-only 在 24 小时或 retention_expires_at 到�
 
 intent 创建 → 验证一次性 token 与确认短语 → users 状态关闭 → receipt + durable jobs → 媒体/提供方/备份处置 → 主体表删除、身份抑制写入 → receipt completed 或 dead_letter。status token hash 允许注销后恢复最小状态。
 
+### 19.5 便携归档保管
+
+`privacy_export_archives` 保存 owner、幂等 UUID、请求哈希、v4 格式、状态、确定性 `.json.enc` 键、非秘密密钥引用、SHA-256/大小、生成/下载期限和受控失败/处置。主路径为 queued → generating → available → deletion_pending → disposed；queued/generating 可进入 failed 或 deletion_pending。数据库触发器阻止跳级、回滚、同状态替换证据和时间倒退。available 必须同时具备对象键、密钥引用、摘要、正字节数及晚于 available_at 的 download_expires_at；disposed 清除对象键/密钥引用但可保留聚合摘要收据。当前尚无创建这些行的公开服务或执行器。
+
 ## 20. 安全与隐私控制
 
 - 所有访问 token、intent token 和 receipt token 只保存哈希。
@@ -447,6 +453,7 @@ intent 创建 → 验证一次性 token 与确认短语 → users 状态关闭 �
 - revision 表除管理员审计外没有通用数据库触发器阻止 UPDATE/DELETE，主要依赖应用权限和仓储约定；生产最小权限与备份审计仍需持续验证。
 - JSONB 快照便于保真，但大规模历史会增加存储与导出成本；需要真实规模数据后再决定分区、归档或压缩。
 - 当前本地数据操作表有 179 个 job/attempt，来自测试和演示；应通过状态分布、失败码和死信而不是总行数判断健康。
+- 归档表与状态机已存在，但请求仓储、执行任务、加密对象、下载授权和到期扫描尚未实现；表结构不能被描述为用户可用的异步导出。
 - 没有设备原生同步表、社交表、支付表或医疗病历表；这些不属于当前实现。
 - 备份物理删除时限属于生产保留政策和演练证据，不能只由主数据库 receipt 状态推断。
 

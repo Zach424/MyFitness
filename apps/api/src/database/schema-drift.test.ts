@@ -136,6 +136,10 @@ const consentReceiptHistoryMigrationPath = path.resolve(
   __dirname,
   '../../../../infra/postgres/migrations/0027_consent_receipt_history_index.sql',
 )
+const portableExportArchiveMigrationPath = path.resolve(
+  __dirname,
+  '../../../../infra/postgres/migrations/0029_portable_export_archive_custody.sql',
+)
 
 describe('health-record migration drift', () => {
   it('contains every contract metric, unit and source kind', async () => {
@@ -327,6 +331,30 @@ describe('health-record migration drift', () => {
   it('indexes owner consent receipts in the complete history order', async () => {
     const migration = await readFile(consentReceiptHistoryMigrationPath, 'utf8')
     expect(migration).toContain('ON consent_events (user_id, accepted_at DESC, id DESC)')
+  })
+
+  it('locks portable export archive custody states and monotonic transitions', async () => {
+    const migration = await readFile(portableExportArchiveMigrationPath, 'utf8')
+    for (const value of [
+      'privacy_export_archives',
+      'myfitness-portable-export-v4',
+      'queued',
+      'generating',
+      'available',
+      'failed',
+      'deletion_pending',
+      'disposed',
+      'encryption_key_ref',
+      'download_expires_at',
+      'available_at <= generation_expires_at',
+      'account_erasure',
+      'ON DELETE RESTRICT',
+      'privacy_export_archives_transition_guard',
+    ]) {
+      expect(migration).toContain(value)
+    }
+    expect(migration).not.toContain('download_url')
+    expect(migration).not.toContain('access_token')
   })
 
   it('persists only an unlinkable primary-store erasure receipt', async () => {
