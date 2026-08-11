@@ -12,6 +12,7 @@ import {
   PortableExportDatabaseSnapshotService,
   PortableExportSnapshotPayloadTooLargeError,
   portableExportSnapshotMaximumPayloadBytes,
+  portableExportWorkoutHeaderPageQuery,
 } from './portable-export-database-snapshot'
 import {
   createPortableExportJsonStream,
@@ -103,6 +104,36 @@ describe('portable export bounded PostgreSQL snapshot', () => {
     return id
   }
 
+  const createWorkout = async (
+    userId: string,
+    startedAt: string,
+    createdAt = startedAt,
+    options: { id?: string; deletedAt?: string | null; title?: string } = {},
+  ) => {
+    const id = options.id ?? randomUUID()
+    await pool.query(
+      `INSERT INTO workout_sessions (
+         id, user_id, title, status, source_kind, source_metadata, started_at, ended_at,
+         timezone, pain_level, fatigue, note, revision, idempotency_key, request_hash,
+         deleted_at, created_at, updated_at
+       ) VALUES (
+         $1, $2, $3, 'completed', 'manual', '{"fixture":"workout-header"}'::jsonb,
+         $4::timestamptz, $4::timestamptz, 'Asia/Shanghai', 0, 3, 'header only', 1,
+         $5, repeat('b', 64), $6::timestamptz, $7::timestamptz, $7::timestamptz
+       )`,
+      [
+        id,
+        userId,
+        options.title ?? `Workout ${id.slice(0, 8)}`,
+        startedAt,
+        `workout-header-${randomUUID()}`,
+        options.deletedAt ?? null,
+        createdAt,
+      ],
+    )
+    return id
+  }
+
   beforeAll(async () => {
     await runMigrations(config.databaseUrl)
   })
@@ -156,6 +187,151 @@ describe('portable export bounded PostgreSQL snapshot', () => {
       batchCount: 3,
       rowCount: 5,
     })
+  })
+
+  it('streams owner workout headers in total order, including soft-deleted rows, from one stable snapshot', async () => {
+    const userId = await createUser()
+    const otherUserId = await createUser()
+    const tiedIds = [randomUUID(), randomUUID()].sort()
+    const orderedWorkouts: Array<{
+      id: string
+      startedAt: string
+      createdAt: string
+      deletedAt?: string
+    }> = [
+      {
+        id: randomUUID(),
+        startedAt: '2026-08-11T01:14:00.000001Z',
+        createdAt: '2026-08-11T01:19:00.000001Z',
+      },
+      {
+        id: randomUUID(),
+        startedAt: '2026-08-11T01:15:00.000001Z',
+        createdAt: '2026-08-11T01:15:00.000001Z',
+      },
+      {
+        id: tiedIds[0]!,
+        startedAt: '2026-08-11T01:15:00.000001Z',
+        createdAt: '2026-08-11T01:15:00.000002Z',
+        deletedAt: '2026-08-11T01:20:00.000001Z',
+      },
+      {
+        id: tiedIds[1]!,
+        startedAt: '2026-08-11T01:15:00.000001Z',
+        createdAt: '2026-08-11T01:15:00.000002Z',
+      },
+    ]
+
+    for (const workout of [...orderedWorkouts].reverse()) {
+      await createWorkout(userId, workout.startedAt, workout.createdAt, {
+        id: workout.id,
+        deletedAt: workout.deletedAt ?? null,
+      })
+    }
+    await createWorkout(otherUserId, orderedWorkouts[0]!.startedAt, orderedWorkouts[0]!.createdAt)
+
+    const session = snapshots.createWorkoutHeaderSnapshot(userId, { batchRows: 2 })
+    const iterator = session.rows[Symbol.asyncIterator]()
+    const first = await iterator.next()
+    expect(first).toMatchObject({ done: false })
+
+    const concurrentId = await createWorkout(
+      userId,
+      '2026-08-11T01:16:00.000001Z',
+      '2026-08-11T01:16:00.000002Z',
+    )
+    const rows = first.done ? [] : [first.value]
+    for await (const row of { [Symbol.asyncIterator]: () => iterator }) rows.push(row)
+
+    expect(rows.map((row) => row.id)).toEqual(orderedWorkouts.map((workout) => workout.id))
+    expect(rows.map((row) => row.id)).not.toContain(concurrentId)
+    expect(rows.filter((row) => row.deleted_at !== null)).toHaveLength(1)
+    expect(Object.keys(rows[0]!).sort()).toEqual(
+      [
+        'id',
+        'title',
+        'status',
+        'source_kind',
+        'source_metadata',
+        'started_at',
+        'ended_at',
+        'timezone',
+        'pain_level',
+        'fatigue',
+        'note',
+        'revision',
+        'deleted_at',
+        'created_at',
+        'updated_at',
+      ].sort(),
+    )
+    expect(rows[0]).not.toHaveProperty('exercises')
+    expect(rows[0]).not.toHaveProperty('history')
+    await expect(session.receipt).resolves.toEqual({
+      batchRows: 2,
+      maximumPayloadBytes: portableExportSnapshotMaximumPayloadBytes,
+      batchCount: 2,
+      rowCount: 4,
+    })
+  })
+
+  it('uses the non-partial owner export index for the actual workout header page query', async () => {
+    const userId = await createUser()
+    await createWorkout(userId, '2026-08-11T01:25:00.000001Z')
+    const definition = await pool.query<{ index_definition: string; predicate: string | null }>(
+      `SELECT pg_get_indexdef(indexrelid) AS index_definition,
+              pg_get_expr(indpred, indrelid) AS predicate
+       FROM pg_index
+       WHERE indexrelid = 'workout_sessions_user_export_idx'::regclass`,
+    )
+    expect(definition.rows).toEqual([
+      expect.objectContaining({
+        index_definition: expect.stringContaining('(user_id, started_at, created_at, id)'),
+        predicate: null,
+      }),
+    ])
+
+    const client = await pool.connect()
+    try {
+      await client.query('BEGIN')
+      await client.query('SET LOCAL enable_seqscan = off')
+      const plan = await client.query<{ 'QUERY PLAN': unknown }>(
+        `EXPLAIN (FORMAT JSON, COSTS OFF) ${portableExportWorkoutHeaderPageQuery}`,
+        [userId, null, 2, portableExportSnapshotMaximumPayloadBytes],
+      )
+      expect(JSON.stringify(plan.rows[0]?.['QUERY PLAN'])).toContain(
+        'workout_sessions_user_export_idx',
+      )
+    } finally {
+      await client.query('ROLLBACK')
+      client.release()
+    }
+  })
+
+  it('propagates workout header cancellation without exposing a second row', async () => {
+    const userId = await createUser()
+    await createWorkout(userId, '2026-08-11T01:35:00.000001Z')
+    await createWorkout(userId, '2026-08-11T01:35:00.000002Z')
+    const abort = new AbortController()
+    const session = snapshots.createWorkoutHeaderSnapshot(userId, {
+      batchRows: 1,
+      signal: abort.signal,
+    })
+    const iterator = session.rows[Symbol.asyncIterator]()
+    await expect(iterator.next()).resolves.toMatchObject({ done: false })
+    const cancellation = new Error('workout header snapshot cancelled by lease owner')
+    const receiptFailure = session.receipt.catch((error: unknown) => error)
+
+    abort.abort(cancellation)
+    let streamFailure: unknown
+    try {
+      await iterator.next()
+    } catch (error) {
+      streamFailure = error
+    }
+
+    expect(streamFailure).toBe(cancellation)
+    expect(await receiptFailure).toBe(cancellation)
   })
 
   it('streams one owner revision history across microsecond pages into byte-compatible v4 JSON', async () => {

@@ -33,6 +33,8 @@ export type PortableExportHealthRecordRevisionSnapshotSession =
   PortableExportDatabaseSnapshotSession
 export type PortableExportConsentEventSnapshotReceipt = PortableExportDatabaseSnapshotReceipt
 export type PortableExportConsentEventSnapshotSession = PortableExportDatabaseSnapshotSession
+export type PortableExportWorkoutHeaderSnapshotReceipt = PortableExportDatabaseSnapshotReceipt
+export type PortableExportWorkoutHeaderSnapshotSession = PortableExportDatabaseSnapshotSession
 
 export type PortableExportHealthHistorySnapshotCollectionReceipt = {
   batchCount: number
@@ -365,6 +367,66 @@ async function* healthRecordRevisionPageRows(
   }
 }
 
+export const portableExportWorkoutHeaderPageQuery = `WITH page AS MATERIALIZED (
+         SELECT id, title, status, source_kind, source_metadata, started_at, ended_at,
+                timezone, pain_level, fatigue, note, revision, deleted_at, created_at, updated_at
+         FROM workout_sessions
+         WHERE user_id = $1
+           AND (
+             $2::uuid IS NULL
+             OR (started_at, created_at, id) > (
+               SELECT started_at, created_at, id
+               FROM workout_sessions
+               WHERE user_id = $1 AND id = $2::uuid
+             )
+           )
+         ORDER BY started_at, created_at, id
+         LIMIT $3
+       ), encoded AS MATERIALIZED (
+         SELECT id, started_at, created_at, to_jsonb(page)::text AS payload_text
+         FROM page
+       )
+       SELECT id,
+              CASE
+                WHEN octet_length(payload_text) <= $4 THEN payload_text
+                ELSE NULL
+              END AS payload_text,
+              octet_length(payload_text) AS payload_byte_length
+       FROM encoded
+       ORDER BY started_at, created_at, id`
+
+async function* workoutHeaderPageRows(
+  client: PoolClient,
+  userId: string,
+  batchRows: number,
+  maximumPayloadBytes: number,
+  stats: MutableSnapshotStats,
+  signal?: AbortSignal,
+): AsyncGenerator<Record<string, unknown>> {
+  throwIfAborted(signal)
+  let anchorId: string | null = null
+
+  while (true) {
+    throwIfAborted(signal)
+    const page: QueryResult<BoundedSnapshotRow> = await client.query<BoundedSnapshotRow>(
+      portableExportWorkoutHeaderPageQuery,
+      [userId, anchorId, batchRows, maximumPayloadBytes],
+    )
+    if (page.rows.length === 0) break
+    yield* boundedPagePayloads(
+      page.rows,
+      batchRows,
+      maximumPayloadBytes,
+      stats,
+      'workout header',
+      signal,
+    )
+
+    anchorId = page.rows.at(-1)!.id
+    if (page.rows.length < batchRows) break
+  }
+}
+
 async function* healthRecordRows(
   client: PoolClient,
   userId: string,
@@ -402,6 +464,19 @@ async function* healthRecordRevisionRows(
   throwIfAborted(signal)
   await assertActiveAccount(client, userId)
   yield* healthRecordRevisionPageRows(client, userId, batchRows, maximumPayloadBytes, stats, signal)
+}
+
+async function* workoutHeaderRows(
+  client: PoolClient,
+  userId: string,
+  batchRows: number,
+  maximumPayloadBytes: number,
+  stats: MutableSnapshotStats,
+  signal?: AbortSignal,
+): AsyncGenerator<Record<string, unknown>> {
+  throwIfAborted(signal)
+  await assertActiveAccount(client, userId)
+  yield* workoutHeaderPageRows(client, userId, batchRows, maximumPayloadBytes, stats, signal)
 }
 
 type SnapshotRowsFactory = (
@@ -694,6 +769,13 @@ export class PortableExportDatabaseSnapshotService {
     options: PortableExportDatabaseSnapshotOptions = {},
   ): PortableExportConsentEventSnapshotSession {
     return createSnapshotSession(this.database, userId, options, consentEventRows)
+  }
+
+  createWorkoutHeaderSnapshot(
+    userId: string,
+    options: PortableExportDatabaseSnapshotOptions = {},
+  ): PortableExportWorkoutHeaderSnapshotSession {
+    return createSnapshotSession(this.database, userId, options, workoutHeaderRows)
   }
 
   createHealthHistorySnapshot(

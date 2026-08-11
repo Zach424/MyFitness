@@ -162,6 +162,26 @@ describe('portable export database snapshot session', () => {
     })
   })
 
+  it('applies the shared bounded receipt to workout headers', async () => {
+    const service = new PortableExportDatabaseSnapshotService(
+      fakeDatabase([{ id: 'workout-1' }, { id: 'workout-2' }, { id: 'workout-3' }]),
+    )
+    const session = service.createWorkoutHeaderSnapshot('11111111-1111-4111-8111-111111111111', {
+      batchRows: 2,
+    })
+    const rows: Array<Record<string, unknown>> = []
+
+    for await (const row of session.rows) rows.push(row)
+
+    expect(rows.map((row) => row.id)).toEqual(['workout-1', 'workout-2', 'workout-3'])
+    await expect(session.receipt).resolves.toEqual({
+      batchRows: 2,
+      maximumPayloadBytes: portableExportSnapshotMaximumPayloadBytes,
+      batchCount: 2,
+      rowCount: 3,
+    })
+  })
+
   it('rejects invalid batch and payload limits before opening a database stream', () => {
     const service = new PortableExportDatabaseSnapshotService(fakeDatabase([]))
 
