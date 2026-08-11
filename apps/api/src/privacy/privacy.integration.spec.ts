@@ -186,6 +186,14 @@ describe('privacy ownership API with PostgreSQL and private media', () => {
     await createHealthRecord(token)
     const plan = await createPlanReflection(token)
     const photo = await createPhoto(token, userId)
+    await pool.query(
+      "UPDATE consent_events SET accepted_at = '2026-08-11T00:00:00.000001Z' WHERE user_id = $1",
+      [userId],
+    )
+    const expectedConsentOrder = await pool.query<{ id: string }>(
+      'SELECT id FROM consent_events WHERE user_id = $1 ORDER BY accepted_at, id',
+      [userId],
+    )
 
     const overview = await request(app.getHttpServer())
       .get('/v1/me/privacy')
@@ -217,6 +225,7 @@ describe('privacy ownership API with PostgreSQL and private media', () => {
     const payload = JSON.parse(exported.text) as {
       schemaVersion: string
       data: {
+        consentEvents: Array<{ id: string }>
         healthRecords: unknown[]
         healthRecordRevisions: unknown[]
         weeklyPlans: Array<{
@@ -233,6 +242,9 @@ describe('privacy ownership API with PostgreSQL and private media', () => {
       }
     }
     expect(payload.schemaVersion).toBe('myfitness-portable-export-v4')
+    expect(payload.data.consentEvents.map((event) => event.id)).toEqual(
+      expectedConsentOrder.rows.map((event) => event.id),
+    )
     expect(payload.data.healthRecords).toHaveLength(1)
     expect(payload.data.healthRecordRevisions).toHaveLength(1)
     expect(payload.data.weeklyPlans).toEqual([

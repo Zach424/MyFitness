@@ -93,6 +93,16 @@ describe('portable export bounded PostgreSQL snapshot', () => {
     return id
   }
 
+  const createConsentEvent = async (userId: string, acceptedAt: string, purpose = 'privacy') => {
+    const id = randomUUID()
+    await pool.query(
+      `INSERT INTO consent_events (id, user_id, purpose, version, accepted_at)
+       VALUES ($1, $2, $3, $4, $5::timestamptz)`,
+      [id, userId, purpose, `snapshot-${randomUUID()}`.slice(0, 40), acceptedAt],
+    )
+    return id
+  }
+
   beforeAll(async () => {
     await runMigrations(config.databaseUrl)
   })
@@ -382,6 +392,212 @@ describe('portable export bounded PostgreSQL snapshot', () => {
       chunkBytes: 43,
       byteLength: expected.length,
       sha256: createHash('sha256').update(expected).digest('hex'),
+    })
+  })
+
+  it('streams consent evidence and health history from one ordered root snapshot', async () => {
+    const userId = await createUser()
+    const otherUserId = await createUser()
+    const consentAcceptedAt = '2026-08-11T01:47:00.000001Z'
+    await Promise.all([
+      createConsentEvent(userId, consentAcceptedAt, 'privacy'),
+      createConsentEvent(userId, consentAcceptedAt, 'health_data'),
+    ])
+    const originalConsentIds = await pool.query<{ id: string }>(
+      'SELECT id FROM consent_events WHERE user_id = $1 ORDER BY accepted_at, id',
+      [userId],
+    )
+    await createConsentEvent(otherUserId, consentAcceptedAt, 'privacy')
+    const firstRecordId = await createRecord(userId, '2026-08-11T01:48:00.000001Z', 70)
+    const secondRecordId = await createRecord(userId, '2026-08-11T01:48:00.000002Z', 71)
+    const firstRevisionId = await createRevision(
+      userId,
+      firstRecordId,
+      '2026-08-11T01:49:00.000001Z',
+    )
+    const secondRevisionId = await createRevision(
+      userId,
+      secondRecordId,
+      '2026-08-11T01:49:00.000002Z',
+    )
+    const index = await pool.query<{ indexdef: string }>(
+      `SELECT indexdef FROM pg_indexes
+       WHERE schemaname = 'public' AND indexname = 'consent_events_user_history_idx'`,
+    )
+    expect(index.rows[0]?.indexdef).toContain('(user_id, accepted_at DESC, id DESC)')
+
+    const stable = snapshots.createConsentHealthSnapshot(userId, { batchRows: 1 })
+    const stableConsentEvents: Array<Record<string, unknown>> = []
+    const stableHealthRecords: Array<Record<string, unknown>> = []
+    const stableHealthRecordRevisions: Array<Record<string, unknown>> = []
+    for await (const row of stable.consentEvents) stableConsentEvents.push(row)
+
+    const concurrentConsentId = await createConsentEvent(
+      userId,
+      '2026-08-11T01:47:00.000002Z',
+      'progress_photo_analysis',
+    )
+    const concurrentRecordId = await createRecord(userId, '2026-08-11T01:48:00.000003Z', 72)
+    const concurrentRevisionId = await createRevision(
+      userId,
+      concurrentRecordId,
+      '2026-08-11T01:49:00.000003Z',
+    )
+    for await (const row of stable.healthRecords) stableHealthRecords.push(row)
+    for await (const row of stable.healthRecordRevisions) {
+      stableHealthRecordRevisions.push(row)
+    }
+
+    expect(stableConsentEvents.map((row) => row.id)).toEqual(
+      originalConsentIds.rows.map((row) => row.id),
+    )
+    expect(stableConsentEvents.some((row) => row.id === concurrentConsentId)).toBe(false)
+    expect(stableHealthRecords.map((row) => row.id)).toEqual([firstRecordId, secondRecordId])
+    expect(stableHealthRecords.some((row) => row.id === concurrentRecordId)).toBe(false)
+    expect(stableHealthRecordRevisions.map((row) => row.id)).toEqual([
+      firstRevisionId,
+      secondRevisionId,
+    ])
+    expect(stableHealthRecordRevisions.some((row) => row.id === concurrentRevisionId)).toBe(false)
+    await stable.complete()
+    await expect(stable.receipt).resolves.toEqual({
+      batchRows: 1,
+      maximumPayloadBytes: portableExportSnapshotMaximumPayloadBytes,
+      consentEvents: { batchCount: 2, rowCount: 2 },
+      healthRecords: { batchCount: 2, rowCount: 2 },
+      healthRecordRevisions: { batchCount: 2, rowCount: 2 },
+    })
+
+    const eager = snapshots.createConsentHealthSnapshot(userId, { batchRows: 2 })
+    const eagerConsentEvents: Array<Record<string, unknown>> = []
+    const eagerHealthRecords: Array<Record<string, unknown>> = []
+    const eagerHealthRecordRevisions: Array<Record<string, unknown>> = []
+    for await (const row of eager.consentEvents) eagerConsentEvents.push(row)
+    for await (const row of eager.healthRecords) eagerHealthRecords.push(row)
+    for await (const row of eager.healthRecordRevisions) eagerHealthRecordRevisions.push(row)
+    await eager.complete()
+    expect(eagerConsentEvents.map((row) => row.id)).toContain(concurrentConsentId)
+    expect(eagerHealthRecords.map((row) => row.id)).toContain(concurrentRecordId)
+    expect(eagerHealthRecordRevisions.map((row) => row.id)).toContain(concurrentRevisionId)
+    const eagerPayload = privacyExportSchema.parse({
+      schemaVersion: privacyExportSchemaVersion,
+      generatedAt: '2026-08-11T01:59:10.000Z',
+      accountId: userId,
+      data: {
+        account: { id: userId, status: 'active' },
+        identities: [],
+        profile: null,
+        goal: null,
+        consentEvents: eagerConsentEvents,
+        healthRecords: eagerHealthRecords,
+        healthRecordRevisions: eagerHealthRecordRevisions,
+        exerciseCatalog: [],
+        foodCatalog: [],
+        workouts: [],
+        nutritionMeals: [],
+        nutritionFavorites: [],
+        weeklyPlans: [],
+        aiExplanationRuns: [],
+        foodPhotoAnalyses: [],
+        progressPhotos: [],
+      },
+    })
+    const expected = serializePortableExport(eagerPayload, Number.MAX_SAFE_INTEGER)
+
+    const lazy = snapshots.createConsentHealthSnapshot(userId, { batchRows: 2 })
+    const json = createPortableExportJsonStream(
+      {
+        ...eagerPayload,
+        data: {
+          ...eagerPayload.data,
+          consentEvents: portableExportJsonAsyncArray(lazy.consentEvents),
+          healthRecords: portableExportJsonAsyncArray(lazy.healthRecords),
+          healthRecordRevisions: portableExportJsonAsyncArray(lazy.healthRecordRevisions),
+        },
+      },
+      { chunkBytes: 47, lifecycle: lazy },
+    )
+    const chunks: Buffer[] = []
+    for await (const chunk of json.bytes) chunks.push(Buffer.from(chunk))
+
+    expect(Buffer.concat(chunks)).toEqual(expected)
+    await expect(lazy.receipt).resolves.toEqual({
+      batchRows: 2,
+      maximumPayloadBytes: portableExportSnapshotMaximumPayloadBytes,
+      consentEvents: { batchCount: 2, rowCount: 3 },
+      healthRecords: { batchCount: 2, rowCount: 3 },
+      healthRecordRevisions: { batchCount: 2, rowCount: 3 },
+    })
+    await expect(json.receipt).resolves.toEqual({
+      schemaVersion: privacyExportSchemaVersion,
+      chunkBytes: 47,
+      byteLength: expected.length,
+      sha256: createHash('sha256').update(expected).digest('hex'),
+    })
+  })
+
+  it('rolls back the root transaction when JSON is cancelled after consent evidence', async () => {
+    const userId = await createUser()
+    await createConsentEvent(userId, '2026-08-11T01:59:20.000001Z')
+    const snapshot = snapshots.createConsentHealthSnapshot(userId, { batchRows: 1 })
+    let consentEventsCompleted = false
+    let healthRecordsStarted = false
+    const observedConsentEvents = (async function* () {
+      for await (const row of snapshot.consentEvents) yield row
+      consentEventsCompleted = true
+    })()
+    const observedHealthRecords = (async function* () {
+      healthRecordsStarted = true
+      yield* snapshot.healthRecords
+    })()
+    const payload = privacyExportSchema.parse({
+      schemaVersion: privacyExportSchemaVersion,
+      generatedAt: '2026-08-11T01:59:30.000Z',
+      accountId: userId,
+      data: {
+        account: { id: userId },
+        identities: [],
+        profile: null,
+        goal: null,
+        consentEvents: [],
+        healthRecords: [],
+        healthRecordRevisions: [],
+        exerciseCatalog: [],
+        foodCatalog: [],
+        workouts: [],
+        nutritionMeals: [],
+        nutritionFavorites: [],
+        weeklyPlans: [],
+        aiExplanationRuns: [],
+        foodPhotoAnalyses: [],
+        progressPhotos: [],
+      },
+    })
+    const json = createPortableExportJsonStream(
+      {
+        ...payload,
+        data: {
+          ...payload.data,
+          consentEvents: portableExportJsonAsyncArray(observedConsentEvents),
+          healthRecords: portableExportJsonAsyncArray(observedHealthRecords),
+          healthRecordRevisions: portableExportJsonAsyncArray(snapshot.healthRecordRevisions),
+        },
+      },
+      { chunkBytes: 1, lifecycle: snapshot },
+    )
+    const iterator = json.bytes[Symbol.asyncIterator]()
+    while (!consentEventsCompleted) {
+      await expect(iterator.next()).resolves.toMatchObject({ done: false })
+    }
+    expect(healthRecordsStarted).toBe(false)
+    const jsonFailure = json.receipt.catch((error: unknown) => error)
+    const snapshotFailure = snapshot.receipt.catch((error: unknown) => error)
+
+    await iterator.return?.()
+
+    expect(await snapshotFailure).toBe(await jsonFailure)
+    expect(await jsonFailure).toMatchObject({
+      message: 'portable export JSON stream did not complete',
     })
   })
 

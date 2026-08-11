@@ -319,7 +319,7 @@ export class PrivacyService {
         client,
         `SELECT to_jsonb(consent) AS payload FROM (
            SELECT id, purpose, version, accepted_at, revoked_at
-           FROM consent_events WHERE user_id = $1 ORDER BY accepted_at
+           FROM consent_events WHERE user_id = $1 ORDER BY accepted_at, id
          ) AS consent`,
         userId,
       )
