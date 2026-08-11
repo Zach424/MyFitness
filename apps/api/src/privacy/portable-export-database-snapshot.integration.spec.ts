@@ -1,6 +1,11 @@
 import { createHash, randomUUID } from 'node:crypto'
 
-import { mealSchema, privacyExportSchema, privacyExportSchemaVersion } from '@myfitness/contracts'
+import {
+  mealSchema,
+  privacyExportSchema,
+  privacyExportSchemaVersion,
+  weeklyPlanSchema,
+} from '@myfitness/contracts'
 import { Pool } from 'pg'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
@@ -588,6 +593,185 @@ describe('portable export bounded PostgreSQL snapshot', () => {
     return foodKey
   }
 
+  const createWeeklyPlanBoundaryFixture = async (userId: string) => {
+    const planId = randomUUID()
+    const secretMarker = `weekly-plan-shape-secret-${randomUUID()}`
+    const weekdays = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const
+    const dates = [
+      '2026-08-10',
+      '2026-08-11',
+      '2026-08-12',
+      '2026-08-13',
+      '2026-08-14',
+      '2026-08-15',
+      '2026-08-16',
+    ] as const
+    const roles = [
+      'warmup',
+      'squat',
+      'hinge',
+      'push',
+      'pull',
+      'core',
+      'cardio',
+      'mobility',
+    ] as const
+    const repeated = (prefix: string, length: number) =>
+      `${prefix}${'x'.repeat(length)}`.slice(0, length)
+    const plan = weeklyPlanSchema.parse({
+      id: planId,
+      userId,
+      weekStart: '2026-08-10',
+      timezone: 'Asia/Shanghai',
+      engineVersion: 'deterministic-v1',
+      status: 'modified',
+      days: weekdays.map((weekday, dayIndex) => ({
+        weekday,
+        date: dates[dayIndex],
+        available: true,
+        session: {
+          kind: dayIndex % 2 === 0 ? 'strength' : 'cardio',
+          title: repeated(`Session ${dayIndex} `, 80),
+          plannedMinutes: 90,
+          intensity: 'moderate',
+          activities: roles.map((role, activityIndex) => ({
+            id: `activity_${dayIndex}_${activityIndex}`,
+            role,
+            selectedOptionId: 'option_0',
+            options: Array.from({ length: 6 }, (_, optionIndex) => ({
+              id: `option_${optionIndex}`,
+              title: repeated(`Option ${dayIndex}-${activityIndex}-${optionIndex} `, 80),
+              dose: repeated('Dose ', 120),
+              equipment: ['bodyweight', 'dumbbells', 'bands'],
+              note: repeated(optionIndex === 0 ? secretMarker : 'Option note ', 180),
+            })),
+            safetyNote: repeated('Safety note ', 180),
+          })),
+          note: repeated('Session note ', 240),
+        },
+      })),
+      nutritionFocuses: ['regular_meals', 'food_variety', 'protein_source', 'hydration'].map(
+        (key, index) => ({
+          key,
+          title: repeated(`Focus ${index} `, 60),
+          action: repeated('Action ', 180),
+          reason: repeated('Reason ', 240),
+          alternatives: Array.from({ length: 4 }, (_, optionIndex) =>
+            repeated(`Alternative ${optionIndex} `, 120),
+          ),
+        }),
+      ),
+      reasons: Array.from({ length: 8 }, (_, index) => ({
+        code: `reason_${index}`,
+        label: repeated(`Reason ${index} `, 60),
+        detail: repeated('Reason detail ', 240),
+      })),
+      evidence: {
+        onboardingRevision: 1,
+        dashboardGeneratedAt: '2026-08-10T00:00:00.000Z',
+        readinessScore: null,
+        recentActiveDays: 0,
+        recentWorkoutCount: 0,
+        recentActiveMinutes: 0,
+        recentMealCount: 0,
+        evidencePolicyVersion: 'planning-impact-v1',
+        evidenceFingerprint: 'planning-impact-v1:readiness-missing',
+      },
+      revision: 4,
+      createdAt: '2026-08-10T00:00:00.000Z',
+      updatedAt: '2026-08-10T03:00:00.000Z',
+    })
+    const payload = {
+      days: plan.days,
+      nutritionFocuses: plan.nutritionFocuses,
+      reasons: plan.reasons,
+      evidence: plan.evidence,
+    }
+    await pool.query(
+      `INSERT INTO weekly_plans (
+         id, user_id, week_start, timezone, engine_version, status, payload,
+         revision, idempotency_key, request_hash, created_at, updated_at
+       ) VALUES (
+         $1, $2, $3::date, $4, $5, $6, $7::jsonb,
+         $8, $9, repeat('c', 64), $10::timestamptz, $11::timestamptz
+       )`,
+      [
+        plan.id,
+        plan.userId,
+        plan.weekStart,
+        plan.timezone,
+        plan.engineVersion,
+        plan.status,
+        JSON.stringify(payload),
+        plan.revision,
+        `weekly-plan-shape-${randomUUID()}`,
+        plan.createdAt,
+        plan.updatedAt,
+      ],
+    )
+    for (let revision = 1; revision <= plan.revision; revision += 1) {
+      await pool.query(
+        `INSERT INTO weekly_plan_revisions (
+           id, plan_id, user_id, action, revision, snapshot, decision_note, changed_at
+         ) VALUES (
+           $1, $2, $3, $4, $5, $6::jsonb, $7, $8::timestamptz
+         )`,
+        [
+          randomUUID(),
+          planId,
+          userId,
+          revision === 1 ? 'generated' : 'modified',
+          revision,
+          JSON.stringify({ ...plan, revision }),
+          repeated(`Decision ${revision} `, 300),
+          `2026-08-10T0${revision - 1}:00:00.000Z`,
+        ],
+      )
+    }
+    const workoutId = await createWorkout(
+      userId,
+      '2026-08-10T01:00:00.000Z',
+      '2026-08-10T01:00:00.000Z',
+    )
+    await pool.query(
+      `INSERT INTO plan_workout_links (
+         id, user_id, plan_id, plan_revision, session_date,
+         workout_id, workout_revision, revision, linked_at, unlinked_at, unlink_reason
+       )
+       SELECT gen_random_uuid(), $1, $2, 4, '2026-08-10'::date,
+              $3, 1, 2, '2026-08-10T02:00:00.000Z'::timestamptz,
+              '2026-08-10T03:00:00.000Z'::timestamptz, 'user'
+       FROM generate_series(1, 400)`,
+      [userId, planId, workoutId],
+    )
+    const experiences = [
+      'easier_than_expected',
+      'about_right',
+      'not_right_for_me',
+      'not_sure_yet',
+    ] as const
+    for (let revision = 1; revision <= plan.revision; revision += 1) {
+      await pool.query(
+        `INSERT INTO plan_experience_reflections (
+           id, user_id, plan_id, plan_revision, experience, source,
+           revision, created_at, updated_at
+         ) VALUES (
+           $1, $2, $3, $4, $5, 'user_confirmed', 1,
+           $6::timestamptz, $6::timestamptz
+         )`,
+        [
+          randomUUID(),
+          userId,
+          planId,
+          revision,
+          experiences[revision - 1],
+          `2026-08-10T0${revision + 3}:00:00.000Z`,
+        ],
+      )
+    }
+    return { planId, secretMarker }
+  }
+
   const materializeNutritionMeals = async (
     meals: AsyncIterable<PortableExportNutritionMealLayerSnapshotMeal>,
   ) => {
@@ -678,6 +862,100 @@ describe('portable export bounded PostgreSQL snapshot', () => {
       )
       expect(JSON.stringify(plan.rows[0]?.['QUERY PLAN'])).toContain(
         'nutrition_meals_user_export_idx',
+      )
+    } finally {
+      await client.query('ROLLBACK')
+      client.release()
+    }
+  })
+
+  it('audits an oversized legal weekly plan and fixes link order without returning content', async () => {
+    const userId = await createUser()
+    const otherUserId = await createUser()
+    const { planId, secretMarker } = await createWeeklyPlanBoundaryFixture(userId)
+
+    const receipt = await snapshots.inspectWeeklyPlanShape(userId, planId)
+
+    expect(receipt).toMatchObject({
+      schemaVersion: 'myfitness-portable-export-weekly-plan-shape/v1',
+      planRevision: 4,
+      historyCount: 4,
+      workoutLinkCount: 400,
+      experienceReflectionCount: 4,
+      workoutLinkTimestampCollisionCount: 399,
+      currentPayloadHasExpectedShape: true,
+      historySnapshotsHaveExpectedShape: true,
+      currentPayloadExceedsPayloadBoundary: true,
+      historyAggregateExceedsPayloadBoundary: true,
+      workoutLinkAggregateExceedsPayloadBoundary: true,
+    })
+    expect(receipt.headerBytes).toBeLessThan(portableExportSnapshotMaximumPayloadBytes)
+    expect(receipt.currentPayloadBytes).toBeGreaterThan(portableExportSnapshotMaximumPayloadBytes)
+    expect(receipt.maximumCurrentDayBytes).toBeLessThan(portableExportSnapshotMaximumPayloadBytes)
+    expect(receipt.currentEvidenceBytes).toBeLessThan(portableExportSnapshotMaximumPayloadBytes)
+    expect(receipt.historyPayloadBytes).toBeGreaterThan(portableExportSnapshotMaximumPayloadBytes)
+    expect(receipt.maximumHistoryPayloadBytes).toBeGreaterThan(
+      portableExportSnapshotMaximumPayloadBytes,
+    )
+    expect(receipt.maximumHistoryDayBytes).toBeLessThan(portableExportSnapshotMaximumPayloadBytes)
+    expect(receipt.maximumHistoryEvidenceBytes).toBeLessThan(
+      portableExportSnapshotMaximumPayloadBytes,
+    )
+    expect(receipt.workoutLinkPayloadBytes).toBeGreaterThan(
+      portableExportSnapshotMaximumPayloadBytes,
+    )
+    expect(receipt.maximumWorkoutLinkBytes).toBeLessThan(portableExportSnapshotMaximumPayloadBytes)
+    expect(receipt.experienceReflectionPayloadBytes).toBeLessThan(
+      portableExportSnapshotMaximumPayloadBytes,
+    )
+    expect(receipt.maximumExperienceReflectionBytes).toBeLessThan(
+      portableExportSnapshotMaximumPayloadBytes,
+    )
+    expect(JSON.stringify(receipt)).not.toContain(secretMarker)
+    expect(JSON.stringify(receipt)).not.toContain(userId)
+    expect(JSON.stringify(receipt)).not.toContain(planId)
+    await expect(snapshots.inspectWeeklyPlanShape(otherUserId, planId)).rejects.toThrowError(
+      'weekly plan not found',
+    )
+
+    const orderedLinks = await pool.query<{ id: string }>(
+      `SELECT id::text
+       FROM plan_workout_links
+       WHERE user_id = $1 AND plan_id = $2
+       ORDER BY linked_at, id`,
+      [userId, planId],
+    )
+    expect(orderedLinks.rows.map((row) => row.id)).toEqual(
+      orderedLinks.rows.map((row) => row.id).sort(),
+    )
+
+    const definition = await pool.query<{ index_definition: string; predicate: string | null }>(
+      `SELECT pg_get_indexdef(indexrelid) AS index_definition,
+              pg_get_expr(indpred, indrelid) AS predicate
+       FROM pg_index
+       WHERE indexrelid = 'plan_workout_links_user_plan_export_idx'::regclass`,
+    )
+    expect(definition.rows).toEqual([
+      expect.objectContaining({
+        index_definition: expect.stringContaining('(user_id, plan_id, linked_at, id)'),
+        predicate: null,
+      }),
+    ])
+
+    const client = await pool.connect()
+    try {
+      await client.query('BEGIN')
+      await client.query('SET LOCAL enable_seqscan = off')
+      const plan = await client.query<{ 'QUERY PLAN': unknown }>(
+        `EXPLAIN (FORMAT JSON, COSTS OFF)
+         SELECT id, linked_at
+         FROM plan_workout_links
+         WHERE user_id = $1 AND plan_id = $2
+         ORDER BY linked_at, id`,
+        [userId, planId],
+      )
+      expect(JSON.stringify(plan.rows[0]?.['QUERY PLAN'])).toContain(
+        'plan_workout_links_user_plan_export_idx',
       )
     } finally {
       await client.query('ROLLBACK')

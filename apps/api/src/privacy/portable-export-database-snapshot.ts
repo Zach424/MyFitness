@@ -56,6 +56,35 @@ export type PortableExportNutritionMealShapeReceipt = {
   historyAggregateExceedsPayloadBoundary: boolean
 }
 
+export const portableExportWeeklyPlanShapeSchemaVersion =
+  'myfitness-portable-export-weekly-plan-shape/v1' as const
+
+export type PortableExportWeeklyPlanShapeReceipt = {
+  schemaVersion: typeof portableExportWeeklyPlanShapeSchemaVersion
+  planRevision: number
+  historyCount: number
+  workoutLinkCount: number
+  experienceReflectionCount: number
+  headerBytes: number
+  currentPayloadBytes: number
+  maximumCurrentDayBytes: number
+  currentEvidenceBytes: number
+  historyPayloadBytes: number
+  maximumHistoryPayloadBytes: number
+  maximumHistoryDayBytes: number
+  maximumHistoryEvidenceBytes: number
+  workoutLinkPayloadBytes: number
+  maximumWorkoutLinkBytes: number
+  workoutLinkTimestampCollisionCount: number
+  experienceReflectionPayloadBytes: number
+  maximumExperienceReflectionBytes: number
+  currentPayloadHasExpectedShape: boolean
+  historySnapshotsHaveExpectedShape: boolean
+  currentPayloadExceedsPayloadBoundary: boolean
+  historyAggregateExceedsPayloadBoundary: boolean
+  workoutLinkAggregateExceedsPayloadBoundary: boolean
+}
+
 export type PortableExportNutritionMealRevisionSnapshotValue = Record<string, unknown> & {
   items: AsyncIterable<Record<string, unknown>>
 }
@@ -1594,6 +1623,187 @@ const mapNutritionMealShape = (
   maximumRevisionItemCount: row.maximum_revision_item_count,
   revisionSnapshotsHaveItemArrays: row.revision_snapshots_have_item_arrays,
   historyAggregateExceedsPayloadBoundary: row.history_aggregate_exceeds_payload_boundary,
+})
+
+type WeeklyPlanShapeRow = QueryResultRow & {
+  plan_revision: number
+  history_count: number
+  workout_link_count: number
+  experience_reflection_count: number
+  header_bytes: number
+  current_payload_bytes: number
+  maximum_current_day_bytes: number
+  current_evidence_bytes: number
+  history_payload_bytes: number
+  maximum_history_payload_bytes: number
+  maximum_history_day_bytes: number
+  maximum_history_evidence_bytes: number
+  workout_link_payload_bytes: number
+  maximum_workout_link_bytes: number
+  workout_link_timestamp_collision_count: number
+  experience_reflection_payload_bytes: number
+  maximum_experience_reflection_bytes: number
+  current_payload_has_expected_shape: boolean
+  history_snapshots_have_expected_shape: boolean
+  current_payload_exceeds_payload_boundary: boolean
+  history_aggregate_exceeds_payload_boundary: boolean
+  workout_link_aggregate_exceeds_payload_boundary: boolean
+}
+
+export const portableExportWeeklyPlanShapeQuery = `WITH target AS MATERIALIZED (
+         SELECT id, week_start, timezone, engine_version, status, payload,
+                revision, created_at, updated_at
+         FROM weekly_plans
+         WHERE user_id = $1 AND id = $2
+       ), current_day_stats AS MATERIALIZED (
+         SELECT COALESCE(max(octet_length(day.value::text)), 0)::integer
+                  AS maximum_current_day_bytes
+         FROM target
+         CROSS JOIN LATERAL jsonb_array_elements(
+           CASE
+             WHEN jsonb_typeof(target.payload->'days') = 'array'
+               THEN target.payload->'days'
+             ELSE '[]'::jsonb
+           END
+         ) AS day(value)
+       ), history_stats AS MATERIALIZED (
+         SELECT count(history.id)::integer AS history_count,
+                COALESCE(
+                  sum(octet_length((to_jsonb(history) - 'user_id' - 'plan_id')::text)),
+                  0
+                )::double precision AS history_payload_bytes,
+                COALESCE(
+                  max(octet_length((to_jsonb(history) - 'user_id' - 'plan_id')::text)),
+                  0
+                )::integer AS maximum_history_payload_bytes,
+                COALESCE(
+                  max(octet_length((history.snapshot->'evidence')::text)),
+                  0
+                )::integer AS maximum_history_evidence_bytes,
+                COALESCE(
+                  bool_and(
+                    jsonb_typeof(history.snapshot) = 'object'
+                    AND jsonb_typeof(history.snapshot->'days') = 'array'
+                    AND jsonb_typeof(history.snapshot->'nutritionFocuses') = 'array'
+                    AND jsonb_typeof(history.snapshot->'reasons') = 'array'
+                    AND jsonb_typeof(history.snapshot->'evidence') = 'object'
+                  ),
+                  false
+                ) AS history_snapshots_have_expected_shape
+         FROM target
+         LEFT JOIN weekly_plan_revisions AS history ON history.plan_id = target.id
+       ), history_day_stats AS MATERIALIZED (
+         SELECT COALESCE(max(octet_length(day.value::text)), 0)::integer
+                  AS maximum_history_day_bytes
+         FROM target
+         JOIN weekly_plan_revisions AS history ON history.plan_id = target.id
+         CROSS JOIN LATERAL jsonb_array_elements(
+           CASE
+             WHEN jsonb_typeof(history.snapshot->'days') = 'array'
+               THEN history.snapshot->'days'
+             ELSE '[]'::jsonb
+           END
+         ) AS day(value)
+       ), workout_link_stats AS MATERIALIZED (
+         SELECT count(link.id)::integer AS workout_link_count,
+                COALESCE(
+                  sum(octet_length((to_jsonb(link) - 'user_id' - 'plan_id')::text)),
+                  0
+                )::double precision AS workout_link_payload_bytes,
+                COALESCE(
+                  max(octet_length((to_jsonb(link) - 'user_id' - 'plan_id')::text)),
+                  0
+                )::integer AS maximum_workout_link_bytes,
+                (
+                  count(link.id) - count(DISTINCT link.linked_at)
+                )::integer AS workout_link_timestamp_collision_count
+         FROM target
+         LEFT JOIN plan_workout_links AS link ON link.plan_id = target.id
+       ), reflection_stats AS MATERIALIZED (
+         SELECT count(reflection.id)::integer AS experience_reflection_count,
+                COALESCE(
+                  sum(octet_length((to_jsonb(reflection) - 'user_id' - 'plan_id')::text)),
+                  0
+                )::double precision AS experience_reflection_payload_bytes,
+                COALESCE(
+                  max(octet_length((to_jsonb(reflection) - 'user_id' - 'plan_id')::text)),
+                  0
+                )::integer AS maximum_experience_reflection_bytes
+         FROM target
+         LEFT JOIN plan_experience_reflections AS reflection
+           ON reflection.plan_id = target.id
+       )
+       SELECT target.revision AS plan_revision,
+              history_stats.history_count,
+              workout_link_stats.workout_link_count,
+              reflection_stats.experience_reflection_count,
+              octet_length(
+                (
+                  (to_jsonb(target) - 'payload')
+                  || jsonb_build_object(
+                    'payload', '{}'::jsonb,
+                    'history', '[]'::jsonb,
+                    'workout_links', '[]'::jsonb,
+                    'experience_reflections', '[]'::jsonb
+                  )
+                )::text
+              )::integer AS header_bytes,
+              octet_length(target.payload::text)::integer AS current_payload_bytes,
+              current_day_stats.maximum_current_day_bytes,
+              COALESCE(octet_length((target.payload->'evidence')::text), 0)::integer
+                AS current_evidence_bytes,
+              history_stats.history_payload_bytes,
+              history_stats.maximum_history_payload_bytes,
+              history_day_stats.maximum_history_day_bytes,
+              history_stats.maximum_history_evidence_bytes,
+              workout_link_stats.workout_link_payload_bytes,
+              workout_link_stats.maximum_workout_link_bytes,
+              workout_link_stats.workout_link_timestamp_collision_count,
+              reflection_stats.experience_reflection_payload_bytes,
+              reflection_stats.maximum_experience_reflection_bytes,
+              (
+                jsonb_typeof(target.payload) = 'object'
+                AND jsonb_typeof(target.payload->'days') = 'array'
+                AND jsonb_typeof(target.payload->'nutritionFocuses') = 'array'
+                AND jsonb_typeof(target.payload->'reasons') = 'array'
+                AND jsonb_typeof(target.payload->'evidence') = 'object'
+              ) AS current_payload_has_expected_shape,
+              history_stats.history_snapshots_have_expected_shape,
+              octet_length(target.payload::text) > $3 AS current_payload_exceeds_payload_boundary,
+              history_stats.history_payload_bytes > $3 AS history_aggregate_exceeds_payload_boundary,
+              workout_link_stats.workout_link_payload_bytes > $3
+                AS workout_link_aggregate_exceeds_payload_boundary
+       FROM target
+       CROSS JOIN current_day_stats
+       CROSS JOIN history_stats
+       CROSS JOIN history_day_stats
+       CROSS JOIN workout_link_stats
+       CROSS JOIN reflection_stats`
+
+const mapWeeklyPlanShape = (row: WeeklyPlanShapeRow): PortableExportWeeklyPlanShapeReceipt => ({
+  schemaVersion: portableExportWeeklyPlanShapeSchemaVersion,
+  planRevision: row.plan_revision,
+  historyCount: row.history_count,
+  workoutLinkCount: row.workout_link_count,
+  experienceReflectionCount: row.experience_reflection_count,
+  headerBytes: row.header_bytes,
+  currentPayloadBytes: row.current_payload_bytes,
+  maximumCurrentDayBytes: row.maximum_current_day_bytes,
+  currentEvidenceBytes: row.current_evidence_bytes,
+  historyPayloadBytes: row.history_payload_bytes,
+  maximumHistoryPayloadBytes: row.maximum_history_payload_bytes,
+  maximumHistoryDayBytes: row.maximum_history_day_bytes,
+  maximumHistoryEvidenceBytes: row.maximum_history_evidence_bytes,
+  workoutLinkPayloadBytes: row.workout_link_payload_bytes,
+  maximumWorkoutLinkBytes: row.maximum_workout_link_bytes,
+  workoutLinkTimestampCollisionCount: row.workout_link_timestamp_collision_count,
+  experienceReflectionPayloadBytes: row.experience_reflection_payload_bytes,
+  maximumExperienceReflectionBytes: row.maximum_experience_reflection_bytes,
+  currentPayloadHasExpectedShape: row.current_payload_has_expected_shape,
+  historySnapshotsHaveExpectedShape: row.history_snapshots_have_expected_shape,
+  currentPayloadExceedsPayloadBoundary: row.current_payload_exceeds_payload_boundary,
+  historyAggregateExceedsPayloadBoundary: row.history_aggregate_exceeds_payload_boundary,
+  workoutLinkAggregateExceedsPayloadBoundary: row.workout_link_aggregate_exceeds_payload_boundary,
 })
 
 export const portableExportNutritionMealHeaderPageQuery = `WITH page AS MATERIALIZED (
@@ -5149,6 +5359,30 @@ export class PortableExportDatabaseSnapshotService {
       receipt = row
     }
     if (!receipt) throw new NotFoundException('nutrition meal not found')
+    return receipt
+  }
+
+  async inspectWeeklyPlanShape(
+    userId: string,
+    planId: string,
+  ): Promise<PortableExportWeeklyPlanShapeReceipt> {
+    const rows = this.database.streamReadOnlyRepeatableRead(
+      async function* (client): AsyncGenerator<PortableExportWeeklyPlanShapeReceipt> {
+        await assertActiveAccount(client, userId)
+        const result = await client.query<WeeklyPlanShapeRow>(portableExportWeeklyPlanShapeQuery, [
+          userId,
+          planId,
+          portableExportSnapshotMaximumPayloadBytes,
+        ])
+        if (result.rows[0]) yield mapWeeklyPlanShape(result.rows[0])
+      },
+    )
+    let receipt: PortableExportWeeklyPlanShapeReceipt | undefined
+    for await (const row of rows) {
+      if (receipt) throw new Error('weekly plan shape returned multiple rows')
+      receipt = row
+    }
+    if (!receipt) throw new NotFoundException('weekly plan not found')
     return receipt
   }
 

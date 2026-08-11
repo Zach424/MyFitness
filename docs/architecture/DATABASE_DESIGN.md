@@ -367,7 +367,7 @@ kind 覆盖对象删除、提供方处置、备份日志等持久副作用。`de
 
 ### 16.1 `schema_migrations`
 
-`name text` 主键、`checksum char`、`applied_at timestamptz`。当前 34 行，名称从 `0001` 连续至 `0034_portable_export_food_catalog_index.sql`。checksum 用于检测已应用迁移文件被改写。
+`name text` 主键、`checksum char`、`applied_at timestamptz`。当前 36 行，名称从 `0001` 连续至 `0036_portable_export_plan_workout_link_index.sql`。checksum 用于检测已应用迁移文件被改写。
 
 ### 16.2 当前迁移演进主题
 
@@ -379,7 +379,7 @@ kind 覆盖对象删除、提供方处置、备份日志等持久副作用。`de
 | 0015–0019 | 身份抑制、照片保留/删除证据、目录定义              |
 | 0020–0024 | 管理员支持与审计、OIDC、计划证据与关联             |
 | 0025–0030 | 洞察/回看数据、本人计划体验与归档保管/安全整数边界 |
-| 0031–0034 | 便携归档健康、训练及两个自定义目录的全历史索引     |
+| 0031–0036 | 便携归档健康、训练、目录、餐食与计划关联全历史索引 |
 
 迁移只能前向追加；不得在共享历史中重写已应用 SQL。生产发布前应先在备份副本演练、核对 checksum、外键和索引，再滚动应用。
 
@@ -454,6 +454,8 @@ intent 创建 → 验证一次性 token 与确认短语 → users 状态关闭 �
 `createNutritionMealLayerSnapshot()` 已实现该四层读取：meal 头使用迁移 0035 三元 keyset，当前 item 使用 `(meal_id,position)` 唯一索引，revision 头使用既有 owner/meal/revision 索引，snapshot items 直接按 JSON ordinality 分页。数据库先交付 meal 双空数组、revision 空 snapshot 和 snapshot 空 items 骨架，再逐元素执行 64 KiB 门禁；非数组 snapshot 在正文前返回固定不可分解错误。五段收据只含批次与行数，不含 owner、meal、revision 或 food 内容。独立入口仍可单独建立事务；七字段入口则把同一状态机注入协调根当前 `PoolClient`，跳过重复 owner 校验并把五段统计合并到统一收据。两种入口共享正文、顺序、门禁和最深失败逻辑。
 
 `nutrition_favorites` 没有软删除或历史表；取消收藏会物理删除当前快照。因此异步来源只导出当前 owner 行，精确复用同步十四字段投影，并按 `food_key` 升序 keyset。复合主键 `(user_id,food_key)` 同时提供 owner 隔离、唯一总序和实际查询计划，无需新增迁移。通用 64 KiB payload 校验器接受显式身份键，内部用 `food_key` 定位错误，但不会给公开 JSON 增加伪造的 `id` 字段。最大契约字段行仍低于门禁，一字节不足时在正文交付前失败；第八字段复用协调根事务，根开始后的并发新增不可见。
+
+周计划没有软删除；owner 唯一 `(user_id,week_start)` 固定顶层顺序，`UNIQUE (plan_id,revision)` 与 `UNIQUE (user_id,plan_id,plan_revision)` 分别固定 history 和体验反思顺序。已关闭 workout link 会保留，原同步 `ORDER BY linked_at` 在同时间行上没有总序；现补为 `(linked_at,id)`，迁移 0036 新增非部分 `(user_id,plan_id,linked_at,id)` 索引。`inspectWeeklyPlanShape()` 在 active-owner、只读 repeatable-read 事务中统计头、当前 payload、history、links 与 reflections，不返回 UUID 或正文。共享 Schema 合法的 7×8×6 夹具证明当前 payload 与单 revision 均超过 64 KiB，四条 history 和 400 条同时间 closed links 的聚合也超过门禁；空 payload 头、单日、evidence、单 link 和单 reflection 仍低于门禁。weeklyPlans 因此必须分解当前/revision 内容，并对三个子集合分别 keyset，不能整体 `jsonb_agg` 或提高单 payload 门禁。
 
 这种分层读取把大餐记录拆成可中断的小批次，同时保持同一数据库快照中的顺序与内容一致；即使取消发生在最深层，外层游标和事务也会随之关闭，不遗留半开的读取资源。
 

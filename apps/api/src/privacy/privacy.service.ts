@@ -450,7 +450,7 @@ export class PrivacyService {
              ), '[]'::jsonb),
               'workout_links', COALESCE((
                 SELECT jsonb_agg(
-                  (to_jsonb(link) - 'user_id' - 'plan_id') ORDER BY link.linked_at
+                  (to_jsonb(link) - 'user_id' - 'plan_id') ORDER BY link.linked_at, link.id
                 )
                 FROM plan_workout_links AS link WHERE link.plan_id = plan.id
               ), '[]'::jsonb),

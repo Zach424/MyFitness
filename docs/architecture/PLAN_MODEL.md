@@ -118,6 +118,12 @@ The weekly-plan page keeps only lightweight navigation for current and historica
 
 The dedicated outcome page reads the system outcome and user reflection under separate in-memory authorities. A failed reflection read never becomes an unfilled state and cannot hide a successfully read outcome. The four choices create or correct on explicit activation; deletion requires confirmation. Current reflections participate in privacy inventory and portable export, while owner deletion cascades them. They do not change outcome `unknown`/`observed`, prove adherence/effect/causality, invoke AI or adapt later plans.
 
+## 便携归档结构边界
+
+周计划属于 owner 数据且没有软删除。便携归档包含当前计划、全部不可变 `weekly_plan_revisions`、活动与已关闭 `plan_workout_links`，以及每个精确计划修订的当前体验反思。顶层计划按 owner 唯一 `week_start`，history 按唯一 revision，reflection 按唯一 plan_revision；link 必须按 `(linked_at,id)`，因为多个已关闭关联可以共享时间戳。迁移 0036 提供 `(user_id,plan_id,linked_at,id)` 非部分索引，不依赖只覆盖活动行的部分唯一索引。
+
+`inspectWeeklyPlanShape()` 只返回 revision、各集合计数、UTF-8 字节、时间戳碰撞数和结构布尔，不返回 owner/plan/link UUID 或计划正文。共享 Schema 合法的 7 天、每日至多 8 个活动、每活动至多 6 个选项计划已经让当前 payload 和单条 revision 超过 64 KiB；修订与已关闭关联数量又没有总上限。因此异步来源必须递归拆分 days/session/activities/options、nutritionFocuses、reasons 与 evidence，并让 current/revision 共用兼容规则；history、links 和 reflections 也必须分别分页。本轮只固定形状和总序，尚未输出正文或接入第九协调字段。
+
 ## Known limitations
 
 - The rules are explainable but have not been clinically validated or evaluated against user outcomes.
