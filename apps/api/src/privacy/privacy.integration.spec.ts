@@ -211,6 +211,9 @@ describe('privacy ownership API with PostgreSQL and private media', () => {
     expect(
       overview.body.inventory.find((item: { category: string }) => item.category === 'plans'),
     ).toMatchObject({ recordCount: 2, includesHistory: true })
+    expect(
+      overview.body.inventory.find((item: { category: string }) => item.category === 'profile'),
+    ).toMatchObject({ recordCount: 2, includesHistory: true })
 
     const exported = await request(app.getHttpServer())
       .get('/v1/me/privacy/export')
@@ -227,6 +230,16 @@ describe('privacy ownership API with PostgreSQL and private media', () => {
     const payload = JSON.parse(exported.text) as {
       schemaVersion: string
       data: {
+        goal: {
+          goal_id: string
+          revision: number
+          revision_history: Array<{
+            goalId: string
+            ownerUserId: string
+            revision: number
+            historyCoverage: string
+          }>
+        }
         consentEvents: Array<{ id: string }>
         healthRecords: unknown[]
         healthRecordRevisions: unknown[]
@@ -244,6 +257,15 @@ describe('privacy ownership API with PostgreSQL and private media', () => {
       }
     }
     expect(payload.schemaVersion).toBe('myfitness-portable-export-v4')
+    expect(payload.data.goal.revision).toBe(1)
+    expect(payload.data.goal.revision_history).toEqual([
+      expect.objectContaining({
+        goalId: payload.data.goal.goal_id,
+        ownerUserId: userId,
+        revision: 1,
+        historyCoverage: 'complete',
+      }),
+    ])
     expect(payload.data.consentEvents.map((event) => event.id)).toEqual(
       expectedConsentOrder.rows.map((event) => event.id),
     )

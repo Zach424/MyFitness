@@ -1,6 +1,6 @@
 # 个人认知模型
 
-状态：第 186 轮完成 P2c 证据引用精确投影；来源权威与撤回传播、回顾持久化、API、确定性派生和客户端闭环仍未实现
+状态：第 187 轮补齐 onboarding goal 不可变来源历史；goal/workout 来源资格绑定与撤回传播、回顾持久化、API、确定性派生和客户端闭环仍未实现
 
 ## 1. 目标与边界
 
@@ -140,9 +140,13 @@ repository 先单独锁定 item，再以锁后的新数据库语句读取 curren
 
 第 186 轮完成 P2c 首段：每次创建、普通追加或反馈修订时，repository 都在同一事务内把 revision 快照的有序 `evidence.references` 写入 `personal_model_evidence_refs`。延迟双向一致性门禁在事务结束时重新聚合全部关系 JSON，并核对引用顺序、数量、支持/反对/上下文/撤回计数和完整快照；少写、多写、换序或直接旁路都会共同回滚。历史投影不可改写或直接删除，账户删除仍可按 owner 级联清理。
 
-这张表是 revision 快照的精确查询投影，不是原始来源权威。`workout_revisions` 已有不可变历史，但建档 `user_goals` 仍只有可变现态，不能为 `onboarding_goal_revision` 建立真实来源外键。本轮因此没有伪造多态来源约束，也不宣称能识别来源更正、删除或撤回；下一步必须先补齐建档目标不可变历史，再把来源资格变化转成新的 withdrawn 证据和模型修订。
+这张表是 revision 快照的精确查询投影，不是原始来源权威。第 187 轮已为建档目标新增稳定 `goal_id`、与资料一致的 revision 和不可变 `user_goal_revisions`；新账号拥有完整链，旧账号只从诚实标记的迁移检查点开始。`workout_revisions` 也已有不可变历史，但 evidence projection 尚未通过复合外键命中这两类来源，不能宣称能识别来源更正、删除或撤回；下一步才把来源资格变化转成新的 withdrawn 证据和模型修订。
 
-这仍不表示完整 P2 已完成。来源更正/删除传播、周回顾、便携导出和普通清单/删除尚未接入。数据库只能证明反馈和证据投影确实绑定某次修订，不能证明引用来源真实存在、当前仍合格、用户理解了标签、证据充分或模型结论正确；后续界面仍必须展示依据、限制和更正入口。
+这仍不表示完整 P2 已完成。来源更正/删除传播、周回顾、个人模型（Personal Model）便携导出和普通清单/删除尚未接入。数据库只能证明反馈和证据投影确实绑定某次修订，不能证明引用来源真实存在、当前仍合格、用户理解了标签、证据充分或模型结论正确；后续界面仍必须展示依据、限制和更正入口。
+
+第 187 轮的 goal history 是来源权威前置，不是 Personal Model 来源绑定本身。共享 `onboarding-goal-snapshot-v1` 固定 owner、稳定聚合、revision、动作、覆盖范围、完整目标和变化时刻；当前目标与新增历史双向延迟核对，历史不可改写，账户删除和本人同步便携导出均覆盖。迁移前已经被覆盖的目标只保存 `checkpoint_only`，后续派生器不得把不存在的早期 revision 当成可验证事实。
+
+来源绑定只有同时命中同一账户、稳定聚合、明确修订和可接受覆盖范围时才算合格；任何一项缺失都必须失败关闭，不能退回仅比较字符串引用。这样才能把“快照声称引用了某条记录”和“数据库能够证明该来源真实存在”明确区分开。
 
 这里的“当前”只代表某个条目已经发布的最新修订，不代表系统掌握了用户完整、永久或唯一的真实状态。数据库可以证明一条历史属于谁、前后顺序是否连续、内容是否被直接改写，却不能证明观察是否充分、结论是否准确或用户是否认同。后续反馈、来源撤回和回顾流程必须继续保留这些不确定性，任何展示层都要让用户看见依据、时间、限制与更正入口。
 
@@ -337,25 +341,25 @@ R-032 继续覆盖“个人状态账本被误解为完整真相”。R-033 新�
 
 ## 14. 分阶段实施与验收
 
-| 阶段                   | 范围                                                         | 退出证据                                                                     |
-| ---------------------- | ------------------------------------------------------------ | ---------------------------------------------------------------------------- |
-| P0 领域基线            | 本文、ADR、路线图与风险重排                                  | 八类边界、状态机、证据和首批场景完成受检；本轮完成                           |
-| P1a 核心共享契约       | item/claim/evidence/confidence/feedback 严格 Schema          | 三个 claim、Unknown、决策资格和边界测试通过；已完成                          |
-| P1b 修订与回顾契约     | item revision、feedback transition、review 信封              | 不可变快照、动作、精确引用、状态转换和回顾数量门禁通过；已完成               |
-| P2 持久内核            | item/revision/feedback/evidence 投影已完成；来源/review 待续 | P2a–P2c 已证明隔离、并发、反馈事务、精确投影和账号删除；来源权威与回顾待完成 |
-| P3 首批派生            | 安排约束、8 周记录频率、训练时长基线                         | 确定性夹具、时区完整周、最低覆盖和 no-op 指纹通过                            |
-| P4 Mirror 读取         | “关于我”摘要、详情、历史、证据追溯                           | 未读/空/失败分离，移动端无障碍与隐私路径通过                                 |
-| P5 周回顾与反馈        | 少量回顾、四选一反馈、模型修订                               | 精确 revision、过期反馈冲突、temporary/disputed 语义通过                     |
-| P6 Pattern/Hypothesis  | 睡眠-RPE 等描述性关系与不确定假设                            | 支持/反对证据、非因果措辞、跨窗口稳定门禁通过                                |
-| P7 Outcome 更新        | 计划采用、实际关联、恢复与反思增加一次证据                   | 单次结果不升级、撤销可见、重复窗口更新可复算                                 |
-| P8 Contextual Decision | 个人历史驱动的结构化建议与解释                               | 引用、Unknown、置信、替代方案、安全 validator 全部通过                       |
+| 阶段                   | 范围                                                                         | 退出证据                                                                                |
+| ---------------------- | ---------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| P0 领域基线            | 本文、ADR、路线图与风险重排                                                  | 八类边界、状态机、证据和首批场景完成受检；本轮完成                                      |
+| P1a 核心共享契约       | item/claim/evidence/confidence/feedback 严格 Schema                          | 三个 claim、Unknown、决策资格和边界测试通过；已完成                                     |
+| P1b 修订与回顾契约     | item revision、feedback transition、review 信封                              | 不可变快照、动作、精确引用、状态转换和回顾数量门禁通过；已完成                          |
+| P2 持久内核            | item/revision/feedback/evidence 投影及 goal 历史已完成；来源绑定/review 待续 | P2a–P2c 已证明隔离、并发、反馈事务、精确投影、goal 历史和账号删除；来源资格与回顾待完成 |
+| P3 首批派生            | 安排约束、8 周记录频率、训练时长基线                                         | 确定性夹具、时区完整周、最低覆盖和 no-op 指纹通过                                       |
+| P4 Mirror 读取         | “关于我”摘要、详情、历史、证据追溯                                           | 未读/空/失败分离，移动端无障碍与隐私路径通过                                            |
+| P5 周回顾与反馈        | 少量回顾、四选一反馈、模型修订                                               | 精确 revision、过期反馈冲突、temporary/disputed 语义通过                                |
+| P6 Pattern/Hypothesis  | 睡眠-RPE 等描述性关系与不确定假设                                            | 支持/反对证据、非因果措辞、跨窗口稳定门禁通过                                           |
+| P7 Outcome 更新        | 计划采用、实际关联、恢复与反思增加一次证据                                   | 单次结果不升级、撤销可见、重复窗口更新可复算                                            |
+| P8 Contextual Decision | 个人历史驱动的结构化建议与解释                                               | 引用、Unknown、置信、替代方案、安全 validator 全部通过                                  |
 
 每个阶段可拆成多轮小迭代。云服务、真实模型、设备接入、部署和极端导出优化不占用认知主线，除非它们阻塞数据安全、隐私或当前阶段验收。
 
 ## 15. 待决策与下一步
 
-下一轮先补齐建档目标不可变历史，解决 `onboarding_goal_revision` 当前没有真实来源修订表的问题；随后才能把 onboarding goal/workout 来源资格与 `personal_model_evidence_refs` 安全绑定，并证明来源更正/删除只追加 withdrawn 资格与后续模型修订、不改写当时快照。Weekly Cognitive Review、API 与客户端仍拆到后续轮次。
+下一轮把 onboarding goal/workout 的 owner、稳定聚合和精确来源 revision 与 `personal_model_evidence_refs` 安全绑定，并定义来源更正/删除如何形成 withdrawn 资格与后续模型修订、不改写当时快照。迁移检查点之前不存在的 goal revision 必须失败关闭。Weekly Cognitive Review、API 与客户端仍拆到后续轮次。
 
 后续待真实数据或用户研究决定：材料变化阈值、长期 Pattern 的最低非重叠窗口、Hypothesis 的高置信上限、周回顾卡片数量理解度，以及 Contextual Decision 的安全升级阈值。缺少证据时保持保守默认，不臆造产品基准。
 
-本设计的领域取舍记录在 [ADR-0175](decisions/0175-evidence-backed-revisable-personal-model.md)，P1a 核心契约记录在 [ADR-0176](decisions/0176-personal-model-core-contract.md)，P1b 修订、反馈转换与回顾契约记录在 [ADR-0177](decisions/0177-personal-model-revision-and-weekly-review-contract.md)，P2a item/revision 持久内核记录在 [ADR-0178](decisions/0178-personal-model-item-revision-persistence-core.md)，P2b 反馈事件与应用事务记录在 [ADR-0179](decisions/0179-personal-model-feedback-event-transaction.md)，P2c 证据投影内核记录在 [ADR-0180](decisions/0180-personal-model-evidence-projection-core.md)；实施状态以[项目状态](../PROJECT_STATUS.md)和[已实现产品需求文档](../product/IMPLEMENTED_PRD.md)为准。
+本设计的领域取舍记录在 [ADR-0175](decisions/0175-evidence-backed-revisable-personal-model.md)，P1a 核心契约记录在 [ADR-0176](decisions/0176-personal-model-core-contract.md)，P1b 修订、反馈转换与回顾契约记录在 [ADR-0177](decisions/0177-personal-model-revision-and-weekly-review-contract.md)，P2a item/revision 持久内核记录在 [ADR-0178](decisions/0178-personal-model-item-revision-persistence-core.md)，P2b 反馈事件与应用事务记录在 [ADR-0179](decisions/0179-personal-model-feedback-event-transaction.md)，P2c 证据投影内核记录在 [ADR-0180](decisions/0180-personal-model-evidence-projection-core.md)，onboarding goal 不可变来源历史记录在 [ADR-0181](decisions/0181-onboarding-goal-revision-history.md)；实施状态以[项目状态](../PROJECT_STATUS.md)和[已实现产品需求文档](../product/IMPLEMENTED_PRD.md)为准。

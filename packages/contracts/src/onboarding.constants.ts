@@ -28,6 +28,10 @@ export const riskFlags = [
   'eating_disorder_history',
 ] as const
 
+export const onboardingGoalSnapshotVersion = 'onboarding-goal-snapshot-v1' as const
+export const onboardingGoalRevisionActions = ['created', 'updated', 'migration_checkpoint'] as const
+export const onboardingGoalHistoryCoverageStates = ['complete', 'checkpoint_only'] as const
+
 export const consentVersions = {
   terms: '2026-07-18',
   privacy: '2026-07-18',

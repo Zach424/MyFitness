@@ -1,13 +1,13 @@
 # Identity and onboarding model
 
-Status: verified WeChat and complete H5 OIDC browser/API adapters, erased-identity suppression and profile/goal register read authority are implemented locally; real credentials, hosted callback, device/browser and shared-provider proof remain gated
+Status: verified WeChat and complete H5 OIDC browser/API adapters, erased-identity suppression, profile/goal register read authority and append-only goal revision history are implemented locally; real credentials, hosted callback, device/browser and shared-provider proof remain gated
 
 ## Ownership chain
 
 ```text
 provider subject → auth_identity → user ← auth_session token hash
                                     ├─ user_profile (revisioned)
-                                    ├─ user_goal
+                                    ├─ user_goal → user_goal_revision
                                     ├─ consent_event (append-only)
                                     └─ health_record
 ```
@@ -16,21 +16,24 @@ Clients never provide a user ID to protected resource routes. A guard hashes the
 
 ## Tables and invariants
 
-| Table                        | Purpose                               | Important invariants                                                                        |
-| ---------------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `users`                      | Stable product identity               | UUID primary key; lifecycle timestamps                                                      |
-| `auth_identities`            | Replaceable provider subject mapping  | Unique provider + subject; cascades with user                                               |
-| `auth_sessions`              | Revocable opaque session lookup       | Unique token hash; explicit provider; expiry required; last-used timestamp                  |
-| `auth_identity_suppressions` | Deleted-identity recreation guard     | Provider + HMAC subject reference only; no raw provider subject or user ID                  |
-| `user_profiles`              | Adult baseline and safety eligibility | Adult confirmation required; canonical height 100–250 cm; revision starts at 1              |
-| `user_goals`                 | Current planning constraints          | Enumerated goal/experience; 1–7 unique weekdays; 15–180 minutes; non-empty equipment        |
-| `consent_events`             | Purpose/version lifecycle receipts    | Append acceptance rows; withdrawal timestamps the active interval; renewed grant adds a row |
+| Table                        | Purpose                               | Important invariants                                                                           |
+| ---------------------------- | ------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `users`                      | Stable product identity               | UUID primary key; lifecycle timestamps                                                         |
+| `auth_identities`            | Replaceable provider subject mapping  | Unique provider + subject; cascades with user                                                  |
+| `auth_sessions`              | Revocable opaque session lookup       | Unique token hash; explicit provider; expiry required; last-used timestamp                     |
+| `auth_identity_suppressions` | Deleted-identity recreation guard     | Provider + HMAC subject reference only; no raw provider subject or user ID                     |
+| `user_profiles`              | Adult baseline and safety eligibility | Adult confirmation required; canonical height 100–250 cm; revision starts at 1                 |
+| `user_goals`                 | Current planning constraints          | Stable goal ID; revision equals profile revision; exact one-step updates; direct delete denied |
+| `user_goal_revisions`        | Append-only goal source history       | Exact snapshot; predecessor chain; complete/checkpoint-only coverage; account cascade only     |
+| `consent_events`             | Purpose/version lifecycle receipts    | Append acceptance rows; withdrawal timestamps the active interval; renewed grant adds a row    |
 
 Risk flags are a bounded enum. No flags produces `eligible`; one or more produces `professional_clearance_required`. This status controls future plan generation, not the ability to own or export records, and must not be presented as a diagnosis.
 
 ## Update behavior
 
-Profile and goal changes run in one database transaction. The service locks the current profile and compares `expectedRevision`; a stale client receives a conflict rather than overwriting newer data. Height is converted to canonical centimeters while its chosen display value/unit are retained. Consent writes use append-only events, so a profile revision cannot rewrite when or which policy version was accepted.
+Profile and goal changes run in one database transaction. The service locks the current profile and compares `expectedRevision`; a stale client receives a conflict rather than overwriting newer data. Each accepted write advances the shared profile/goal revision by exactly one and appends an `onboarding-goal-snapshot-v1` row under a stable goal ID. New aggregates have complete history. Existing aggregates first observed by migration 0040 at revision greater than one are explicitly marked `checkpoint_only`; missing overwritten values are never fabricated. Deferred two-sided guards require the current goal and the new immutable row to match at commit. Height is converted to canonical centimeters while its chosen display value/unit are retained. Consent writes use append-only events, so a profile revision cannot rewrite when or which policy version was accepted.
+
+The public onboarding response remains a current register and does not expose internal history. The owner's synchronous portable export includes ordered goal revision snapshots, while account erasure cascades both current and history rows. Direct history mutation and direct current-goal deletion fail closed.
 
 The current versions are `2026-07-18` for terms, privacy and health-data processing. A client must send the exact active versions. Required service purposes remain active until account erasure. Optional AI-plan and food-photo purposes can be withdrawn; a later explicit request adds a new acceptance row rather than clearing the prior revocation. The privacy center exports every interval and erases consent receipts with the account.
 

@@ -1,6 +1,6 @@
 # 架构基线
 
-状态：已实现至第 186 轮 Personal Model P2c 不可变证据投影首片；来源权威/撤回、回顾、API、派生与客户端闭环仍未实现；架构变更必须新增 ADR。
+状态：已实现至第 187 轮 onboarding goal 不可变来源历史；goal/workout 来源资格与撤回、回顾、Personal Model API、派生与客户端闭环仍未实现；架构变更必须新增 ADR。
 
 ## 系统形态
 
@@ -155,7 +155,7 @@ ADR-0004 记录健康记录替换、只追加快照、软删除与乐观并发�
 
 确定性周计划规则、证据来源凭据、有界修订生命周期与限制记录在 [PLAN_MODEL.md](PLAN_MODEL.md)。ADR-0008 说明结构化规则路径为何先于模型编排；ADR-0047 将历史续页绑定到精确的所有者计划修订；ADR-0097 要求主观恢复估计先通过个人基线、覆盖、方向一致性和置信度门槛，才可改变计划边界；ADR-0098 把状态证据、采用调整和后续确认记录连成修订绑定的非因果回看；ADR-0099 使历史采用修订按所有者与精确版本实时重算，并把撤销证据与 Unknown 分开；ADR-0103 以非持久化证据账本并列本人确认、确认记录、系统观察和估计/Unknown，同时保持既有权威与失效边界；ADR-0104 只把账本卡片映射到既有计划、记录和历史权威表面，并保持导航、刷新和证据新鲜彼此独立。
 
-长期个人认知镜子的领域边界记录在 [PERSONAL_MODEL.md](PERSONAL_MODEL.md)。ADR-0175 决定把它建模为记录之上的可追溯、可校准、可修订派生层；ADR-0176/0177 固定 P1 claim、证据、反馈、完整修订与结构化回顾契约；ADR-0178/0179 固定 P2a/P2b item/revision/feedback 持久边界；ADR-0180 固定 P2c 首个证据投影内核，并明确在 onboarding goal 不可变历史出现前不得伪造来源外键。下一步补齐 goal source revision，再绑定 goal/workout 资格与撤回传播，不创建大而全 Agent、公开 API 或自动适应路径。
+长期个人认知镜子的领域边界记录在 [PERSONAL_MODEL.md](PERSONAL_MODEL.md)。ADR-0175 决定把它建模为记录之上的可追溯、可校准、可修订派生层；ADR-0176/0177 固定 P1 claim、证据、反馈、完整修订与结构化回顾契约；ADR-0178/0179 固定 P2a/P2b item/revision/feedback 持久边界；ADR-0180 固定 P2c 首个证据投影内核。ADR-0181 进一步为 onboarding goal 建立稳定聚合 ID、与资料一致的 revision、不可变完整快照、迁移覆盖标识和便携导出，旧账号只记录真实检查点，不伪造被覆盖的历史。下一步绑定 goal/workout 精确来源资格与撤回传播，不创建大而全 Agent、公开 API 或自动适应路径。
 
 仅审阅 AI 边界、最小化、提供方契约、校验与回退记录在 [AI_EXPLANATION_MODEL.md](AI_EXPLANATION_MODEL.md)。ADR-0009 说明解释为何不能变更计划或已确认记录。
 

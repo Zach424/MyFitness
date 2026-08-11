@@ -48,6 +48,7 @@ erDiagram
   users ||--o{ privacy_export_archives : restricts_until_disposed
   users ||--o| user_profiles : has
   users ||--o| user_goals : has
+  user_goals ||--o{ user_goal_revisions : revises
   users ||--o{ consent_events : grants
   users ||--o{ health_records : records
   health_records ||--o{ health_record_revisions : revises
@@ -81,9 +82,9 @@ erDiagram
 
 | 领域     | 表                                                                                                                           |        本地活动行 |
 | -------- | ---------------------------------------------------------------------------------------------------------------------------- | ----------------: |
-| 迁移     | `schema_migrations`                                                                                                          |                38 |
+| 迁移     | `schema_migrations`                                                                                                          |                40 |
 | 用户身份 | `users` / `auth_identities` / `auth_sessions` / `auth_identity_suppressions`                                                 |  60 / 60 / 60 / 0 |
-| 资料授权 | `user_profiles` / `user_goals` / `consent_events`                                                                            |        3 / 3 / 15 |
+| 资料授权 | `user_profiles` / `user_goals` / `user_goal_revisions` / `consent_events`                                                    |    3 / 3 / 3 / 15 |
 | 健康     | `health_records` / `health_record_revisions`                                                                                 |             0 / 0 |
 | 训练     | `workout_sessions` / `workout_exercises` / `workout_sets` / `workout_revisions`                                              |     2 / 2 / 6 / 2 |
 | 动作目录 | `user_exercise_catalog_entries` / `user_exercise_catalog_revisions`                                                          |             0 / 0 |
@@ -148,9 +149,15 @@ erDiagram
 
 ### 5.6 `user_goals`
 
-一用户一行：`user_id` 主键/FK；`primary_goal,experience,available_days[],session_minutes,equipment[],dietary_preferences[],created_at,updated_at`。资料与目标在建档写事务中共同维护，profile revision 作为整体建档版本。
+一用户一行：`user_id` 主键/FK，稳定 `goal_id` 唯一；`primary_goal,experience,available_days[],session_minutes,equipment[],dietary_preferences[],revision,created_at,updated_at`。资料与目标在建档写事务中共同维护，目标 revision 通过延迟复合外键与 profile revision 保持相同。更新只能把 revision 精确增加一，不能改变 owner、goal ID 或创建时刻；直接物理删除被拒绝，账户级 owner 级联仍可清理。
 
-### 5.7 `consent_events`
+### 5.7 `user_goal_revisions`
+
+每次成功建档写入都在同一事务追加一行：`user_id,goal_id,revision,previous_revision,action,history_coverage`、全部目标字段、严格 `snapshot jsonb` 与 `changed_at`。`onboarding-goal-snapshot-v1` 同时保存 owner、稳定聚合、revision、动作、覆盖范围、完整目标和变化时刻，并由共享 Zod Schema 与数据库快照相等约束共同保护。
+
+新账号从 revision 1 写 `created + complete`，后续只能用精确前驱写 `updated` 并继承覆盖范围。迁移前 revision 已大于 1 的旧账号无法恢复被覆盖内容，只回填一条 `migration_checkpoint + checkpoint_only`；以后历史从该真实检查点继续，不把缺失版本伪装成已保存。双侧延迟触发器要求事务结束时当前行与新历史精确相等，阻止只改当前、只写未来历史或漏写快照。历史 UPDATE/直接 DELETE 均失败，账户删除级联已实测。
+
+### 5.8 `consent_events`
 
 `id,user_id,purpose,version,accepted_at,revoked_at`。每次同意独立插入，不覆盖旧回执；撤回只填写该事件 revoked_at。索引覆盖 `(user_id,accepted_at desc,id desc)` 和 `(user_id,purpose,accepted_at desc)`，支持总历史和某用途最新状态。
 
@@ -418,7 +425,7 @@ repository 在插入 revision 后使用一次 JSON 数组展开，按原顺序�
 
 ### 16.1 `schema_migrations`
 
-`name text` 主键、`checksum char`、`applied_at timestamptz`。当前 39 行，名称从 `0001` 连续至 `0039_personal_model_evidence_projection_core.sql`。checksum 用于检测已应用迁移文件被改写。
+`name text` 主键、`checksum char`、`applied_at timestamptz`。当前 40 行，名称从 `0001` 连续至 `0040_onboarding_goal_revision_history.sql`。checksum 用于检测已应用迁移文件被改写。
 
 ### 16.2 当前迁移演进主题
 
@@ -432,6 +439,7 @@ repository 在插入 revision 后使用一次 JSON 数组展开，按原顺序�
 | 0025–0030 | 洞察/回看数据、本人计划体验与归档保管/安全整数边界                 |
 | 0031–0036 | 便携归档健康、训练、目录、餐食与计划关联全历史索引                 |
 | 0037–0039 | Personal Model item/revision、feedback 与 evidence projection 内核 |
+| 0040      | onboarding goal 稳定聚合、不可变修订与诚实迁移检查点               |
 
 迁移只能前向追加；不得在共享历史中重写已应用 SQL。生产发布前应先在备份副本演练、核对 checksum、外键和索引，再滚动应用。
 
@@ -440,6 +448,7 @@ repository 在插入 revision 后使用一次 JSON 数组展开，按原顺序�
 | 父实体                              | 子实体                                                   | 主要策略                                         |
 | ----------------------------------- | -------------------------------------------------------- | ------------------------------------------------ |
 | `users`                             | 资料、目标、会话、身份、授权、业务聚合、照片、AI         | 账户级删除时级联清理                             |
+| `user_goals`                        | `user_goal_revisions`                                    | 当前行直接删除拒绝；仅账户删除级联清理完整历史   |
 | `users`                             | Personal Model item、revision、feedback 与 evidence 历史 | 账户级删除时级联；日常直接物理删除由触发器拒绝   |
 | `users`                             | `privacy_export_archives`                                | RESTRICT；先处置私有对象并删除保管行             |
 | 当前聚合                            | 子项与 revision                                          | 聚合物理删除时级联；普通用户删除只先软删         |
@@ -456,7 +465,7 @@ repository 在插入 revision 后使用一次 JSON 数组展开，按原顺序�
 
 ### 18.2 历史
 
-所有 revision 表有 `(aggregate_id,revision)` 唯一约束，并有 `(user_id,aggregate_id,revision desc)` 读取索引，防止跨用户历史查询。Personal Model revision 使用 `(user_id,item_id,revision desc)`；feedback 使用 `(user_id,item_id,created_at desc,id desc)`；evidence projection 使用 owner/item/revision/ordinal 与 owner/evidence kind/aggregate revision 两条索引，分别支持还原有序证据和后续来源影响查询。当前来源索引不等于来源外键或撤回传播已经实现。
+所有 revision 表有 `(aggregate_id,revision)` 唯一约束，并有 `(user_id,aggregate_id,revision desc)` 读取索引，防止跨用户历史查询。Goal history 使用 `(user_id,goal_id,revision desc)` 并以独立 `history_coverage` 区分完整链与迁移检查点。Personal Model revision 使用 `(user_id,item_id,revision desc)`；feedback 使用 `(user_id,item_id,created_at desc,id desc)`；evidence projection 使用 owner/item/revision/ordinal 与 owner/evidence kind/aggregate revision 两条索引，分别支持还原有序证据和后续来源影响查询。当前 evidence 来源索引尚未绑定 goal/workout 来源外键或撤回传播。
 
 ### 18.3 幂等
 
@@ -477,6 +486,8 @@ repository 在插入 revision 后使用一次 JSON 数组展开，按原顺序�
 创建 → 当前 revision 1 + revision 快照 → 更正增加 revision → 用户删除写 deleted_at 与 deleted 修订 → 当前列表/洞察排除 → 账户级删除时当前与历史物理清除。
 
 Personal Model item 创建时在同一事务写入 revision 1、全部有序 evidence projection 并发布当前指针；后续普通更新与反馈 revised 都只追加完整快照和对应证据行，再把指针精确推进一位。反馈 no-op 只追加结果收据，不复制 revision 或证据。当前阶段不支持普通物理删除，只有账户级 owner 级联可清理 item、revision、feedback 与 evidence；来源传播和便携导出生命周期留待后续迁移。
+
+建档目标创建时写稳定聚合和完整 revision 1；以后每次资料/目标共同 revision 都追加一条目标快照，即使目标字段未改变也保存本次本人重新提交的精确来源版本。旧账号在 0040 只获得当前检查点，覆盖范围继续随新修订继承。同步便携导出的当前 goal 对象内含有序 `revision_history`；普通读取仍只返回当前建档，账户删除清除当前与全部历史。
 
 ### 19.2 临时餐食照片
 
@@ -530,12 +541,12 @@ intent 创建 → 验证一次性 token 与确认短语 → users 状态关闭 �
 ## 21. 当前限制与后续设计风险
 
 - 当前为模块化单体单库，尚未基于真实压力拆分服务；不应提前按微服务复制健康数据。
-- revision 表除管理员审计外没有通用数据库触发器阻止 UPDATE/DELETE，主要依赖应用权限和仓储约定；生产最小权限与备份审计仍需持续验证。
+- goal、Personal Model 与管理员审计历史已有数据库不可变触发器；其余 revision 表仍主要依赖应用只追加策略、唯一 revision、生产最小权限与备份审计。
 - JSONB 快照便于保真，但大规模历史会增加存储与导出成本；需要真实规模数据后再决定分区、归档或压缩。
 - 当前本地数据操作表有 179 个 job/attempt，来自测试和演示；应通过状态分布、失败码和死信而不是总行数判断健康。
 - 归档表与状态机已存在，但请求仓储、执行任务、加密对象、下载授权和到期扫描尚未实现；表结构不能被描述为用户可用的异步导出。
 - 没有设备原生同步表、社交表、支付表或医疗病历表；这些不属于当前实现。
-- `personal_model_items`、`personal_model_item_revisions`、`personal_model_feedback_events` 与 `personal_model_evidence_refs` 已建立 owner 复合键、不可变历史、原子当前指针、反馈结果和证据投影绑定，但仍只是内部 P2a–P2c 持久内核。证据来源权威/撤回、Weekly Cognitive Review、列表、便携导出和公开 API 尚未完成；在这些语义通过验证前，不得把四张表描述为用户可用的“认知镜子”，也不得建立任意 JSON“用户画像”旁路。
+- `personal_model_items`、`personal_model_item_revisions`、`personal_model_feedback_events` 与 `personal_model_evidence_refs` 已建立 owner 复合键、不可变历史、原子当前指针、反馈结果和证据投影绑定；`user_goal_revisions` 也已提供稳定、可导出的 onboarding goal 来源历史。但 evidence 尚未用复合外键绑定 goal/workout 精确来源，来源撤回、Weekly Cognitive Review、Personal Model 列表/导出和公开 API 也未完成；在这些语义通过验证前，不得把内核描述为用户可用的“认知镜子”，也不得建立任意 JSON“用户画像”旁路。
 - 备份物理删除时限属于生产保留政策和演练证据，不能只由主数据库 receipt 状态推断。
 
 ## 22. 运行核对查询

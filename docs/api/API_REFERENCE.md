@@ -161,6 +161,8 @@
 | `GET /v1/me/onboarding`        | 用户 Bearer  | 无                                                                         | 读取当前资料、目标、授权、资格和 revision                   | 401、404 未建档         |
 | `PUT /v1/me/onboarding`        | 用户 Bearer  | body OnboardingWrite                                                       | 建立或更正资料；200 当前建档                                | 400、401、409           |
 
+公开建档响应保持当前资料/目标视图，不暴露内部聚合 ID 或历史。每次成功 PUT 会在同一事务中保存稳定 `goal_id`、共同建档 revision 和一条严格 `onboarding-goal-snapshot-v1`；新账号历史为 `complete`，迁移前已经覆盖过早期版本的账号为 `checkpoint_only`。历史目前只通过本人便携导出交付，不新增独立读取路径。
+
 ## 5. 健康记录接口
 
 | 方法与路径                                  | 参数                                                 | 功能与成功响应     | 失败               |
@@ -298,16 +300,16 @@
 
 ## 13. 隐私接口
 
-| 方法与路径                                      | 鉴权与参数                                         | 功能与成功响应                                       | 失败                   |
-| ----------------------------------------------- | -------------------------------------------------- | ---------------------------------------------------- | ---------------------- |
-| `GET /v1/me/privacy`                            | 用户 Bearer                                        | 200 数据库存、授权、导出和删除能力概览               | 401                    |
-| `GET /v1/me/privacy/consents/history`           | Bearer; `limit(1..20),cursor?`                     | 200 授权回执历史                                     | 400、401               |
-| `POST /v1/me/privacy/consents/{purpose}/revoke` | Bearer; path 可撤回 purpose; `{confirmed:true}`    | 200 revoked 状态及清理数量                           | 400、401、404/409、422 |
-| `GET /v1/me/privacy/export`                     | 用户 Bearer                                        | 200 附件 JSON，Schema v4，包含历史与净化照片导出证据 | 401、413/500           |
-| `POST /v1/me/privacy/account-deletion-intents`  | 用户 Bearer                                        | 201 15 分钟 intentId、intentToken、expiresAt         | 401、409               |
-| `DELETE /v1/me/privacy/account`                 | Bearer + 删除意图凭据; body AccountDeletionRequest | 202/200 返回带 statusToken 的删除回执并关闭会话      | 400、401、409、422     |
-| `GET /v1/privacy/erasure-receipts/{receiptId}`  | receipt UUID + `X-Erasure-Receipt-Token`           | 200 最小删除状态                                     | 401、404               |
-| `POST /v1/privacy/erasure-receipts/recover`     | `X-Erasure-Receipt-Token`                          | 200 在响应丢失后恢复对应最小回执                     | 401、404               |
+| 方法与路径                                      | 鉴权与参数                                         | 功能与成功响应                                                   | 失败                   |
+| ----------------------------------------------- | -------------------------------------------------- | ---------------------------------------------------------------- | ---------------------- |
+| `GET /v1/me/privacy`                            | 用户 Bearer                                        | 200 数据库存、授权、导出和删除能力概览                           | 401                    |
+| `GET /v1/me/privacy/consents/history`           | Bearer; `limit(1..20),cursor?`                     | 200 授权回执历史                                                 | 400、401               |
+| `POST /v1/me/privacy/consents/{purpose}/revoke` | Bearer; path 可撤回 purpose; `{confirmed:true}`    | 200 revoked 状态及清理数量                                       | 400、401、404/409、422 |
+| `GET /v1/me/privacy/export`                     | 用户 Bearer                                        | 200 附件 JSON，Schema v4；`goal.revision_history` 含有序目标历史 | 401、413/500           |
+| `POST /v1/me/privacy/account-deletion-intents`  | 用户 Bearer                                        | 201 15 分钟 intentId、intentToken、expiresAt                     | 401、409               |
+| `DELETE /v1/me/privacy/account`                 | Bearer + 删除意图凭据; body AccountDeletionRequest | 202/200 返回带 statusToken 的删除回执并关闭会话                  | 400、401、409、422     |
+| `GET /v1/privacy/erasure-receipts/{receiptId}`  | receipt UUID + `X-Erasure-Receipt-Token`           | 200 最小删除状态                                                 | 401、404               |
+| `POST /v1/privacy/erasure-receipts/recover`     | `X-Erasure-Receipt-Token`                          | 200 在响应丢失后恢复对应最小回执                                 | 401、404               |
 
 ## 14. 管理员接口
 
@@ -411,7 +413,7 @@ Content-Type: application/json
 - 响应对象为严格 Schema；客户端应拒绝错误类型和不满足跨字段不变量的响应。
 - revision、source、timezone、occurredAt 和历史快照是健康数据可追责性的组成部分，不得在未来兼容层中静默丢弃。
 - OpenAPI 当前以内联 Schema 为主，没有复用 components；生成 SDK 前应以契约测试验证 nullable、联合类型和自定义跨字段约束。
-- 当前 OpenAPI 不包含 `/v1/mirror`、`/v1/personal-model` 或 Weekly Cognitive Review 路由。P1a/P1b 的 item、EvidenceReference、Unknown、feedback event、完整 revision、反馈转换和 review current/history 信封是内部共享契约；P2a–P2c 已新增只供内部后续服务组合的 item/revision/feedback/evidence projection PostgreSQL 仓储，支持反馈重放并要求每个修订原子投影完整证据数组，但没有控制器、模块装配或 HTTP 授权语义。证据投影也尚未绑定 onboarding goal/workout 来源资格与撤回状态。请求/响应分页、认证错误隐藏、客户端幂等键、读取侧对账与错误映射仍未定义；[个人认知模型](../architecture/PERSONAL_MODEL.md) 中的路径继续是候选设计，不能被客户端、文档或部署材料描述为已实现接口。
+- 当前 OpenAPI 不包含 `/v1/mirror`、`/v1/personal-model` 或 Weekly Cognitive Review 路由。P1a/P1b 的 item、EvidenceReference、Unknown、feedback event、完整 revision、反馈转换和 review current/history 信封是内部共享契约；P2a–P2c 已新增只供内部后续服务组合的 item/revision/feedback/evidence projection PostgreSQL 仓储，支持反馈重放并要求每个修订原子投影完整证据数组。第 187 轮另补齐 onboarding goal 的稳定聚合 ID、不可变修订和诚实覆盖范围，但尚未把 goal/workout 精确来源资格与撤回状态绑定到 evidence projection。Personal Model 仍没有控制器、模块装配或 HTTP 授权语义，请求/响应分页、认证错误隐藏、客户端幂等键、读取侧对账与错误映射也未定义；[个人认知模型](../architecture/PERSONAL_MODEL.md) 中的路径继续是候选设计，不能被客户端、文档或部署材料描述为已实现接口。
 
 ## 19. 参考
 

@@ -107,8 +107,8 @@ export class PrivacyService {
       `
         SELECT 'profile' AS category,
                ((SELECT COUNT(*) FROM user_profiles WHERE user_id = $1)
-                + (SELECT COUNT(*) FROM user_goals WHERE user_id = $1))::text AS record_count,
-               FALSE AS includes_history,
+                 + (SELECT COUNT(*) FROM user_goals WHERE user_id = $1))::text AS record_count,
+               TRUE AS includes_history,
                GREATEST(
                  (SELECT MAX(updated_at) FROM user_profiles WHERE user_id = $1),
                  (SELECT MAX(updated_at) FROM user_goals WHERE user_id = $1)
@@ -309,10 +309,19 @@ export class PrivacyService {
       const goalRows = await jsonRows(
         client,
         `SELECT to_jsonb(goal) AS payload FROM (
-           SELECT primary_goal, experience, available_days, session_minutes, equipment,
-                  dietary_preferences, created_at, updated_at
-           FROM user_goals WHERE user_id = $1
-         ) AS goal`,
+           SELECT current_goal.goal_id, current_goal.revision, current_goal.primary_goal,
+                  current_goal.experience, current_goal.available_days,
+                  current_goal.session_minutes, current_goal.equipment,
+                  current_goal.dietary_preferences, current_goal.created_at,
+                  current_goal.updated_at,
+                  COALESCE((
+                    SELECT jsonb_agg(history.snapshot ORDER BY history.revision)
+                    FROM user_goal_revisions AS history
+                    WHERE history.user_id = current_goal.user_id
+                      AND history.goal_id = current_goal.goal_id
+                  ), '[]'::jsonb) AS revision_history
+            FROM user_goals AS current_goal WHERE current_goal.user_id = $1
+          ) AS goal`,
         userId,
       )
       const consentEvents = await jsonRows(

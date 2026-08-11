@@ -6,6 +6,9 @@ import {
   dietaryPreferenceOptions,
   equipmentOptions,
   experienceLevels,
+  onboardingGoalHistoryCoverageStates,
+  onboardingGoalRevisionActions,
+  onboardingGoalSnapshotVersion,
   primaryGoals,
   riskFlags,
   sexForCalculationOptions,
@@ -31,6 +34,8 @@ export const weekdaySchema = z.enum(weekdays)
 export const equipmentSchema = z.enum(equipmentOptions)
 export const dietaryPreferenceSchema = z.enum(dietaryPreferenceOptions)
 export const riskFlagSchema = z.enum(riskFlags)
+export const onboardingGoalRevisionActionSchema = z.enum(onboardingGoalRevisionActions)
+export const onboardingGoalHistoryCoverageSchema = z.enum(onboardingGoalHistoryCoverageStates)
 
 export const devSessionRequestSchema = z
   .object({
@@ -51,6 +56,48 @@ export const devSessionSchema = z
   })
   .strict()
 
+export const onboardingGoalSchema = z
+  .object({
+    primaryGoal: primaryGoalSchema,
+    experience: experienceLevelSchema,
+    availableDays: uniqueArray(weekdaySchema, 'availableDays must not contain duplicates')
+      .min(1)
+      .max(7),
+    sessionMinutes: z.number().int().min(15).max(180),
+    equipment: uniqueArray(equipmentSchema, 'equipment must not contain duplicates').min(1),
+    dietaryPreferences: uniqueArray(
+      dietaryPreferenceSchema,
+      'dietaryPreferences must not contain duplicates',
+    ).min(1),
+  })
+  .strict()
+
+export const onboardingGoalRevisionSnapshotSchema = z
+  .object({
+    schemaVersion: z.literal(onboardingGoalSnapshotVersion),
+    goalId: z.string().uuid(),
+    ownerUserId: z.string().uuid(),
+    revision: z.number().int().positive(),
+    action: onboardingGoalRevisionActionSchema,
+    historyCoverage: onboardingGoalHistoryCoverageSchema,
+    goal: onboardingGoalSchema,
+    changedAt: z.string().datetime({ offset: true }),
+  })
+  .strict()
+  .superRefine((snapshot, ctx) => {
+    const validOrigin =
+      (snapshot.action === 'created' &&
+        snapshot.revision === 1 &&
+        snapshot.historyCoverage === 'complete') ||
+      (snapshot.action === 'migration_checkpoint' &&
+        snapshot.revision > 1 &&
+        snapshot.historyCoverage === 'checkpoint_only') ||
+      (snapshot.action === 'updated' && snapshot.revision > 1)
+    if (!validOrigin) {
+      ctx.addIssue({ code: 'custom', message: 'goal revision origin is inconsistent' })
+    }
+  })
+
 export const onboardingBaseSchema = z
   .object({
     adultConfirmed: z.literal(true),
@@ -69,21 +116,7 @@ export const onboardingBaseSchema = z
         timezone: z.string().trim().min(1).max(64),
       })
       .strict(),
-    goal: z
-      .object({
-        primaryGoal: primaryGoalSchema,
-        experience: experienceLevelSchema,
-        availableDays: uniqueArray(weekdaySchema, 'availableDays must not contain duplicates')
-          .min(1)
-          .max(7),
-        sessionMinutes: z.number().int().min(15).max(180),
-        equipment: uniqueArray(equipmentSchema, 'equipment must not contain duplicates').min(1),
-        dietaryPreferences: uniqueArray(
-          dietaryPreferenceSchema,
-          'dietaryPreferences must not contain duplicates',
-        ).min(1),
-      })
-      .strict(),
+    goal: onboardingGoalSchema,
     risk: z
       .object({
         flags: uniqueArray(riskFlagSchema, 'risk flags must not contain duplicates'),
@@ -173,5 +206,7 @@ export const onboardingResponseSchema = z
 export type RiskFlag = z.infer<typeof riskFlagSchema>
 export type OnboardingRequest = z.infer<typeof onboardingRequestSchema>
 export type OnboardingResponse = z.infer<typeof onboardingResponseSchema>
+export type OnboardingGoal = z.infer<typeof onboardingGoalSchema>
+export type OnboardingGoalRevisionSnapshot = z.infer<typeof onboardingGoalRevisionSnapshotSchema>
 export type DevSessionRequest = z.infer<typeof devSessionRequestSchema>
 export type DevSession = z.infer<typeof devSessionSchema>

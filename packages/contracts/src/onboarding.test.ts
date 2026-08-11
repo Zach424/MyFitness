@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import { consentVersions, onboardingRequestSchema } from './onboarding'
+import {
+  consentVersions,
+  onboardingGoalRevisionSnapshotSchema,
+  onboardingRequestSchema,
+} from './onboarding'
 
 export const validOnboardingRequest = {
   adultConfirmed: true,
@@ -64,6 +68,27 @@ describe('onboarding contract', () => {
           ...validOnboardingRequest.goal,
           dietaryPreferences: ['none', 'vegetarian'],
         },
+      }).success,
+    ).toBe(false)
+  })
+
+  it('keeps complete and migration-checkpoint goal history distinguishable', () => {
+    const snapshot = {
+      schemaVersion: 'onboarding-goal-snapshot-v1',
+      goalId: '22222222-2222-4222-8222-222222222222',
+      ownerUserId: '11111111-1111-4111-8111-111111111111',
+      revision: 3,
+      action: 'migration_checkpoint',
+      historyCoverage: 'checkpoint_only',
+      goal: validOnboardingRequest.goal,
+      changedAt: '2026-08-12T00:00:00.000000Z',
+    } as const
+    expect(onboardingGoalRevisionSnapshotSchema.parse(snapshot)).toEqual(snapshot)
+    expect(
+      onboardingGoalRevisionSnapshotSchema.safeParse({
+        ...snapshot,
+        action: 'created',
+        historyCoverage: 'complete',
       }).success,
     ).toBe(false)
   })

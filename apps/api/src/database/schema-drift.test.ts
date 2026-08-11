@@ -30,6 +30,9 @@ import {
   mealTypes,
   measurementPersistenceDecimalPlaces,
   nutritionSourceKinds,
+  onboardingGoalHistoryCoverageStates,
+  onboardingGoalRevisionActions,
+  onboardingGoalSnapshotVersion,
   planEngineVersion,
   planRevisionActions,
   planStatuses,
@@ -189,6 +192,10 @@ const personalModelFeedbackEventMigrationPath = path.resolve(
 const personalModelEvidenceProjectionMigrationPath = path.resolve(
   __dirname,
   '../../../../infra/postgres/migrations/0039_personal_model_evidence_projection_core.sql',
+)
+const onboardingGoalRevisionHistoryMigrationPath = path.resolve(
+  __dirname,
+  '../../../../infra/postgres/migrations/0040_onboarding_goal_revision_history.sql',
 )
 
 describe('health-record migration drift', () => {
@@ -573,6 +580,40 @@ describe('health-record migration drift', () => {
       'personal model evidence projection does not match revision snapshot',
       'personal_model_evidence_refs_immutable',
       'personal model evidence references are append-only',
+    ]) {
+      expect(migration).toContain(boundary)
+    }
+  })
+
+  it('keeps exact append-only onboarding goal revisions with honest migration coverage', async () => {
+    const migration = await readFile(onboardingGoalRevisionHistoryMigrationPath, 'utf8')
+    for (const value of [
+      ...primaryGoals,
+      ...experienceLevels,
+      ...weekdays,
+      ...equipmentOptions,
+      ...dietaryPreferenceOptions,
+      ...onboardingGoalRevisionActions,
+      ...onboardingGoalHistoryCoverageStates,
+    ]) {
+      expect(migration, `${value} is missing from the goal history migration`).toContain(
+        `'${value}'`,
+      )
+    }
+    expect(migration).toContain(`'${onboardingGoalSnapshotVersion}'`)
+    for (const boundary of [
+      'CREATE TABLE user_goal_revisions',
+      'onboarding-goal-snapshot-v1',
+      'migration_checkpoint',
+      'checkpoint_only',
+      'user_goals_profile_revision_fk',
+      'user_goal_revisions_previous_fk',
+      'user_goal_revisions_snapshot_exact_check',
+      'user_goals_current_revision_guard',
+      'user_goal_revisions_current_guard',
+      'user goal current row does not match its immutable revision',
+      'user_goal_revisions_immutable',
+      'user goal revisions are append-only',
     ]) {
       expect(migration).toContain(boundary)
     }

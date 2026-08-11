@@ -60,6 +60,7 @@ export class OnboardingService {
         [userId],
       )
       const currentRevision = current.rows[0]?.revision
+      const nextRevision = currentRevision === undefined ? 1 : currentRevision + 1
 
       if (currentRevision !== undefined) {
         if (input.expectedRevision !== currentRevision) {
@@ -131,9 +132,9 @@ export class OnboardingService {
         `
           INSERT INTO user_goals (
             user_id, primary_goal, experience, available_days,
-            session_minutes, equipment, dietary_preferences
+            session_minutes, equipment, dietary_preferences, revision
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
           ON CONFLICT (user_id) DO UPDATE SET
             primary_goal = EXCLUDED.primary_goal,
             experience = EXCLUDED.experience,
@@ -141,6 +142,7 @@ export class OnboardingService {
             session_minutes = EXCLUDED.session_minutes,
             equipment = EXCLUDED.equipment,
             dietary_preferences = EXCLUDED.dietary_preferences,
+            revision = EXCLUDED.revision,
             updated_at = NOW()
         `,
         [
@@ -151,7 +153,59 @@ export class OnboardingService {
           input.goal.sessionMinutes,
           input.goal.equipment,
           input.goal.dietaryPreferences,
+          nextRevision,
         ],
+      )
+
+      await client.query(
+        `
+          INSERT INTO user_goal_revisions (
+            user_id, goal_id, revision, previous_revision, action, history_coverage,
+            primary_goal, experience, available_days, session_minutes,
+            equipment, dietary_preferences, snapshot, changed_at
+          )
+          SELECT
+            goal.user_id,
+            goal.goal_id,
+            goal.revision,
+            $2,
+            $3,
+            CASE
+              WHEN goal.revision = 1 THEN 'complete'
+              ELSE predecessor.history_coverage
+            END,
+            goal.primary_goal,
+            goal.experience,
+            goal.available_days,
+            goal.session_minutes,
+            goal.equipment,
+            goal.dietary_preferences,
+            build_user_goal_revision_snapshot_v1(
+              goal.user_id,
+              goal.goal_id,
+              goal.revision,
+              $3,
+              CASE
+                WHEN goal.revision = 1 THEN 'complete'
+                ELSE predecessor.history_coverage
+              END,
+              goal.primary_goal,
+              goal.experience,
+              goal.available_days,
+              goal.session_minutes,
+              goal.equipment,
+              goal.dietary_preferences,
+              goal.updated_at
+            ),
+            goal.updated_at
+          FROM user_goals AS goal
+          LEFT JOIN user_goal_revisions AS predecessor
+            ON predecessor.user_id = goal.user_id
+           AND predecessor.goal_id = goal.goal_id
+           AND predecessor.revision = goal.revision - 1
+          WHERE goal.user_id = $1
+        `,
+        [userId, currentRevision ?? null, currentRevision === undefined ? 'created' : 'updated'],
       )
 
       const consents = [
