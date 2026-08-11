@@ -1,6 +1,6 @@
 # 个人认知模型
 
-状态：第 181 轮完成领域与架构设计，尚未实现持久化、API 或客户端闭环
+状态：第 182 轮完成 P1a 核心共享契约；尚未实现不可变 revision/review 信封、持久化、API 或客户端闭环
 
 ## 1. 目标与边界
 
@@ -113,7 +113,20 @@ erDiagram
   weekly_cognitive_review_revisions }o--o{ personal_model_item_revisions : summarizes
 ```
 
-这是后续迁移的候选结构，不是第 181 轮已存在的数据库事实。迁移前仍需用共享 contracts 锁定字段与状态机，再以 PostgreSQL 约束重复所有者、revision 和状态不变量。
+这是后续迁移的候选结构，不是当前数据库事实。P1a 只锁定核心 item/evidence/confidence/feedback；P1b 仍须固定 revision 与 review 信封，随后才能以 PostgreSQL 约束所有者、revision 和状态不变量。
+
+### 4.4 P1a 核心共享契约
+
+`packages/contracts/src/personal-model.ts` 已实现首批内部权威边界，但尚未被 API 或数据库使用：
+
+- 三个严格 claim 通过 `claimSchemaVersion` 同时锁定认知类型、主题和来源：本人确认的训练安排 Constraint、确定性已记录训练频率 Behavior、确定性已记录课次时长 Baseline。Behavior 不能伪装成 Goal/Constraint，当前联合也不接受 Pattern/Hypothesis 或额外因果字段。
+- EvidenceReference 目前只开放真实可复用的 `onboarding_goal_revision` 与 `workout_revision`。每条引用绑定 owner、聚合 UUID、正 revision、时间、来源、作用角色和撤回原因；EvidenceSet 复核计数、所有者、唯一性、窗口及 SHA-256 指纹表示。
+- 置信收据按 `user_confirmed` 与 `longitudinal_observation` 分支，公开覆盖周数、合格证据、不同日期、比较/稳定窗口、反对证据和限制，不接受模型自评分。
+- Unknown 使用独立 `personal-model-unknown-v1` 收据和原因枚举，不创建全零 Behavior/Baseline 条目。
+- 只有 `active` 条目通过 `personalModelDecisionInputSchema`；`candidate`、`disputed`、`superseded` 与 `invalidated` 均失败关闭。
+- 反馈事件绑定精确 `itemRevision`，固定四个选择、受限原因、300 字敏感备注和 temporary 有效期；严格对象拒绝任何 `confidenceDelta` 类客户端提权字段。
+
+P1a 还没有定义数据库不可变修订快照、Weekly Cognitive Review 信封、请求/响应分页或状态转换命令。这些属于 P1b，不能从当前导出类型推断为已实现。
 
 ## 5. 证据模型
 
@@ -242,6 +255,7 @@ stateDiagram-v2
 ### 10.2 单次训练记录时长基线
 
 - Baseline：对最近 8 个完整周、当前未删除且结束不早于开始的训练，计算 elapsed minutes 的中位数与四分位范围。
+- P1a 固定 `elapsed-duration-minutes-v1` 历时分钟语义和 `nearest-rank-quartiles-v1` 四分位算法版本；P3 推导实现仍须用原始样本夹具证明该算法与边界。
 - 至少 6 条、覆盖至少 4 个不同周才可 active；单条极端值不直接改变典型范围。
 - 名称固定为“已记录训练的历时时长基线”，不等于有效训练时长、最佳时长或建议时长。
 
@@ -301,24 +315,25 @@ R-032 继续覆盖“个人状态账本被误解为完整真相”。R-033 新�
 
 ## 14. 分阶段实施与验收
 
-| 阶段                   | 范围                                               | 退出证据                                                 |
-| ---------------------- | -------------------------------------------------- | -------------------------------------------------------- |
-| P0 领域基线            | 本文、ADR、路线图与风险重排                        | 八类边界、状态机、证据和首批场景完成受检；本轮完成       |
-| P1 共享契约            | item/revision/evidence/feedback/review 严格 Schema | 跨字段不变量、Unknown、状态转换和边界测试通过            |
-| P2 持久内核            | 前四张模型表、owner/revision/追加事件与 repository | 真实 PostgreSQL 证明隔离、并发、修订、撤销与账号删除     |
-| P3 首批派生            | 安排约束、8 周记录频率、训练时长基线               | 确定性夹具、时区完整周、最低覆盖和 no-op 指纹通过        |
-| P4 Mirror 读取         | “关于我”摘要、详情、历史、证据追溯                 | 未读/空/失败分离，移动端无障碍与隐私路径通过             |
-| P5 周回顾与反馈        | 少量回顾、四选一反馈、模型修订                     | 精确 revision、过期反馈冲突、temporary/disputed 语义通过 |
-| P6 Pattern/Hypothesis  | 睡眠-RPE 等描述性关系与不确定假设                  | 支持/反对证据、非因果措辞、跨窗口稳定门禁通过            |
-| P7 Outcome 更新        | 计划采用、实际关联、恢复与反思增加一次证据         | 单次结果不升级、撤销可见、重复窗口更新可复算             |
-| P8 Contextual Decision | 个人历史驱动的结构化建议与解释                     | 引用、Unknown、置信、替代方案、安全 validator 全部通过   |
+| 阶段                   | 范围                                                | 退出证据                                                 |
+| ---------------------- | --------------------------------------------------- | -------------------------------------------------------- |
+| P0 领域基线            | 本文、ADR、路线图与风险重排                         | 八类边界、状态机、证据和首批场景完成受检；本轮完成       |
+| P1a 核心共享契约       | item/claim/evidence/confidence/feedback 严格 Schema | 三个 claim、Unknown、决策资格和边界测试通过；已完成      |
+| P1b 修订与回顾契约     | item revision、feedback transition、review 信封     | 不可变快照、动作、精确引用、状态转换和回顾数量门禁通过   |
+| P2 持久内核            | 前四张模型表、owner/revision/追加事件与 repository  | 真实 PostgreSQL 证明隔离、并发、修订、撤销与账号删除     |
+| P3 首批派生            | 安排约束、8 周记录频率、训练时长基线                | 确定性夹具、时区完整周、最低覆盖和 no-op 指纹通过        |
+| P4 Mirror 读取         | “关于我”摘要、详情、历史、证据追溯                  | 未读/空/失败分离，移动端无障碍与隐私路径通过             |
+| P5 周回顾与反馈        | 少量回顾、四选一反馈、模型修订                      | 精确 revision、过期反馈冲突、temporary/disputed 语义通过 |
+| P6 Pattern/Hypothesis  | 睡眠-RPE 等描述性关系与不确定假设                   | 支持/反对证据、非因果措辞、跨窗口稳定门禁通过            |
+| P7 Outcome 更新        | 计划采用、实际关联、恢复与反思增加一次证据          | 单次结果不升级、撤销可见、重复窗口更新可复算             |
+| P8 Contextual Decision | 个人历史驱动的结构化建议与解释                      | 引用、Unknown、置信、替代方案、安全 validator 全部通过   |
 
 每个阶段可拆成多轮小迭代。云服务、真实模型、设备接入、部署和极端导出优化不占用认知主线，除非它们阻塞数据安全、隐私或当前阶段验收。
 
 ## 15. 待决策与下一步
 
-下一轮只实现 P1 的最小共享契约，不建表、不开放 API：先锁定 `PersonalModelItem` 公共头、首批三个 claim 联合、EvidenceReference、置信收据、状态与 feedback event。验收必须证明 Goal/Constraint 不会被 Behavior 覆盖，Pattern/Hypothesis 不能声明因果，disputed/candidate 不能成为决策输入，Unknown 不被编码为零。
+下一轮只实现 P1b 修订与回顾契约，不建表、不开放 API：锁定不可变 `PersonalModelItemRevision` 快照与 action、反馈后的状态转换结果、Weekly Cognitive Review 当前/历史信封、精确 `itemId + itemRevision` 引用和卡片数量门禁。验收必须证明修订不能引用未来/其他 owner 条目，反馈针对过期 revision 时失败关闭，相同指纹可表达 no-op，回顾不能携带未选中的自由事实。
 
-后续待真实数据或用户研究决定：最低周数与材料变化阈值、四分位算法、反馈原因集、是否允许自由说明、Hypothesis 的高置信上限、周回顾卡片数量理解度，以及 Contextual Decision 的安全升级阈值。缺少证据时保持保守默认，不臆造产品基准。
+后续待真实数据或用户研究决定：材料变化阈值、长期 Pattern 的最低非重叠窗口、Hypothesis 的高置信上限、周回顾卡片数量理解度，以及 Contextual Decision 的安全升级阈值。缺少证据时保持保守默认，不臆造产品基准。
 
-本设计的取舍与被拒绝方案记录在 [ADR-0175](decisions/0175-evidence-backed-revisable-personal-model.md)；实施状态以[项目状态](../PROJECT_STATUS.md)和[已实现产品需求文档](../product/IMPLEMENTED_PRD.md)为准。
+本设计的领域取舍记录在 [ADR-0175](decisions/0175-evidence-backed-revisable-personal-model.md)，P1a 共享契约取舍记录在 [ADR-0176](decisions/0176-personal-model-core-contract.md)；实施状态以[项目状态](../PROJECT_STATUS.md)和[已实现产品需求文档](../product/IMPLEMENTED_PRD.md)为准。
