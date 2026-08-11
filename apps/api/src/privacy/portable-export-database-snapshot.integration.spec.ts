@@ -64,6 +64,35 @@ describe('portable export bounded PostgreSQL snapshot', () => {
     return id
   }
 
+  const createRevision = async (
+    userId: string,
+    recordId: string,
+    changedAt: string,
+    revision = 1,
+    sourceMetadata: Record<string, string> = {},
+  ) => {
+    const id = randomUUID()
+    const result = await pool.query(
+      `INSERT INTO health_record_revisions (
+         id, record_id, user_id, action, revision, metric,
+         canonical_value, canonical_unit, display_value, display_unit,
+         source_kind, source_metadata, confidence, status,
+         occurred_at, timezone, created_at, updated_at, changed_at
+       )
+       SELECT $1, record.id, record.user_id, 'created', $2, record.metric,
+              record.canonical_value, record.canonical_unit,
+              record.display_value, record.display_unit,
+              record.source_kind, $3::jsonb, record.confidence, record.status,
+              record.occurred_at, record.timezone, record.created_at, record.updated_at,
+              $4::timestamptz
+       FROM health_records AS record
+       WHERE record.id = $5 AND record.user_id = $6`,
+      [id, revision, JSON.stringify(sourceMetadata), changedAt, recordId, userId],
+    )
+    if (result.rowCount !== 1) throw new Error('revision fixture record was not found')
+    return id
+  }
+
   beforeAll(async () => {
     await runMigrations(config.databaseUrl)
   })
@@ -116,6 +145,135 @@ describe('portable export bounded PostgreSQL snapshot', () => {
       maximumPayloadBytes: portableExportSnapshotMaximumPayloadBytes,
       batchCount: 3,
       rowCount: 5,
+    })
+  })
+
+  it('streams one owner revision history across microsecond pages into byte-compatible v4 JSON', async () => {
+    const userId = await createUser()
+    const otherUserId = await createUser()
+    const changedAt = [
+      '2026-08-11T01:30:00.000001Z',
+      '2026-08-11T01:30:00.000002Z',
+      '2026-08-11T01:30:00.000003Z',
+      '2026-08-11T01:30:00.000003Z',
+      '2026-08-11T01:30:00.000005Z',
+    ]
+    const originalRevisions: Array<{ changedAt: string; id: string; revision: number }> = []
+    for (let index = 0; index < changedAt.length; index += 1) {
+      const recordId = await createRecord(userId, changedAt[index]!, 80 + index)
+      const revision = index < 4 ? 1 : 2
+      originalRevisions.push({
+        changedAt: changedAt[index]!,
+        id: await createRevision(userId, recordId, changedAt[index]!, revision),
+        revision,
+      })
+    }
+    const expectedOriginalIds = [...originalRevisions]
+      .sort(
+        (left, right) =>
+          left.changedAt.localeCompare(right.changedAt) ||
+          left.revision - right.revision ||
+          left.id.localeCompare(right.id),
+      )
+      .map((revision) => revision.id)
+    const otherRecordId = await createRecord(otherUserId, changedAt[2]!, 999)
+    await createRevision(otherUserId, otherRecordId, changedAt[2]!)
+    const index = await pool.query<{ indexdef: string }>(
+      `SELECT indexdef FROM pg_indexes
+       WHERE schemaname = 'public' AND indexname = 'health_record_revisions_user_export_idx'`,
+    )
+    expect(index.rows[0]?.indexdef).toContain('(user_id, changed_at, revision, id)')
+
+    const stable = snapshots.createHealthRecordRevisionSnapshot(userId, { batchRows: 2 })
+    const iterator = stable.rows[Symbol.asyncIterator]()
+    const first = await iterator.next()
+    expect(first).toMatchObject({ done: false, value: { id: expectedOriginalIds[0] } })
+
+    const concurrentRecordId = await createRecord(userId, '2026-08-11T01:30:00.0000035Z', 88)
+    const concurrentRevisionId = await createRevision(
+      userId,
+      concurrentRecordId,
+      '2026-08-11T01:30:00.0000035Z',
+    )
+    const stableRows = [first.value!]
+    while (true) {
+      const next = await iterator.next()
+      if (next.done) break
+      stableRows.push(next.value)
+    }
+
+    expect(stableRows.map((row) => row.id)).toEqual(expectedOriginalIds)
+    expect(stableRows.some((row) => row.id === concurrentRevisionId)).toBe(false)
+    await expect(stable.receipt).resolves.toEqual({
+      batchRows: 2,
+      maximumPayloadBytes: portableExportSnapshotMaximumPayloadBytes,
+      batchCount: 3,
+      rowCount: 5,
+    })
+
+    const eagerSnapshot = snapshots.createHealthRecordRevisionSnapshot(userId, { batchRows: 2 })
+    const eagerRows: Array<Record<string, unknown>> = []
+    for await (const row of eagerSnapshot.rows) eagerRows.push(row)
+    await expect(eagerSnapshot.receipt).resolves.toEqual({
+      batchRows: 2,
+      maximumPayloadBytes: portableExportSnapshotMaximumPayloadBytes,
+      batchCount: 3,
+      rowCount: 6,
+    })
+    const eagerPayload = privacyExportSchema.parse({
+      schemaVersion: privacyExportSchemaVersion,
+      generatedAt: '2026-08-11T01:45:00.000Z',
+      accountId: userId,
+      data: {
+        account: { id: userId, status: 'active' },
+        identities: [],
+        profile: null,
+        goal: null,
+        consentEvents: [],
+        healthRecords: [],
+        healthRecordRevisions: eagerRows,
+        exerciseCatalog: [],
+        foodCatalog: [],
+        workouts: [],
+        nutritionMeals: [],
+        nutritionFavorites: [],
+        weeklyPlans: [],
+        aiExplanationRuns: [],
+        foodPhotoAnalyses: [],
+        progressPhotos: [],
+      },
+    })
+    const expected = serializePortableExport(eagerPayload, Number.MAX_SAFE_INTEGER)
+
+    const lazySnapshot = snapshots.createHealthRecordRevisionSnapshot(userId, { batchRows: 2 })
+    const json = createPortableExportJsonStream(
+      {
+        ...eagerPayload,
+        data: {
+          ...eagerPayload.data,
+          healthRecordRevisions: portableExportJsonAsyncArray(lazySnapshot.rows),
+        },
+      },
+      { chunkBytes: 41 },
+    )
+    const chunks: Buffer[] = []
+    for await (const chunk of json.bytes) {
+      expect(chunk.length).toBeLessThanOrEqual(41)
+      chunks.push(Buffer.from(chunk))
+    }
+
+    expect(Buffer.concat(chunks)).toEqual(expected)
+    await expect(lazySnapshot.receipt).resolves.toEqual({
+      batchRows: 2,
+      maximumPayloadBytes: portableExportSnapshotMaximumPayloadBytes,
+      batchCount: 3,
+      rowCount: 6,
+    })
+    await expect(json.receipt).resolves.toEqual({
+      schemaVersion: privacyExportSchemaVersion,
+      chunkBytes: 41,
+      byteLength: expected.length,
+      sha256: createHash('sha256').update(expected).digest('hex'),
     })
   })
 
@@ -210,6 +368,86 @@ describe('portable export bounded PostgreSQL snapshot', () => {
         data: {
           ...base.data,
           healthRecords: portableExportJsonAsyncArray(snapshot.rows),
+        },
+      },
+      { chunkBytes: 64 },
+    )
+    const jsonReceiptFailure = json.receipt.catch((error: unknown) => error)
+    const chunks: Buffer[] = []
+    let streamFailure: unknown
+
+    try {
+      for await (const chunk of json.bytes) chunks.push(Buffer.from(chunk))
+    } catch (error) {
+      streamFailure = error
+    }
+
+    expect(streamFailure).toBeInstanceOf(PortableExportSnapshotPayloadTooLargeError)
+    expect(streamFailure).toMatchObject({
+      code: 'portable_export_snapshot_payload_too_large',
+      maximumBytes: 512,
+      actualBytes: expectedPayloadBytes,
+    })
+    expect(Buffer.concat(chunks).toString('utf8')).not.toContain(secretMarker)
+    expect(await snapshotReceiptFailure).toBe(streamFailure)
+    expect(await jsonReceiptFailure).toBe(streamFailure)
+  })
+
+  it('reuses the database payload gate for oversized health record revisions', async () => {
+    const userId = await createUser()
+    const secretMarker = `revision-must-not-cross-${randomUUID()}`
+    const recordId = await createRecord(userId, '2026-08-11T02:50:00.000001Z', 70)
+    const revisionId = await createRevision(userId, recordId, '2026-08-11T02:55:00.000001Z', 1, {
+      provider: `${secretMarker}-${'y'.repeat(2048)}`,
+    })
+    const measured = await pool.query<{ payload_byte_length: number }>(
+      `SELECT octet_length(to_jsonb(history)::text) AS payload_byte_length
+       FROM (
+         SELECT id, record_id, action, revision, metric, canonical_value, canonical_unit,
+                display_value, display_unit, source_kind, source_metadata, confidence,
+                status, occurred_at, timezone, created_at, updated_at, changed_at
+         FROM health_record_revisions
+         WHERE id = $1
+       ) AS history`,
+      [revisionId],
+    )
+    const expectedPayloadBytes = measured.rows[0]!.payload_byte_length
+    expect(expectedPayloadBytes).toBeGreaterThan(512)
+
+    const snapshot = snapshots.createHealthRecordRevisionSnapshot(userId, {
+      batchRows: 1,
+      maximumPayloadBytes: 512,
+    })
+    const snapshotReceiptFailure = snapshot.receipt.catch((error: unknown) => error)
+    const base = privacyExportSchema.parse({
+      schemaVersion: privacyExportSchemaVersion,
+      generatedAt: '2026-08-11T02:59:00.000Z',
+      accountId: userId,
+      data: {
+        account: { id: userId },
+        identities: [],
+        profile: null,
+        goal: null,
+        consentEvents: [],
+        healthRecords: [],
+        healthRecordRevisions: [],
+        exerciseCatalog: [],
+        foodCatalog: [],
+        workouts: [],
+        nutritionMeals: [],
+        nutritionFavorites: [],
+        weeklyPlans: [],
+        aiExplanationRuns: [],
+        foodPhotoAnalyses: [],
+        progressPhotos: [],
+      },
+    })
+    const json = createPortableExportJsonStream(
+      {
+        ...base,
+        data: {
+          ...base.data,
+          healthRecordRevisions: portableExportJsonAsyncArray(snapshot.rows),
         },
       },
       { chunkBytes: 64 },

@@ -63,6 +63,27 @@ describe('portable export database snapshot session', () => {
     })
   })
 
+  it('applies the shared bounded receipt to health record revisions', async () => {
+    const service = new PortableExportDatabaseSnapshotService(
+      fakeDatabase([{ id: 'revision-1' }, { id: 'revision-2' }, { id: 'revision-3' }]),
+    )
+    const session = service.createHealthRecordRevisionSnapshot(
+      '11111111-1111-4111-8111-111111111111',
+      { batchRows: 2 },
+    )
+    const rows: Array<Record<string, unknown>> = []
+
+    for await (const row of session.rows) rows.push(row)
+
+    expect(rows.map((row) => row.id)).toEqual(['revision-1', 'revision-2', 'revision-3'])
+    await expect(session.receipt).resolves.toEqual({
+      batchRows: 2,
+      maximumPayloadBytes: portableExportSnapshotMaximumPayloadBytes,
+      batchCount: 2,
+      rowCount: 3,
+    })
+  })
+
   it('rejects invalid batch and payload limits before opening a database stream', () => {
     const service = new PortableExportDatabaseSnapshotService(fakeDatabase([]))
 
