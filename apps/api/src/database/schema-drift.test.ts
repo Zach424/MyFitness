@@ -140,6 +140,10 @@ const portableExportArchiveMigrationPath = path.resolve(
   __dirname,
   '../../../../infra/postgres/migrations/0029_portable_export_archive_custody.sql',
 )
+const portableExportArchiveSafeSizeMigrationPath = path.resolve(
+  __dirname,
+  '../../../../infra/postgres/migrations/0030_portable_export_archive_safe_size.sql',
+)
 
 describe('health-record migration drift', () => {
   it('contains every contract metric, unit and source kind', async () => {
@@ -334,7 +338,10 @@ describe('health-record migration drift', () => {
   })
 
   it('locks portable export archive custody states and monotonic transitions', async () => {
-    const migration = await readFile(portableExportArchiveMigrationPath, 'utf8')
+    const migration = `${await readFile(portableExportArchiveMigrationPath, 'utf8')}\n${await readFile(
+      portableExportArchiveSafeSizeMigrationPath,
+      'utf8',
+    )}`
     for (const value of [
       'privacy_export_archives',
       'myfitness-portable-export-v4',
@@ -350,6 +357,7 @@ describe('health-record migration drift', () => {
       'account_erasure',
       'ON DELETE RESTRICT',
       'privacy_export_archives_transition_guard',
+      'artifact_byte_size <= 9007199254740991',
     ]) {
       expect(migration).toContain(value)
     }

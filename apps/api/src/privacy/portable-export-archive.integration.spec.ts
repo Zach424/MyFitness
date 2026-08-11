@@ -1,16 +1,21 @@
 import { randomUUID } from 'node:crypto'
 
+import type { INestApplication } from '@nestjs/common'
 import { privacyExportSchemaVersion } from '@myfitness/contracts'
 import { Pool } from 'pg'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { getRuntimeConfig } from '../config'
+import { createApplication } from '../bootstrap'
 import { runMigrations } from '../database/migrate'
+import { PortableExportArchiveService } from './portable-export-archive.service'
 
 describe('portable export archive PostgreSQL custody boundary', () => {
   const config = getRuntimeConfig()
   const pool = new Pool({ connectionString: config.databaseUrl })
   const users = new Set<string>()
+  let app: INestApplication
+  let archives: PortableExportArchiveService
 
   const createUser = async () => {
     const userId = randomUUID()
@@ -49,6 +54,9 @@ describe('portable export archive PostgreSQL custody boundary', () => {
 
   beforeAll(async () => {
     await runMigrations(config.databaseUrl)
+    app = await createApplication(false, 'metadata')
+    await app.init()
+    archives = app.get(PortableExportArchiveService)
   })
 
   afterAll(async () => {
@@ -56,6 +64,7 @@ describe('portable export archive PostgreSQL custody boundary', () => {
       await pool.query('DELETE FROM privacy_export_archives WHERE user_id = $1', [userId])
       await pool.query('DELETE FROM users WHERE id = $1', [userId])
     }
+    await app.close()
     await pool.end()
   })
 
@@ -143,6 +152,24 @@ describe('portable export archive PostgreSQL custody boundary', () => {
         [expired.archiveId, 'd'.repeat(64)],
       ),
     ).rejects.toMatchObject({ code: '23514' })
+
+    const oversized = await insertQueued(userId)
+    await pool.query(
+      `UPDATE privacy_export_archives
+       SET status = 'generating', encryption_key_ref = 'kms/local/export-v1', updated_at = NOW()
+       WHERE id = $1`,
+      [oversized.archiveId],
+    )
+    await expect(
+      pool.query(
+        `UPDATE privacy_export_archives
+         SET status = 'available', artifact_sha256 = $2,
+             artifact_byte_size = 9007199254740992, available_at = NOW(),
+             download_expires_at = NOW() + INTERVAL '24 hours', updated_at = NOW()
+         WHERE id = $1`,
+        [oversized.archiveId, 'd'.repeat(64)],
+      ),
+    ).rejects.toMatchObject({ code: '23514' })
   })
 
   it('prevents owner erasure until artifact disposition reaches its terminal state', async () => {
@@ -170,5 +197,90 @@ describe('portable export archive PostgreSQL custody boundary', () => {
       rowCount: 1,
     })
     users.delete(userId)
+  })
+
+  it('reserves one owner-scoped intent under concurrency and never revives its terminal state', async () => {
+    const ownerId = await createUser()
+    const otherOwnerId = await createUser()
+    const idempotencyKey = randomUUID()
+    const requestHash = 'e'.repeat(64)
+
+    const concurrent = await Promise.all(
+      Array.from({ length: 8 }, () => archives.reserve(ownerId, { idempotencyKey, requestHash })),
+    )
+    expect(new Set(concurrent.map((receipt) => receipt.archiveId))).toHaveLength(1)
+    expect(concurrent.every((receipt) => receipt.status === 'queued')).toBe(true)
+    expect(
+      concurrent.every((receipt) => JSON.stringify(receipt) === JSON.stringify(concurrent[0])),
+    ).toBe(true)
+
+    const receipt = concurrent[0]!
+    const persisted = await pool.query<{
+      count: string
+      object_key: string
+      generation_expires_at: Date
+      created_at: Date
+    }>(
+      `SELECT COUNT(*) OVER ()::text AS count, object_key, generation_expires_at, created_at
+       FROM privacy_export_archives
+       WHERE user_id = $1 AND idempotency_key = $2`,
+      [ownerId, idempotencyKey],
+    )
+    expect(persisted.rows[0]).toMatchObject({
+      count: '1',
+      object_key: `${ownerId}/${receipt.archiveId}.json.enc`,
+    })
+    expect(
+      persisted.rows[0]!.generation_expires_at.getTime() - persisted.rows[0]!.created_at.getTime(),
+    ).toBe(60 * 60 * 1000)
+
+    await expect(
+      archives.reserve(ownerId, { idempotencyKey, requestHash: 'f'.repeat(64) }),
+    ).rejects.toMatchObject({ status: 409 })
+    await expect(archives.findOwned(otherOwnerId, receipt.archiveId)).rejects.toMatchObject({
+      status: 404,
+    })
+    await expect(archives.findOwned(ownerId, receipt.archiveId)).resolves.toEqual(receipt)
+
+    await pool.query("UPDATE users SET status = 'deletion_pending' WHERE id = $1", [otherOwnerId])
+    await expect(
+      archives.reserve(otherOwnerId, { idempotencyKey: randomUUID(), requestHash }),
+    ).rejects.toMatchObject({ status: 404 })
+
+    await pool.query(
+      `UPDATE privacy_export_archives
+       SET status = 'failed', object_key = NULL, failure_code = 'unexpected_error',
+           updated_at = NOW()
+       WHERE id = $1`,
+      [receipt.archiveId],
+    )
+    const terminalReplay = await archives.reserve(ownerId, { idempotencyKey, requestHash })
+    expect(terminalReplay).toMatchObject({
+      archiveId: receipt.archiveId,
+      status: 'failed',
+      failureCode: 'unexpected_error',
+    })
+    expect(terminalReplay.updatedAt).not.toBe(receipt.updatedAt)
+
+    const disposedKey = randomUUID()
+    const disposable = await archives.reserve(ownerId, {
+      idempotencyKey: disposedKey,
+      requestHash,
+    })
+    await pool.query(
+      `UPDATE privacy_export_archives
+       SET status = 'deletion_pending', disposition_reason = 'retention_expired', updated_at = NOW()
+       WHERE id = $1`,
+      [disposable.archiveId],
+    )
+    await pool.query(
+      `UPDATE privacy_export_archives
+       SET status = 'disposed', object_key = NULL, disposed_at = NOW(), updated_at = NOW()
+       WHERE id = $1`,
+      [disposable.archiveId],
+    )
+    await expect(
+      archives.reserve(ownerId, { idempotencyKey: disposedKey, requestHash }),
+    ).resolves.toMatchObject({ archiveId: disposable.archiveId, status: 'disposed' })
   })
 })

@@ -96,6 +96,16 @@ describe('portable export archive custody contract', () => {
         downloadExpiresAt: '2026-08-12T10:00:00.000Z',
         artifact: { byteSize: 1024, sha256: 'a'.repeat(64) },
       },
+      {
+        ...baseReceipt,
+        status: 'available',
+        availableAt: '2026-08-11T08:03:00.000Z',
+        downloadExpiresAt: '2026-08-12T08:03:00.000Z',
+        artifact: { byteSize: Number.MAX_SAFE_INTEGER + 1, sha256: 'a'.repeat(64) },
+        failureCode: null,
+        dispositionReason: null,
+        disposedAt: null,
+      },
     ]) {
       expect(portableExportArchiveReceiptSchema.safeParse(invalid).success).toBe(false)
     }

@@ -8,7 +8,7 @@
 
 ## 1. 文档范围与实测基线
 
-本文根据 `infra/postgres/migrations`、服务端仓储 SQL 和正在运行的本地 PostgreSQL `information_schema` 交叉整理。基线实例已应用 `0001` 至 `0029` 共 29 个迁移，当前有 40 张基础表/业务表、2 个业务触发器和 2 个触发函数。
+本文根据 `infra/postgres/migrations`、服务端仓储 SQL 和正在运行的本地 PostgreSQL `information_schema` 交叉整理。基线实例已应用 `0001` 至 `0030` 共 30 个迁移，当前有 40 张基础表/业务表、2 个业务触发器和 2 个触发函数。
 
 本地实例中的行数只反映自动化与演示运行产生的临时数据，不是生产容量指标，也不能用于推断真实用户行为。结构、约束和关系才是本文的长期设计事实。
 
@@ -79,7 +79,7 @@ erDiagram
 
 | 领域     | 表                                                                                                          |        本地活动行 |
 | -------- | ----------------------------------------------------------------------------------------------------------- | ----------------: |
-| 迁移     | `schema_migrations`                                                                                         |                28 |
+| 迁移     | `schema_migrations`                                                                                         |                30 |
 | 用户身份 | `users` / `auth_identities` / `auth_sessions` / `auth_identity_suppressions`                                |  60 / 60 / 60 / 0 |
 | 资料授权 | `user_profiles` / `user_goals` / `consent_events`                                                           |        3 / 3 / 15 |
 | 健康     | `health_records` / `health_record_revisions`                                                                |             0 / 0 |
@@ -367,18 +367,18 @@ kind 覆盖对象删除、提供方处置、备份日志等持久副作用。`de
 
 ### 16.1 `schema_migrations`
 
-`name text` 主键、`checksum char`、`applied_at timestamptz`。当前 29 行，名称从 `0001` 连续至 `0029_portable_export_archive_custody.sql`。checksum 用于检测已应用迁移文件被改写。
+`name text` 主键、`checksum char`、`applied_at timestamptz`。当前 30 行，名称从 `0001` 连续至 `0030_portable_export_archive_safe_size.sql`。checksum 用于检测已应用迁移文件被改写。
 
 ### 16.2 当前迁移演进主题
 
-| 范围      | 主要结构                                  |
-| --------- | ----------------------------------------- |
-| 0001–0004 | 用户、身份、资料、授权、健康记录与修订    |
-| 0005–0009 | 训练、餐食、周计划及各自历史              |
-| 0010–0014 | AI 运行、照片、隐私删除、持久数据操作     |
-| 0015–0019 | 身份抑制、照片保留/删除证据、目录定义     |
-| 0020–0024 | 管理员支持与审计、OIDC、计划证据与关联    |
-| 0025–0029 | 洞察/回看数据、本人计划体验与归档保管边界 |
+| 范围      | 主要结构                                           |
+| --------- | -------------------------------------------------- |
+| 0001–0004 | 用户、身份、资料、授权、健康记录与修订             |
+| 0005–0009 | 训练、餐食、周计划及各自历史                       |
+| 0010–0014 | AI 运行、照片、隐私删除、持久数据操作              |
+| 0015–0019 | 身份抑制、照片保留/删除证据、目录定义              |
+| 0020–0024 | 管理员支持与审计、OIDC、计划证据与关联             |
+| 0025–0030 | 洞察/回看数据、本人计划体验与归档保管/安全整数边界 |
 
 迁移只能前向追加；不得在共享历史中重写已应用 SQL。生产发布前应先在备份副本演练、核对 checksum、外键和索引，再滚动应用。
 
@@ -436,7 +436,7 @@ intent 创建 → 验证一次性 token 与确认短语 → users 状态关闭 �
 
 ### 19.5 便携归档保管
 
-`privacy_export_archives` 保存 owner、幂等 UUID、请求哈希、v4 格式、状态、确定性 `.json.enc` 键、非秘密密钥引用、SHA-256/大小、生成/下载期限和受控失败/处置。主路径为 queued → generating → available → deletion_pending → disposed；queued/generating 可进入 failed 或 deletion_pending。数据库触发器阻止跳级、回滚、同状态替换证据和时间倒退。available 必须同时具备对象键、密钥引用、摘要、正字节数及晚于 available_at 的 download_expires_at；disposed 清除对象键/密钥引用但可保留聚合摘要收据。当前尚无创建这些行的公开服务或执行器。
+`privacy_export_archives` 保存 owner、幂等 UUID、请求哈希、v4 格式、状态、确定性 `.json.enc` 键、非秘密密钥引用、SHA-256/大小、生成/下载期限和受控失败/处置。主路径为 queued → generating → available → deletion_pending → disposed；queued/generating 可进入 failed 或 deletion_pending。数据库触发器阻止跳级、回滚、同状态替换证据和时间倒退。available 必须同时具备对象键、密钥引用、摘要、正且不超过 `Number.MAX_SAFE_INTEGER` 的字节数及晚于 available_at 的 download_expires_at；disposed 清除对象键/密钥引用但可保留聚合摘要收据。内部预约服务在事务中锁定 active owner，以 `INSERT ... ON CONFLICT DO NOTHING` 收敛并发；相同请求指纹只读取现有状态，不同请求指纹冲突，读取同时限定 active owner 与 archive UUID。对象键和一小时生成期限均由服务端产生。当前没有公开路由、执行器或真实对象写入。
 
 ## 20. 安全与隐私控制
 
