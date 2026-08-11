@@ -8,7 +8,11 @@ import { getRuntimeConfig } from '../config'
 import { DatabaseService } from '../database/database.service'
 import { runMigrations } from '../database/migrate'
 import { serializePortableExport } from './portable-export-artifact'
-import { PortableExportDatabaseSnapshotService } from './portable-export-database-snapshot'
+import {
+  PortableExportDatabaseSnapshotService,
+  PortableExportSnapshotPayloadTooLargeError,
+  portableExportSnapshotMaximumPayloadBytes,
+} from './portable-export-database-snapshot'
 import {
   createPortableExportJsonStream,
   portableExportJsonAsyncArray,
@@ -33,6 +37,7 @@ describe('portable export bounded PostgreSQL snapshot', () => {
     occurredAt: string,
     value: number,
     createdAt = occurredAt,
+    sourceMetadata: Record<string, string> = {},
   ) => {
     const id = randomUUID()
     await pool.query(
@@ -42,11 +47,19 @@ describe('portable export bounded PostgreSQL snapshot', () => {
          confidence, status, occurred_at, timezone, idempotency_key, request_hash,
          created_at, updated_at
        ) VALUES (
-         $1, $2, 'body.weight', $3, 'kg', $3, 'kg', 'manual', '{}'::jsonb,
+         $1, $2, 'body.weight', $3, 'kg', $3, 'kg', 'manual', $7::jsonb,
          NULL, 'confirmed', $4::timestamptz, 'Asia/Shanghai', $5, repeat('a', 64),
          $6::timestamptz, $6::timestamptz
        )`,
-      [id, userId, value, occurredAt, `snapshot-${randomUUID()}`, createdAt],
+      [
+        id,
+        userId,
+        value,
+        occurredAt,
+        `snapshot-${randomUUID()}`,
+        createdAt,
+        JSON.stringify(sourceMetadata),
+      ],
     )
     return id
   }
@@ -98,7 +111,12 @@ describe('portable export bounded PostgreSQL snapshot', () => {
     expect(rows.map((row) => row.id)).toEqual(originalIds)
     expect(rows[3]?.canonical_value).toBe(73)
     expect(rows.some((row) => row.id === concurrentId)).toBe(false)
-    await expect(session.receipt).resolves.toEqual({ batchRows: 2, batchCount: 3, rowCount: 5 })
+    await expect(session.receipt).resolves.toEqual({
+      batchRows: 2,
+      maximumPayloadBytes: portableExportSnapshotMaximumPayloadBytes,
+      batchCount: 3,
+      rowCount: 5,
+    })
   })
 
   it('fails closed for an inactive owner and for cancellation between rows', async () => {
@@ -134,6 +152,89 @@ describe('portable export bounded PostgreSQL snapshot', () => {
     await cancelledReceipt
   })
 
+  it('withholds an oversized row in PostgreSQL and propagates one root error through JSON', async () => {
+    const userId = await createUser()
+    const secretMarker = `must-not-cross-the-database-boundary-${randomUUID()}`
+    const recordId = await createRecord(
+      userId,
+      '2026-08-11T02:30:00.000001Z',
+      70,
+      '2026-08-11T02:30:00.000001Z',
+      { provider: `${secretMarker}-${'x'.repeat(2048)}` },
+    )
+    const measured = await pool.query<{ payload_byte_length: number }>(
+      `SELECT octet_length(to_jsonb(record)::text) AS payload_byte_length
+       FROM (
+         SELECT id, metric, canonical_value, canonical_unit, display_value, display_unit,
+                source_kind, source_metadata, confidence, status, occurred_at, timezone,
+                revision, deleted_at, created_at, updated_at
+         FROM health_records
+         WHERE id = $1
+       ) AS record`,
+      [recordId],
+    )
+    const expectedPayloadBytes = measured.rows[0]!.payload_byte_length
+    expect(expectedPayloadBytes).toBeGreaterThan(512)
+
+    const snapshot = snapshots.createHealthRecordSnapshot(userId, {
+      batchRows: 1,
+      maximumPayloadBytes: 512,
+    })
+    const snapshotReceiptFailure = snapshot.receipt.catch((error: unknown) => error)
+    const base = privacyExportSchema.parse({
+      schemaVersion: privacyExportSchemaVersion,
+      generatedAt: '2026-08-11T02:45:00.000Z',
+      accountId: userId,
+      data: {
+        account: { id: userId },
+        identities: [],
+        profile: null,
+        goal: null,
+        consentEvents: [],
+        healthRecords: [],
+        healthRecordRevisions: [],
+        exerciseCatalog: [],
+        foodCatalog: [],
+        workouts: [],
+        nutritionMeals: [],
+        nutritionFavorites: [],
+        weeklyPlans: [],
+        aiExplanationRuns: [],
+        foodPhotoAnalyses: [],
+        progressPhotos: [],
+      },
+    })
+    const json = createPortableExportJsonStream(
+      {
+        ...base,
+        data: {
+          ...base.data,
+          healthRecords: portableExportJsonAsyncArray(snapshot.rows),
+        },
+      },
+      { chunkBytes: 64 },
+    )
+    const jsonReceiptFailure = json.receipt.catch((error: unknown) => error)
+    const chunks: Buffer[] = []
+    let streamFailure: unknown
+
+    try {
+      for await (const chunk of json.bytes) chunks.push(Buffer.from(chunk))
+    } catch (error) {
+      streamFailure = error
+    }
+
+    expect(streamFailure).toBeInstanceOf(PortableExportSnapshotPayloadTooLargeError)
+    expect(streamFailure).toMatchObject({
+      code: 'portable_export_snapshot_payload_too_large',
+      maximumBytes: 512,
+      actualBytes: expectedPayloadBytes,
+    })
+    expect(Buffer.concat(chunks).toString('utf8')).not.toContain(secretMarker)
+    expect(await snapshotReceiptFailure).toBe(streamFailure)
+    expect(await jsonReceiptFailure).toBe(streamFailure)
+  })
+
   it('feeds the owner snapshot into a byte-compatible complete v4 JSON tree without an array copy', async () => {
     const userId = await createUser()
     await createRecord(userId, '2026-08-11T03:00:00.000001Z', 70)
@@ -145,6 +246,7 @@ describe('portable export bounded PostgreSQL snapshot', () => {
     for await (const row of eagerSnapshot.rows) eagerRows.push(row)
     await expect(eagerSnapshot.receipt).resolves.toEqual({
       batchRows: 2,
+      maximumPayloadBytes: portableExportSnapshotMaximumPayloadBytes,
       batchCount: 2,
       rowCount: 3,
     })
@@ -193,6 +295,7 @@ describe('portable export bounded PostgreSQL snapshot', () => {
     expect(Buffer.concat(chunks)).toEqual(expected)
     await expect(lazySnapshot.receipt).resolves.toEqual({
       batchRows: 2,
+      maximumPayloadBytes: portableExportSnapshotMaximumPayloadBytes,
       batchCount: 2,
       rowCount: 3,
     })
