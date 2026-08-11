@@ -121,6 +121,30 @@ export type PortableExportWorkoutRevisionSnapshotShapeReceipt = {
   decomposable: boolean
 }
 
+export type PortableExportWorkoutRevisionSnapshotExercise = Record<string, unknown> & {
+  sets: AsyncIterable<Record<string, unknown>>
+}
+
+export type PortableExportWorkoutRevisionSnapshotValue = Record<string, unknown> & {
+  exercises: AsyncIterable<PortableExportWorkoutRevisionSnapshotExercise>
+}
+
+export type PortableExportWorkoutRevisionSnapshotReceipt = {
+  batchRows: number
+  maximumPayloadBytes: number
+  shape: PortableExportWorkoutRevisionSnapshotShapeReceipt
+  snapshotRoots: PortableExportHealthHistorySnapshotCollectionReceipt
+  snapshotExercises: PortableExportHealthHistorySnapshotCollectionReceipt
+  snapshotSets: PortableExportHealthHistorySnapshotCollectionReceipt
+}
+
+export type PortableExportWorkoutRevisionSnapshotSession = {
+  snapshots: AsyncIterable<PortableExportWorkoutRevisionSnapshotValue>
+  receipt: Promise<PortableExportWorkoutRevisionSnapshotReceipt>
+  complete: () => Promise<void>
+  cancel: (error: unknown) => Promise<void>
+}
+
 export type PortableExportHealthHistorySnapshotCollectionReceipt = {
   batchCount: number
   rowCount: number
@@ -204,6 +228,15 @@ export class PortableExportSnapshotPayloadTooLargeError extends RangeError {
   ) {
     super(`portable export snapshot payload exceeds ${maximumBytes} bytes`)
     this.name = 'PortableExportSnapshotPayloadTooLargeError'
+  }
+}
+
+export class PortableExportWorkoutRevisionSnapshotNotDecomposableError extends Error {
+  readonly code = 'portable_export_workout_revision_snapshot_not_decomposable'
+
+  constructor() {
+    super('portable export workout revision snapshot is not decomposable')
+    this.name = 'PortableExportWorkoutRevisionSnapshotNotDecomposableError'
   }
 }
 
@@ -748,9 +781,14 @@ export const portableExportWorkoutRevisionSnapshotShapeQuery = `WITH target AS M
            AND history.id = $3
        ), exercise_rows AS MATERIALIZED (
          SELECT target.id AS revision_id,
-                exercise.value AS exercise_json,
-                exercise.ordinality::integer AS exercise_ordinality,
-                CASE
+                 exercise.value AS exercise_json,
+                 exercise.ordinality::integer AS exercise_ordinality,
+                 CASE
+                   WHEN exercise.value->>'id' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+                     THEN exercise.value->>'id'
+                   ELSE NULL
+                 END AS exercise_id,
+                 CASE
                   WHEN exercise.value->>'position' ~ '^[1-9][0-9]*$'
                     THEN (exercise.value->>'position')::integer
                   ELSE NULL
@@ -772,9 +810,14 @@ export const portableExportWorkoutRevisionSnapshotShapeQuery = `WITH target AS M
        ), set_rows AS MATERIALIZED (
          SELECT exercise_order.revision_id,
                 exercise_order.exercise_ordinality,
-                set_row.value AS set_json,
-                set_row.ordinality::integer AS set_ordinality,
-                CASE
+                 set_row.value AS set_json,
+                 set_row.ordinality::integer AS set_ordinality,
+                 CASE
+                   WHEN set_row.value->>'id' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+                     THEN set_row.value->>'id'
+                   ELSE NULL
+                 END AS set_id,
+                 CASE
                   WHEN set_row.value->>'position' ~ '^[1-9][0-9]*$'
                     THEN (set_row.value->>'position')::integer
                   ELSE NULL
@@ -809,7 +852,11 @@ export const portableExportWorkoutRevisionSnapshotShapeQuery = `WITH target AS M
                       ?| ARRAY['trackingMode', 'equipment', 'equipmentNotes']::text[]
                 )::integer AS extended_exercise_count,
                 COALESCE(
-                  max(octet_length((exercise_order.exercise_json - 'sets')::text)),
+                  max(
+                    octet_length(
+                      jsonb_set(exercise_order.exercise_json, '{sets}', '[]'::jsonb)::text
+                    )
+                  ),
                   0
                 )::integer AS maximum_exercise_header_bytes,
                 COALESCE(
@@ -843,7 +890,8 @@ export const portableExportWorkoutRevisionSnapshotShapeQuery = `WITH target AS M
                         ]::text[]
                       )
                     )
-                    AND jsonb_typeof(exercise_order.exercise_json->'sets') = 'array'
+                     AND jsonb_typeof(exercise_order.exercise_json->'sets') = 'array'
+                     AND exercise_order.exercise_id IS NOT NULL
                     AND jsonb_array_length(
                       CASE
                         WHEN jsonb_typeof(exercise_order.exercise_json->'sets') = 'array'
@@ -855,8 +903,10 @@ export const portableExportWorkoutRevisionSnapshotShapeQuery = `WITH target AS M
                   ),
                   false
                 )
-                AND count(exercise_order.exercise_json) BETWEEN 1 AND 30
-                AND count(DISTINCT exercise_order.exercise_position)
+                 AND count(exercise_order.exercise_json) BETWEEN 1 AND 30
+                 AND count(DISTINCT exercise_order.exercise_id)
+                   = count(exercise_order.exercise_json)
+                 AND count(DISTINCT exercise_order.exercise_position)
                   = count(exercise_order.exercise_json) AS exercises_decomposable
          FROM target
          LEFT JOIN exercise_order ON exercise_order.revision_id = target.id
@@ -884,11 +934,13 @@ export const portableExportWorkoutRevisionSnapshotShapeQuery = `WITH target AS M
                           'canonicalLoadKg', 'durationSeconds', 'distanceMeters', 'rpe', 'completed'
                         ]::text[]
                       )
-                    )
+                     )
+                    AND set_id IS NOT NULL
                     AND set_position BETWEEN 1 AND 100
                   ),
                   false
                 )
+                AND count(DISTINCT set_id) = count(set_json)
                 AND count(DISTINCT set_position) = count(set_json) AS sets_decomposable,
                 COALESCE(
                   bool_and(
@@ -920,7 +972,9 @@ export const portableExportWorkoutRevisionSnapshotShapeQuery = `WITH target AS M
                   THEN 'extended'
                 ELSE 'mixed'
               END AS compatibility,
-              octet_length((target.snapshot - 'exercises')::text)::integer AS root_header_bytes,
+              octet_length(
+                jsonb_set(target.snapshot, '{exercises}', '[]'::jsonb)::text
+              )::integer AS root_header_bytes,
               exercise_stats.exercise_count,
               set_stats.set_count,
               exercise_stats.legacy_exercise_count,
@@ -957,7 +1011,9 @@ export const portableExportWorkoutRevisionSnapshotShapeQuery = `WITH target AS M
                 AND jsonb_typeof(target.snapshot->'exercises') = 'array'
                 AND exercise_stats.exercises_decomposable
                 AND set_stats.sets_decomposable
-                AND octet_length((target.snapshot - 'exercises')::text) <= $4
+                AND octet_length(
+                  jsonb_set(target.snapshot, '{exercises}', '[]'::jsonb)::text
+                ) <= $4
                 AND exercise_stats.maximum_exercise_header_bytes <= $4
                 AND set_stats.maximum_set_bytes <= $4
               ) AS decomposable
@@ -982,6 +1038,204 @@ const mapWorkoutRevisionSnapshotShape = (
   setStorageOrderMatchesPosition: row.set_storage_order_matches_position,
   decomposable: row.decomposable,
 })
+
+const readWorkoutRevisionSnapshotShape = async (
+  client: PoolClient,
+  userId: string,
+  workoutId: string,
+  revisionId: string,
+  maximumPayloadBytes: number,
+) => {
+  const result = await client.query<WorkoutRevisionSnapshotShapeRow>(
+    portableExportWorkoutRevisionSnapshotShapeQuery,
+    [userId, workoutId, revisionId, maximumPayloadBytes],
+  )
+  const row = result.rows[0]
+  if (!row) throw new NotFoundException('workout revision snapshot not found')
+  return mapWorkoutRevisionSnapshotShape(row)
+}
+
+export const portableExportWorkoutRevisionSnapshotRootQuery = `WITH target AS MATERIALIZED (
+         SELECT history.workout_id, history.snapshot
+         FROM workout_revisions AS history
+         INNER JOIN workout_sessions AS workout ON workout.id = history.workout_id
+         WHERE workout.user_id = $1
+           AND history.user_id = $1
+           AND history.workout_id = $2
+           AND history.id = $3
+       ), encoded AS MATERIALIZED (
+         SELECT workout_id AS id,
+                jsonb_set(snapshot, '{exercises}', '[]'::jsonb)::text AS payload_text
+         FROM target
+       )
+       SELECT id,
+              CASE WHEN octet_length(payload_text) <= $4 THEN payload_text ELSE NULL END
+                AS payload_text,
+              octet_length(payload_text) AS payload_byte_length
+       FROM encoded`
+
+const workoutRevisionSnapshotRootRows = async function* (
+  client: PoolClient,
+  userId: string,
+  workoutId: string,
+  revisionId: string,
+  maximumPayloadBytes: number,
+  stats: MutableSnapshotStats,
+  signal?: AbortSignal,
+): AsyncGenerator<Record<string, unknown>> {
+  throwIfAborted(signal)
+  const result = await client.query<BoundedSnapshotRow>(
+    portableExportWorkoutRevisionSnapshotRootQuery,
+    [userId, workoutId, revisionId, maximumPayloadBytes],
+  )
+  if (result.rows.length === 0) throw new NotFoundException('workout revision snapshot not found')
+  yield* boundedPagePayloads(
+    result.rows,
+    1,
+    maximumPayloadBytes,
+    stats,
+    'workout revision snapshot root',
+    signal,
+  )
+}
+
+export const portableExportWorkoutRevisionSnapshotExercisePageQuery = `WITH target AS MATERIALIZED (
+         SELECT history.id, history.snapshot
+         FROM workout_revisions AS history
+         INNER JOIN workout_sessions AS workout ON workout.id = history.workout_id
+         WHERE workout.user_id = $1
+           AND history.user_id = $1
+           AND history.workout_id = $2
+           AND history.id = $3
+       ), exercise_rows AS MATERIALIZED (
+         SELECT exercise.value AS exercise_json,
+                exercise.value->>'id' AS id,
+                exercise.ordinality
+         FROM target
+         CROSS JOIN LATERAL jsonb_array_elements(target.snapshot->'exercises')
+           WITH ORDINALITY AS exercise(value, ordinality)
+       ), page AS MATERIALIZED (
+         SELECT id, ordinality,
+                jsonb_set(exercise_json, '{sets}', '[]'::jsonb)::text AS payload_text
+         FROM exercise_rows
+         WHERE $4::text IS NULL
+            OR ordinality > (
+              SELECT anchor.ordinality FROM exercise_rows AS anchor WHERE anchor.id = $4::text
+            )
+         ORDER BY ordinality
+         LIMIT $5
+       )
+       SELECT id,
+              CASE WHEN octet_length(payload_text) <= $6 THEN payload_text ELSE NULL END
+                AS payload_text,
+              octet_length(payload_text) AS payload_byte_length
+       FROM page
+       ORDER BY ordinality`
+
+async function* workoutRevisionSnapshotExercisePageRows(
+  client: PoolClient,
+  userId: string,
+  workoutId: string,
+  revisionId: string,
+  batchRows: number,
+  maximumPayloadBytes: number,
+  stats: MutableSnapshotStats,
+  signal?: AbortSignal,
+): AsyncGenerator<Record<string, unknown>> {
+  throwIfAborted(signal)
+  let anchorId: string | null = null
+
+  while (true) {
+    throwIfAborted(signal)
+    const page: QueryResult<BoundedSnapshotRow> = await client.query<BoundedSnapshotRow>(
+      portableExportWorkoutRevisionSnapshotExercisePageQuery,
+      [userId, workoutId, revisionId, anchorId, batchRows, maximumPayloadBytes],
+    )
+    if (page.rows.length === 0) break
+    yield* boundedPagePayloads(
+      page.rows,
+      batchRows,
+      maximumPayloadBytes,
+      stats,
+      'workout revision snapshot exercise',
+      signal,
+    )
+    anchorId = page.rows.at(-1)!.id
+    if (page.rows.length < batchRows) break
+  }
+}
+
+export const portableExportWorkoutRevisionSnapshotSetPageQuery = `WITH target AS MATERIALIZED (
+         SELECT history.id, history.snapshot
+         FROM workout_revisions AS history
+         INNER JOIN workout_sessions AS workout ON workout.id = history.workout_id
+         WHERE workout.user_id = $1
+           AND history.user_id = $1
+           AND history.workout_id = $2
+           AND history.id = $3
+       ), exercise_target AS MATERIALIZED (
+         SELECT exercise.value AS exercise_json
+         FROM target
+         CROSS JOIN LATERAL jsonb_array_elements(target.snapshot->'exercises')
+           WITH ORDINALITY AS exercise(value, ordinality)
+         WHERE exercise.value->>'id' = $4
+       ), set_rows AS MATERIALIZED (
+         SELECT set_row.value AS set_json,
+                set_row.value->>'id' AS id,
+                set_row.ordinality
+         FROM exercise_target
+         CROSS JOIN LATERAL jsonb_array_elements(exercise_target.exercise_json->'sets')
+           WITH ORDINALITY AS set_row(value, ordinality)
+       ), page AS MATERIALIZED (
+         SELECT id, ordinality, set_json::text AS payload_text
+         FROM set_rows
+         WHERE $5::text IS NULL
+            OR ordinality > (
+              SELECT anchor.ordinality FROM set_rows AS anchor WHERE anchor.id = $5::text
+            )
+         ORDER BY ordinality
+         LIMIT $6
+       )
+       SELECT id,
+              CASE WHEN octet_length(payload_text) <= $7 THEN payload_text ELSE NULL END
+                AS payload_text,
+              octet_length(payload_text) AS payload_byte_length
+       FROM page
+       ORDER BY ordinality`
+
+async function* workoutRevisionSnapshotSetPageRows(
+  client: PoolClient,
+  userId: string,
+  workoutId: string,
+  revisionId: string,
+  exerciseId: string,
+  batchRows: number,
+  maximumPayloadBytes: number,
+  stats: MutableSnapshotStats,
+  signal?: AbortSignal,
+): AsyncGenerator<Record<string, unknown>> {
+  throwIfAborted(signal)
+  let anchorId: string | null = null
+
+  while (true) {
+    throwIfAborted(signal)
+    const page: QueryResult<BoundedSnapshotRow> = await client.query<BoundedSnapshotRow>(
+      portableExportWorkoutRevisionSnapshotSetPageQuery,
+      [userId, workoutId, revisionId, exerciseId, anchorId, batchRows, maximumPayloadBytes],
+    )
+    if (page.rows.length === 0) break
+    yield* boundedPagePayloads(
+      page.rows,
+      batchRows,
+      maximumPayloadBytes,
+      stats,
+      'workout revision snapshot set',
+      signal,
+    )
+    anchorId = page.rows.at(-1)!.id
+    if (page.rows.length < batchRows) break
+  }
+}
 
 async function* healthRecordRows(
   client: PoolClient,
@@ -2106,6 +2360,376 @@ const createWorkoutRevisionHeaderLayerSnapshotSession = (
   return { workouts, receipt, complete, cancel }
 }
 
+type WorkoutRevisionSnapshotItem =
+  | {
+      kind: 'snapshot'
+      value: PortableExportWorkoutRevisionSnapshotValue
+    }
+  | {
+      kind: 'boundary'
+    }
+
+const createWorkoutRevisionSnapshotSession = (
+  database: DatabaseService,
+  userId: string,
+  workoutId: string,
+  revisionId: string,
+  options: PortableExportDatabaseSnapshotOptions,
+): PortableExportWorkoutRevisionSnapshotSession => {
+  const batchRows = validateBatchRows(options.batchRows ?? portableExportSnapshotDefaultBatchRows)
+  const maximumPayloadBytes = validateMaximumPayloadBytes(
+    options.maximumPayloadBytes ?? portableExportSnapshotMaximumPayloadBytes,
+  )
+  const snapshotRootStats: MutableSnapshotStats = { batchCount: 0, rowCount: 0 }
+  const snapshotExerciseStats: MutableSnapshotStats = { batchCount: 0, rowCount: 0 }
+  const snapshotSetStats: MutableSnapshotStats = { batchCount: 0, rowCount: 0 }
+  let shape: PortableExportWorkoutRevisionSnapshotShapeReceipt | undefined
+  let resolveReceipt!: (receipt: PortableExportWorkoutRevisionSnapshotReceipt) => void
+  let rejectReceipt!: (error: unknown) => void
+  const receipt = new Promise<PortableExportWorkoutRevisionSnapshotReceipt>((resolve, reject) => {
+    resolveReceipt = resolve
+    rejectReceipt = reject
+  })
+  let finalized = false
+  let finalizedError: unknown
+  let snapshotsStarted = false
+  let snapshotsReachedBoundary = false
+  let activeExerciseIterator:
+    AsyncIterator<PortableExportWorkoutRevisionSnapshotExercise, void, undefined> | undefined
+  let activeSetIterator: AsyncIterator<Record<string, unknown>, void, undefined> | undefined
+  let transactionIterator: AsyncIterator<WorkoutRevisionSnapshotItem, void, undefined>
+  let failLayer!: (rootError: unknown) => Promise<unknown>
+
+  const transactionItems = database.streamReadOnlyRepeatableRead(
+    async function* (client): AsyncGenerator<WorkoutRevisionSnapshotItem> {
+      throwIfAborted(options.signal)
+      await assertActiveAccount(client, userId)
+      shape = await readWorkoutRevisionSnapshotShape(
+        client,
+        userId,
+        workoutId,
+        revisionId,
+        maximumPayloadBytes,
+      )
+      if (!shape.decomposable) {
+        throw new PortableExportWorkoutRevisionSnapshotNotDecomposableError()
+      }
+
+      let snapshotHeader: Record<string, unknown> | undefined
+      for await (const root of workoutRevisionSnapshotRootRows(
+        client,
+        userId,
+        workoutId,
+        revisionId,
+        maximumPayloadBytes,
+        snapshotRootStats,
+        options.signal,
+      )) {
+        if (snapshotHeader) {
+          throw new Error('portable export workout revision snapshot returned multiple roots')
+        }
+        snapshotHeader = root
+      }
+      if (!snapshotHeader || !Array.isArray(snapshotHeader.exercises)) {
+        throw new Error('portable export workout revision snapshot returned an invalid root')
+      }
+
+      let exercisesStarted = false
+      let exercisesCompleted = false
+      const exercises: AsyncIterable<PortableExportWorkoutRevisionSnapshotExercise> = {
+        [Symbol.asyncIterator]: () => {
+          if (exercisesStarted) {
+            return (async function* () {
+              throw await failLayer(
+                new Error('portable export workout revision snapshot exercises must be read once'),
+              )
+            })()
+          }
+          exercisesStarted = true
+          const exerciseSourceIterator = workoutRevisionSnapshotExercisePageRows(
+            client,
+            userId,
+            workoutId,
+            revisionId,
+            batchRows,
+            maximumPayloadBytes,
+            snapshotExerciseStats,
+            options.signal,
+          )[Symbol.asyncIterator]()
+          let suppressSetRootFailure = false
+          let exerciseIterator!: AsyncGenerator<
+            PortableExportWorkoutRevisionSnapshotExercise,
+            void,
+            undefined
+          >
+          exerciseIterator = (async function* () {
+            let exerciseSourceError: unknown
+            try {
+              while (true) {
+                const nextExercise = await exerciseSourceIterator.next()
+                if (nextExercise.done) {
+                  exercisesCompleted = true
+                  return
+                }
+                const exerciseHeader = nextExercise.value
+                const exerciseId = exerciseHeader.id
+                if (
+                  typeof exerciseId !== 'string' ||
+                  exerciseId.length === 0 ||
+                  !Array.isArray(exerciseHeader.sets)
+                ) {
+                  throw new Error(
+                    'portable export workout revision snapshot returned an invalid exercise',
+                  )
+                }
+                let setsStarted = false
+                let setsCompleted = false
+                const sets: AsyncIterable<Record<string, unknown>> = {
+                  [Symbol.asyncIterator]: () => {
+                    if (setsStarted) {
+                      return (async function* () {
+                        throw await failLayer(
+                          new Error(
+                            'portable export workout revision snapshot sets must be read once before the next exercise',
+                          ),
+                        )
+                      })()
+                    }
+                    setsStarted = true
+                    const setSourceIterator = workoutRevisionSnapshotSetPageRows(
+                      client,
+                      userId,
+                      workoutId,
+                      revisionId,
+                      exerciseId,
+                      batchRows,
+                      maximumPayloadBytes,
+                      snapshotSetStats,
+                      options.signal,
+                    )[Symbol.asyncIterator]()
+                    let setIterator!: AsyncGenerator<Record<string, unknown>, void, undefined>
+                    setIterator = (async function* () {
+                      let setSourceError: unknown
+                      try {
+                        while (true) {
+                          const nextSet = await setSourceIterator.next()
+                          if (nextSet.done) {
+                            setsCompleted = true
+                            return
+                          }
+                          yield nextSet.value
+                        }
+                      } catch (error) {
+                        setSourceError = error
+                        throw error
+                      } finally {
+                        if (activeSetIterator === setIterator) activeSetIterator = undefined
+                        if (!setsCompleted) {
+                          let cleanupError: unknown
+                          try {
+                            await setSourceIterator.return?.(undefined)
+                          } catch (error) {
+                            cleanupError = error
+                          }
+                          if (!finalized && !suppressSetRootFailure) {
+                            const rootError =
+                              setSourceError ??
+                              new Error(
+                                'portable export workout revision snapshot sets did not complete',
+                              )
+                            throw await failLayer(
+                              cleanupError === undefined
+                                ? rootError
+                                : new AggregateError(
+                                    [rootError, cleanupError],
+                                    'portable export workout revision snapshot set source and cleanup both failed',
+                                  ),
+                            )
+                          }
+                          if (cleanupError !== undefined) throw cleanupError
+                        }
+                      }
+                    })()
+                    activeSetIterator = setIterator
+                    return setIterator
+                  },
+                }
+                exerciseHeader.sets = sets
+                yield exerciseHeader as PortableExportWorkoutRevisionSnapshotExercise
+                if (!setsStarted || !setsCompleted) {
+                  throw new Error(
+                    'portable export workout revision snapshot sets must complete before the next exercise',
+                  )
+                }
+              }
+            } catch (error) {
+              exerciseSourceError = error
+              throw error
+            } finally {
+              if (activeExerciseIterator === exerciseIterator) {
+                activeExerciseIterator = undefined
+              }
+              if (!exercisesCompleted) {
+                suppressSetRootFailure = true
+                const cleanupErrors: unknown[] = []
+                try {
+                  await activeSetIterator?.return?.(undefined)
+                } catch (error) {
+                  cleanupErrors.push(error)
+                } finally {
+                  activeSetIterator = undefined
+                }
+                try {
+                  await exerciseSourceIterator.return?.(undefined)
+                } catch (error) {
+                  cleanupErrors.push(error)
+                } finally {
+                  suppressSetRootFailure = false
+                }
+                if (!finalized) {
+                  const rootError =
+                    exerciseSourceError ??
+                    new Error(
+                      'portable export workout revision snapshot exercises did not complete',
+                    )
+                  throw await failLayer(
+                    cleanupErrors.length === 0
+                      ? rootError
+                      : new AggregateError(
+                          [rootError, ...cleanupErrors],
+                          'portable export workout revision snapshot exercise source and nested cleanup both failed',
+                        ),
+                  )
+                }
+                if (cleanupErrors.length === 1) throw cleanupErrors[0]
+                if (cleanupErrors.length > 1) {
+                  throw new AggregateError(
+                    cleanupErrors,
+                    'portable export workout revision snapshot exercise cleanup failed',
+                  )
+                }
+              }
+            }
+          })()
+          activeExerciseIterator = exerciseIterator
+          return exerciseIterator
+        },
+      }
+
+      snapshotHeader.exercises = exercises
+      yield {
+        kind: 'snapshot',
+        value: snapshotHeader as PortableExportWorkoutRevisionSnapshotValue,
+      }
+      if (!exercisesStarted || !exercisesCompleted) {
+        throw new Error('portable export workout revision snapshot exercises must complete')
+      }
+      throwIfAborted(options.signal)
+      yield { kind: 'boundary' }
+    },
+  )
+  transactionIterator = transactionItems[Symbol.asyncIterator]()
+
+  const fail = async (rootError: unknown) => {
+    if (finalized) return finalizedError ?? rootError
+    finalized = true
+    const cleanupErrors: unknown[] = []
+    try {
+      await activeSetIterator?.return?.(undefined)
+    } catch (error) {
+      cleanupErrors.push(error)
+    } finally {
+      activeSetIterator = undefined
+    }
+    try {
+      await activeExerciseIterator?.return?.(undefined)
+    } catch (error) {
+      cleanupErrors.push(error)
+    } finally {
+      activeExerciseIterator = undefined
+    }
+    try {
+      await transactionIterator.return?.(undefined)
+    } catch (error) {
+      cleanupErrors.push(error)
+    }
+    finalizedError =
+      cleanupErrors.length === 0
+        ? rootError
+        : new AggregateError(
+            [rootError, ...cleanupErrors],
+            'portable export workout revision snapshot and nested cleanup both failed',
+          )
+    rejectReceipt(finalizedError)
+    return finalizedError
+  }
+  failLayer = fail
+
+  const snapshots: AsyncIterable<PortableExportWorkoutRevisionSnapshotValue> = {
+    [Symbol.asyncIterator]: () =>
+      (async function* () {
+        if (snapshotsStarted) {
+          throw await fail(
+            new Error('portable export workout revision snapshot must be read once in order'),
+          )
+        }
+        snapshotsStarted = true
+        try {
+          while (true) {
+            const next = await transactionIterator.next()
+            if (next.done) {
+              throw new Error('portable export workout revision snapshot ended before its boundary')
+            }
+            if (next.value.kind === 'boundary') {
+              snapshotsReachedBoundary = true
+              return
+            }
+            yield next.value.value
+          }
+        } catch (error) {
+          throw await fail(error)
+        } finally {
+          if (!snapshotsReachedBoundary && !finalized) {
+            await fail(new Error('portable export workout revision snapshot did not complete'))
+          }
+        }
+      })(),
+  }
+
+  const complete = async () => {
+    if (finalized || !snapshotsStarted || !snapshotsReachedBoundary || !shape) {
+      throw await fail(
+        new Error('portable export workout revision snapshot cannot commit before it completes'),
+      )
+    }
+    try {
+      const next = await transactionIterator.next()
+      if (!next.done) {
+        throw new Error('portable export workout revision snapshot returned data after boundary')
+      }
+      finalized = true
+      resolveReceipt({
+        batchRows,
+        maximumPayloadBytes,
+        shape,
+        snapshotRoots: { ...snapshotRootStats },
+        snapshotExercises: { ...snapshotExerciseStats },
+        snapshotSets: { ...snapshotSetStats },
+      })
+    } catch (error) {
+      throw await fail(error)
+    }
+  }
+
+  const cancel = async (error: unknown) => {
+    const rootError = error ?? new Error('portable export workout revision snapshot was cancelled')
+    const finalError = await fail(rootError)
+    if (finalError !== rootError) throw finalError
+  }
+
+  return { snapshots, receipt, complete, cancel }
+}
+
 type CoordinatedSnapshotItem<Collection extends string> =
   | {
       kind: 'row'
@@ -2370,6 +2994,21 @@ export class PortableExportDatabaseSnapshotService {
     options: PortableExportDatabaseSnapshotOptions = {},
   ): PortableExportWorkoutRevisionHeaderLayerSnapshotSession {
     return createWorkoutRevisionHeaderLayerSnapshotSession(this.database, userId, options)
+  }
+
+  createWorkoutRevisionSnapshot(
+    userId: string,
+    workoutId: string,
+    revisionId: string,
+    options: PortableExportDatabaseSnapshotOptions = {},
+  ): PortableExportWorkoutRevisionSnapshotSession {
+    return createWorkoutRevisionSnapshotSession(
+      this.database,
+      userId,
+      workoutId,
+      revisionId,
+      options,
+    )
   }
 
   async inspectWorkoutRevisionSnapshotShape(

@@ -442,7 +442,9 @@ intent 创建 → 验证一次性 token 与确认短语 → users 状态关闭 �
 
 `inspectWorkoutRevisionSnapshotShape()` 用一个精确 target CTE 沿 `workout_revisions → workout_sessions` 绑定 active owner、workout 和 revision，再以 `jsonb_array_elements(... WITH ORDINALITY)` 检查 snapshot。查询不返回 snapshot 或 UUID，只聚合 revision 数字、`legacy|extended|mixed`、根头/最大动作头/最大 set UTF-8 字节数、元素计数、存储顺序是否与 position 一致及 `decomposable`。严格允许键、根身份、对象数组、父级数量和 position 唯一必须同时成立；任一元素超过 64 KiB 或出现未知字段时失败关闭。现有契约不要求输入数组按 position 排序，修订写入又保留原数组，因此 position `[2,1]` 仍可能是合法可分解证据；下一步必须用元素 UUID 恢复 JSON ordinality 分页，不能用 position 重排历史。
 
-递归 JSON 来源契约已经能表达 workout 对象内的懒 exercises/sets/history，并证明嵌套取消可传播到文件根；数据库现已把 workout 头、按 position 读取的动作/set 标量和按 revision 读取的四字段修订头放入同一根事务，并用分层收据分别记录四层批次/行数。shape 收据已经冻结可分解前置条件，但尚未输出正文。下一项数据库工作是按 JSON exercise/set ordinality 把每条通过门禁的 snapshot 递归分解为有界 workout/exercise/set 事实并连接 history；不得截断历史、遗漏 snapshot、按 position 改写数组或用空 history 形成不完整公开对象。
+`createWorkoutRevisionSnapshot()` 让 shape 与正文共享同一只读 repeatable-read 事务。shape 还要求 exercise `id` 在 revision 内唯一、set `id` 在父 exercise 内唯一；ID 只需符合规范 UUID 文本结构，不锁定特定版本。根页以 `jsonb_set(snapshot,'{exercises}','[]')` 形成一个有界骨架，动作页以 `jsonb_set(exercise_json,'{sets}','[]')` 形成骨架，set 页交付原对象；三者都在 PostgreSQL 内编码并执行 64 KiB UTF-8 门禁。动作和组页面只携上一元素 UUID，在相同 target CTE 内恢复 ordinality 后继续读取，应用和收据不暴露 ordinality。空数组键在 Node 中原地替换为懒数组，保留 JSONB 解析键序；真实数据库证明反序 position 快照物化后与直接 `SELECT snapshot` 的 JSON 字节相同。
+
+递归 JSON 来源契约已经能表达 workout 对象内的懒 exercises/sets/history，并证明嵌套取消可传播到文件根；数据库现已分别完成当前 workout→exercise→set→revision header 四层事务和单 revision snapshot→exercise→set 三层事务。后者发布 shape、根、动作与组收据并完成原序正文，但尚未连接前者。下一项数据库工作是让每个 revision 头强制完整消费其 snapshot 后才能推进下一 revision，并把组合 history 与同步 v4 逐字节对账；不得截断历史、遗漏 snapshot、按 position 改写数组或用空 history 形成不完整公开对象。
 
 ## 20. 安全与隐私控制
 

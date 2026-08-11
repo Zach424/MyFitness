@@ -5,7 +5,12 @@ import type { DatabaseService } from '../database/database.service'
 import {
   PortableExportDatabaseSnapshotService,
   PortableExportSnapshotPayloadTooLargeError,
+  PortableExportWorkoutRevisionSnapshotNotDecomposableError,
   portableExportSnapshotMaximumPayloadBytes,
+  portableExportWorkoutRevisionSnapshotExercisePageQuery,
+  portableExportWorkoutRevisionSnapshotRootQuery,
+  portableExportWorkoutRevisionSnapshotSetPageQuery,
+  portableExportWorkoutRevisionSnapshotShapeQuery,
 } from './portable-export-database-snapshot'
 
 const fakeDatabase = (values: Array<Record<string, unknown>>) =>
@@ -179,6 +184,119 @@ const fakeWorkoutRevisionSnapshotShapeDatabase = (row?: Record<string, unknown>)
           }
           lifecycle.shapeQueries += 1
           return { rows: row ? [row] : [] }
+        },
+      } as unknown as PoolClient
+      return (async function* () {
+        let completed = false
+        try {
+          for await (const value of operation(client)) yield value
+          completed = true
+          lifecycle.committed = true
+        } finally {
+          if (!completed) lifecycle.rolledBack = true
+        }
+      })()
+    },
+  } as unknown as DatabaseService
+  return { database, lifecycle }
+}
+
+const fakeWorkoutRevisionSnapshotDatabase = (
+  snapshot: Record<string, unknown>,
+  decomposable = true,
+) => {
+  const exercises = snapshot.exercises as Array<Record<string, unknown>>
+  const lifecycle = {
+    accountQueries: 0,
+    streamCount: 0,
+    shapeQueries: 0,
+    rootQueries: 0,
+    exerciseQueries: 0,
+    setQueries: 0,
+    committed: false,
+    rolledBack: false,
+  }
+  const boundedRows = (values: Array<Record<string, unknown>>, maximumPayloadBytes: number) =>
+    values.map((payload) => {
+      const payloadText = JSON.stringify(payload)
+      const payloadByteLength = Buffer.byteLength(payloadText)
+      return {
+        id: payload.id,
+        payload_text: payloadByteLength <= maximumPayloadBytes ? payloadText : null,
+        payload_byte_length: payloadByteLength,
+      }
+    })
+  const pageAfter = (
+    values: Array<Record<string, unknown>>,
+    anchorId: string | null,
+    batchRows: number,
+  ) => {
+    const anchorIndex = anchorId ? values.findIndex((value) => value.id === anchorId) : -1
+    return values.slice(anchorIndex + 1, anchorIndex + 1 + batchRows)
+  }
+  const database = {
+    streamReadOnlyRepeatableRead: (operation: (client: PoolClient) => AsyncIterable<unknown>) => {
+      lifecycle.streamCount += 1
+      const client = {
+        query: async (sql: string, parameters: unknown[]) => {
+          if (sql.startsWith('SELECT id FROM users')) {
+            lifecycle.accountQueries += 1
+            return { rows: [{ id: parameters[0] }] }
+          }
+          if (sql === portableExportWorkoutRevisionSnapshotShapeQuery) {
+            lifecycle.shapeQueries += 1
+            const root = { ...snapshot, exercises: [] }
+            const setRows = exercises.flatMap(
+              (exercise) => exercise.sets as Array<Record<string, unknown>>,
+            )
+            return {
+              rows: [
+                {
+                  revision: snapshot.revision,
+                  compatibility: 'legacy',
+                  root_header_bytes: Buffer.byteLength(JSON.stringify(root)),
+                  exercise_count: exercises.length,
+                  set_count: setRows.length,
+                  legacy_exercise_count: exercises.length,
+                  extended_exercise_count: 0,
+                  maximum_exercise_header_bytes: Math.max(
+                    ...exercises.map((exercise) =>
+                      Buffer.byteLength(JSON.stringify({ ...exercise, sets: [] })),
+                    ),
+                  ),
+                  maximum_set_bytes: Math.max(
+                    ...setRows.map((set) => Buffer.byteLength(JSON.stringify(set))),
+                  ),
+                  exercise_storage_order_matches_position: false,
+                  set_storage_order_matches_position: false,
+                  decomposable,
+                },
+              ],
+            }
+          }
+          if (sql === portableExportWorkoutRevisionSnapshotRootQuery) {
+            lifecycle.rootQueries += 1
+            return {
+              rows: boundedRows([{ ...snapshot, exercises: [] }], parameters[3] as number),
+            }
+          }
+          if (sql === portableExportWorkoutRevisionSnapshotExercisePageQuery) {
+            lifecycle.exerciseQueries += 1
+            const page = pageAfter(
+              exercises,
+              parameters[3] as string | null,
+              parameters[4] as number,
+            ).map((exercise) => ({ ...exercise, sets: [] }))
+            return { rows: boundedRows(page, parameters[5] as number) }
+          }
+          if (sql === portableExportWorkoutRevisionSnapshotSetPageQuery) {
+            lifecycle.setQueries += 1
+            const exercise = exercises.find((value) => value.id === parameters[3])
+            const sets = (exercise?.sets ?? []) as Array<Record<string, unknown>>
+            const page = pageAfter(sets, parameters[4] as string | null, parameters[5] as number)
+            return { rows: boundedRows(page, parameters[6] as number) }
+          }
+          throw new Error('unexpected workout revision snapshot query')
         },
       } as unknown as PoolClient
       return (async function* () {
@@ -939,6 +1057,194 @@ describe('portable export database snapshot session', () => {
       committed: true,
       rolledBack: false,
     })
+  })
+
+  it('rebuilds one revision snapshot in stored JSON array order and commits explicitly', async () => {
+    const snapshot = {
+      id: '22222222-2222-4222-8222-222222222222',
+      userId: '11111111-1111-4111-8111-111111111111',
+      title: 'Stored order',
+      exercises: [
+        {
+          id: '33333333-3333-4333-8333-333333333333',
+          position: 2,
+          name: 'Stored first',
+          sets: [
+            { id: '55555555-5555-4555-8555-555555555555', position: 2 },
+            { id: '66666666-6666-4666-8666-666666666666', position: 1 },
+          ],
+        },
+        {
+          id: '44444444-4444-4444-8444-444444444444',
+          position: 1,
+          name: 'Stored second',
+          sets: [{ id: '77777777-7777-4777-8777-777777777777', position: 1 }],
+        },
+      ],
+      revision: 1,
+    }
+    const { database, lifecycle } = fakeWorkoutRevisionSnapshotDatabase(snapshot)
+    const service = new PortableExportDatabaseSnapshotService(database)
+    const session = service.createWorkoutRevisionSnapshot(
+      snapshot.userId,
+      snapshot.id,
+      '88888888-8888-4888-8888-888888888888',
+      { batchRows: 1 },
+    )
+    const materialized: Array<Record<string, unknown>> = []
+
+    for await (const revisionSnapshot of session.snapshots) {
+      const root = { ...revisionSnapshot, exercises: [] as Array<Record<string, unknown>> }
+      for await (const exercise of revisionSnapshot.exercises) {
+        const exerciseValue = { ...exercise, sets: [] as Array<Record<string, unknown>> }
+        for await (const set of exercise.sets) exerciseValue.sets.push(set)
+        root.exercises.push(exerciseValue)
+      }
+      materialized.push(root)
+    }
+    expect(lifecycle.committed).toBe(false)
+
+    await session.complete()
+
+    expect(JSON.stringify(materialized[0])).toBe(JSON.stringify(snapshot))
+    expect(lifecycle).toMatchObject({
+      accountQueries: 1,
+      streamCount: 1,
+      shapeQueries: 1,
+      rootQueries: 1,
+      exerciseQueries: 3,
+      setQueries: 5,
+      committed: true,
+      rolledBack: false,
+    })
+    await expect(session.receipt).resolves.toMatchObject({
+      batchRows: 1,
+      maximumPayloadBytes: portableExportSnapshotMaximumPayloadBytes,
+      shape: { decomposable: true, exerciseCount: 2, setCount: 3 },
+      snapshotRoots: { batchCount: 1, rowCount: 1 },
+      snapshotExercises: { batchCount: 2, rowCount: 2 },
+      snapshotSets: { batchCount: 3, rowCount: 3 },
+    })
+  })
+
+  it('fails a revision snapshot before reading root content when shape is not decomposable', async () => {
+    const snapshot = {
+      id: '22222222-2222-4222-8222-222222222222',
+      userId: '11111111-1111-4111-8111-111111111111',
+      title: 'secret snapshot content',
+      exercises: [
+        {
+          id: '33333333-3333-4333-8333-333333333333',
+          sets: [{ id: '44444444-4444-4444-8444-444444444444' }],
+        },
+      ],
+      revision: 1,
+    }
+    const { database, lifecycle } = fakeWorkoutRevisionSnapshotDatabase(snapshot, false)
+    const service = new PortableExportDatabaseSnapshotService(database)
+    const session = service.createWorkoutRevisionSnapshot(
+      snapshot.userId,
+      snapshot.id,
+      '55555555-5555-4555-8555-555555555555',
+    )
+    const receiptFailure = session.receipt.catch((error: unknown) => error)
+    let streamFailure: unknown
+
+    try {
+      await session.snapshots[Symbol.asyncIterator]().next()
+    } catch (error) {
+      streamFailure = error
+    }
+
+    expect(streamFailure).toBeInstanceOf(PortableExportWorkoutRevisionSnapshotNotDecomposableError)
+    expect(String(streamFailure)).not.toContain('secret snapshot content')
+    expect(await receiptFailure).toBe(streamFailure)
+    expect(lifecycle).toMatchObject({
+      shapeQueries: 1,
+      rootQueries: 0,
+      committed: false,
+      rolledBack: true,
+    })
+  })
+
+  it('fails the root when a revision snapshot exercise field is skipped', async () => {
+    const snapshot = {
+      id: '22222222-2222-4222-8222-222222222222',
+      userId: '11111111-1111-4111-8111-111111111111',
+      exercises: [
+        {
+          id: '33333333-3333-4333-8333-333333333333',
+          sets: [{ id: '44444444-4444-4444-8444-444444444444' }],
+        },
+      ],
+      revision: 1,
+    }
+    const { database, lifecycle } = fakeWorkoutRevisionSnapshotDatabase(snapshot)
+    const service = new PortableExportDatabaseSnapshotService(database)
+    const session = service.createWorkoutRevisionSnapshot(
+      snapshot.userId,
+      snapshot.id,
+      '55555555-5555-4555-8555-555555555555',
+    )
+    const snapshots = session.snapshots[Symbol.asyncIterator]()
+    await expect(snapshots.next()).resolves.toMatchObject({ done: false })
+    const receiptFailure = session.receipt.catch((error: unknown) => error)
+    let streamFailure: unknown
+
+    try {
+      await snapshots.next()
+    } catch (error) {
+      streamFailure = error
+    }
+
+    expect(streamFailure).toMatchObject({
+      message: 'portable export workout revision snapshot exercises must complete',
+    })
+    expect(await receiptFailure).toBe(streamFailure)
+    expect(lifecycle).toMatchObject({ committed: false, rolledBack: true })
+  })
+
+  it('cancels an active revision snapshot set before its exercise and root', async () => {
+    const snapshot = {
+      id: '22222222-2222-4222-8222-222222222222',
+      userId: '11111111-1111-4111-8111-111111111111',
+      exercises: [
+        {
+          id: '33333333-3333-4333-8333-333333333333',
+          sets: [
+            { id: '44444444-4444-4444-8444-444444444444' },
+            { id: '55555555-5555-4555-8555-555555555555' },
+          ],
+        },
+      ],
+      revision: 1,
+    }
+    const { database, lifecycle } = fakeWorkoutRevisionSnapshotDatabase(snapshot)
+    const service = new PortableExportDatabaseSnapshotService(database)
+    const session = service.createWorkoutRevisionSnapshot(
+      snapshot.userId,
+      snapshot.id,
+      '66666666-6666-4666-8666-666666666666',
+      { batchRows: 1 },
+    )
+    const snapshots = session.snapshots[Symbol.asyncIterator]()
+    const root = await snapshots.next()
+    if (root.done) throw new Error('revision snapshot fixture was not returned')
+    const exercises = root.value.exercises[Symbol.asyncIterator]()
+    const exercise = await exercises.next()
+    if (exercise.done) throw new Error('revision snapshot exercise fixture was not returned')
+    const sets = exercise.value.sets[Symbol.asyncIterator]()
+    await expect(sets.next()).resolves.toMatchObject({ done: false })
+    const cancellation = new Error('revision snapshot cancelled by lease owner')
+    const receiptFailure = session.receipt.catch((error: unknown) => error)
+
+    await session.cancel(cancellation)
+
+    expect(await receiptFailure).toBe(cancellation)
+    await expect(sets.next()).resolves.toEqual({ done: true, value: undefined })
+    await expect(exercises.next()).resolves.toEqual({ done: true, value: undefined })
+    await expect(snapshots.next()).rejects.toBe(cancellation)
+    expect(lifecycle).toMatchObject({ committed: false, rolledBack: true })
   })
 
   it('rejects invalid batch and payload limits before opening a database stream', () => {

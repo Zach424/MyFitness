@@ -11,6 +11,7 @@ import { serializePortableExport } from './portable-export-artifact'
 import {
   PortableExportDatabaseSnapshotService,
   PortableExportSnapshotPayloadTooLargeError,
+  PortableExportWorkoutRevisionSnapshotNotDecomposableError,
   portableExportSnapshotMaximumPayloadBytes,
   portableExportWorkoutExerciseHeaderPageQuery,
   portableExportWorkoutHeaderPageQuery,
@@ -1048,7 +1049,7 @@ describe('portable export bounded PostgreSQL snapshot', () => {
     ).rejects.toThrowError('workout revision snapshot not found')
   })
 
-  it('fails the decomposition receipt for unknown root fields or oversized child headers', async () => {
+  it('fails the decomposition receipt for unknown, oversized or ambiguous child shapes', async () => {
     const userId = await createUser()
     const workoutId = await createWorkout(userId, '2026-08-11T02:35:00.000001Z')
     const legacyExercise = {
@@ -1117,6 +1118,38 @@ describe('portable export bounded PostgreSQL snapshot', () => {
       'updated',
       oversizedSnapshot,
     )
+    const duplicateExerciseId = randomUUID()
+    const duplicateExerciseSnapshot = workoutRevisionSnapshot(userId, workoutId, 3, [
+      { ...legacyExercise, id: duplicateExerciseId, position: 1 },
+      { ...extendedExercise, id: duplicateExerciseId, position: 2 },
+    ])
+    const duplicateExerciseRevisionId = await createWorkoutRevision(
+      userId,
+      workoutId,
+      3,
+      '2026-08-11T02:40:00.000003Z',
+      'updated',
+      duplicateExerciseSnapshot,
+    )
+    const duplicateSetId = randomUUID()
+    const duplicateSetSnapshot = workoutRevisionSnapshot(userId, workoutId, 4, [
+      {
+        ...legacyExercise,
+        id: randomUUID(),
+        sets: [
+          { ...legacyExercise.sets[0], id: duplicateSetId, position: 1 },
+          { ...legacyExercise.sets[0], id: duplicateSetId, position: 2 },
+        ],
+      },
+    ])
+    const duplicateSetRevisionId = await createWorkoutRevision(
+      userId,
+      workoutId,
+      4,
+      '2026-08-11T02:40:00.000004Z',
+      'updated',
+      duplicateSetSnapshot,
+    )
 
     const unknown = await snapshots.inspectWorkoutRevisionSnapshotShape(
       userId,
@@ -1128,12 +1161,250 @@ describe('portable export bounded PostgreSQL snapshot', () => {
       workoutId,
       oversizedRevisionId,
     )
+    const duplicateExercise = await snapshots.inspectWorkoutRevisionSnapshotShape(
+      userId,
+      workoutId,
+      duplicateExerciseRevisionId,
+    )
+    const duplicateSet = await snapshots.inspectWorkoutRevisionSnapshotShape(
+      userId,
+      workoutId,
+      duplicateSetRevisionId,
+    )
 
     expect(unknown).toMatchObject({ compatibility: 'mixed', decomposable: false })
     expect(oversized.maximumExerciseHeaderBytes).toBeGreaterThan(
       portableExportSnapshotMaximumPayloadBytes,
     )
     expect(oversized.decomposable).toBe(false)
+    expect(duplicateExercise.decomposable).toBe(false)
+    expect(duplicateSet.decomposable).toBe(false)
+  })
+
+  it('rebuilds one immutable revision snapshot byte-for-byte in JSON ordinality', async () => {
+    const userId = await createUser()
+    const otherUserId = await createUser()
+    const workoutId = await createWorkout(userId, '2026-08-11T02:45:00.000001Z')
+    const storedFirstExerciseId = randomUUID()
+    const storedSecondExerciseId = randomUUID()
+    const storedFirstSetIds = [randomUUID(), randomUUID()]
+    const storedSecondSetId = randomUUID()
+    const snapshot = workoutRevisionSnapshot(userId, workoutId, 1, [
+      {
+        id: storedFirstExerciseId,
+        position: 2,
+        exerciseKey: 'stored_second',
+        name: 'Stored first',
+        category: 'strength',
+        sets: [
+          {
+            id: storedFirstSetIds[0],
+            position: 2,
+            kind: 'working',
+            reps: 8,
+            canonicalLoadKg: null,
+            completed: true,
+          },
+          {
+            id: storedFirstSetIds[1],
+            position: 1,
+            kind: 'warmup',
+            reps: 10,
+            canonicalLoadKg: null,
+            completed: true,
+          },
+        ],
+      },
+      {
+        id: storedSecondExerciseId,
+        position: 1,
+        exerciseKey: 'stored_first',
+        name: 'Stored second',
+        category: 'strength',
+        trackingMode: 'reps_load',
+        equipment: [],
+        sets: [
+          {
+            id: storedSecondSetId,
+            position: 1,
+            kind: 'working',
+            reps: 10,
+            canonicalLoadKg: null,
+            completed: true,
+          },
+        ],
+      },
+    ])
+    const revisionId = await createWorkoutRevision(
+      userId,
+      workoutId,
+      1,
+      '2026-08-11T02:50:00.000001Z',
+      'created',
+      snapshot,
+    )
+    const direct = await pool.query<{ snapshot: Record<string, unknown> }>(
+      'SELECT snapshot FROM workout_revisions WHERE id = $1',
+      [revisionId],
+    )
+    const session = snapshots.createWorkoutRevisionSnapshot(userId, workoutId, revisionId, {
+      batchRows: 1,
+    })
+    const materialized: Array<Record<string, unknown>> = []
+
+    for await (const revisionSnapshot of session.snapshots) {
+      const root = { ...revisionSnapshot, exercises: [] as Array<Record<string, unknown>> }
+      for await (const exercise of revisionSnapshot.exercises) {
+        const exerciseValue = { ...exercise, sets: [] as Array<Record<string, unknown>> }
+        for await (const set of exercise.sets) exerciseValue.sets.push(set)
+        root.exercises.push(exerciseValue)
+      }
+      materialized.push(root)
+    }
+    await session.complete()
+
+    expect(JSON.stringify(materialized[0])).toBe(JSON.stringify(direct.rows[0]!.snapshot))
+    const materializedExercises = materialized[0]!.exercises as Array<Record<string, unknown>>
+    expect(materializedExercises.map((exercise) => exercise.id)).toEqual([
+      storedFirstExerciseId,
+      storedSecondExerciseId,
+    ])
+    expect(
+      (materializedExercises[0]!.sets as Array<Record<string, unknown>>).map((set) => set.id),
+    ).toEqual(storedFirstSetIds)
+    await expect(session.receipt).resolves.toMatchObject({
+      batchRows: 1,
+      shape: {
+        compatibility: 'mixed',
+        exerciseStorageOrderMatchesPosition: false,
+        setStorageOrderMatchesPosition: false,
+        decomposable: true,
+      },
+      snapshotRoots: { batchCount: 1, rowCount: 1 },
+      snapshotExercises: { batchCount: 2, rowCount: 2 },
+      snapshotSets: { batchCount: 3, rowCount: 3 },
+    })
+
+    const crossOwner = snapshots.createWorkoutRevisionSnapshot(otherUserId, workoutId, revisionId)
+    const crossOwnerReceipt = crossOwner.receipt.catch((error: unknown) => error)
+    let crossOwnerError: unknown
+    try {
+      await crossOwner.snapshots[Symbol.asyncIterator]().next()
+    } catch (error) {
+      crossOwnerError = error
+    }
+    expect(crossOwnerError).toMatchObject({ message: 'workout revision snapshot not found' })
+    expect(await crossOwnerReceipt).toBe(crossOwnerError)
+  })
+
+  it('fails closed before emitting content for an unknown revision snapshot shape', async () => {
+    const userId = await createUser()
+    const workoutId = await createWorkout(userId, '2026-08-11T02:55:00.000001Z')
+    const secretMarker = `unknown-snapshot-${randomUUID()}`
+    const snapshot = workoutRevisionSnapshot(
+      userId,
+      workoutId,
+      1,
+      [
+        {
+          id: randomUUID(),
+          position: 1,
+          exerciseKey: 'unknown_shape',
+          name: secretMarker,
+          category: 'strength',
+          sets: [
+            {
+              id: randomUUID(),
+              position: 1,
+              kind: 'working',
+              reps: 10,
+              canonicalLoadKg: null,
+              completed: true,
+            },
+          ],
+        },
+      ],
+      { unknownFutureField: secretMarker },
+    )
+    const revisionId = await createWorkoutRevision(
+      userId,
+      workoutId,
+      1,
+      '2026-08-11T03:00:00.000001Z',
+      'created',
+      snapshot,
+    )
+    const session = snapshots.createWorkoutRevisionSnapshot(userId, workoutId, revisionId)
+    const receiptFailure = session.receipt.catch((error: unknown) => error)
+    let streamFailure: unknown
+
+    try {
+      await session.snapshots[Symbol.asyncIterator]().next()
+    } catch (error) {
+      streamFailure = error
+    }
+
+    expect(streamFailure).toBeInstanceOf(PortableExportWorkoutRevisionSnapshotNotDecomposableError)
+    expect(String(streamFailure)).not.toContain(secretMarker)
+    expect(await receiptFailure).toBe(streamFailure)
+  })
+
+  it('closes an active immutable snapshot set before its exercise and root', async () => {
+    const userId = await createUser()
+    const workoutId = await createWorkout(userId, '2026-08-11T03:05:00.000001Z')
+    const snapshot = workoutRevisionSnapshot(userId, workoutId, 1, [
+      {
+        id: randomUUID(),
+        position: 1,
+        exerciseKey: 'cancel_snapshot',
+        name: 'Cancellation fixture',
+        category: 'strength',
+        sets: [
+          {
+            id: randomUUID(),
+            position: 1,
+            kind: 'working',
+            reps: 10,
+            canonicalLoadKg: null,
+            completed: true,
+          },
+          {
+            id: randomUUID(),
+            position: 2,
+            kind: 'working',
+            reps: 8,
+            canonicalLoadKg: null,
+            completed: true,
+          },
+        ],
+      },
+    ])
+    const revisionId = await createWorkoutRevision(
+      userId,
+      workoutId,
+      1,
+      '2026-08-11T03:10:00.000001Z',
+      'created',
+      snapshot,
+    )
+    const session = snapshots.createWorkoutRevisionSnapshot(userId, workoutId, revisionId, {
+      batchRows: 1,
+    })
+    const snapshotRows = session.snapshots[Symbol.asyncIterator]()
+    const root = await snapshotRows.next()
+    const exercises = root.value!.exercises[Symbol.asyncIterator]()
+    const exercise = await exercises.next()
+    const sets = exercise.value!.sets[Symbol.asyncIterator]()
+    await expect(sets.next()).resolves.toMatchObject({ done: false })
+    const cancellation = new Error('immutable snapshot cancelled by lease owner')
+    const receiptFailure = session.receipt.catch((error: unknown) => error)
+
+    await session.cancel(cancellation)
+
+    expect(await receiptFailure).toBe(cancellation)
+    await expect(sets.next()).resolves.toEqual({ done: true, value: undefined })
+    await expect(exercises.next()).resolves.toEqual({ done: true, value: undefined })
+    await expect(snapshotRows.next()).rejects.toBe(cancellation)
   })
 
   it('streams one owner revision history across microsecond pages into byte-compatible v4 JSON', async () => {

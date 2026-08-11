@@ -60,6 +60,8 @@ Migration `0024_exercise_insight_index.sql` adds `(workout_id, exercise_key)` lo
 
 `inspectWorkoutRevisionSnapshotShape()` 对单个不可变 snapshot 形成无正文的分解前置收据：沿精确 owner/workout/revision 父链验证根身份，以严格键集区分 `legacy|extended|mixed`，检查数组/计数/position 唯一，并在 PostgreSQL 内计算根头、最大动作头和最大 set 的 UTF-8 字节数。Workout 契约只要求 position 唯一，不要求输入数组升序；修订保存接受对象的原数组，所以合法 `[2,1]` 必须按 JSON ordinality 保留，只报告顺序不匹配而不能重排。该收据不是完整领域验证，也不输出 snapshot；下一层仍须按原始数组顺序递归连接 history，才能称为训练快照流式化。
 
+`createWorkoutRevisionSnapshot()` 已把单 revision 的根、动作和组变成同一只读快照中的有界来源。shape 补充父级范围内 UUID 唯一；根与动作由 PostgreSQL 交付保留 `exercises: []`/`sets: []` 键位的骨架，Node 原地替换为懒数组，页面则用上一元素 UUID 恢复 JSON ordinality。因此合法反序 position 既不被重排，也不会因删除再追加键改变对象序；真实 JSONB 逐字节对账已通过。三层仍必须完整读取并显式完成才提交。该来源尚未嵌入 revision history，不能视为完整训练导出。
+
 ## Exercise catalog and history boundary
 
 The active picker combines the versioned `starter-2026-08-05-v1` catalog with owner-created entries. A custom definition has a stable key, display name, aliases, category, tracking mode, equipment and optional equipment notes. Creation is idempotent, correction uses an expected revision, and archive removes the definition from active search while keeping immutable definition revisions.

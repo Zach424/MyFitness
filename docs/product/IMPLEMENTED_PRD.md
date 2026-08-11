@@ -511,8 +511,9 @@ H5 还包含 OIDC 登录页；微信小程序通过微信登录码换取会话�
 - 新读取世代会使旧导出副作用失效，避免把过期响应落盘。
 - 内部异步归档基础已能在一个只读 repeatable-read 流事务中按 UUID 锚点分批读取同意事件、健康记录和健康修订，并通过三个懒数组节点按 v4 字段顺序输出，不先建立对应集合数组。数据库只校验一次 active owner，先后比较完整 `(accepted_at, id)`、`(occurred_at, created_at, id)` 与 `(changed_at, revision, id)`；同步同意查询也使用 UUID 尾序。同意历史复用既有降序索引的反向扫描，不新增迁移。每行 JSON payload 由 PostgreSQL 精确计量 UTF-8，只有不超过 64 KiB 的文本才交给 Node。三个字段结束后仍不提交，只有 JSON 根物理 EOF 才提交；字段内、字段间或后续 JSON 取消均回滚，数据库与 JSON 收据共享取消原因。其余十个顶层集合、嵌套聚合和媒体仍完整驻留，完整数据库导出尚未切换。后续字节可分块认证加密并用可中止的 multipart 条件写入私有对象，但当前也无公开入口、KMS、租约状态执行器、下载或到期清理，不能把它展示为用户可用导出。
 - 同步 workout 导出现在以 `(started_at,created_at,id)` 固定同时间总序，当前关系表的动作、组和修订继续按数据库唯一 position/position/revision 输出。真实数据库证明现有创建契约允许的 30 个动作 × 每动作 50 组当前训练，在排除 history 后单项 JSON 仍超过 64 KiB；修订数量还没有上限且每条保存完整图。因此 workouts 不得接到简单聚合行源，也不得调高门禁。内部 `createWorkoutRevisionHeaderLayerSnapshot()` 已把全历史 owner workout 头、九字段动作头、十一字段 set 和四字段修订头放入同一只读 repeatable-read 根事务；关系图必须先完整读取，history 才能启动。软删除、owner/并发修订隔离、既有修订索引计划、显式完成提交和活动 history/关系子流取消均通过验证。
-- 内部 `inspectWorkoutRevisionSnapshotShape()` 现在能在正文不出库的前提下检查单条 revision snapshot：收据只含 revision 数字、`legacy|extended|mixed`、根/动作/组字节数、计数、存储顺序标志和 `decomposable`，不含 UUID、动作名或备注。严格键集、父链身份、数组结构、数量、position 唯一和每元素 64 KiB 共同决定可分解结论；未知字段和超限失败关闭。合法历史数组允许 position `[2,1]`，未来必须按 JSON ordinality 保留，不能按 position 重排。该收据不是完整领域验证，也不交付 snapshot 正文。
-- 内部 v4 JSON 来源现在可以在任意嵌套对象中显式放置懒数组；workout exercises/sets/history 测试证明与 eager v4 字节相同、只在遍历到字段时启动，内层取消先关闭活动来源并取消同一文件根。数据库已实现 workout→exercise→set→revision header 的同根分层组装、四段收据和 snapshot shape 前置门禁，但 history 元素的 ordinality 分页正文与公开 v4 连接仍未实现。当前同步下载和公开 Schema 保持不变，内存风险没有下降。
+- 内部 `inspectWorkoutRevisionSnapshotShape()` 现在能在正文不出库的前提下检查单条 revision snapshot：收据只含 revision 数字、`legacy|extended|mixed`、根/动作/组字节数、计数、存储顺序标志和 `decomposable`，不含 UUID、动作名或备注。严格键集、父链身份、数组结构、数量、position 与 UUID 唯一和每元素 64 KiB 共同决定可分解结论；未知字段、重复 UUID 和超限失败关闭。
+- 内部 `createWorkoutRevisionSnapshot()` 在 shape 通过后，以同一只读 repeatable-read 事务交付根→exercise→set。根/动作使用保留键位的空数组骨架，Node 原地替换懒来源；动作/组按 JSON ordinality 和 UUID 锚点分页，合法 position `[2,1]` 不重排。真实数据库证明物化结果与直接 JSONB 逐字节相同，跨 owner、跳过、重复、早停和最深层取消失败关闭。它仍是单 revision 内部能力，没有接入 history 或公开 v4。
+- 内部 v4 JSON 来源现在可以在任意嵌套对象中显式放置懒数组；当前关系图四层和单 snapshot 三层分别通过生命周期验证，但尚未组合。当前同步下载和公开 Schema 保持不变，内存风险没有下降。
 
 ### 19.3 授权历史与撤回
 
