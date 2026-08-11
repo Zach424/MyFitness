@@ -242,4 +242,75 @@ describe('portable export incremental JSON stream', () => {
     await expect(collect(session.bytes)).rejects.toBe(sourceError)
     await receiptRejection
   })
+
+  it('holds root completion until physical JSON EOF and forwards one cancellation cause', async () => {
+    let completed = false
+    let cancelledWith: unknown
+    const successful = createPortableExportJsonStream(fixture(), {
+      chunkBytes: 17,
+      lifecycle: {
+        complete: () => {
+          completed = true
+        },
+        cancel: () => {
+          throw new Error('successful JSON must not cancel its root lifecycle')
+        },
+      },
+    })
+    const successfulIterator = successful.bytes[Symbol.asyncIterator]()
+
+    while (true) {
+      const next = await successfulIterator.next()
+      if (next.done) break
+      expect(completed).toBe(false)
+    }
+
+    expect(completed).toBe(true)
+    await expect(successful.receipt).resolves.toMatchObject({ chunkBytes: 17 })
+
+    const cancelled = createPortableExportJsonStream(fixture(), {
+      chunkBytes: 17,
+      lifecycle: {
+        complete: () => {
+          throw new Error('incomplete JSON must not complete its root lifecycle')
+        },
+        cancel: (error) => {
+          cancelledWith = error
+        },
+      },
+    })
+    const cancelledIterator = cancelled.bytes[Symbol.asyncIterator]()
+    await expect(cancelledIterator.next()).resolves.toMatchObject({ done: false })
+    const receiptFailure = cancelled.receipt.catch((error: unknown) => error)
+
+    await cancelledIterator.return?.()
+
+    expect(await receiptFailure).toBe(cancelledWith)
+    expect(cancelledWith).toMatchObject({
+      message: 'portable export JSON stream did not complete',
+    })
+  })
+
+  it('preserves one ordered aggregate when root cancellation cleanup also fails', async () => {
+    const cleanupError = new Error('root lifecycle cleanup failed')
+    let rootError: unknown
+    const session = createPortableExportJsonStream(fixture(), {
+      chunkBytes: 17,
+      lifecycle: {
+        complete: () => undefined,
+        cancel: (error) => {
+          rootError = error
+          throw new AggregateError([error, cleanupError], 'root and cleanup failed')
+        },
+      },
+    })
+    const iterator = session.bytes[Symbol.asyncIterator]()
+    await expect(iterator.next()).resolves.toMatchObject({ done: false })
+    const receiptFailure = session.receipt.catch((error: unknown) => error)
+    const returnFailure = await iterator.return?.().catch((error: unknown) => error)
+
+    expect(returnFailure).toBe(await receiptFailure)
+    expect(returnFailure).toBeInstanceOf(AggregateError)
+    expect((returnFailure as AggregateError).errors).toEqual([rootError, cleanupError])
+  })
 })

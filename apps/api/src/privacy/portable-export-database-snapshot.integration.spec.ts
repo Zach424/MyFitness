@@ -277,6 +277,179 @@ describe('portable export bounded PostgreSQL snapshot', () => {
     })
   })
 
+  it('keeps current health facts and revisions in one root-committed database snapshot', async () => {
+    const userId = await createUser()
+    const firstRecordId = await createRecord(userId, '2026-08-11T01:50:00.000001Z', 70)
+    const secondRecordId = await createRecord(userId, '2026-08-11T01:50:00.000002Z', 71)
+    const firstRevisionId = await createRevision(
+      userId,
+      firstRecordId,
+      '2026-08-11T01:55:00.000001Z',
+    )
+    const secondRevisionId = await createRevision(
+      userId,
+      secondRecordId,
+      '2026-08-11T01:55:00.000002Z',
+    )
+    const stable = snapshots.createHealthHistorySnapshot(userId, { batchRows: 1 })
+    const stableRecords: Array<Record<string, unknown>> = []
+    const stableRevisions: Array<Record<string, unknown>> = []
+
+    for await (const row of stable.healthRecords) stableRecords.push(row)
+    const concurrentRecordId = await createRecord(userId, '2026-08-11T01:50:00.000003Z', 72)
+    const concurrentRevisionId = await createRevision(
+      userId,
+      concurrentRecordId,
+      '2026-08-11T01:55:00.000003Z',
+    )
+    for await (const row of stable.healthRecordRevisions) stableRevisions.push(row)
+    let receiptSettled = false
+    void stable.receipt.finally(() => {
+      receiptSettled = true
+    })
+
+    expect(stableRecords.map((row) => row.id)).toEqual([firstRecordId, secondRecordId])
+    expect(stableRevisions.map((row) => row.id)).toEqual([firstRevisionId, secondRevisionId])
+    expect(stableRevisions.some((row) => row.id === concurrentRevisionId)).toBe(false)
+    expect(receiptSettled).toBe(false)
+
+    await stable.complete()
+
+    await expect(stable.receipt).resolves.toEqual({
+      batchRows: 1,
+      maximumPayloadBytes: portableExportSnapshotMaximumPayloadBytes,
+      healthRecords: { batchCount: 2, rowCount: 2 },
+      healthRecordRevisions: { batchCount: 2, rowCount: 2 },
+    })
+
+    const eager = snapshots.createHealthHistorySnapshot(userId, { batchRows: 2 })
+    const eagerRecords: Array<Record<string, unknown>> = []
+    const eagerRevisions: Array<Record<string, unknown>> = []
+    for await (const row of eager.healthRecords) eagerRecords.push(row)
+    for await (const row of eager.healthRecordRevisions) eagerRevisions.push(row)
+    await eager.complete()
+    const eagerPayload = privacyExportSchema.parse({
+      schemaVersion: privacyExportSchemaVersion,
+      generatedAt: '2026-08-11T01:59:00.000Z',
+      accountId: userId,
+      data: {
+        account: { id: userId, status: 'active' },
+        identities: [],
+        profile: null,
+        goal: null,
+        consentEvents: [],
+        healthRecords: eagerRecords,
+        healthRecordRevisions: eagerRevisions,
+        exerciseCatalog: [],
+        foodCatalog: [],
+        workouts: [],
+        nutritionMeals: [],
+        nutritionFavorites: [],
+        weeklyPlans: [],
+        aiExplanationRuns: [],
+        foodPhotoAnalyses: [],
+        progressPhotos: [],
+      },
+    })
+    expect(eagerRecords.map((row) => row.id)).toContain(concurrentRecordId)
+    expect(eagerRevisions.map((row) => row.id)).toContain(concurrentRevisionId)
+    const expected = serializePortableExport(eagerPayload, Number.MAX_SAFE_INTEGER)
+
+    const lazy = snapshots.createHealthHistorySnapshot(userId, { batchRows: 2 })
+    const json = createPortableExportJsonStream(
+      {
+        ...eagerPayload,
+        data: {
+          ...eagerPayload.data,
+          healthRecords: portableExportJsonAsyncArray(lazy.healthRecords),
+          healthRecordRevisions: portableExportJsonAsyncArray(lazy.healthRecordRevisions),
+        },
+      },
+      { chunkBytes: 43, lifecycle: lazy },
+    )
+    const chunks: Buffer[] = []
+    for await (const chunk of json.bytes) chunks.push(Buffer.from(chunk))
+
+    expect(Buffer.concat(chunks)).toEqual(expected)
+    await expect(lazy.receipt).resolves.toEqual({
+      batchRows: 2,
+      maximumPayloadBytes: portableExportSnapshotMaximumPayloadBytes,
+      healthRecords: { batchCount: 2, rowCount: 3 },
+      healthRecordRevisions: { batchCount: 2, rowCount: 3 },
+    })
+    await expect(json.receipt).resolves.toEqual({
+      schemaVersion: privacyExportSchemaVersion,
+      chunkBytes: 43,
+      byteLength: expected.length,
+      sha256: createHash('sha256').update(expected).digest('hex'),
+    })
+  })
+
+  it('rolls back one root transaction when JSON is cancelled between health fields', async () => {
+    const userId = await createUser()
+    const recordId = await createRecord(userId, '2026-08-11T01:59:30.000001Z', 70)
+    await createRevision(userId, recordId, '2026-08-11T01:59:40.000001Z')
+    const snapshot = snapshots.createHealthHistorySnapshot(userId, { batchRows: 1 })
+    let healthRecordsCompleted = false
+    let healthRecordRevisionsStarted = false
+    const observedHealthRecords = (async function* () {
+      for await (const row of snapshot.healthRecords) yield row
+      healthRecordsCompleted = true
+    })()
+    const observedHealthRecordRevisions = (async function* () {
+      healthRecordRevisionsStarted = true
+      yield* snapshot.healthRecordRevisions
+    })()
+    const payload = privacyExportSchema.parse({
+      schemaVersion: privacyExportSchemaVersion,
+      generatedAt: '2026-08-11T01:59:50.000Z',
+      accountId: userId,
+      data: {
+        account: { id: userId },
+        identities: [],
+        profile: null,
+        goal: null,
+        consentEvents: [],
+        healthRecords: [],
+        healthRecordRevisions: [],
+        exerciseCatalog: [],
+        foodCatalog: [],
+        workouts: [],
+        nutritionMeals: [],
+        nutritionFavorites: [],
+        weeklyPlans: [],
+        aiExplanationRuns: [],
+        foodPhotoAnalyses: [],
+        progressPhotos: [],
+      },
+    })
+    const json = createPortableExportJsonStream(
+      {
+        ...payload,
+        data: {
+          ...payload.data,
+          healthRecords: portableExportJsonAsyncArray(observedHealthRecords),
+          healthRecordRevisions: portableExportJsonAsyncArray(observedHealthRecordRevisions),
+        },
+      },
+      { chunkBytes: 1, lifecycle: snapshot },
+    )
+    const iterator = json.bytes[Symbol.asyncIterator]()
+    while (!healthRecordsCompleted) {
+      await expect(iterator.next()).resolves.toMatchObject({ done: false })
+    }
+    expect(healthRecordRevisionsStarted).toBe(false)
+    const jsonFailure = json.receipt.catch((error: unknown) => error)
+    const snapshotFailure = snapshot.receipt.catch((error: unknown) => error)
+
+    await iterator.return?.()
+
+    expect(await snapshotFailure).toBe(await jsonFailure)
+    expect(await jsonFailure).toMatchObject({
+      message: 'portable export JSON stream did not complete',
+    })
+  })
+
   it('fails closed for an inactive owner and for cancellation between rows', async () => {
     const disabledUserId = await createUser('disabled')
     const inactive = snapshots.createHealthRecordSnapshot(disabledUserId)

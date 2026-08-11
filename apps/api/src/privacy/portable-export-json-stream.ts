@@ -18,6 +18,17 @@ export type PortableExportJsonStreamSession = {
   receipt: Promise<PortableExportJsonStreamReceipt>
 }
 
+export type PortableExportJsonStreamLifecycle = {
+  complete: () => void | Promise<void>
+  cancel: (error: unknown) => void | Promise<void>
+}
+
+export type PortableExportJsonStreamOptions = {
+  chunkBytes?: number
+  maximumBytes?: number
+  lifecycle?: PortableExportJsonStreamLifecycle
+}
+
 const portableExportJsonAsyncArrayTag: unique symbol = Symbol('portableExportJsonAsyncArray')
 
 export type PortableExportJsonAsyncArray<T> = {
@@ -223,7 +234,7 @@ async function* utf8Chunks(
 
 export const createPortableExportJsonStream = (
   payload: PortableExportJsonSource,
-  options: { chunkBytes?: number; maximumBytes?: number } = {},
+  options: PortableExportJsonStreamOptions = {},
 ): PortableExportJsonStreamSession => {
   const chunkBytes = validateChunkBytes(
     options.chunkBytes ?? portableExportJsonStreamDefaultChunkBytes,
@@ -240,6 +251,8 @@ export const createPortableExportJsonStream = (
     const hash = createHash('sha256')
     let byteLength = 0
     let completed = false
+    let failure: unknown
+    let finalFailure: unknown
 
     try {
       const tokens = (async function* () {
@@ -254,6 +267,7 @@ export const createPortableExportJsonStream = (
         hash.update(chunk)
         yield chunk
       }
+      await options.lifecycle?.complete()
       completed = true
       resolveReceipt({
         schemaVersion: privacyExportSchemaVersion,
@@ -262,11 +276,29 @@ export const createPortableExportJsonStream = (
         sha256: hash.digest('hex'),
       })
     } catch (error) {
-      rejectReceipt(error)
-      throw error
+      failure = error
     } finally {
-      if (!completed) rejectReceipt(new Error('portable export JSON stream did not complete'))
+      if (!completed) {
+        const rootError = failure ?? new Error('portable export JSON stream did not complete')
+        finalFailure = rootError
+        try {
+          await options.lifecycle?.cancel(rootError)
+        } catch (cleanupError) {
+          if (cleanupError instanceof AggregateError && cleanupError.errors[0] === rootError) {
+            finalFailure = cleanupError
+          } else if (cleanupError !== rootError) {
+            finalFailure = new AggregateError(
+              [rootError, cleanupError],
+              'portable export JSON stream and root lifecycle cleanup both failed',
+            )
+          }
+        }
+        rejectReceipt(finalFailure)
+        if (failure === undefined && finalFailure !== rootError) throw finalFailure
+      }
     }
+
+    if (failure !== undefined) throw finalFailure
   })()
 
   return { bytes, receipt }

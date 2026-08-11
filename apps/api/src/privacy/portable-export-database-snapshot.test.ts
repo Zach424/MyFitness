@@ -35,6 +35,61 @@ const fakeDatabase = (values: Array<Record<string, unknown>>) =>
     },
   }) as unknown as DatabaseService
 
+const fakeHealthHistoryDatabase = (
+  healthRecords: Array<Record<string, unknown>>,
+  healthRecordRevisions: Array<Record<string, unknown>>,
+) => {
+  const lifecycle = {
+    accountQueries: 0,
+    streamCount: 0,
+    committed: false,
+    rolledBack: false,
+  }
+  const database = {
+    streamReadOnlyRepeatableRead: (operation: (client: PoolClient) => AsyncIterable<unknown>) => {
+      lifecycle.streamCount += 1
+      const client = {
+        query: async (sql: string, parameters: unknown[]) => {
+          if (sql.startsWith('SELECT id FROM users')) {
+            lifecycle.accountQueries += 1
+            return { rows: [{ id: parameters[0] }] }
+          }
+          const values = sql.includes('FROM health_record_revisions')
+            ? healthRecordRevisions
+            : healthRecords
+          const anchorId = parameters[1] as string | null
+          const batchRows = parameters[2] as number
+          const maximumPayloadBytes = parameters[3] as number
+          const anchorIndex = anchorId ? values.findIndex((value) => value.id === anchorId) : -1
+          return {
+            rows: values.slice(anchorIndex + 1, anchorIndex + 1 + batchRows).map((payload) => {
+              const payloadText = JSON.stringify(payload)
+              const payloadByteLength = Buffer.byteLength(payloadText)
+              return {
+                id: payload.id,
+                payload_text: payloadByteLength <= maximumPayloadBytes ? payloadText : null,
+                payload_byte_length: payloadByteLength,
+              }
+            }),
+          }
+        },
+      } as unknown as PoolClient
+
+      return (async function* () {
+        let completed = false
+        try {
+          for await (const value of operation(client)) yield value
+          completed = true
+          lifecycle.committed = true
+        } finally {
+          if (!completed) lifecycle.rolledBack = true
+        }
+      })()
+    },
+  } as unknown as DatabaseService
+  return { database, lifecycle }
+}
+
 describe('portable export database snapshot session', () => {
   it('publishes a bounded receipt only after every row is consumed', async () => {
     const service = new PortableExportDatabaseSnapshotService(
@@ -166,5 +221,59 @@ describe('portable export database snapshot session', () => {
     )
     await iterator.return?.()
     await receiptRejection
+  })
+
+  it('coordinates both health collections in one stream and commits only after root completion', async () => {
+    const { database, lifecycle } = fakeHealthHistoryDatabase(
+      [{ id: 'record-1' }, { id: 'record-2' }],
+      [{ id: 'revision-1' }],
+    )
+    const service = new PortableExportDatabaseSnapshotService(database)
+    const session = service.createHealthHistorySnapshot('11111111-1111-4111-8111-111111111111', {
+      batchRows: 1,
+    })
+    const records: Array<Record<string, unknown>> = []
+    const revisions: Array<Record<string, unknown>> = []
+
+    for await (const row of session.healthRecords) records.push(row)
+    expect(lifecycle.committed).toBe(false)
+    for await (const row of session.healthRecordRevisions) revisions.push(row)
+    expect(lifecycle.committed).toBe(false)
+
+    await session.complete()
+
+    expect(records.map((row) => row.id)).toEqual(['record-1', 'record-2'])
+    expect(revisions.map((row) => row.id)).toEqual(['revision-1'])
+    expect(lifecycle).toMatchObject({
+      accountQueries: 1,
+      streamCount: 1,
+      committed: true,
+      rolledBack: false,
+    })
+    await expect(session.receipt).resolves.toEqual({
+      batchRows: 1,
+      maximumPayloadBytes: portableExportSnapshotMaximumPayloadBytes,
+      healthRecords: { batchCount: 2, rowCount: 2 },
+      healthRecordRevisions: { batchCount: 1, rowCount: 1 },
+    })
+  })
+
+  it('rolls back the shared stream with one root cause when cancelled between collections', async () => {
+    const { database, lifecycle } = fakeHealthHistoryDatabase(
+      [{ id: 'record-1' }],
+      [{ id: 'revision-1' }],
+    )
+    const service = new PortableExportDatabaseSnapshotService(database)
+    const session = service.createHealthHistorySnapshot('11111111-1111-4111-8111-111111111111')
+    for await (const _ of session.healthRecords) {
+      // Finish the first collection and leave the transaction between fields.
+    }
+    const cancellation = new Error('portable export root was cancelled between fields')
+    const receiptFailure = session.receipt.catch((error: unknown) => error)
+
+    await session.cancel(cancellation)
+
+    expect(lifecycle).toMatchObject({ committed: false, rolledBack: true })
+    expect(await receiptFailure).toBe(cancellation)
   })
 })

@@ -32,6 +32,26 @@ export type PortableExportHealthRecordRevisionSnapshotReceipt =
 export type PortableExportHealthRecordRevisionSnapshotSession =
   PortableExportDatabaseSnapshotSession
 
+export type PortableExportHealthHistorySnapshotCollectionReceipt = {
+  batchCount: number
+  rowCount: number
+}
+
+export type PortableExportHealthHistorySnapshotReceipt = {
+  batchRows: number
+  maximumPayloadBytes: number
+  healthRecords: PortableExportHealthHistorySnapshotCollectionReceipt
+  healthRecordRevisions: PortableExportHealthHistorySnapshotCollectionReceipt
+}
+
+export type PortableExportHealthHistorySnapshotSession = {
+  healthRecords: AsyncIterable<Record<string, unknown>>
+  healthRecordRevisions: AsyncIterable<Record<string, unknown>>
+  receipt: Promise<PortableExportHealthHistorySnapshotReceipt>
+  complete: () => Promise<void>
+  cancel: (error: unknown) => Promise<void>
+}
+
 type BoundedSnapshotRow = QueryResultRow & {
   id: string
   payload_text: string | null
@@ -151,7 +171,7 @@ function* boundedPagePayloads(
   }
 }
 
-async function* healthRecordRows(
+async function* healthRecordPageRows(
   client: PoolClient,
   userId: string,
   batchRows: number,
@@ -160,8 +180,6 @@ async function* healthRecordRows(
   signal?: AbortSignal,
 ): AsyncGenerator<Record<string, unknown>> {
   throwIfAborted(signal)
-  await assertActiveAccount(client, userId)
-
   let anchorId: string | null = null
 
   while (true) {
@@ -212,7 +230,7 @@ async function* healthRecordRows(
   }
 }
 
-async function* healthRecordRevisionRows(
+async function* healthRecordRevisionPageRows(
   client: PoolClient,
   userId: string,
   batchRows: number,
@@ -221,8 +239,6 @@ async function* healthRecordRevisionRows(
   signal?: AbortSignal,
 ): AsyncGenerator<Record<string, unknown>> {
   throwIfAborted(signal)
-  await assertActiveAccount(client, userId)
-
   let anchorId: string | null = null
 
   while (true) {
@@ -271,6 +287,32 @@ async function* healthRecordRevisionRows(
     anchorId = page.rows.at(-1)!.id
     if (page.rows.length < batchRows) break
   }
+}
+
+async function* healthRecordRows(
+  client: PoolClient,
+  userId: string,
+  batchRows: number,
+  maximumPayloadBytes: number,
+  stats: MutableSnapshotStats,
+  signal?: AbortSignal,
+): AsyncGenerator<Record<string, unknown>> {
+  throwIfAborted(signal)
+  await assertActiveAccount(client, userId)
+  yield* healthRecordPageRows(client, userId, batchRows, maximumPayloadBytes, stats, signal)
+}
+
+async function* healthRecordRevisionRows(
+  client: PoolClient,
+  userId: string,
+  batchRows: number,
+  maximumPayloadBytes: number,
+  stats: MutableSnapshotStats,
+  signal?: AbortSignal,
+): AsyncGenerator<Record<string, unknown>> {
+  throwIfAborted(signal)
+  await assertActiveAccount(client, userId)
+  yield* healthRecordRevisionPageRows(client, userId, batchRows, maximumPayloadBytes, stats, signal)
 }
 
 type SnapshotRowsFactory = (
@@ -327,6 +369,191 @@ const createSnapshotSession = (
   return { rows, receipt }
 }
 
+type HealthHistoryCollection = 'healthRecords' | 'healthRecordRevisions'
+
+type HealthHistorySnapshotItem =
+  | {
+      kind: 'row'
+      collection: HealthHistoryCollection
+      value: Record<string, unknown>
+    }
+  | {
+      kind: 'boundary'
+      collection: HealthHistoryCollection
+    }
+
+const createHealthHistorySnapshotSession = (
+  database: DatabaseService,
+  userId: string,
+  options: PortableExportDatabaseSnapshotOptions,
+): PortableExportHealthHistorySnapshotSession => {
+  const batchRows = validateBatchRows(options.batchRows ?? portableExportSnapshotDefaultBatchRows)
+  const maximumPayloadBytes = validateMaximumPayloadBytes(
+    options.maximumPayloadBytes ?? portableExportSnapshotMaximumPayloadBytes,
+  )
+  const healthRecordStats: MutableSnapshotStats = { batchCount: 0, rowCount: 0 }
+  const healthRecordRevisionStats: MutableSnapshotStats = { batchCount: 0, rowCount: 0 }
+  let resolveReceipt!: (receipt: PortableExportHealthHistorySnapshotReceipt) => void
+  let rejectReceipt!: (error: unknown) => void
+  const receipt = new Promise<PortableExportHealthHistorySnapshotReceipt>((resolve, reject) => {
+    resolveReceipt = resolve
+    rejectReceipt = reject
+  })
+
+  const transactionItems = database.streamReadOnlyRepeatableRead(
+    async function* (client): AsyncGenerator<HealthHistorySnapshotItem> {
+      throwIfAborted(options.signal)
+      await assertActiveAccount(client, userId)
+      for await (const value of healthRecordPageRows(
+        client,
+        userId,
+        batchRows,
+        maximumPayloadBytes,
+        healthRecordStats,
+        options.signal,
+      )) {
+        yield { kind: 'row', collection: 'healthRecords', value }
+      }
+      yield { kind: 'boundary', collection: 'healthRecords' }
+
+      for await (const value of healthRecordRevisionPageRows(
+        client,
+        userId,
+        batchRows,
+        maximumPayloadBytes,
+        healthRecordRevisionStats,
+        options.signal,
+      )) {
+        yield { kind: 'row', collection: 'healthRecordRevisions', value }
+      }
+      yield { kind: 'boundary', collection: 'healthRecordRevisions' }
+      throwIfAborted(options.signal)
+    },
+  )
+  const transactionIterator = transactionItems[Symbol.asyncIterator]()
+  let state: HealthHistoryCollection | 'ready' | 'complete' | 'failed' = 'healthRecords'
+  let activeCollection: HealthHistoryCollection | undefined
+  let finalized = false
+
+  const fail = async (rootError: unknown) => {
+    if (finalized) return rootError
+    finalized = true
+    state = 'failed'
+    let cleanupError: unknown
+    try {
+      await transactionIterator.return?.()
+    } catch (error) {
+      cleanupError = error
+    }
+    const finalError =
+      cleanupError === undefined || cleanupError === rootError
+        ? rootError
+        : new AggregateError(
+            [rootError, cleanupError],
+            'portable export health history snapshot and transaction cleanup both failed',
+          )
+    rejectReceipt(finalError)
+    return finalError
+  }
+
+  const consumeCollection = async function* (
+    collection: HealthHistoryCollection,
+  ): AsyncGenerator<Record<string, unknown>> {
+    if (finalized || activeCollection !== undefined || state !== collection) {
+      const error = new Error(
+        'portable export health history collections must be read once in order',
+      )
+      throw await fail(error)
+    }
+
+    activeCollection = collection
+    let reachedBoundary = false
+    try {
+      while (true) {
+        const next = await transactionIterator.next()
+        if (next.done) {
+          throw new Error('portable export health history snapshot ended before its boundary')
+        }
+        if (next.value.kind === 'boundary') {
+          if (next.value.collection !== collection) {
+            throw new Error('portable export health history snapshot returned an invalid boundary')
+          }
+          reachedBoundary = true
+          state = collection === 'healthRecords' ? 'healthRecordRevisions' : 'ready'
+          return
+        }
+        if (next.value.collection !== collection) {
+          throw new Error('portable export health history snapshot returned an out-of-order row')
+        }
+        yield next.value.value
+      }
+    } catch (error) {
+      throw await fail(error)
+    } finally {
+      activeCollection = undefined
+      if (!reachedBoundary && !finalized) {
+        await fail(new Error('portable export health history snapshot did not complete'))
+      }
+    }
+  }
+
+  const createCollection = (collection: HealthHistoryCollection) => {
+    let started = false
+    return {
+      [Symbol.asyncIterator]: () =>
+        (async function* () {
+          if (started) {
+            const error = new Error(
+              'portable export health history collections must be read once in order',
+            )
+            throw await fail(error)
+          }
+          started = true
+          yield* consumeCollection(collection)
+        })(),
+    }
+  }
+
+  const complete = async () => {
+    if (finalized || activeCollection !== undefined || state !== 'ready') {
+      const error = new Error(
+        'portable export health history snapshot cannot commit before every collection completes',
+      )
+      throw await fail(error)
+    }
+    try {
+      const next = await transactionIterator.next()
+      if (!next.done) {
+        throw new Error('portable export health history snapshot returned data after its boundary')
+      }
+      finalized = true
+      state = 'complete'
+      resolveReceipt({
+        batchRows,
+        maximumPayloadBytes,
+        healthRecords: { ...healthRecordStats },
+        healthRecordRevisions: { ...healthRecordRevisionStats },
+      })
+    } catch (error) {
+      throw await fail(error)
+    }
+  }
+
+  const cancel = async (error: unknown) => {
+    const rootError = error ?? new Error('portable export health history snapshot was cancelled')
+    const finalError = await fail(rootError)
+    if (finalError !== rootError) throw finalError
+  }
+
+  return {
+    healthRecords: createCollection('healthRecords'),
+    healthRecordRevisions: createCollection('healthRecordRevisions'),
+    receipt,
+    complete,
+    cancel,
+  }
+}
+
 @Injectable()
 export class PortableExportDatabaseSnapshotService {
   constructor(private readonly database: DatabaseService) {}
@@ -343,5 +570,12 @@ export class PortableExportDatabaseSnapshotService {
     options: PortableExportDatabaseSnapshotOptions = {},
   ): PortableExportHealthRecordRevisionSnapshotSession {
     return createSnapshotSession(this.database, userId, options, healthRecordRevisionRows)
+  }
+
+  createHealthHistorySnapshot(
+    userId: string,
+    options: PortableExportDatabaseSnapshotOptions = {},
+  ): PortableExportHealthHistorySnapshotSession {
+    return createHealthHistorySnapshotSession(this.database, userId, options)
   }
 }
