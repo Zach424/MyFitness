@@ -32,11 +32,11 @@
 - 原生 Apple Health、Health Connect 或穿戴设备自动同步。
 - 照片人体测量、姿态诊断、精确体脂率或“好坏体态”判断。
 - AI 自动修改计划、自动确认事实、自动写入餐食或自动提高训练量。
-- 用户可见的 Personal Model、Pattern/Hypothesis 生命周期、Weekly Cognitive Review、用户校准和模型修订闭环；当前只有内部 item/revision/feedback/evidence、goal/workout 来源资格及 refresh request/resolution 持久内核。
+- 用户可见的 Personal Model、Pattern/Hypothesis 生命周期、Weekly Cognitive Review 和模型修订闭环；当前只有内部持久内核、反馈事务和首个 training availability 确定性派生/refresh，尚无产品入口。
 - 基于长期个人模型自动执行 Contextual Decision，或把相关性、短期状态和用户未确认推断当作稳定人格标签。
 - 用户端离线写入队列；网络结果不确定时不会在后台自动重放请求。
 
-仓库已实现 Personal Model P1a/P1b 内部共享契约，以及 P2a item/revision、P2b feedback 和 P2c evidence/source PostgreSQL 内核。复合 owner 外键、不可变触发器和延迟原子发布保护完整历史链；追加式反馈与结果 revision 不可分离；每个新 revision 又必须在同一事务把完整有序 EvidenceReference 投影成不可变行，提交时核对快照数组、身份、顺序、资格及支持/反对/撤回计数。onboarding goal 具有稳定聚合、不可变快照与诚实检查点；goal/workout evidence 进一步通过生成式类型键绑定同 owner 精确来源，新 eligible 引用必须命中当前未删除来源。来源更正/删除会在原事务生成不可变 refresh request，下一模型 revision 必须包含对应 withdrawn context 并形成 resolution，否则回滚。该协议尚无确定性消费执行器；回顾、Personal Model 便携导出、API、派生服务和客户端也未接入，因此不构成用户可见的个人模型、每周认知回顾或自动适应功能。
+仓库已实现 Personal Model P1a/P1b 契约和 P2a–P2c PostgreSQL 内核，完整修订、用户反馈、有序 EvidenceReference、goal/workout 精确来源及 refresh request/resolution 都受 owner、不可变和提交时门禁保护。第 189 轮又完成首个 `training_availability_constraint_v1` 内部确定性路径：从当前 goal 创建 user-confirmed Constraint，相同语义 no-op，goal 更正时以旧 withdrawn + 当前 eligible 来源追加修订并解决请求；用户不同意保持 disputed，终态不复活。它没有控制器、自动触发、公开 API 或客户端；纵向 Behavior/Baseline、回顾、Personal Model 便携导出也未接入，因此不构成用户可见认知镜子或自动适应功能。
 
 ## 3. 用户、权限与信任边界
 

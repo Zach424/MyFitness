@@ -1,7 +1,9 @@
+import { createHash, randomUUID } from 'node:crypto'
 import { isDeepStrictEqual } from 'node:util'
 
 import { Injectable } from '@nestjs/common'
 import {
+  onboardingGoalRevisionSnapshotSchema,
   personalModelFeedbackEventSchema,
   personalModelFeedbackTransitionResultSchema,
   personalModelFeedbackTransitionVersion,
@@ -15,6 +17,10 @@ import {
 import type { PoolClient } from 'pg'
 
 import { DatabaseService } from '../database/database.service'
+import {
+  deriveTrainingAvailability,
+  type TrainingAvailabilityDerivationResult,
+} from './personal-model-training-availability'
 
 type PersonalModelRevisionRow = {
   id: string
@@ -51,7 +57,34 @@ type PersonalModelFeedbackEventRow = {
   result_fingerprint: string
 }
 
+type TrainingAvailabilityProfileRow = {
+  timezone: string
+  revision: number
+}
+
+type TrainingAvailabilityGoalRow = {
+  snapshot: unknown
+}
+
+type TrainingAvailabilityItemRow = {
+  id: string
+}
+
+type TrainingAvailabilityPendingRequestRow = {
+  affected_item_revision: number
+  evidence_kind: string
+  source_aggregate_id: string
+  withdrawn_source_revision: number
+  observed_source_revision: number
+  reason: string
+}
+
+type TrainingAvailabilityEvaluationRow = {
+  evaluated_at: Date
+}
+
 const maximumHistoryPageSize = 50
+const sha256Hex = (value: string) => createHash('sha256').update(value, 'utf8').digest('hex')
 
 const canonicalizeDateTime = (value: string): string => new Date(value).toISOString()
 
@@ -414,6 +447,13 @@ export class PersonalModelRevisionConflictError extends Error {
   }
 }
 
+export class TrainingAvailabilitySourceNotFoundError extends Error {
+  constructor() {
+    super('current onboarding goal source not found')
+    this.name = 'TrainingAvailabilitySourceNotFoundError'
+  }
+}
+
 @Injectable()
 export class PersonalModelRepository {
   constructor(private readonly database: DatabaseService) {}
@@ -596,6 +636,192 @@ export class PersonalModelRepository {
       if (updated.rowCount !== 1) throw new PersonalModelRevisionConflictError()
       return transition
     })
+  }
+
+  async refreshTrainingAvailability(userId: string): Promise<TrainingAvailabilityDerivationResult> {
+    try {
+      return await this.database.withTransaction(async (client) => {
+        const owner = await client.query('SELECT 1 FROM users WHERE id = $1 FOR UPDATE', [userId])
+        if (!owner.rows[0]) throw new TrainingAvailabilitySourceNotFoundError()
+
+        const profileResult = await client.query<TrainingAvailabilityProfileRow>(
+          `
+            SELECT timezone, revision
+            FROM user_profiles
+            WHERE user_id = $1
+            FOR SHARE
+          `,
+          [userId],
+        )
+        const profile = profileResult.rows[0]
+        if (!profile) throw new TrainingAvailabilitySourceNotFoundError()
+
+        const goalResult = await client.query<TrainingAvailabilityGoalRow>(
+          `
+            SELECT history.snapshot
+            FROM user_goals AS goal
+            JOIN user_goal_revisions AS history
+              ON history.user_id = goal.user_id
+             AND history.goal_id = goal.goal_id
+             AND history.revision = goal.revision
+            WHERE goal.user_id = $1 AND goal.revision = $2
+            FOR SHARE OF goal
+          `,
+          [userId, profile.revision],
+        )
+        const goalRow = goalResult.rows[0]
+        if (!goalRow) throw new TrainingAvailabilitySourceNotFoundError()
+        const goalRevision = onboardingGoalRevisionSnapshotSchema.parse(goalRow.snapshot)
+
+        const itemResult = await client.query<TrainingAvailabilityItemRow>(
+          `
+            SELECT id
+            FROM personal_model_items
+            WHERE user_id = $1 AND subject_key = 'training.availability'
+          `,
+          [userId],
+        )
+        const itemId = itemResult.rows[0]?.id ?? randomUUID()
+        const current = itemResult.rows[0]
+          ? (await lockCurrentRevision(client, userId, itemId)).revision
+          : null
+
+        const pendingRequests =
+          current === null
+            ? []
+            : (
+                await client.query<TrainingAvailabilityPendingRequestRow>(
+                  `
+                    SELECT
+                      request.affected_item_revision,
+                      request.evidence_kind,
+                      request.source_aggregate_id,
+                      request.withdrawn_source_revision,
+                      request.observed_source_revision,
+                      request.reason
+                    FROM personal_model_source_refresh_requests AS request
+                    LEFT JOIN personal_model_source_refresh_resolutions AS resolution
+                      ON resolution.request_id = request.id
+                    WHERE request.user_id = $1
+                      AND request.item_id = $2
+                      AND resolution.request_id IS NULL
+                    ORDER BY request.created_at, request.id
+                  `,
+                  [userId, itemId],
+                )
+              ).rows
+
+        const evaluationResult = await client.query<TrainingAvailabilityEvaluationRow>(
+          `
+            SELECT GREATEST(
+              clock_timestamp(),
+              $1::timestamptz + INTERVAL '1 millisecond',
+              COALESCE(
+                $2::timestamptz + INTERVAL '1 millisecond',
+                '-infinity'::timestamptz
+              )
+            ) AS evaluated_at
+          `,
+          [goalRevision.changedAt, current?.changedAt ?? null],
+        )
+        const evaluatedAt = evaluationResult.rows[0]?.evaluated_at.toISOString()
+        if (!evaluatedAt) throw new Error('training availability evaluation time is missing')
+
+        const result = deriveTrainingAvailability({
+          goalRevision,
+          timezone: profile.timezone,
+          evaluatedAt,
+          currentRevision: current,
+          ids: {
+            itemId,
+            revisionId: randomUUID(),
+            eligibleReferenceId: randomUUID(),
+          },
+          sha256Hex,
+        })
+
+        if (result.outcome === 'no_op') {
+          if (pendingRequests.length > 0) {
+            throw new PersonalModelRevisionConflictError(
+              'training availability has unresolved source refresh requests',
+            )
+          }
+          return result
+        }
+
+        if (result.outcome === 'created') {
+          if (current !== null || pendingRequests.length > 0) {
+            throw new PersonalModelRevisionConflictError(
+              'training availability creation target is no longer empty',
+            )
+          }
+          await client.query(
+            `
+              INSERT INTO personal_model_items (
+                id, user_id, subject_key, current_revision, created_at, updated_at
+              )
+              VALUES ($1, $2, 'training.availability', 1, $3, $3)
+            `,
+            [itemId, userId, result.revision.changedAt],
+          )
+          const stored = await insertRevision(client, result.revision)
+          return { ...result, revision: stored }
+        }
+
+        if (current === null) {
+          throw new PersonalModelRevisionConflictError(
+            'training availability revision target is missing',
+          )
+        }
+
+        if (result.cause === 'source_refreshed') {
+          const eligibleReference = current.snapshot.evidenceSet.references.find(
+            (reference) =>
+              reference.evidenceKind === 'onboarding_goal_revision' &&
+              reference.qualification === 'eligible',
+          )
+          const pendingRequest = pendingRequests.length === 1 ? pendingRequests[0] : undefined
+          const exactPendingRequest =
+            eligibleReference !== undefined &&
+            pendingRequest !== undefined &&
+            pendingRequest.affected_item_revision <= current.revision &&
+            pendingRequest.evidence_kind === 'onboarding_goal_revision' &&
+            pendingRequest.source_aggregate_id === eligibleReference.aggregateId &&
+            pendingRequest.withdrawn_source_revision === eligibleReference.aggregateRevision &&
+            pendingRequest.observed_source_revision > eligibleReference.aggregateRevision &&
+            pendingRequest.observed_source_revision <= goalRevision.revision &&
+            pendingRequest.reason === 'source_corrected'
+          if (!exactPendingRequest) {
+            throw new PersonalModelRevisionConflictError(
+              'training availability source refresh request does not match the current evidence',
+            )
+          }
+        } else if (pendingRequests.length > 0) {
+          throw new PersonalModelRevisionConflictError(
+            'training availability content reconciliation cannot skip source refresh requests',
+          )
+        }
+
+        const stored = await insertRevision(client, result.revision)
+        const updated = await client.query(
+          `
+            UPDATE personal_model_items
+            SET current_revision = $1, updated_at = $2
+            WHERE user_id = $3 AND id = $4 AND current_revision = $5
+          `,
+          [stored.revision, stored.changedAt, userId, itemId, current.revision],
+        )
+        if (updated.rowCount !== 1) throw new PersonalModelRevisionConflictError()
+        return { ...result, revision: stored }
+      })
+    } catch (error) {
+      if (isPostgresError(error) && error.code === '23505') {
+        throw new PersonalModelRevisionConflictError(
+          'training availability item or revision already exists',
+        )
+      }
+      throw error
+    }
   }
 
   async getCurrent(userId: string, itemId: string): Promise<PersonalModelItemRevision> {
