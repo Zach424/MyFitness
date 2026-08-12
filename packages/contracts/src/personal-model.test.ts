@@ -9,6 +9,8 @@ import {
   personalModelFeedbackApplicationSchema,
   personalModelFeedbackEventSchema,
   personalModelFeedbackTransitionResultSchema,
+  personalModelFeedbackWriteRequestSchema,
+  personalModelFeedbackWriteResponseSchema,
   personalModelItemRevisionSchema,
   personalModelItemSchema,
   personalModelUnknownReceiptSchema,
@@ -907,6 +909,61 @@ describe('personal model contract', () => {
       personalModelFeedbackApplicationSchema.safeParse({
         item: { ...item, status: 'invalidated', validTo: observedThrough },
         event,
+      }).success,
+    ).toBe(false)
+  })
+
+  it('keeps the public feedback write request and response exact and minimal', () => {
+    expect(
+      personalModelFeedbackWriteRequestSchema.safeParse({
+        schemaVersion: 'personal-model-feedback-write-request-v1',
+        eventId: uuidFor(611),
+        choice: 'uncertain',
+        reasonCode: null,
+        note: null,
+        contextValidUntil: null,
+      }).success,
+    ).toBe(true)
+    expect(
+      personalModelFeedbackWriteRequestSchema.safeParse({
+        schemaVersion: 'personal-model-feedback-write-request-v1',
+        eventId: uuidFor(611),
+        choice: 'temporary_context',
+        reasonCode: null,
+        note: null,
+        contextValidUntil: null,
+      }).success,
+    ).toBe(false)
+    expect(
+      personalModelFeedbackWriteResponseSchema.safeParse({
+        schemaVersion: 'personal-model-feedback-write-response-v1',
+        outcome: 'revised',
+        eventId: uuidFor(611),
+        itemId,
+        targetRevision: 1,
+        currentRevision: 2,
+        choice: 'disagree',
+        feedbackState: 'disagreed',
+        status: 'disputed',
+        validTo: null,
+        acceptedAt: '2026-08-10T00:30:00.000Z',
+        noOpReason: null,
+      }).success,
+    ).toBe(true)
+    expect(
+      personalModelFeedbackWriteResponseSchema.safeParse({
+        schemaVersion: 'personal-model-feedback-write-response-v1',
+        outcome: 'revised',
+        eventId: uuidFor(611),
+        itemId,
+        targetRevision: 1,
+        currentRevision: 1,
+        choice: 'disagree',
+        feedbackState: 'disagreed',
+        status: 'disputed',
+        validTo: null,
+        acceptedAt: '2026-08-10T00:30:00.000Z',
+        noOpReason: null,
       }).success,
     ).toBe(false)
   })

@@ -55,6 +55,7 @@ import { RedisService } from './operations/redis.service'
 import { PlansController } from './plans/plans.controller'
 import { PlansService } from './plans/plans.service'
 import { PersonalModelCurrentSubjectViewService } from './personal-model/personal-model-current-subject-view'
+import { PersonalModelFeedbackService } from './personal-model/personal-model-feedback.service'
 import { personalModelCurrentSubjectNoStoreMiddleware } from './personal-model/personal-model-current-subject-no-store.middleware'
 import { PersonalModelController } from './personal-model/personal-model.controller'
 import { PersonalModelRepository } from './personal-model/personal-model.repository'
@@ -113,6 +114,7 @@ import { WorkoutsService } from './workouts/workouts.service'
     PhotoStorageService,
     OnboardingService,
     PersonalModelCurrentSubjectViewService,
+    PersonalModelFeedbackService,
     PersonalModelRepository,
     InternalOperationsGuard,
     OperationalMetricsService,
@@ -141,6 +143,10 @@ export class AppModule implements NestModule {
     consumer.apply(personalModelCurrentSubjectNoStoreMiddleware).forRoutes({
       path: 'personal-model/subjects/:subjectKey/current',
       method: RequestMethod.GET,
+    })
+    consumer.apply(personalModelCurrentSubjectNoStoreMiddleware).forRoutes({
+      path: 'personal-model/items/:itemId/revisions/:revision/feedback',
+      method: RequestMethod.POST,
     })
   }
 

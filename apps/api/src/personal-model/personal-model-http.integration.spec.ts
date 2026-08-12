@@ -89,6 +89,12 @@ describe('personal model current-subject HTTP boundary with PostgreSQL', () => {
       .get('/v1/personal-model/subjects/training.recorded_frequency/current')
       .expect('Cache-Control', 'private, no-store')
       .expect(401)
+
+    await request(app.getHttpServer())
+      .post('/v1/personal-model/items/22222222-2222-4222-8222-222222222222/revisions/1/feedback')
+      .send({})
+      .expect('Cache-Control', 'private, no-store')
+      .expect(401)
   })
 
   it('returns one uninformative unavailable boundary without exposing authority state', async () => {
@@ -220,5 +226,62 @@ describe('personal model current-subject HTTP boundary with PostgreSQL', () => {
     expect(other.body.current).toBeNull()
     expect(JSON.stringify(other.body)).not.toContain(otherUserId)
     expect(JSON.stringify(other.body)).not.toContain(created.revision.itemId)
+
+    const feedbackRequest = {
+      schemaVersion: 'personal-model-feedback-write-request-v1',
+      eventId: randomUUID(),
+      choice: 'uncertain',
+      reasonCode: 'evidence_missing',
+      note: null,
+      contextValidUntil: null,
+    }
+    const feedbackPath = `/v1/personal-model/items/${created.revision.itemId}/revisions/1/feedback`
+    const accepted = await request(app.getHttpServer())
+      .post(feedbackPath)
+      .set('Authorization', `Bearer ${token}`)
+      .send(feedbackRequest)
+      .expect('Cache-Control', 'private, no-store')
+      .expect(200)
+    expect(accepted.body).toMatchObject({
+      schemaVersion: 'personal-model-feedback-write-response-v1',
+      outcome: 'revised',
+      eventId: feedbackRequest.eventId,
+      itemId: created.revision.itemId,
+      targetRevision: 1,
+      currentRevision: 2,
+      choice: 'uncertain',
+      feedbackState: 'uncertain',
+      noOpReason: null,
+    })
+    expect(JSON.stringify(accepted.body)).not.toContain(userId)
+    expect(JSON.stringify(accepted.body)).not.toContain('evidence')
+    expect(JSON.stringify(accepted.body)).not.toContain('Fingerprint')
+
+    const replay = await request(app.getHttpServer())
+      .post(feedbackPath)
+      .set('Authorization', `Bearer ${token}`)
+      .send(feedbackRequest)
+      .expect('Cache-Control', 'private, no-store')
+      .expect(200)
+    expect(replay.body).toEqual(accepted.body)
+
+    await request(app.getHttpServer())
+      .post(feedbackPath)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ ...feedbackRequest, choice: 'matches_me' })
+      .expect('Cache-Control', 'private, no-store')
+      .expect(409)
+    await request(app.getHttpServer())
+      .post(feedbackPath)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ ...feedbackRequest, eventId: randomUUID() })
+      .expect('Cache-Control', 'private, no-store')
+      .expect(409)
+    await request(app.getHttpServer())
+      .post(feedbackPath)
+      .set('Authorization', `Bearer ${otherToken}`)
+      .send({ ...feedbackRequest, eventId: randomUUID() })
+      .expect('Cache-Control', 'private, no-store')
+      .expect(404)
   })
 })

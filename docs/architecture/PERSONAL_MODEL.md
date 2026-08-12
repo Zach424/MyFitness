@@ -1,6 +1,6 @@
 # 个人认知模型
 
-状态：第 199 轮完成三个严格主题的客户端逐项读取；反馈 HTTP/入口、回顾持久化、模型导出和完整客户端闭环仍未实现
+状态：第 200 轮完成精确修订反馈认证 HTTP；客户端反馈入口、回顾持久化、模型导出和完整客户端闭环仍未实现
 
 ## 1. 目标与边界
 
@@ -191,6 +191,8 @@ repository 在 READ COMMITTED 事务中先锁 active owner，再读取 item/curr
 第 198 轮把 `training.recorded_frequency` 接入首个独立页面。从“我的衡迹”进入后只读取一个固定主题，复用 unread/五阶段、单调代次和中性卡片；初始失败保持 Unknown，刷新中/刷新失败保留上次完整快照，卸载后迟到结果失权。客户端 unknown 响应改由无 Zod 运行时的轻量严格校验器处理，并通过与权威 Schema 的空态、三主题和畸形夹具一致性核对。该页面仍不支持训练安排、课次时长、反馈、历史、lineage、证据分页或持久缓存。
 
 第 199 轮让三个严格主题通过同一页面逐项可达。紧凑索引以唯一 `aria-pressed` 表达当前读取对象：本人安排显示本人提交权威，记录频次和记录时长显示已确认记录范围。主题切换先取消旧失败焦点，再提高 generation 并清除旧快照/错误，随后只用 begin 收据上的新 subject 读取；旧回调和旧焦点都不能跨主题提交。页面不批量预取、不并排展示，也不缓存每个主题，因此不会在内存中形成组合画像。
+
+第 200 轮新增 `POST /v1/personal-model/items/{itemId}/revisions/{revision}/feedback`。Bearer 身份、路径目标、服务端接受时刻与结果修订彼此分权；公开正文只携带 event UUID 和四选一内容。仓储在 active owner 与 item 行锁内重新读取 current，生成并原子提交 revised/no-op；同 event 响应丢失重放返回首次收据，换内容、过期/终态目标、跨 owner 或 authority 失效分别冲突或不可用。公开响应只返回结果定位和当前反馈状态，不回显 note/reason、claim、证据、owner 或内部指纹。客户端按钮仍未接入。
 
 换言之，读取成功只说明系统找到了当前保留的一代认识，读取为空只说明该主题尚无条目；两种结果都不能被解释为现实行为存在、缺失、达标或失败。
 
@@ -413,8 +415,8 @@ R-032 继续覆盖“个人状态账本被误解为完整真相”。R-033 新�
 | P1b 修订与回顾契约     | item revision、feedback transition、review 信封                                  | 不可变快照、动作、精确引用、状态转换和回顾数量门禁通过；已完成             |
 | P2 持久内核            | item/revision/feedback/evidence、goal 历史及来源 refresh 协议已完成；review 待续 | P2a–P2c 已证明隔离、并发、反馈事务、精确投影、来源资格、撤回解决和账号删除 |
 | P3 首批派生            | 安排约束、8 周记录频率、训练时长基线及终态新代际均已完成                         | 三 claim 的 create/no-op/refresh、Unknown/失效、异议、并发、换代和删除通过 |
-| P4 Mirror 读取         | “关于我”摘要、详情、历史、证据追溯                                               | 未读/空/失败分离，移动端无障碍与隐私路径通过                               |
-| P5 周回顾与反馈        | 少量回顾、四选一反馈、模型修订                                                   | 精确 revision、过期反馈冲突、temporary/disputed 语义通过                   |
+| P4 Mirror 读取         | 当前主题读取与三主题逐项页面已完成；摘要、历史、证据追溯待续                     | 未读/空/失败分离，移动端无障碍与隐私路径通过                               |
+| P5 周回顾与反馈        | 反馈认证 HTTP 已完成；客户端写入与少量周回顾待续                                 | 精确 revision、响应重放、temporary/disputed 与客户端权限通过               |
 | P6 Pattern/Hypothesis  | 睡眠-RPE 等描述性关系与不确定假设                                                | 支持/反对证据、非因果措辞、跨窗口稳定门禁通过                              |
 | P7 Outcome 更新        | 计划采用、实际关联、恢复与反思增加一次证据                                       | 单次结果不升级、撤销可见、重复窗口更新可复算                               |
 | P8 Contextual Decision | 个人历史驱动的结构化建议与解释                                                   | 引用、Unknown、置信、替代方案、安全 validator 全部通过                     |
@@ -423,8 +425,8 @@ R-032 继续覆盖“个人状态账本被误解为完整真相”。R-033 新�
 
 ## 15. 待决策与下一步
 
-下一轮只实现当前主题的本人反馈认证 HTTP：四个已有反馈选择绑定精确 `itemId + revision`，复用既有追加事件/revised/no-op 事务，补齐 Bearer、严格正文、owner 竞态、终态/过期错误、no-store、OpenAPI 与 PostgreSQL 证明。先不接客户端按钮，也不开放 lineage 或证据分页。Weekly Cognitive Review、模型导出与其余页面接线仍拆到后续轮次。
+下一轮先取得 WeApp 结构性包体降幅，再实现无页面引用的客户端反馈传输与写入权限模型：最小请求/收据严格校验、当前 `itemId + revision + eventId` 绑定、提交代次、主题切换与卸载失权、响应未知后的同事件安全重试。先不接客户端按钮，也不开放 lineage 或证据分页。Weekly Cognitive Review、模型导出与其余页面接线仍拆到后续轮次。
 
 后续待真实数据或用户研究决定：材料变化阈值、长期 Pattern 的最低非重叠窗口、Hypothesis 的高置信上限、周回顾卡片数量理解度，以及 Contextual Decision 的安全升级阈值。缺少证据时保持保守默认，不臆造产品基准。
 
-本设计的领域取舍记录在 [ADR-0175](decisions/0175-evidence-backed-revisable-personal-model.md)，P1/P2 契约与持久边界记录在 ADR-0176–0182，training availability 与训练频率派生记录在 ADR-0183/0184，同主题终态后新代际记录在 ADR-0185，训练时长基线记录在 ADR-0186，当前主题信封、投影、认证 HTTP、客户端读取权限与中性展示记录在 ADR-0187–0191；实施状态以[项目状态](../PROJECT_STATUS.md)和[已实现产品需求文档](../product/IMPLEMENTED_PRD.md)为准。
+本设计的领域取舍记录在 [ADR-0175](decisions/0175-evidence-backed-revisable-personal-model.md)，P1/P2 契约与持久边界记录在 ADR-0176–0182，training availability 与训练频率派生记录在 ADR-0183/0184，同主题终态后新代际记录在 ADR-0185，训练时长基线记录在 ADR-0186，当前主题信封、投影、认证 HTTP、客户端读取权限与中性展示记录在 ADR-0187–0191，页面与反馈 HTTP 记录在 ADR-0192–0194；实施状态以[项目状态](../PROJECT_STATUS.md)和[已实现产品需求文档](../product/IMPLEMENTED_PRD.md)为准。

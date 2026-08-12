@@ -8699,6 +8699,1001 @@
         "tags": ["operations"]
       }
     },
+    "/v1/personal-model/subjects/{subjectKey}/current": {
+      "get": {
+        "operationId": "PersonalModelController_readCurrentSubject",
+        "parameters": [
+          {
+            "name": "subjectKey",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "enum": [
+                "training.availability",
+                "training.recorded_frequency",
+                "training.recorded_session_duration"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "schemaVersion": {
+                      "type": "string",
+                      "enum": ["personal-model-current-subject-view-v1"]
+                    },
+                    "subjectKey": {
+                      "type": "string",
+                      "enum": [
+                        "training.availability",
+                        "training.recorded_frequency",
+                        "training.recorded_session_duration"
+                      ]
+                    },
+                    "current": {
+                      "nullable": true,
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "itemId": {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                            },
+                            "generation": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "exclusiveMinimum": true,
+                              "maximum": 9007199254740991
+                            },
+                            "revision": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "exclusiveMinimum": true,
+                              "maximum": 9007199254740991
+                            },
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "candidate",
+                                "active",
+                                "disputed",
+                                "superseded",
+                                "invalidated"
+                              ]
+                            },
+                            "feedbackState": {
+                              "type": "string",
+                              "enum": [
+                                "unreviewed",
+                                "confirmed",
+                                "temporary",
+                                "disagreed",
+                                "uncertain"
+                              ]
+                            },
+                            "terminal": { "type": "boolean" },
+                            "confidence": {
+                              "type": "object",
+                              "properties": {
+                                "level": {
+                                  "type": "string",
+                                  "enum": ["insufficient", "low", "moderate", "high"]
+                                },
+                                "limitations": {
+                                  "maxItems": 6,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "enum": [
+                                      "limited_coverage",
+                                      "single_window",
+                                      "conflicting_evidence",
+                                      "stale_evidence",
+                                      "user_disputed",
+                                      "source_withdrawn"
+                                    ]
+                                  }
+                                }
+                              },
+                              "required": ["level", "limitations"],
+                              "additionalProperties": false
+                            },
+                            "evidence": {
+                              "type": "object",
+                              "properties": {
+                                "asOf": {
+                                  "type": "string",
+                                  "format": "date-time",
+                                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                },
+                                "window": {
+                                  "type": "object",
+                                  "properties": {
+                                    "startAt": {
+                                      "type": "string",
+                                      "format": "date-time",
+                                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                    },
+                                    "endAt": {
+                                      "type": "string",
+                                      "format": "date-time",
+                                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                    },
+                                    "timezone": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 64
+                                    }
+                                  },
+                                  "required": ["startAt", "endAt", "timezone"],
+                                  "additionalProperties": false
+                                },
+                                "qualifiedCount": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 800
+                                },
+                                "supportingCount": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 800
+                                },
+                                "contradictingCount": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 800
+                                },
+                                "withdrawnCount": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 800
+                                }
+                              },
+                              "required": [
+                                "asOf",
+                                "window",
+                                "qualifiedCount",
+                                "supportingCount",
+                                "contradictingCount",
+                                "withdrawnCount"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "validFrom": {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                            },
+                            "validTo": {
+                              "nullable": true,
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                            },
+                            "observedFrom": {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                            },
+                            "observedThrough": {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                            },
+                            "derivedAt": {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                            },
+                            "updatedAt": {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                            },
+                            "kind": { "type": "string", "enum": ["constraint"] },
+                            "claimSchemaVersion": {
+                              "type": "string",
+                              "enum": ["training_availability_constraint_v1"]
+                            },
+                            "source": { "type": "string", "enum": ["user_confirmed"] },
+                            "claim": {
+                              "type": "object",
+                              "properties": {
+                                "availableDays": {
+                                  "minItems": 1,
+                                  "maxItems": 7,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "enum": ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+                                  }
+                                },
+                                "sessionMinutes": {
+                                  "type": "integer",
+                                  "minimum": 15,
+                                  "maximum": 180
+                                },
+                                "sourceGoalRevision": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "exclusiveMinimum": true,
+                                  "maximum": 9007199254740991
+                                },
+                                "durationUnit": { "type": "string", "enum": ["minutes"] }
+                              },
+                              "required": [
+                                "availableDays",
+                                "sessionMinutes",
+                                "sourceGoalRevision",
+                                "durationUnit"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "required": [
+                            "itemId",
+                            "generation",
+                            "revision",
+                            "status",
+                            "feedbackState",
+                            "terminal",
+                            "confidence",
+                            "evidence",
+                            "validFrom",
+                            "validTo",
+                            "observedFrom",
+                            "observedThrough",
+                            "derivedAt",
+                            "updatedAt",
+                            "kind",
+                            "claimSchemaVersion",
+                            "source",
+                            "claim"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "itemId": {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                            },
+                            "generation": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "exclusiveMinimum": true,
+                              "maximum": 9007199254740991
+                            },
+                            "revision": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "exclusiveMinimum": true,
+                              "maximum": 9007199254740991
+                            },
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "candidate",
+                                "active",
+                                "disputed",
+                                "superseded",
+                                "invalidated"
+                              ]
+                            },
+                            "feedbackState": {
+                              "type": "string",
+                              "enum": [
+                                "unreviewed",
+                                "confirmed",
+                                "temporary",
+                                "disagreed",
+                                "uncertain"
+                              ]
+                            },
+                            "terminal": { "type": "boolean" },
+                            "confidence": {
+                              "type": "object",
+                              "properties": {
+                                "level": {
+                                  "type": "string",
+                                  "enum": ["insufficient", "low", "moderate", "high"]
+                                },
+                                "limitations": {
+                                  "maxItems": 6,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "enum": [
+                                      "limited_coverage",
+                                      "single_window",
+                                      "conflicting_evidence",
+                                      "stale_evidence",
+                                      "user_disputed",
+                                      "source_withdrawn"
+                                    ]
+                                  }
+                                }
+                              },
+                              "required": ["level", "limitations"],
+                              "additionalProperties": false
+                            },
+                            "evidence": {
+                              "type": "object",
+                              "properties": {
+                                "asOf": {
+                                  "type": "string",
+                                  "format": "date-time",
+                                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                },
+                                "window": {
+                                  "type": "object",
+                                  "properties": {
+                                    "startAt": {
+                                      "type": "string",
+                                      "format": "date-time",
+                                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                    },
+                                    "endAt": {
+                                      "type": "string",
+                                      "format": "date-time",
+                                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                    },
+                                    "timezone": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 64
+                                    }
+                                  },
+                                  "required": ["startAt", "endAt", "timezone"],
+                                  "additionalProperties": false
+                                },
+                                "qualifiedCount": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 800
+                                },
+                                "supportingCount": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 800
+                                },
+                                "contradictingCount": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 800
+                                },
+                                "withdrawnCount": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 800
+                                }
+                              },
+                              "required": [
+                                "asOf",
+                                "window",
+                                "qualifiedCount",
+                                "supportingCount",
+                                "contradictingCount",
+                                "withdrawnCount"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "validFrom": {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                            },
+                            "validTo": {
+                              "nullable": true,
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                            },
+                            "observedFrom": {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                            },
+                            "observedThrough": {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                            },
+                            "derivedAt": {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                            },
+                            "updatedAt": {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                            },
+                            "kind": { "type": "string", "enum": ["behavior"] },
+                            "claimSchemaVersion": {
+                              "type": "string",
+                              "enum": ["recorded_training_frequency_behavior_v1"]
+                            },
+                            "source": { "type": "string", "enum": ["deterministic_rule"] },
+                            "claim": {
+                              "type": "object",
+                              "properties": {
+                                "observationWindow": {
+                                  "type": "object",
+                                  "properties": {
+                                    "startDate": {
+                                      "type": "string",
+                                      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                                    },
+                                    "endDateExclusive": {
+                                      "type": "string",
+                                      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                                    },
+                                    "completeWeeks": {
+                                      "type": "integer",
+                                      "minimum": 1,
+                                      "maximum": 8
+                                    },
+                                    "timezone": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 64
+                                    }
+                                  },
+                                  "required": [
+                                    "startDate",
+                                    "endDateExclusive",
+                                    "completeWeeks",
+                                    "timezone"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                "weeklyRecordedSessionCounts": {
+                                  "minItems": 1,
+                                  "maxItems": 8,
+                                  "type": "array",
+                                  "items": { "type": "integer", "minimum": 0, "maximum": 100 }
+                                },
+                                "qualifyingWorkoutCount": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "exclusiveMinimum": true,
+                                  "maximum": 800
+                                },
+                                "recordedWeekCount": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "exclusiveMinimum": true,
+                                  "maximum": 8
+                                },
+                                "medianSessionsPerWeek": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 100
+                                },
+                                "minimumSessionsPerWeek": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 100
+                                },
+                                "maximumSessionsPerWeek": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 100
+                                },
+                                "frequencyUnit": {
+                                  "type": "string",
+                                  "enum": ["recorded_sessions_per_week"]
+                                },
+                                "medianPolicyVersion": {
+                                  "type": "string",
+                                  "enum": ["numeric-median-v1"]
+                                }
+                              },
+                              "required": [
+                                "observationWindow",
+                                "weeklyRecordedSessionCounts",
+                                "qualifyingWorkoutCount",
+                                "recordedWeekCount",
+                                "medianSessionsPerWeek",
+                                "minimumSessionsPerWeek",
+                                "maximumSessionsPerWeek",
+                                "frequencyUnit",
+                                "medianPolicyVersion"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "required": [
+                            "itemId",
+                            "generation",
+                            "revision",
+                            "status",
+                            "feedbackState",
+                            "terminal",
+                            "confidence",
+                            "evidence",
+                            "validFrom",
+                            "validTo",
+                            "observedFrom",
+                            "observedThrough",
+                            "derivedAt",
+                            "updatedAt",
+                            "kind",
+                            "claimSchemaVersion",
+                            "source",
+                            "claim"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "itemId": {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                            },
+                            "generation": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "exclusiveMinimum": true,
+                              "maximum": 9007199254740991
+                            },
+                            "revision": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "exclusiveMinimum": true,
+                              "maximum": 9007199254740991
+                            },
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "candidate",
+                                "active",
+                                "disputed",
+                                "superseded",
+                                "invalidated"
+                              ]
+                            },
+                            "feedbackState": {
+                              "type": "string",
+                              "enum": [
+                                "unreviewed",
+                                "confirmed",
+                                "temporary",
+                                "disagreed",
+                                "uncertain"
+                              ]
+                            },
+                            "terminal": { "type": "boolean" },
+                            "confidence": {
+                              "type": "object",
+                              "properties": {
+                                "level": {
+                                  "type": "string",
+                                  "enum": ["insufficient", "low", "moderate", "high"]
+                                },
+                                "limitations": {
+                                  "maxItems": 6,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "enum": [
+                                      "limited_coverage",
+                                      "single_window",
+                                      "conflicting_evidence",
+                                      "stale_evidence",
+                                      "user_disputed",
+                                      "source_withdrawn"
+                                    ]
+                                  }
+                                }
+                              },
+                              "required": ["level", "limitations"],
+                              "additionalProperties": false
+                            },
+                            "evidence": {
+                              "type": "object",
+                              "properties": {
+                                "asOf": {
+                                  "type": "string",
+                                  "format": "date-time",
+                                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                },
+                                "window": {
+                                  "type": "object",
+                                  "properties": {
+                                    "startAt": {
+                                      "type": "string",
+                                      "format": "date-time",
+                                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                    },
+                                    "endAt": {
+                                      "type": "string",
+                                      "format": "date-time",
+                                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                    },
+                                    "timezone": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 64
+                                    }
+                                  },
+                                  "required": ["startAt", "endAt", "timezone"],
+                                  "additionalProperties": false
+                                },
+                                "qualifiedCount": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 800
+                                },
+                                "supportingCount": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 800
+                                },
+                                "contradictingCount": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 800
+                                },
+                                "withdrawnCount": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 800
+                                }
+                              },
+                              "required": [
+                                "asOf",
+                                "window",
+                                "qualifiedCount",
+                                "supportingCount",
+                                "contradictingCount",
+                                "withdrawnCount"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "validFrom": {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                            },
+                            "validTo": {
+                              "nullable": true,
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                            },
+                            "observedFrom": {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                            },
+                            "observedThrough": {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                            },
+                            "derivedAt": {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                            },
+                            "updatedAt": {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                            },
+                            "kind": { "type": "string", "enum": ["baseline"] },
+                            "claimSchemaVersion": {
+                              "type": "string",
+                              "enum": ["recorded_session_duration_baseline_v1"]
+                            },
+                            "source": { "type": "string", "enum": ["deterministic_rule"] },
+                            "claim": {
+                              "type": "object",
+                              "properties": {
+                                "observationWindow": {
+                                  "type": "object",
+                                  "properties": {
+                                    "startDate": {
+                                      "type": "string",
+                                      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                                    },
+                                    "endDateExclusive": {
+                                      "type": "string",
+                                      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                                    },
+                                    "completeWeeks": {
+                                      "type": "integer",
+                                      "minimum": 1,
+                                      "maximum": 8
+                                    },
+                                    "timezone": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 64
+                                    }
+                                  },
+                                  "required": [
+                                    "startDate",
+                                    "endDateExclusive",
+                                    "completeWeeks",
+                                    "timezone"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                "sampleCount": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "exclusiveMinimum": true,
+                                  "maximum": 800
+                                },
+                                "coveredWeeks": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "exclusiveMinimum": true,
+                                  "maximum": 8
+                                },
+                                "firstQuartileMinutes": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "exclusiveMinimum": true,
+                                  "maximum": 1440
+                                },
+                                "medianMinutes": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "exclusiveMinimum": true,
+                                  "maximum": 1440
+                                },
+                                "thirdQuartileMinutes": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "exclusiveMinimum": true,
+                                  "maximum": 1440
+                                },
+                                "durationUnit": { "type": "string", "enum": ["minutes"] },
+                                "durationPolicyVersion": {
+                                  "type": "string",
+                                  "enum": ["elapsed-duration-minutes-v1"]
+                                },
+                                "quartilePolicyVersion": {
+                                  "type": "string",
+                                  "enum": ["nearest-rank-quartiles-v1"]
+                                }
+                              },
+                              "required": [
+                                "observationWindow",
+                                "sampleCount",
+                                "coveredWeeks",
+                                "firstQuartileMinutes",
+                                "medianMinutes",
+                                "thirdQuartileMinutes",
+                                "durationUnit",
+                                "durationPolicyVersion",
+                                "quartilePolicyVersion"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "required": [
+                            "itemId",
+                            "generation",
+                            "revision",
+                            "status",
+                            "feedbackState",
+                            "terminal",
+                            "confidence",
+                            "evidence",
+                            "validFrom",
+                            "validTo",
+                            "observedFrom",
+                            "observedThrough",
+                            "derivedAt",
+                            "updatedAt",
+                            "kind",
+                            "claimSchemaVersion",
+                            "source",
+                            "claim"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ]
+                    }
+                  },
+                  "required": ["schemaVersion", "subjectKey", "current"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": { "description": "The personal-model subject is not supported." },
+          "401": { "description": "Bearer token is missing, invalid, expired or revoked." },
+          "404": { "description": "The current subject is unavailable for this principal." },
+          "500": { "description": "The current personal-model projection failed closed." }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Read the current owner-visible item for one personal-model subject",
+        "tags": ["personal model"]
+      }
+    },
+    "/v1/personal-model/items/{itemId}/revisions/{revision}/feedback": {
+      "post": {
+        "operationId": "PersonalModelController_applyFeedback",
+        "parameters": [
+          {
+            "name": "itemId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "revision",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "integer", "minimum": 1 }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "schemaVersion": {
+                    "type": "string",
+                    "enum": ["personal-model-feedback-write-request-v1"]
+                  },
+                  "eventId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "choice": {
+                    "type": "string",
+                    "enum": ["matches_me", "temporary_context", "disagree", "uncertain"]
+                  },
+                  "reasonCode": {
+                    "nullable": true,
+                    "type": "string",
+                    "enum": [
+                      "evidence_missing",
+                      "context_changed",
+                      "not_representative",
+                      "source_incorrect",
+                      "prefer_not_to_answer",
+                      "other"
+                    ]
+                  },
+                  "note": { "nullable": true, "type": "string", "minLength": 1, "maxLength": 300 },
+                  "contextValidUntil": {
+                    "nullable": true,
+                    "type": "string",
+                    "format": "date-time",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                  }
+                },
+                "required": [
+                  "schemaVersion",
+                  "eventId",
+                  "choice",
+                  "reasonCode",
+                  "note",
+                  "contextValidUntil"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "schemaVersion": {
+                      "type": "string",
+                      "enum": ["personal-model-feedback-write-response-v1"]
+                    },
+                    "outcome": { "type": "string", "enum": ["revised", "no_op"] },
+                    "eventId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "itemId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "targetRevision": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "exclusiveMinimum": true,
+                      "maximum": 9007199254740991
+                    },
+                    "currentRevision": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "exclusiveMinimum": true,
+                      "maximum": 9007199254740991
+                    },
+                    "choice": {
+                      "type": "string",
+                      "enum": ["matches_me", "temporary_context", "disagree", "uncertain"]
+                    },
+                    "feedbackState": {
+                      "type": "string",
+                      "enum": ["unreviewed", "confirmed", "temporary", "disagreed", "uncertain"]
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": ["candidate", "active", "disputed", "superseded", "invalidated"]
+                    },
+                    "validTo": {
+                      "nullable": true,
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "acceptedAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "noOpReason": {
+                      "nullable": true,
+                      "type": "string",
+                      "enum": ["feedback_already_current"]
+                    }
+                  },
+                  "required": [
+                    "schemaVersion",
+                    "outcome",
+                    "eventId",
+                    "itemId",
+                    "targetRevision",
+                    "currentRevision",
+                    "choice",
+                    "feedbackState",
+                    "status",
+                    "validTo",
+                    "acceptedAt",
+                    "noOpReason"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": { "description": "The feedback request or target path is invalid." },
+          "401": { "description": "Bearer token is missing, invalid, expired or revoked." },
+          "404": { "description": "The feedback target is unavailable for this principal." },
+          "409": { "description": "The target is stale, terminal or reuses an event ID." },
+          "500": { "description": "The feedback transaction failed closed." }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Apply authenticated feedback to one exact personal-model revision",
+        "tags": ["personal model"]
+      }
+    },
     "/v1/plans/weekly": {
       "post": {
         "operationId": "PlansController_generate",

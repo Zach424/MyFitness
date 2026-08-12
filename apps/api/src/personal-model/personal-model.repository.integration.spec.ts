@@ -787,6 +787,147 @@ describe('PersonalModelRepository with PostgreSQL', () => {
     expect(current).toEqual(first.revision)
   })
 
+  it('builds an exact feedback transition in the locked transaction and replays the receipt', async () => {
+    const commandUserId = randomUUID()
+    const commandItemId = randomUUID()
+    const commandWorkoutId = randomUUID()
+    const commandCurrent = createdWorkoutRevisionFor(commandUserId, commandItemId, commandWorkoutId)
+    await pool.query('INSERT INTO users (id) VALUES ($1)', [commandUserId])
+    await pool.query(
+      `
+        INSERT INTO workout_sessions (
+          id, user_id, title, status, source_kind, source_metadata,
+          started_at, ended_at, timezone, pain_level, fatigue, note,
+          revision, idempotency_key, request_hash, created_at, updated_at
+        )
+        VALUES (
+          $1, $2, 'Feedback source workout', 'completed', 'manual', '{}',
+          $3, $4, 'Asia/Shanghai', 0, 2, NULL,
+          1, $5, $6, $3, $3
+        )
+      `,
+      [
+        commandWorkoutId,
+        commandUserId,
+        initialWorkoutStartedAt,
+        initialWorkoutEndedAt,
+        `feedback-command-${randomUUID()}`,
+        '9'.repeat(64),
+      ],
+    )
+    await pool.query(
+      `
+        INSERT INTO workout_revisions (
+          id, workout_id, user_id, action, revision, snapshot, changed_at
+        )
+        VALUES ($1, $2, $3, 'created', 1, $4::JSONB, $5)
+      `,
+      [
+        randomUUID(),
+        commandWorkoutId,
+        commandUserId,
+        JSON.stringify({
+          id: commandWorkoutId,
+          userId: commandUserId,
+          revision: 1,
+          source: { kind: 'manual' },
+          startedAt: initialWorkoutStartedAt,
+          endedAt: initialWorkoutEndedAt,
+          timezone: 'Asia/Shanghai',
+        }),
+        initialWorkoutStartedAt,
+      ],
+    )
+    await repository.create(commandCurrent)
+    const eventId = randomUUID()
+    const request = {
+      schemaVersion: 'personal-model-feedback-write-request-v1' as const,
+      eventId,
+      choice: 'matches_me' as const,
+      reasonCode: null,
+      note: null,
+      contextValidUntil: null,
+    }
+    const expectedRevision = commandCurrent.revision
+    const acceptedAt = '2026-08-12T08:00:00.000Z'
+    try {
+      const results = await Promise.all([
+        repository.applyFeedbackCommand(
+          commandUserId,
+          commandItemId,
+          expectedRevision,
+          request,
+          acceptedAt,
+        ),
+        repository.applyFeedbackCommand(
+          commandUserId,
+          commandItemId,
+          expectedRevision,
+          request,
+          acceptedAt,
+        ),
+      ])
+
+      expect(results[0]).toEqual(results[1])
+      expect(results[0]).toMatchObject({
+        outcome: 'revised',
+        event: { id: eventId, itemRevision: expectedRevision, choice: 'matches_me' },
+        revision: { revision: expectedRevision + 1, previousRevision: expectedRevision },
+      })
+      expect((await repository.getCurrent(commandUserId, commandItemId)).revision).toBe(
+        expectedRevision + 1,
+      )
+      const stored = await pool.query<{ event_count: string; revision_count: string }>(
+        `
+          SELECT
+            (SELECT COUNT(*) FROM personal_model_feedback_events WHERE id = $1)::TEXT AS event_count,
+            (
+              SELECT COUNT(*)
+              FROM personal_model_item_revisions
+              WHERE feedback_event_id = $1
+            )::TEXT AS revision_count
+        `,
+        [eventId],
+      )
+      expect(stored.rows[0]).toEqual({ event_count: '1', revision_count: '1' })
+      await expect(
+        repository.applyFeedbackCommand(
+          commandUserId,
+          commandItemId,
+          expectedRevision,
+          { ...request, choice: 'uncertain' },
+          acceptedAt,
+        ),
+      ).rejects.toThrow('feedback event id is already in use')
+    } finally {
+      await pool.query('DELETE FROM users WHERE id = $1', [commandUserId])
+    }
+  })
+
+  it('rejects feedback when owner authority has become inactive', async () => {
+    await pool.query("UPDATE users SET status = 'deletion_pending' WHERE id = $1", [otherUserId])
+    try {
+      await expect(
+        repository.applyFeedbackCommand(
+          otherUserId,
+          itemId,
+          current.revision,
+          {
+            schemaVersion: 'personal-model-feedback-write-request-v1',
+            eventId: randomUUID(),
+            choice: 'uncertain',
+            reasonCode: null,
+            note: null,
+            contextValidUntil: null,
+          },
+          '2026-08-12T08:30:00.000Z',
+        ),
+      ).rejects.toThrow('active personal model feedback authority not found')
+    } finally {
+      await pool.query("UPDATE users SET status = 'active' WHERE id = $1", [otherUserId])
+    }
+  })
+
   it('rejects direct event mutation and incomplete or false no-op outcomes', async () => {
     const event = await pool.query<{ id: string }>(
       'SELECT id FROM personal_model_feedback_events WHERE user_id = $1 ORDER BY created_at LIMIT 1',

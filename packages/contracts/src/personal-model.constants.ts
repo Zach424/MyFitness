@@ -8,6 +8,10 @@ export const personalModelCurrentSubjectViewVersion =
   'personal-model-current-subject-view-v1' as const
 export const personalModelFeedbackTransitionVersion =
   'personal-model-feedback-transition-v1' as const
+export const personalModelFeedbackWriteRequestVersion =
+  'personal-model-feedback-write-request-v1' as const
+export const personalModelFeedbackWriteResponseVersion =
+  'personal-model-feedback-write-response-v1' as const
 export const weeklyCognitiveReviewVersion = 'weekly-cognitive-review-v1' as const
 export const weeklyCognitiveReviewEnvelopeVersion = 'weekly-cognitive-review-envelope-v1' as const
 export const weeklyCognitiveReviewHistoryPageVersion =

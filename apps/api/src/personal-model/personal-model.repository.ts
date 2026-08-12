@@ -9,11 +9,13 @@ import {
   personalModelFeedbackEventSchema,
   personalModelFeedbackTransitionResultSchema,
   personalModelFeedbackTransitionVersion,
+  personalModelFeedbackWriteRequestSchema,
   personalModelItemSchema,
   personalModelItemRevisionSchema,
   workoutSchema,
   type PersonalModelFeedbackEvent,
   type PersonalModelFeedbackTransitionResult,
+  type PersonalModelFeedbackWriteRequest,
   type PersonalModelCurrentSubjectEnvelope,
   type PersonalModelItem,
   type PersonalModelItemRevision,
@@ -22,6 +24,7 @@ import {
 import type { PoolClient } from 'pg'
 
 import { DatabaseService } from '../database/database.service'
+import { applyPersonalModelFeedback } from './personal-model-feedback'
 import {
   deriveRecordedSessionDuration,
   type RecordedSessionDurationDerivationResult,
@@ -552,6 +555,78 @@ const findPersistedFeedbackTransition = async (
   })
 }
 
+const sameFeedbackWriteRequest = (
+  transition: PersonalModelFeedbackTransitionResult,
+  expectedRevision: number,
+  request: PersonalModelFeedbackWriteRequest,
+) =>
+  transition.event.itemRevision === expectedRevision &&
+  transition.event.choice === request.choice &&
+  transition.event.reasonCode === request.reasonCode &&
+  transition.event.note === request.note &&
+  (transition.event.contextValidUntil === request.contextValidUntil ||
+    (transition.event.contextValidUntil !== null &&
+      request.contextValidUntil !== null &&
+      Date.parse(transition.event.contextValidUntil) === Date.parse(request.contextValidUntil)))
+
+const persistFeedbackTransition = async (
+  client: PoolClient,
+  userId: string,
+  itemId: string,
+  transition: PersonalModelFeedbackTransitionResult,
+) => {
+  const resultRevision = transition.outcome === 'revised' ? transition.revision.revision : null
+  const resultFingerprint =
+    transition.outcome === 'revised'
+      ? transition.revision.derivationFingerprint
+      : transition.resultFingerprint
+  const noOpReason = transition.outcome === 'no_op' ? transition.reason : null
+  await client.query(
+    `
+      INSERT INTO personal_model_feedback_events (
+        id, user_id, item_id, item_revision, choice, reason_code, note,
+        context_valid_until, created_at, transition_schema_version,
+        outcome, no_op_reason, result_revision, result_fingerprint
+      )
+      VALUES (
+        $1, $2, $3, $4, $5, $6, $7,
+        $8, $9, $10,
+        $11, $12, $13, $14
+      )
+    `,
+    [
+      transition.event.id,
+      transition.event.userId,
+      transition.event.itemId,
+      transition.event.itemRevision,
+      transition.event.choice,
+      transition.event.reasonCode,
+      transition.event.note,
+      transition.event.contextValidUntil,
+      transition.event.createdAt,
+      personalModelFeedbackTransitionVersion,
+      transition.outcome,
+      noOpReason,
+      resultRevision,
+      resultFingerprint,
+    ],
+  )
+
+  if (transition.outcome === 'no_op') return transition
+
+  const stored = await insertRevision(client, transition.revision)
+  const updated = await client.query(
+    `
+      UPDATE personal_model_items
+      SET current_revision = $1, updated_at = $2
+      WHERE user_id = $3 AND id = $4 AND current_revision = $5
+    `,
+    [stored.revision, stored.changedAt, userId, itemId, transition.event.itemRevision],
+  )
+  if (updated.rowCount !== 1) throw new PersonalModelRevisionConflictError()
+  return transition
+}
+
 const isPostgresError = (error: unknown): error is { code: string } =>
   typeof error === 'object' && error !== null && 'code' in error
 
@@ -566,6 +641,13 @@ export class PersonalModelRevisionConflictError extends Error {
   constructor(message = 'personal model revision conflict') {
     super(message)
     this.name = 'PersonalModelRevisionConflictError'
+  }
+}
+
+export class PersonalModelFeedbackAuthorityNotFoundError extends Error {
+  constructor() {
+    super('active personal model feedback authority not found')
+    this.name = 'PersonalModelFeedbackAuthorityNotFoundError'
   }
 }
 
@@ -727,58 +809,71 @@ export class PersonalModelRepository {
       ) {
         throw new PersonalModelRevisionConflictError('feedback target is no longer current')
       }
-
-      const resultRevision = transition.outcome === 'revised' ? transition.revision.revision : null
-      const resultFingerprint =
-        transition.outcome === 'revised'
-          ? transition.revision.derivationFingerprint
-          : transition.resultFingerprint
-      const noOpReason = transition.outcome === 'no_op' ? transition.reason : null
-      await client.query(
-        `
-          INSERT INTO personal_model_feedback_events (
-            id, user_id, item_id, item_revision, choice, reason_code, note,
-            context_valid_until, created_at, transition_schema_version,
-            outcome, no_op_reason, result_revision, result_fingerprint
-          )
-          VALUES (
-            $1, $2, $3, $4, $5, $6, $7,
-            $8, $9, $10,
-            $11, $12, $13, $14
-          )
-        `,
-        [
-          transition.event.id,
-          transition.event.userId,
-          transition.event.itemId,
-          transition.event.itemRevision,
-          transition.event.choice,
-          transition.event.reasonCode,
-          transition.event.note,
-          transition.event.contextValidUntil,
-          transition.event.createdAt,
-          personalModelFeedbackTransitionVersion,
-          transition.outcome,
-          noOpReason,
-          resultRevision,
-          resultFingerprint,
-        ],
-      )
-
-      if (transition.outcome === 'no_op') return transition
-
-      const stored = await insertRevision(client, transition.revision)
-      const updated = await client.query(
-        `
-          UPDATE personal_model_items
-          SET current_revision = $1, updated_at = $2
-          WHERE user_id = $3 AND id = $4 AND current_revision = $5
-        `,
-        [stored.revision, stored.changedAt, userId, itemId, transition.event.itemRevision],
-      )
-      if (updated.rowCount !== 1) throw new PersonalModelRevisionConflictError()
-      return transition
+      return persistFeedbackTransition(client, userId, itemId, transition)
     })
+  }
+
+  async applyFeedbackCommand(
+    userId: string,
+    itemId: string,
+    expectedRevision: number,
+    input: PersonalModelFeedbackWriteRequest,
+    acceptedAt: string,
+  ): Promise<PersonalModelFeedbackTransitionResult> {
+    const request = personalModelFeedbackWriteRequestSchema.parse(input)
+    try {
+      return await this.database.withTransaction(async (client) => {
+        const owner = await client.query(
+          "SELECT id FROM users WHERE id = $1 AND status = 'active' FOR SHARE",
+          [userId],
+        )
+        if (!owner.rows[0]) throw new PersonalModelFeedbackAuthorityNotFoundError()
+
+        const locked = await lockCurrentRevision(client, userId, itemId)
+        const persisted = await findPersistedFeedbackTransition(
+          client,
+          userId,
+          itemId,
+          request.eventId,
+        )
+        if (persisted) {
+          if (sameFeedbackWriteRequest(persisted, expectedRevision, request)) return persisted
+          throw new PersonalModelRevisionConflictError('feedback event id is already in use')
+        }
+        if (locked.currentRevision !== expectedRevision) {
+          throw new PersonalModelRevisionConflictError('feedback target is no longer current')
+        }
+        if (
+          locked.revision.snapshot.status === 'superseded' ||
+          locked.revision.snapshot.status === 'invalidated'
+        ) {
+          throw new PersonalModelRevisionConflictError('terminal personal model item')
+        }
+        if (Date.parse(acceptedAt) < Date.parse(locked.revision.changedAt)) {
+          throw new PersonalModelRevisionConflictError('feedback acceptance time precedes target')
+        }
+        if (
+          request.contextValidUntil !== null &&
+          Date.parse(request.contextValidUntil) <= Date.parse(acceptedAt)
+        ) {
+          throw new PersonalModelRevisionConflictError('temporary feedback validity has expired')
+        }
+
+        const transition = applyPersonalModelFeedback({
+          current: locked.revision,
+          request,
+          acceptedAt,
+          revisionId: randomUUID(),
+          sha256Hex: (value) => createHash('sha256').update(value).digest('hex'),
+        })
+        return persistFeedbackTransition(client, userId, itemId, transition)
+      })
+    } catch (error) {
+      if (isPostgresError(error) && error.code === '23505') {
+        throw new PersonalModelRevisionConflictError('feedback event id is already in use')
+      }
+      throw error
+    }
   }
 
   async refreshTrainingAvailability(userId: string): Promise<TrainingAvailabilityDerivationResult> {

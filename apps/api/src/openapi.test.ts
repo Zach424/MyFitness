@@ -84,6 +84,17 @@ describe('OpenAPI document', () => {
     expect(currentSubject?.responses?.['401']).toBeDefined()
     expect(currentSubject?.responses?.['404']).toBeDefined()
     expect(currentSubject?.responses?.['500']).toBeDefined()
+    const personalModelFeedback =
+      document.paths['/v1/personal-model/items/{itemId}/revisions/{revision}/feedback']?.post
+    expect(personalModelFeedback).toBeDefined()
+    expect(personalModelFeedback?.security).toContainEqual({ bearer: [] })
+    expect(personalModelFeedback?.requestBody).toBeDefined()
+    expect(personalModelFeedback?.responses?.['200']).toBeDefined()
+    expect(personalModelFeedback?.responses?.['400']).toBeDefined()
+    expect(personalModelFeedback?.responses?.['401']).toBeDefined()
+    expect(personalModelFeedback?.responses?.['404']).toBeDefined()
+    expect(personalModelFeedback?.responses?.['409']).toBeDefined()
+    expect(personalModelFeedback?.responses?.['500']).toBeDefined()
     expect(document.paths['/v1/auth/dev/session']?.post).toBeDefined()
     expect(document.paths['/v1/auth/wechat/session']?.post).toBeDefined()
     expect(document.paths['/v1/me/onboarding']?.put).toBeDefined()

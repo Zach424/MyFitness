@@ -31,6 +31,8 @@ import {
   personalModelUnknownReasons,
   personalModelUnknownReceiptVersion,
   personalModelFeedbackTransitionVersion,
+  personalModelFeedbackWriteRequestVersion,
+  personalModelFeedbackWriteResponseVersion,
   personalModelRevisionActions,
   weeklyCognitiveReviewEnvelopeVersion,
   weeklyCognitiveReviewHistoryPageVersion,
@@ -720,6 +722,73 @@ export const personalModelFeedbackEventSchema = z
     }
   })
 
+export const personalModelFeedbackWriteRequestSchema = z
+  .object({
+    schemaVersion: z.literal(personalModelFeedbackWriteRequestVersion),
+    eventId: z.string().uuid(),
+    choice: personalModelFeedbackChoiceSchema,
+    reasonCode: personalModelFeedbackReasonCodeSchema.nullable(),
+    note: z.string().trim().min(1).max(personalModelFeedbackNoteMaximumLength).nullable(),
+    contextValidUntil: offsetDateTimeSchema.nullable(),
+  })
+  .strict()
+  .superRefine((request, ctx) => {
+    if (request.choice === 'temporary_context') {
+      if (request.contextValidUntil === null) {
+        addIssue(ctx, ['contextValidUntil'], 'temporary context feedback requires a validity end')
+      }
+    } else if (request.contextValidUntil !== null) {
+      addIssue(ctx, ['contextValidUntil'], 'only temporary context feedback may set a validity end')
+    }
+  })
+
+export const personalModelFeedbackWriteResponseSchema = z
+  .object({
+    schemaVersion: z.literal(personalModelFeedbackWriteResponseVersion),
+    outcome: z.enum(['revised', 'no_op']),
+    eventId: z.string().uuid(),
+    itemId: z.string().uuid(),
+    targetRevision: z.number().int().positive(),
+    currentRevision: z.number().int().positive(),
+    choice: personalModelFeedbackChoiceSchema,
+    feedbackState: personalModelFeedbackStateSchema,
+    status: personalModelStatusSchema,
+    validTo: offsetDateTimeSchema.nullable(),
+    acceptedAt: offsetDateTimeSchema,
+    noOpReason: personalModelFeedbackNoOpReasonSchema.nullable(),
+  })
+  .strict()
+  .superRefine((response, ctx) => {
+    const expectedCurrentRevision =
+      response.outcome === 'revised' ? response.targetRevision + 1 : response.targetRevision
+    if (response.currentRevision !== expectedCurrentRevision) {
+      addIssue(ctx, ['currentRevision'], 'feedback response revision must match its outcome')
+    }
+    if ((response.outcome === 'no_op') !== (response.noOpReason !== null)) {
+      addIssue(ctx, ['noOpReason'], 'only no-op feedback responses may include a reason')
+    }
+    const expectedFeedbackState = {
+      matches_me: 'confirmed',
+      temporary_context: 'temporary',
+      disagree: 'disagreed',
+      uncertain: 'uncertain',
+    }[response.choice]
+    if (response.feedbackState !== expectedFeedbackState) {
+      addIssue(ctx, ['feedbackState'], 'feedback response state must match its choice')
+    }
+    if (response.choice === 'temporary_context') {
+      if (response.validTo === null) {
+        addIssue(ctx, ['validTo'], 'temporary feedback response requires a validity end')
+      }
+    }
+    if (response.choice === 'disagree' && response.status !== 'disputed') {
+      addIssue(ctx, ['status'], 'disagreement feedback response must remain disputed')
+    }
+    if (response.status === 'superseded' || response.status === 'invalidated') {
+      addIssue(ctx, ['status'], 'feedback response cannot expose a terminal result')
+    }
+  })
+
 const personalModelFeedbackStateForChoice = (
   choice: z.infer<typeof personalModelFeedbackChoiceSchema>,
 ) =>
@@ -1371,6 +1440,12 @@ export type PersonalModelConfidenceReceipt = z.infer<typeof personalModelConfide
 export type PersonalModelItem = z.infer<typeof personalModelItemSchema>
 export type PersonalModelUnknownReceipt = z.infer<typeof personalModelUnknownReceiptSchema>
 export type PersonalModelFeedbackEvent = z.infer<typeof personalModelFeedbackEventSchema>
+export type PersonalModelFeedbackWriteRequest = z.infer<
+  typeof personalModelFeedbackWriteRequestSchema
+>
+export type PersonalModelFeedbackWriteResponse = z.infer<
+  typeof personalModelFeedbackWriteResponseSchema
+>
 export type PersonalModelItemRevision = z.infer<typeof personalModelItemRevisionSchema>
 export type PersonalModelCurrentSubjectEnvelope = z.infer<
   typeof personalModelCurrentSubjectEnvelopeSchema
