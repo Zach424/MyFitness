@@ -415,6 +415,7 @@ Content-Type: application/json
 - OpenAPI 当前以内联 Schema 为主，没有复用 components；生成 SDK 前应以契约测试验证 nullable、联合类型和自定义跨字段约束。
 - `GET /v1/personal-model/subjects/{subjectKey}/current` 是首个已实现 Personal Model 公开读取。它要求现有 Bearer 会话；`subjectKey` 只允许 `training.availability`、`training.recorded_frequency`、`training.recorded_session_duration`。200 响应严格为 `personal-model-current-subject-view-v1`：active owner 没有该主题时 `current:null`；非空时只保留当前 item/revision 数字定位、generation、结构化 claim、状态/反馈、置信限制、证据计数/窗口和必要时间，明确排除 owner、前代、内部 revision/reference UUID、EvidenceReference 正文、指纹与策略字段。无 Bearer 返回 401，非法 subject 返回 400，认证后 owner authority 竞态统一返回无身份线索 404，数据库歧义/损坏返回不带内部正文的 500；所有这些状态都固定 `Cache-Control: private, no-store`。当前 OpenAPI 仍不包含 Weekly Cognitive Review、lineage、证据分页、模型导出或反馈路由；客户端尚未形成页面接线，因此不能把单一当前主题读取描述为完整认知镜子。
 - 客户端已有尚未接页面的严格适配器。平台传输只接受 `PersonalModelSubjectKey`，使用现有认证请求；成功值由无 Taro 依赖的核心再次解析，并要求响应 subject 与请求一致。它不会把 404、500、网络异常或畸形正文转成空主题。页面内存纯模型区分 unread、启动后的五阶段、成功空主题、刷新过期和迟到响应，但不执行持久缓存、轮询或后台重试。该模块尚未产生用户可见页面，也不改变接口状态码。
+- 当前主题已有未接页面的纯展示模型与 props-only 卡片。展示层只消费严格解析后的共享视图：空主题明确不是零，安排标为本人提交，频次/时长只描述已记录课次；状态、本人核对、资料覆盖/限制、四类精确证据计数、时域与代次/修订分开呈现。组件没有 API 调用、缓存、路由或反馈控制，不扩大上述 HTTP 契约。
 
 ## 19. 参考
 

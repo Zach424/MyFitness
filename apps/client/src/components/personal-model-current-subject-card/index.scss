@@ -1,0 +1,260 @@
+.personal-model-card {
+  padding: 18px;
+  border: 1px solid var(--color-line);
+  border-top: 4px solid var(--color-juniper);
+  border-radius: var(--radius-card);
+  color: var(--color-ink);
+  background: var(--color-paper);
+  box-shadow: var(--shadow-float);
+}
+
+.personal-model-card--limited {
+  border-top-color: var(--color-warning);
+}
+
+.personal-model-card--disputed,
+.personal-model-card--retired {
+  border-top-color: var(--color-pulse);
+}
+
+.personal-model-card--retired {
+  box-shadow: none;
+}
+
+.personal-model-card__header,
+.personal-model-card__facts,
+.personal-model-card__scale {
+  display: flex;
+}
+
+.personal-model-card__header {
+  gap: 16px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.personal-model-card__eyebrow,
+.personal-model-card__title,
+.personal-model-card__summary,
+.personal-model-card__interpretation,
+.personal-model-card__source,
+.personal-model-card__revision,
+.personal-model-card__notice-title,
+.personal-model-card__notice-copy,
+.personal-model-card__fact-label,
+.personal-model-card__fact-value,
+.personal-model-card__section-label,
+.personal-model-card__scale-value,
+.personal-model-card__scale-label,
+.personal-model-card__time,
+.personal-model-card__limit,
+.personal-model-card__validity,
+.personal-model-card__empty-copy {
+  display: block;
+}
+
+.personal-model-card__eyebrow,
+.personal-model-card__revision,
+.personal-model-card__section-label,
+.personal-model-card__scale-value,
+.personal-model-card__validity {
+  font-family: var(--font-metric);
+}
+
+.personal-model-card__eyebrow,
+.personal-model-card__section-label {
+  color: var(--color-juniper);
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+}
+
+.personal-model-card__title {
+  margin-top: 5px;
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 780;
+  letter-spacing: 0.015em;
+}
+
+.personal-model-card__revision {
+  flex: none;
+  color: var(--color-muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.personal-model-card__summary {
+  margin-top: 20px;
+  font-size: 17px;
+  font-weight: 760;
+  line-height: 1.55;
+}
+
+.personal-model-card__interpretation,
+.personal-model-card__empty-copy {
+  margin-top: 8px;
+  color: var(--color-muted);
+  font-size: 12px;
+  line-height: 1.75;
+}
+
+.personal-model-card__source {
+  margin-top: 10px;
+  color: var(--color-mineral);
+  font-size: 11px;
+  font-weight: 680;
+}
+
+.personal-model-card__notice {
+  margin-top: 16px;
+  padding: 12px 13px;
+  border-left: 3px solid var(--color-juniper);
+  background: var(--color-juniper-soft);
+}
+
+.personal-model-card--limited .personal-model-card__notice {
+  border-left-color: var(--color-warning);
+  background: var(--color-warning-soft);
+}
+
+.personal-model-card--disputed .personal-model-card__notice,
+.personal-model-card--retired .personal-model-card__notice {
+  border-left-color: var(--color-pulse);
+  background: rgba(233, 106, 91, 0.08);
+}
+
+.personal-model-card__notice-title {
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.personal-model-card__notice-copy {
+  margin-top: 4px;
+  color: var(--color-muted);
+  font-size: 11px;
+  line-height: 1.65;
+}
+
+.personal-model-card__facts {
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.personal-model-card__fact {
+  min-width: 0;
+  flex: 1;
+  padding: 11px 12px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-control);
+  background: var(--color-mist);
+}
+
+.personal-model-card__fact-label,
+.personal-model-card__scale-label,
+.personal-model-card__time,
+.personal-model-card__validity {
+  color: var(--color-muted);
+  font-size: 10px;
+  line-height: 1.6;
+}
+
+.personal-model-card__fact-value {
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 720;
+  line-height: 1.5;
+}
+
+.personal-model-card__evidence,
+.personal-model-card__limits {
+  margin-top: 18px;
+}
+
+.personal-model-card__scale {
+  margin-top: 8px;
+  border-top: 1px solid var(--color-line);
+  border-bottom: 1px solid var(--color-line);
+}
+
+.personal-model-card__scale-item {
+  min-width: 0;
+  flex: 1;
+  padding: 11px 8px 10px;
+  border-right: 1px solid var(--color-line);
+}
+
+.personal-model-card__scale-item:last-child {
+  border-right: 0;
+}
+
+.personal-model-card__scale-value {
+  color: var(--color-mineral);
+  font-size: 17px;
+  font-weight: 760;
+}
+
+.personal-model-card__scale-label {
+  margin-top: 3px;
+}
+
+.personal-model-card__time {
+  margin-top: 7px;
+}
+
+.personal-model-card__limit {
+  position: relative;
+  margin-top: 7px;
+  padding-left: 12px;
+  color: var(--color-muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.personal-model-card__limit::before {
+  position: absolute;
+  top: 0;
+  left: 0;
+  color: var(--color-warning);
+  content: '—';
+}
+
+.personal-model-card__validity {
+  margin-top: 16px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--color-line);
+}
+
+.personal-model-card--empty {
+  border-top-color: var(--color-mineral);
+  box-shadow: none;
+}
+
+@media (max-width: 360px) {
+  .personal-model-card {
+    padding: 15px;
+  }
+
+  .personal-model-card__header,
+  .personal-model-card__facts {
+    flex-direction: column;
+  }
+
+  .personal-model-card__revision,
+  .personal-model-card__fact {
+    width: 100%;
+  }
+
+  .personal-model-card__scale {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .personal-model-card__scale-item:nth-child(2) {
+    border-right: 0;
+  }
+
+  .personal-model-card__scale-item:nth-child(-n + 2) {
+    border-bottom: 1px solid var(--color-line);
+  }
+}

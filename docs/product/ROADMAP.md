@@ -2,7 +2,7 @@
 
 路线图按受控迭代组织。一轮可以跨越多个工作会话，但只有在实现、验证、档案更新和提交全部完成后才结束。
 
-进度快照（2026-08-12）：第 0–192 轮已在本地完成。Personal Model P0/P1 契约、P2a–P2c 持久/来源内核、training availability Constraint、recorded training frequency Behavior、recorded session duration Baseline 及同主题终态后新代际已经受门禁保护。时长只来自完整本地周内起止完整、正数且不超过 1,440 分钟的当前 workout revision；固定中位数与 nearest-rank 四分位数不推断能力、强度或效果。三个 claim 均复用 Unknown/candidate/active、精确来源撤回、反馈保持、终态不复活、并发收敛与账户删除。完整单元实测为 635 项、集成为 162 项、浏览器基线为 95 项。生产依赖为 0 个 critical/high、9 个 moderate。下一阶段先实现 owner/subject 当前代最小内部读取信封；除数据丢失、安全、隐私或认知闭环阻塞外，极端规模导出、部署与非必要运维强化暂停。
+进度快照（2026-08-12）：第 0–197 轮已在本地完成。Personal Model P0/P1 契约、P2a–P2c 持久/来源内核、三个严格 claim、同主题新代际、当前主题信封/最小投影/认证 HTTP、严格客户端读取权限和未接线中性展示已经受门禁保护。展示层把本人安排与系统整理的已记录频次/时长分开，空主题不冒充零，状态/本人核对/资料限制/证据时域不变成评分、效果或建议。完整单元实测为 672 项、集成为 174 项、浏览器基线为 95 项。生产依赖为 0 个 critical/high、9 个 moderate。下一阶段只接入一个固定当前主题的独立页面读取闭环；除数据丢失、安全、隐私或认知闭环阻塞外，极端规模导出、部署与非必要运维强化暂停。
 
 ## 认知镜子主线
 
@@ -12,7 +12,7 @@
 | P1   | 共享领域契约                        | P1a 核心 item/claim/evidence/confidence/feedback 与 P1b 不可变 revision、反馈转换、Weekly Cognitive Review 信封均已实现 |
 | P2   | 持久化与所有者隔离                  | P2a/P2b、P2c 证据/来源资格/撤回协议及 goal 历史完成；执行器、回顾、普通删除/Personal Model 导出仍待实现                 |
 | P3   | Evidence → Personal Model Item      | 三个严格 claim 已实现：安排与记录频率并列、记录课次时长基线；均满足覆盖门槛且不推断依从性、动机、偏好或训练效果         |
-| P4   | Mirror 读取与周回顾                 | 当前主题认证 HTTP 与客户端读取权限已完成；后续固定最小展示、少量精确修订与周回顾                                        |
+| P4   | Mirror 读取与周回顾                 | 当前主题认证 HTTP、客户端读取权限与未接线中性展示已完成；后续固定单主题页面、少量精确修订与周回顾                       |
 | P5   | User Feedback → Model Revision      | 用户可选择“符合我、暂时情况、不同意、不确定”，反馈绑定精确修订并形成不可变后续修订，不自动提高置信                      |
 | P6   | Pattern → Hypothesis                | 只在多窗口复现、支持/反对证据和限制完整时生成候选假设；LLM 仅提供受检表达，不拥有事实或置信更新权                       |
 | P7   | Hypothesis → Outcome → Model Update | 行动与结果绑定精确假设修订，保持非因果说明，并以确定性规则决定支持、反对、争议或失效                                    |
@@ -219,6 +219,7 @@ P0–P5 是首个最小闭环：Evidence → Personal Model Item → Weekly Revi
 | 194  | Personal Model 当前主题最小可见投影   | owner-free claim/状态/限制/证据摘要、空主题及不可枚举 authority 错误，通过         |
 | 195  | Personal Model 当前主题认证只读 HTTP  | Bearer、严格 subject、200/400/401/404/500 no-store、OpenAPI 与 owner 隔离，通过    |
 | 196  | Personal Model 客户端读取权限         | 严格解析、unread + 五阶段、代次失效、过期快照、切换/卸载清理与零包体变化，通过     |
+| 197  | Personal Model 当前主题中性展示       | 三主题纯文案、状态/反馈/限制/证据时域、移动端卡片、无评分建议与零包体变化，通过    |
 
 托管共享环境部署、封闭测试强化与发布继续作为正式发布门禁，但在真实身份、数据保管、遥测、域名、预算、责任人与备案材料就绪前不占用本地迭代编号。原生 App 与 HealthKit/Health Connect/华为设备同步继续等待 MVP 留存门禁。
 
