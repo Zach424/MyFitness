@@ -9,6 +9,7 @@ describe('me hub navigation model', () => {
       '训练目标',
       '单位与时区',
       '安全边界',
+      '本人训练安排',
       '已记录训练观察',
       '证据范围与限制',
       '授权记录',
@@ -39,9 +40,10 @@ describe('me hub navigation model', () => {
   it('keeps the mirror separate from profile editing and data custody', () => {
     const mirror = meHubSections.find((section) => section.id === 'mirror')
 
-    expect(mirror?.capabilities).toEqual(['已记录训练观察', '证据范围与限制'])
+    expect(mirror?.capabilities).toEqual(['本人训练安排', '已记录训练观察', '证据范围与限制'])
     expect(mirror?.capabilities).not.toContain('个人资料')
     expect(mirror?.capabilities).not.toContain('数据导出')
+    expect(mirror?.boundary).toContain('一次只读取一个主题')
     expect(mirror?.boundary).toContain('不会自动调整计划')
   })
 })

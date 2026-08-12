@@ -3,6 +3,7 @@ export type MeHubCapability =
   | '训练目标'
   | '单位与时区'
   | '安全边界'
+  | '本人训练安排'
   | '已记录训练观察'
   | '证据范围与限制'
   | '授权记录'
@@ -35,11 +36,11 @@ export const meHubSections: readonly MeHubSection[] = [
     id: 'mirror',
     eyebrow: '02 / 系统整理的观察',
     title: '系统如何理解我',
-    description: '核对系统从已确认训练记录中整理出的频次观察、证据范围和限制。',
-    actionLabel: '查看已记录训练观察',
+    description: '逐项核对本人训练安排，以及系统从已确认记录整理出的频次和时长观察。',
+    actionLabel: '打开个人认知镜子',
     path: '/pages/personal-model/index',
-    capabilities: ['已记录训练观察', '证据范围与限制'],
-    boundary: '进入后只读取已记录训练频次；不会评价现实表现，也不会自动调整计划。',
+    capabilities: ['本人训练安排', '已记录训练观察', '证据范围与限制'],
+    boundary: '进入后一次只读取一个主题；不会组合评分，也不会自动调整计划。',
   },
   {
     id: 'custody',

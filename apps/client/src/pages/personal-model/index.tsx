@@ -13,15 +13,26 @@ import {
   failPersonalModelCurrentSubjectRead,
   invalidatePersonalModelCurrentSubjectRead,
   personalModelCurrentSubjectReadPhase,
+  replacePersonalModelCurrentSubject,
   type PersonalModelCurrentSubjectReadState,
 } from '../../lib/personal-model-current-subject-read'
-import { personalModelPageFailureCopy, personalModelPageSubject } from './personal-model-page.model'
+import type { DeferredH5FocusRequest } from '../../lib/accessibility'
+import {
+  defaultPersonalModelPageSubject,
+  personalModelPageFailureCopy,
+  personalModelPageSubjectContext,
+  personalModelPageSubjectOption,
+  personalModelPageSubjects,
+} from './personal-model-page.model'
 import './index.scss'
 
 const PersonalModelPage = () => {
-  const initialState = useRef(createPersonalModelCurrentSubjectReadState(personalModelPageSubject))
+  const initialState = useRef(
+    createPersonalModelCurrentSubjectReadState(defaultPersonalModelPageSubject),
+  )
   const stateRef = useRef<PersonalModelCurrentSubjectReadState>(initialState.current)
   const pageActive = useRef(true)
+  const failureFocus = useRef<DeferredH5FocusRequest | false>(false)
   const [readState, setReadState] = useState(initialState.current)
 
   const commit = (next: PersonalModelCurrentSubjectReadState) => {
@@ -29,12 +40,18 @@ const PersonalModelPage = () => {
     setReadState(next)
   }
 
+  const cancelFailureFocus = () => {
+    failureFocus.current && failureFocus.current.cancel()
+    failureFocus.current = false
+  }
+
   const readCurrentSubject = async () => {
     if (stateRef.current.busy) return
+    cancelFailureFocus()
     const begun = beginPersonalModelCurrentSubjectRead(stateRef.current)
     commit(begun.state)
     try {
-      const snapshot = await getCurrentPersonalModelSubject(personalModelPageSubject)
+      const snapshot = await getCurrentPersonalModelSubject(begun.receipt.subjectKey)
       if (!pageActive.current) return
       const next = acceptPersonalModelCurrentSubjectRead(stateRef.current, begun.receipt, snapshot)
       if (next !== stateRef.current) commit(next)
@@ -43,8 +60,21 @@ const PersonalModelPage = () => {
       const next = failPersonalModelCurrentSubjectRead(stateRef.current, begun.receipt, error)
       if (next === stateRef.current) return
       commit(next)
-      deferH5Focus('personal-model-read-retry', next.snapshot ? 80 : 450)
+      failureFocus.current = deferH5Focus('personal-model-read-retry', next.snapshot ? 80 : 450, {
+        canFocus: () =>
+          pageActive.current &&
+          stateRef.current.subjectKey === begun.receipt.subjectKey &&
+          stateRef.current.generation === begun.receipt.generation &&
+          stateRef.current.failure !== undefined,
+      })
     }
+  }
+
+  const selectSubject = (subjectKey: (typeof personalModelPageSubjects)[number]['subjectKey']) => {
+    if (subjectKey === stateRef.current.subjectKey) return
+    cancelFailureFocus()
+    commit(replacePersonalModelCurrentSubject(stateRef.current, subjectKey))
+    void readCurrentSubject()
   }
 
   useEffect(() => {
@@ -52,10 +82,13 @@ const PersonalModelPage = () => {
     void readCurrentSubject()
     return () => {
       pageActive.current = false
+      cancelFailureFocus()
       stateRef.current = invalidatePersonalModelCurrentSubjectRead(stateRef.current)
     }
   }, [])
 
+  const selectedSubject = personalModelPageSubjectOption(readState.subjectKey)
+  const selectedContext = personalModelPageSubjectContext(readState.subjectKey)
   const phase = personalModelCurrentSubjectReadPhase(readState)
   const presentation = readState.snapshot
     ? presentPersonalModelCurrentSubject(readState.snapshot)
@@ -68,7 +101,7 @@ const PersonalModelPage = () => {
   return (
     <View className="personal-model-page">
       <ScrollView className="personal-model-page__scroll" scrollY enhanced showScrollbar={false}>
-        <View className="personal-model-page__shell" aria-label="已记录训练频次个人认知">
+        <View className="personal-model-page__shell" aria-label="个人认知核对">
           <View className="personal-model-page__topbar">
             <Button
               className="personal-model-page__back"
@@ -90,8 +123,32 @@ const PersonalModelPage = () => {
               系统目前看见的，是你的记录，不是你的全部。
             </Text>
             <Text className="personal-model-page__lead">
-              本页只核对完整观察周内的已确认训练记录。它不会判断现实训练是否达标，也不会自动调整你的计划。
+              一次只核对一项本人资料或已确认训练记录。切换主题会清除上一项快照，不会把三项拼成评分或自动调整你的计划。
             </Text>
+          </View>
+
+          <View
+            className="personal-model-page__subject-register"
+            role="group"
+            aria-label="选择要核对的个人认知"
+          >
+            {personalModelPageSubjects.map((option) => {
+              const selected = option.subjectKey === readState.subjectKey
+              return (
+                <Button
+                  key={option.subjectKey}
+                  className={`personal-model-page__subject${selected ? ' personal-model-page__subject--selected' : ''}`}
+                  aria-pressed={selected}
+                  {...buttonActivationProps(() => selectSubject(option.subjectKey))}
+                >
+                  {option.label}
+                </Button>
+              )
+            })}
+          </View>
+
+          <View className="personal-model-page__subject-context" role="note">
+            <Text>{selectedContext}</Text>
           </View>
 
           {readState.snapshot ? (
@@ -110,7 +167,9 @@ const PersonalModelPage = () => {
           {phase === 'unread' || phase === 'initial-loading' ? (
             <View className="personal-model-page__state" role="status">
               <Text className="personal-model-page__state-eyebrow">CHECKING CURRENT SUBJECT</Text>
-              <Text className="personal-model-page__state-title">正在核对已记录训练频次</Text>
+              <Text className="personal-model-page__state-title">
+                {selectedSubject.loadingTitle}
+              </Text>
               <Text className="personal-model-page__state-copy">
                 完整读取成功后才会显示空主题或当前观察；加载中不会使用零值占位。
               </Text>
@@ -155,7 +214,7 @@ const PersonalModelPage = () => {
           <View className="personal-model-page__boundary" role="note">
             <Text className="personal-model-page__boundary-label">当前边界</Text>
             <Text className="personal-model-page__boundary-copy">
-              当前只开放“已记录训练频次”。训练时间安排、课次时长、历史代际和反馈操作尚未接入本页。
+              当前开放三项逐项核对，但不会批量读取或组合画像。历史代际、证据正文和反馈操作尚未接入本页。
             </Text>
           </View>
         </View>

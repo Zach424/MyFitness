@@ -102,6 +102,40 @@
   line-height: 1.78;
 }
 
+.personal-model-page__subject-register {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.personal-model-page__subject {
+  min-height: 46px;
+  margin: 0;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  color: var(--color-ink);
+  background: transparent;
+  font-size: 11px;
+  font-weight: 740;
+  line-height: 44px;
+}
+
+.personal-model-page__subject--selected {
+  background: var(--color-mineral-soft);
+}
+
+.personal-model-page__subject-context {
+  display: block;
+  margin-bottom: 16px;
+  padding: 10px 12px;
+  border-left: 3px solid var(--color-mineral);
+  color: var(--color-muted);
+  font-size: 10px;
+  line-height: 1.55;
+}
+
 .personal-model-page__toolbar {
   display: flex;
   gap: 14px;
@@ -192,6 +226,7 @@
 }
 
 .personal-model-page__back:focus,
+.personal-model-page__subject:focus,
 .personal-model-page__refresh:focus,
 .personal-model-page__retry:focus {
   outline: 3px solid rgba(233, 106, 91, 0.35);
@@ -199,6 +234,11 @@
 }
 
 @media (max-width: 420px) {
+  .personal-model-page__subject {
+    min-height: 48px;
+    padding: 0 4px;
+  }
+
   .personal-model-page__toolbar {
     align-items: stretch;
     flex-direction: column;
