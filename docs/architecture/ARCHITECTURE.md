@@ -1,6 +1,6 @@
 # 架构基线
 
-状态：已实现至第 200 轮三个严格 claim、同主题新代际、三主题逐项读取与精确反馈认证 HTTP；客户端反馈入口、回顾和模型导出仍未实现；架构变更必须新增 ADR。
+状态：当前实现已包含三个严格 Personal Model claim、同主题新代际、三主题逐项读取与三种本人校准；第 203 轮新增 iLens 目标领域迁移决策，但 Muscle Model、Body Assessment、Performance 与 Plan v2 尚未实现。架构变更必须新增 ADR。
 
 ## 系统形态
 
@@ -34,6 +34,8 @@ flowchart TB
 ## 交付架构
 
 项目从 pnpm 单体仓库和模块化单体架构起步。单一 API 部署单元让事务、授权、迁移和本地开发保持清晰。AI 工作位于队列/工作进程边界之后，因为其运行时、延迟、成本、重试和可观测性需求不同。只有在发现经过测量的扩展压力或所有权约束后才拆分更多服务。
+
+iLens 迁移继续使用同一模块化单体与共享 PostgreSQL，不因新产品命名拆服务或复制数据。新领域按 Muscle Model、Body Metrics/Assessment、Performance、Plan v2 的依赖顺序逐个进入 `packages/contracts`、领域规则、API 模块和数据库；Evidence 使用共享信封加领域内精确外键，AI 只消费当前有效、可追溯事实。目标模型、能力矩阵和阶段计划分别见仓库根目录 `dataModel.md`、`funcTable.md` 与产品路线图；已实现边界仍以已实现 PRD 为准。
 
 已实现基础：
 

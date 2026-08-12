@@ -2,13 +2,13 @@
 
 状态：内部 Alpha 当前结构
 
-基线日期：2026-08-10
+基线日期：2026-08-12
 
 数据库：PostgreSQL，`public` Schema
 
 ## 1. 文档范围与实测基线
 
-本文根据 `infra/postgres/migrations`、服务端仓储 SQL 和正在运行的本地 PostgreSQL `information_schema` 交叉整理。基线实例已应用 `0001` 至 `0030` 共 30 个迁移，当前有 40 张基础表/业务表、2 个业务触发器和 2 个触发函数。
+本文根据 `infra/postgres/migrations`、服务端仓储 SQL 和当前结构测试交叉整理。仓库包含 `0001` 至 `0044` 共 44 个有序 SQL 迁移，迁移文件累计定义 46 张当前表；实际环境仍应通过 `schema_migrations` 与 `information_schema` 核对已应用版本，不能仅凭仓库文件推断部署完成。
 
 本地实例中的行数只反映自动化与演示运行产生的临时数据，不是生产容量指标，也不能用于推断真实用户行为。结构、约束和关系才是本文的长期设计事实。
 
@@ -585,6 +585,10 @@ intent 创建 → 验证一次性 token 与确认短语 → users 状态关闭 �
 - 当前本地数据操作表有 179 个 job/attempt，来自测试和演示；应通过状态分布、失败码和死信而不是总行数判断健康。
 - 归档表与状态机已存在，但请求仓储、执行任务、加密对象、下载授权和到期扫描尚未实现；表结构不能被描述为用户可用的异步导出。
 - 没有设备原生同步表、社交表、支付表或医疗病历表；这些不属于当前实现。
+- iLens 目标中的统一肌群词表、动作主/次肌群关联、肌群状态、Body Assessment/报告资产和正式 Performance 投影均没有当前表；在相应迁移、owner 隔离、revision、导出和删除测试完成前，页面不得冒充这些事实已存在。
+- 当前 `health_records` 只承载九个受契约约束的身体/恢复指标。身体组成、节段指标和报告提取应先扩展版本化指标注册表及候选确认流程，不应把提供方任意键直接写入 JSONB 当成已确认事实。
+- 当前 `weekly_plans` 是每用户每周一个聚合，不具备 iLens Plan v2 的长期计划、周期及 `draft/active/paused/replaced/completed/archived` 生命周期。后续采用新聚合与兼容读取，不能原地解释旧状态或覆盖既有修订历史。
+- Performance 必须从已完成训练的精确组事实确定性派生并固定公式版本；e1RM 属于估算投影，不是用户实测 1RM、训练处方或医疗结论。
 - `personal_model_items`、revision、feedback、evidence、source refresh 与 `user_goal_revisions` 已建立 owner 复合键、不可变历史、原子当前指针、精确来源和撤回解决；training availability、recorded training frequency 与 recorded session duration 都有内部确定性事务，同主题终态也能以唯一当前 generation 原子接续。current-subject 信封与认证最小视图已能严格选择并返回唯一当前代，但 Weekly Cognitive Review、公开 lineage/证据读取、导出和客户端仍未完成；在这些语义通过验证前，不得把一个当前主题 API 描述为完整用户“认知镜子”，也不得建立任意 JSON“用户画像”旁路。
 - 备份物理删除时限属于生产保留政策和演练证据，不能只由主数据库 receipt 状态推断。
 
