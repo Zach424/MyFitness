@@ -39,6 +39,7 @@ import type {
   PlanOutcomeReview,
   PlanWorkoutLink,
   PlanWorkoutLinkClosure,
+  PersonalModelSubjectKey,
   PrivacyOverview,
   ConsentReceiptHistory,
   RevocableConsentPurpose,
@@ -591,6 +592,12 @@ export const getNutritionInsight = (timezone: string) =>
 export const getHealthInsight = (metric: MetricCode, timezone: string) =>
   authenticatedRequest<HealthInsight>(
     `/insights/health/${encodeURIComponent(metric)}?timezone=${encodeURIComponent(timezone)}`,
+    'GET',
+  )
+
+export const requestCurrentPersonalModelSubject = (subjectKey: PersonalModelSubjectKey) =>
+  authenticatedRequest<unknown>(
+    `/personal-model/subjects/${encodeURIComponent(subjectKey)}/current`,
     'GET',
   )
 

@@ -32,11 +32,11 @@
 - 原生 Apple Health、Health Connect 或穿戴设备自动同步。
 - 照片人体测量、姿态诊断、精确体脂率或“好坏体态”判断。
 - AI 自动修改计划、自动确认事实、自动写入餐食或自动提高训练量。
-- 用户可见的 Personal Model 页面、Pattern/Hypothesis 生命周期、Weekly Cognitive Review 和模型修订闭环；当前已有内部持久/代际内核、当前主题严格信封/最小可见投影、一个认证只读 HTTP、反馈事务以及三个严格 claim 的确定性派生，但尚无客户端产品入口。
+- 用户可见的 Personal Model 页面、Pattern/Hypothesis 生命周期、Weekly Cognitive Review 和模型修订闭环；当前已有内部持久/代际内核、当前主题信封/投影、认证 HTTP、严格客户端适配/页面内存读取权限、反馈事务以及三个严格 claim，但尚无展示或产品入口。
 - 基于长期个人模型自动执行 Contextual Decision，或把相关性、短期状态和用户未确认推断当作稳定人格标签。
 - 用户端离线写入队列；网络结果不确定时不会在后台自动重放请求。
 
-仓库已实现 Personal Model P1a/P1b 契约和 P2a–P2c PostgreSQL 内核，完整修订、用户反馈、有序 EvidenceReference、goal/workout 精确来源及 refresh request/resolution 都受 owner、不可变和提交时门禁保护。三个严格 claim 均有确定性派生；终态旧 item 可由 generation+1 新 item 原子接续。`getCurrentSubject` 按 active owner/subject 返回唯一未退役代及精确 revision，应用层再生成 owner-free 最小可见视图。首个认证 HTTP 只接受三个 subject，以 Session principal 绑定 owner；200/400/401/404/500 全部禁止缓存，空主题、authority 竞态与内部故障保持不同且不泄露内部字段。自动触发、公开代际/证据 API、客户端、回顾和 Personal Model 便携导出仍未接入，因此这只是受控读取切片，不构成完整用户可见认知镜子或自动适应功能。
+仓库已实现 Personal Model 契约、PostgreSQL 内核、三个确定性 claim、同主题代际和认证当前主题 HTTP。客户端薄传输只接受共享 subject，成功正文经无平台依赖核心再次严格解析；页面内存纯模型用显式 unread、启动后五阶段和 generation 收据区分成功空主题、初始失败、刷新 stale、迟到响应、subject 切换与卸载。当前模块不被页面引用，不持久化、不轮询，双端产物未变化。自动触发、公开代际/证据 API、最小展示、反馈入口、回顾和 Personal Model 便携导出仍未接入，因此这仍只是受控读取基础，不构成完整用户可见认知镜子或自动适应功能。
 
 ## 3. 用户、权限与信任边界
 
