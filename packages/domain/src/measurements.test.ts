@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
-import { MeasurementError, normalizeMeasurement } from './measurements'
+import { currentBodyMetricDefinitions } from '@myfitness/contracts/body-metric-registry.constants'
+
+import { MeasurementError, metricDefinitions, normalizeMeasurement } from './measurements'
 
 describe('measurement normalization', () => {
   it('normalizes pounds to canonical kilograms', () => {
@@ -23,5 +25,19 @@ describe('measurement normalization', () => {
   it('rejects implausible values and fractional 1-to-5 scores', () => {
     expect(() => normalizeMeasurement('body.weight', 900, 'kg')).toThrow(/between/)
     expect(() => normalizeMeasurement('recovery.energy', 3.5, 'score_1_5')).toThrow(/whole-number/)
+  })
+
+  it('keeps current domain boundaries aligned with body metric registry v2', () => {
+    for (const definition of currentBodyMetricDefinitions) {
+      expect(metricDefinitions[definition.code]).toMatchObject({
+        canonicalUnit: definition.canonicalUnit,
+        allowedUnits: definition.allowedDisplayUnits,
+        min: definition.technicalBounds.minimum,
+        max: definition.technicalBounds.maximum,
+      })
+      expect(Boolean(metricDefinitions[definition.code].integer)).toBe(
+        definition.technicalBounds.wholeNumber,
+      )
+    }
   })
 })

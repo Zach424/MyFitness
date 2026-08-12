@@ -80,6 +80,10 @@ import {
   personalModelSubjectKeys,
 } from '@myfitness/contracts'
 import { mappableMuscleIds, muscleModelVersion } from '@myfitness/contracts/muscle-model.constants'
+import {
+  currentBodyMetricDefinitions,
+  plannedBodyMetricDefinitions,
+} from '@myfitness/contracts/body-metric-registry.constants'
 import { describe, expect, it } from 'vitest'
 
 const migrationPath = path.resolve(
@@ -224,6 +228,18 @@ const workoutExerciseMuscleMappingMigrationPath = path.resolve(
 )
 
 describe('health-record migration drift', () => {
+  it('keeps planned v2 metrics outside the current persisted metric whitelist', async () => {
+    expect(currentBodyMetricDefinitions.map((definition) => definition.code)).toEqual(metricCodes)
+    const migrations = await Promise.all(
+      [migrationPath, lifecycleMigrationPath].map((file) => readFile(file, 'utf8')),
+    )
+    for (const definition of plannedBodyMetricDefinitions) {
+      for (const migration of migrations) {
+        expect(migration).not.toContain(`'${definition.code}'`)
+      }
+    }
+  })
+
   it('contains every contract metric, unit and source kind', async () => {
     const migration = await readFile(migrationPath, 'utf8')
 

@@ -1,8 +1,8 @@
 # 项目状态
 
-最后审阅：2026-08-12
+最后审阅：2026-08-13
 
-阶段：内部 Alpha，可在本地完整运行。第 205 轮被归类为 F（Feature）：9 个 starter 动作和 owner 自定义动作现在通过 `ilens-muscle-model-v1` 返回严格的 primary/secondary 肌群关系；8 个 starter 动作有 `starter_catalog` 映射，通用灵活性流程显式保持 Unknown。自定义关系以 `user_confirmed` 来源随目录 revision 保存，旧客户端不传时保持 unmapped，更新省略字段时保留，显式 `null` 才清除。训练动作另保存选择时关系快照，目录后续更正或停用不会静默重写历史训练及便携导出。`core_global`、重复、交叉、未知 ID、错误版本和数据库旁路都失败关闭。本轮没有肌群训练量、人体 SVG、肌群状态、映射编辑 UI 或计划算法，映射来源也不代表医学或动作安全审阅。完整单元实测为 121 个文件、786 项，PostgreSQL 集成为 29 个文件、177 项，全工作区 strict typecheck、OpenAPI、H5/WeApp 生产构建及入库包体预算通过。`docs/` 当前为 434 份 Markdown，11 份活跃权威文档、待迁移总量 191；第 090–205 轮与 ADR-0085–0199 连续受保护。下一轮只建立 Body Metric Registry v2。
+阶段：内部 Alpha，可在本地完整运行。第 206 轮被归类为 F（Feature）：`ilens-body-metric-registry-v2` 现在以严格常量与 Zod 运行时冻结 29 个指标，其中现有健康记录的 9 项为 `current`，目标身体基础、组成和进阶字段的 20 项为 `planned`。每项固定中文名、类别、规范/展示单位、四位持久精度、来源能力、非临床技术摄入护栏和确定性派生声明；BMI、体脂肪量、去脂体重和腰臀比携带独立公式版本及输入身份。AI 视觉估算与报告提取保持不同候选来源，技术边界明确不是医学正常范围。三层一致性测试证明旧 9 项顺序、单位、领域范围与数据库白名单不变，因此本轮没有迁移、API/OpenAPI 或页面改动；20 项计划指标尚不可写入。定向单元 4 个文件、51 项，完整单元 122 个文件、792 项，PostgreSQL 集成 29 个文件、177 项及全工作区 strict typecheck 均通过。`docs/` 当前为 436 份 Markdown，11 份活跃权威文档、待迁移总量 191；第 090–206 轮与 ADR-0085–0200 连续受保护。下一轮只建立 Body Assessment 与私有报告内核。
 
 主要交付目标：微信小程序 + 响应式 H5
 
@@ -14,9 +14,10 @@ iLens 以健身房力量训练为当前垂直，把个人资料、身体指标�
 
 | 模块              | 状态                       | 当前证据                                                     | 下一门禁                           |
 | ----------------- | -------------------------- | ------------------------------------------------------------ | ---------------------------------- |
-| 产品范围          | iLens 目标与现状边界已分离 | 目标数据模型、迁移矩阵、已实现 PRD、数据库设计与 35 项风险   | Body Metric Registry 与真实研究    |
-| 交付路线图        | Phase 0–6 已重排           | 第 203 轮审计、ADR-0197、204–224 独立切片                    | 第 206 轮 Body Metric Registry v2  |
+| 产品范围          | iLens 目标与现状边界已分离 | 目标数据模型、迁移矩阵、已实现 PRD、数据库设计与 35 项风险   | Body Assessment 数据边界           |
+| 交付路线图        | Phase 0–6 已重排           | 第 203 轮审计、ADR-0197、204–224 独立切片                    | 第 207 轮 Body Assessment 内核     |
 | Muscle Model      | v1 契约与动作关联完成      | 5 区域、26 ID、9 个 starter 响应、自定义 revision 与训练快照 | 聚合/人体图前的内容审阅与升级策略  |
+| Body Metrics      | v2 注册表完成              | 9 个现用、20 个计划指标；单位、精度、来源、护栏与派生版本    | 计划指标的持久生命周期与评估关联   |
 | Body Assessment   | 待实现                     | 仅有可借鉴的私有照片候选流程                                 | 检测事件、报告、候选与确认模型     |
 | Performance       | 待实现                     | 当前只有动作次数、训练量和窗口点序列                         | 最佳组、e1RM、PR 与算法版本        |
 | Plan v2           | 待实现                     | 当前只有单周 weekly plan 聚合                                | 长期生命周期与旧历史兼容           |
@@ -38,6 +39,7 @@ iLens 以健身房力量训练为当前垂直，把个人资料、身体指标�
 
 - iLens 继续采用当前 Taro 多端客户端、NestJS 模块化单体、PostgreSQL、共享契约与独立 AI worker 边界；产品迁移不触发微服务拆分或整仓重命名。目标模型以 `dataModel.md` 为输入，`funcTable.md` 记录当前/目标/差距，已实现 PRD 仍是实际能力权威。Muscle Model → 动作关联 → 肌群状态/训练分析/人体图，Body Metric Registry → Body Assessment → Body Profile，Training → Performance → Plan v2 构成三条主依赖链；全部确认事实最终再进入 Personal Model 与 AI 闭环。
 - Muscle Model v1 通过 `@myfitness/contracts/muscle-model.constants` 暴露无 Zod 的规范常量，通过 `@myfitness/contracts/muscle-model` 暴露严格运行时。5 个 region 与 26 个 muscle 的身份、中文名、层级、节点类型、前/后视图和顺序同版本不可变；`core_global` 只作为 aggregate。动作目录用严格判别联合返回 mapped/unmapped，mapped 只能引用 25 个具体 muscle group，并携带 `starter_catalog|user_confirmed` 来源。自定义关系保存在目录当前行和完整 revision 快照中；训练保存选择时映射 JSON 快照，后续目录变化不反向解释历史。当前不包含权重、肌群状态、人体图、内容专家审阅或服务端目录匹配证明，任何聚合都必须独立验收。
+- Body Metric Registry v2 通过 `@myfitness/contracts/body-metric-registry.constants` 暴露无 Zod 的规范常量，通过 `@myfitness/contracts/body-metric-registry` 暴露严格运行时。29 个定义包含 `current|planned` 能力状态、类别、中文名、规范/展示单位、四位精度、来源能力、技术摄入护栏和派生元数据；BMI、体脂肪量、去脂体重和腰臀比固定公式版本与输入指标。注册表完整性、旧契约单位、领域范围和数据库白名单由测试交叉锁定；计划项不会因出现在词表中而绕过前向迁移、owner、revision、导出、纠正、删除或本人确认验收。
 - 客户端采用 Taro 4、React 与 TypeScript，同时面向小程序和 H5。
 - 仓库采用 pnpm 工作区，锁文件入库，并共享 CSS/TypeScript 设计令牌包。
 - 无第三方依赖的项目状态镜像会选择最近打开的 Obsidian vault（或显式覆盖路径），把 `docs/PROJECT_STATUS.md` 逐字节复制到 vault 内，并独立拒绝过期或逃逸路径的目标；仓库副本始终是权威来源。
@@ -206,4 +208,4 @@ iLens 以健身房力量训练为当前垂直，把个人资料、身体指标�
 
 ## 首要下一步
 
-下一轮执行第 206 轮 Body Metric Registry v2：审计当前九个健康指标与目标身体组成字段，固定指标代码、规范/展示单位、持久精度、是否可手工记录或确定性派生、合理输入边界和注册表版本；旧记录与现有 API 行为必须保持兼容。本轮不创建 Body Assessment、报告上传、OCR 候选、身体档案页面或医学正常范围。R-034 的 Personal Model 精确时间资格修复继续隔离保存；云资源、真实 AI 提供方和批量品牌重命名继续暂停。
+下一轮执行第 207 轮 Body Assessment 与私有报告内核：只建立检测事件、owner 隔离、原始报告资产引用、逐字段候选、保留/删除状态和与 v2 指标身份的严格关联，并用迁移与仓储测试证明历史、导出和账户删除边界。本轮不连接真实 OCR/视觉提供方，不创建 Body Profile 页面，不把候选自动确认为身体事实，也不发布医学解释。R-034 的 Personal Model 精确时间资格修复继续隔离保存；云资源、真实 AI 提供方和批量品牌重命名继续暂停。

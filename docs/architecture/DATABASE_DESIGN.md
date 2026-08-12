@@ -167,6 +167,8 @@ purpose：`terms,privacy,health_data,ai_plan_explanation,food_photo_analysis,pro
 
 ### 6.1 `health_records`
 
+当前表继续只接受 Body Metric Registry v2 中 9 个 `current` 指标。注册表另外声明的 20 个 `planned` 指标尚未进入本表 CHECK、修订表、API 或页面；第 206 轮没有迁移，也没有改写旧行。后续 Body Assessment 接入时必须使用前向迁移扩白名单，并保持旧 `body.body_fat` 等代码和四位精度含义不变。
+
 | 列组      | 列                                                            | 说明                                    |
 | --------- | ------------------------------------------------------------- | --------------------------------------- |
 | 标识/归属 | `id,user_id`                                                  | PK；user FK                             |
@@ -185,6 +187,8 @@ purpose：`terms,privacy,health_data,ai_plan_explanation,food_photo_analysis,pro
 ### 6.2 `health_record_revisions`
 
 包含 `id,record_id,user_id,action,revision`，再复制 metric、标准/展示值、来源、置信度、状态、发生时间、时区和原 created/updated 时间，最后以 `changed_at` 标记修订写入。唯一 `(record_id,revision)`；FK → health_records 并随聚合删除。
+
+注册表的技术最小/最大值只用于拒绝明显单位或摄入错误，不是 PostgreSQL 医学正常范围，也不得据此生成诊断或健康等级。新增派生值必须保存公式版本和精确输入证据；当前数据库尚未持久化这些计划指标或公式谱系。
 
 ## 7. 训练
 
