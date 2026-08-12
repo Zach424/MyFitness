@@ -413,7 +413,11 @@ resolution 保存 `request_id,user_id,item_id,resolved_item_revision,withdrawn_r
 
 账户擦除从所有者根节点级联移除模型、证据、请求与解决历史，日常业务路径则不提供物理删除。这样既保留用户仍持有账户期间的解释、争议和纠正链，也不会让新增内部账本逃离账户删除范围。公开导出尚未包含这些表，因此它们目前只能作为内部权威；开放用户读取前必须定义可理解的来源变化说明、分页边界、本人授权和便携导出结构，不能直接暴露内部队列字段。
 
-该账本是可重试的待重算协议，本身不是派生器。第 189 轮的 training availability repository 事务已经能够消费 goal 类请求：先锁 owner，再读取当前 profile/goal/item 和全部未解决请求；纯派生器返回 create/no-op/revised，revised 必须匹配当前 eligible goal 与唯一待办，随后复用既有 revision/evidence/resolution 写入并推进指针。第二个并发执行者等待 owner 锁后重读，只会得到 no-op。没有控制器或调度器自动调用该方法，workout 类请求也尚无消费派生器，因此“来源已排队”仍不能普遍描述为“认知已自动更新”。
+该账本是可重试的待重算协议，本身不是派生器。training availability repository 已消费 goal 类请求；第 190 轮的 recorded training frequency repository 也能消费 workout 类请求。频率事务先锁 active owner，再读取目标 item/current 和全部未解决请求；随后用一条 SQL 从账户建立时刻、当前 profile 时区、当前未删除 workout 与精确 current history revision 生成最近至多 8 个完整本地周观察。纯派生器返回 Unknown/create/no-op/revised；revised 必须撤回匹配旧来源、加入仍在窗口中的当前来源并复用既有 resolution 写入。最后一条来源删除会追加 invalidated revision 与 Unknown 收据；终态条目收到迟到请求时追加同终态撤回历史而不复活。第二个并发执行者等待 owner 锁后重读，只会得到 no-op。仍没有控制器或调度器自动调用这些方法，因此“来源已排队”不能描述为“认知已自动更新”。
+
+频率观察使用 READ COMMITTED，但 owner 锁后来源边界由同一条数据库语句计算和聚合，避免分段查询自行混合时区、窗口与训练快照。若训练在该语句之后、模型提交之前改变，精确来源资格的延迟门禁会拒绝旧引用；若训练在模型提交之后改变，来源 revision 触发器会生成新 refresh request。这样无需把整个事务提升为等待锁时容易保留旧快照的隔离级别，也没有通过应用时钟猜测数据库并发顺序。
+
+`personal_model_items` 当前仍以 `(user_id,subject_key)` 唯一，只允许一个主题拥有一个 item；契约又把 `invalidated`/`superseded` 设为不可复活终态。因此现有结构可以安全保持旧历史，却不能在之后出现充分新证据时创建同主题的新一代 item。下一轮必须先定义代际身份、唯一当前代、旧代读取与来源请求归属，再调整约束；在此之前执行器对终态坚持 no-op 或同终态撤回，不能通过重写状态绕过生命周期。
 
 ## 15. 管理员身份与审计
 
@@ -571,7 +575,7 @@ intent 创建 → 验证一次性 token 与确认短语 → users 状态关闭 �
 - 当前本地数据操作表有 179 个 job/attempt，来自测试和演示；应通过状态分布、失败码和死信而不是总行数判断健康。
 - 归档表与状态机已存在，但请求仓储、执行任务、加密对象、下载授权和到期扫描尚未实现；表结构不能被描述为用户可用的异步导出。
 - 没有设备原生同步表、社交表、支付表或医疗病历表；这些不属于当前实现。
-- `personal_model_items`、revision、feedback、evidence、source refresh 与 `user_goal_revisions` 已建立 owner 复合键、不可变历史、原子当前指针、精确来源和撤回解决；training availability 也已有首个内部确定性消费事务。但 workout 纵向派生、Weekly Cognitive Review、Personal Model 列表/导出和公开 API 仍未完成；在这些语义通过验证前，不得把内核描述为用户可用的“认知镜子”，也不得建立任意 JSON“用户画像”旁路。
+- `personal_model_items`、revision、feedback、evidence、source refresh 与 `user_goal_revisions` 已建立 owner 复合键、不可变历史、原子当前指针、精确来源和撤回解决；training availability 与 recorded training frequency 都已有内部确定性消费事务。当前单主题单 item 约束尚不能表达终态后的新代际，训练时长、Weekly Cognitive Review、Personal Model 列表/导出和公开 API 也未完成；在这些语义通过验证前，不得把内核描述为用户可用的“认知镜子”，也不得建立任意 JSON“用户画像”旁路。
 - 备份物理删除时限属于生产保留政策和演练证据，不能只由主数据库 receipt 状态推断。
 
 ## 22. 运行核对查询

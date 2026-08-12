@@ -32,11 +32,11 @@
 - 原生 Apple Health、Health Connect 或穿戴设备自动同步。
 - 照片人体测量、姿态诊断、精确体脂率或“好坏体态”判断。
 - AI 自动修改计划、自动确认事实、自动写入餐食或自动提高训练量。
-- 用户可见的 Personal Model、Pattern/Hypothesis 生命周期、Weekly Cognitive Review 和模型修订闭环；当前只有内部持久内核、反馈事务和首个 training availability 确定性派生/refresh，尚无产品入口。
+- 用户可见的 Personal Model、Pattern/Hypothesis 生命周期、Weekly Cognitive Review 和模型修订闭环；当前只有内部持久内核、反馈事务以及 training availability/recorded training frequency 两个确定性派生场景，尚无产品入口。
 - 基于长期个人模型自动执行 Contextual Decision，或把相关性、短期状态和用户未确认推断当作稳定人格标签。
 - 用户端离线写入队列；网络结果不确定时不会在后台自动重放请求。
 
-仓库已实现 Personal Model P1a/P1b 契约和 P2a–P2c PostgreSQL 内核，完整修订、用户反馈、有序 EvidenceReference、goal/workout 精确来源及 refresh request/resolution 都受 owner、不可变和提交时门禁保护。第 189 轮又完成首个 `training_availability_constraint_v1` 内部确定性路径：从当前 goal 创建 user-confirmed Constraint，相同语义 no-op，goal 更正时以旧 withdrawn + 当前 eligible 来源追加修订并解决请求；用户不同意保持 disputed，终态不复活。它没有控制器、自动触发、公开 API 或客户端；纵向 Behavior/Baseline、回顾、Personal Model 便携导出也未接入，因此不构成用户可见认知镜子或自动适应功能。
+仓库已实现 Personal Model P1a/P1b 契约和 P2a–P2c PostgreSQL 内核，完整修订、用户反馈、有序 EvidenceReference、goal/workout 精确来源及 refresh request/resolution 都受 owner、不可变和提交时门禁保护。`training_availability_constraint_v1` 从当前 goal 形成本人确认约束；第 190 轮新增 `recorded_training_frequency_behavior_v1`，只统计最近至多 8 个完整本地周的当前未删除 workout revisions。没有完整周或没有合格训练时返回 Unknown 而不生成零行为；正向证据未达到 4 周且 6 次的门槛时为 candidate，达到门槛后为带单窗口限制的 active。训练更正/删除会精确撤回旧来源，最后证据删除使条目失效；用户不同意继续 disputed，终态不复活。账户存在与训练记录都不能证明现实活动完整。它们没有控制器、自动触发、公开 API 或客户端；同主题终态后的新代际、训练时长 Baseline、回顾和 Personal Model 便携导出也未接入，因此不构成用户可见认知镜子或自动适应功能。
 
 ## 3. 用户、权限与信任边界
 

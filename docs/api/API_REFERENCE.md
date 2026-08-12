@@ -413,7 +413,7 @@ Content-Type: application/json
 - 响应对象为严格 Schema；客户端应拒绝错误类型和不满足跨字段不变量的响应。
 - revision、source、timezone、occurredAt 和历史快照是健康数据可追责性的组成部分，不得在未来兼容层中静默丢弃。
 - OpenAPI 当前以内联 Schema 为主，没有复用 components；生成 SDK 前应以契约测试验证 nullable、联合类型和自定义跨字段约束。
-- 当前 OpenAPI 不包含 `/v1/mirror`、`/v1/personal-model` 或 Weekly Cognitive Review 路由。P1a/P1b 的 item、EvidenceReference、Unknown、feedback event、完整 revision、反馈转换和 review current/history 信封是内部共享契约；P2a–P2c 已新增 item/revision/feedback/evidence/source PostgreSQL 内核。第 189 轮在 repository 内部增加 `refreshTrainingAvailability(userId)`：它以严格当前 onboarding goal 创建或 no-op，并在唯一匹配 refresh request 存在时原子追加 withdrawn + replacement revision 与 resolution；用户异议和终态不会被自动覆盖。该方法没有控制器、模块装配、后台触发或 HTTP 授权语义；请求/响应 Schema、认证错误隐藏、幂等键和公开读取仍未定义。[个人认知模型](../architecture/PERSONAL_MODEL.md) 中的路径继续是候选设计，不能被客户端、文档或部署材料描述为已实现接口。
+- 当前 OpenAPI 不包含 `/v1/mirror`、`/v1/personal-model` 或 Weekly Cognitive Review 路由。P1a/P1b 的 item、EvidenceReference、Unknown、feedback event、完整 revision、反馈转换和 review current/history 信封是内部共享契约；P2a–P2c 已新增 item/revision/feedback/evidence/source PostgreSQL 内核。repository 内部已有 `refreshTrainingAvailability(userId)` 与 `refreshRecordedTrainingFrequency(userId)`：前者从当前 onboarding goal 创建或刷新 Constraint；后者从当前资料时区、最近至多 8 个完整本地周和当前 workout revisions 创建或刷新 recorded-frequency Behavior，并区分覆盖不足/无证据 Unknown、低覆盖 candidate、active 与证据耗尽 invalidated。两者都能消费精确 refresh request、保留 withdrawn 历史和用户异议，终态不会自动复活。它们没有控制器、模块装配、后台触发或 HTTP 授权语义；请求/响应 Schema、认证错误隐藏、幂等键和公开读取仍未定义。[个人认知模型](../architecture/PERSONAL_MODEL.md) 中的路径继续是候选设计，不能被客户端、文档或部署材料描述为已实现接口。
 
 ## 19. 参考
 

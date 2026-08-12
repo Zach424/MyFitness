@@ -2,7 +2,7 @@
 
 路线图按受控迭代组织。一轮可以跨越多个工作会话，但只有在实现、验证、档案更新和提交全部完成后才结束。
 
-进度快照（2026-08-12）：第 0–189 轮已在本地完成。Personal Model P0/P1 契约、P2a–P2c 持久/来源内核和首个 P3 training availability 场景已经受门禁保护：当前本人 goal 可确定性创建 Constraint，相同语义 no-op，更正通过旧 withdrawn + 当前 eligible 来源和 resolution 追加修订；并发只有一个发布者，异议与终态不被覆盖。完整单元实测为 611 项、集成为 149 项、浏览器基线为 95 项。生产依赖为 0 个 critical/high、9 个 moderate。下一阶段实现纵向 recorded training frequency Behavior；除数据丢失、安全、隐私或认知闭环阻塞外，极端规模导出、部署与非必要运维强化暂停。
+进度快照（2026-08-12）：第 0–190 轮已在本地完成。Personal Model P0/P1 契约、P2a–P2c 持久/来源内核及 training availability Constraint 与 recorded training frequency Behavior 两个 P3 场景已经受门禁保护。频率行为使用最近至多 8 个完整本地周与当前训练修订，缺少完整周/证据返回 Unknown，低覆盖为 candidate，充分正向证据为带单窗口限制的 active；语义 no-op、来源更正/删除、证据耗尽失效、异议与终态保持均已验证。完整单元实测为 623 项、集成为 154 项、浏览器基线为 95 项。生产依赖为 0 个 critical/high、9 个 moderate。下一阶段先解决终态后的同主题新代际，再扩展训练时长 Baseline；除数据丢失、安全、隐私或认知闭环阻塞外，极端规模导出、部署与非必要运维强化暂停。
 
 ## 认知镜子主线
 
@@ -212,6 +212,7 @@ P0–P5 是首个最小闭环：Evidence → Personal Model Item → Weekly Revi
 | 187  | onboarding goal 不可变来源历史        | 稳定聚合、共同 revision、完整/检查点快照、双侧门禁、便携导出与账户删除证明，通过   |
 | 188  | Personal Model 精确来源与撤回协议     | goal/workout 复合来源、当前资格、refresh request/resolution 与删除证明，通过       |
 | 189  | 训练可用性确定性派生与刷新            | 本人 goal create/no-op/refresh、语义指纹、异议/终态保持、并发与删除证明，通过      |
+| 190  | 已记录训练频率确定性派生              | 完整本地周、Unknown/candidate/active、语义 no-op、来源撤回与证据耗尽证明，通过     |
 
 托管共享环境部署、封闭测试强化与发布继续作为正式发布门禁，但在真实身份、数据保管、遥测、域名、预算、责任人与备案材料就绪前不占用本地迭代编号。原生 App 与 HealthKit/Health Connect/华为设备同步继续等待 MVP 留存门禁。
 

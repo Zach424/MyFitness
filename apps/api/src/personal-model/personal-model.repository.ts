@@ -9,6 +9,7 @@ import {
   personalModelFeedbackTransitionVersion,
   personalModelItemSchema,
   personalModelItemRevisionSchema,
+  workoutSchema,
   type PersonalModelFeedbackEvent,
   type PersonalModelFeedbackTransitionResult,
   type PersonalModelItem,
@@ -17,6 +18,10 @@ import {
 import type { PoolClient } from 'pg'
 
 import { DatabaseService } from '../database/database.service'
+import {
+  deriveRecordedTrainingFrequency,
+  type RecordedTrainingFrequencyDerivationResult,
+} from './personal-model-recorded-training-frequency'
 import {
   deriveTrainingAvailability,
   type TrainingAvailabilityDerivationResult,
@@ -81,6 +86,35 @@ type TrainingAvailabilityPendingRequestRow = {
 
 type TrainingAvailabilityEvaluationRow = {
   evaluated_at: Date
+}
+
+type RecordedTrainingFrequencyItemRow = {
+  id: string
+}
+
+type RecordedTrainingFrequencyPendingRequestRow = {
+  evidence_kind: string
+  source_aggregate_id: string
+  withdrawn_source_revision: number
+  observed_source_revision: number
+  reason: string
+}
+
+type RecordedTrainingFrequencyObservationRow = {
+  evaluated_at: Date
+  timezone: string
+  start_date: string
+  end_date_exclusive: string
+  complete_weeks: number
+  start_at: Date
+  end_at: Date
+  workouts: unknown
+}
+
+type RecordedTrainingFrequencyWorkoutRow = {
+  snapshot: unknown
+  localDate: string
+  weekIndex: number
 }
 
 const maximumHistoryPageSize = 50
@@ -454,6 +488,13 @@ export class TrainingAvailabilitySourceNotFoundError extends Error {
   }
 }
 
+export class RecordedTrainingFrequencyAuthorityNotFoundError extends Error {
+  constructor() {
+    super('recorded training frequency observation authority not found')
+    this.name = 'RecordedTrainingFrequencyAuthorityNotFoundError'
+  }
+}
+
 @Injectable()
 export class PersonalModelRepository {
   constructor(private readonly database: DatabaseService) {}
@@ -818,6 +859,263 @@ export class PersonalModelRepository {
       if (isPostgresError(error) && error.code === '23505') {
         throw new PersonalModelRevisionConflictError(
           'training availability item or revision already exists',
+        )
+      }
+      throw error
+    }
+  }
+
+  async refreshRecordedTrainingFrequency(
+    userId: string,
+  ): Promise<RecordedTrainingFrequencyDerivationResult> {
+    try {
+      return await this.database.withTransaction(async (client) => {
+        const owner = await client.query(
+          "SELECT 1 FROM users WHERE id = $1 AND status = 'active' FOR UPDATE",
+          [userId],
+        )
+        if (!owner.rows[0]) throw new RecordedTrainingFrequencyAuthorityNotFoundError()
+
+        const itemResult = await client.query<RecordedTrainingFrequencyItemRow>(
+          `
+            SELECT id
+            FROM personal_model_items
+            WHERE user_id = $1 AND subject_key = 'training.recorded_frequency'
+          `,
+          [userId],
+        )
+        const itemId = itemResult.rows[0]?.id ?? randomUUID()
+        const current = itemResult.rows[0]
+          ? (await lockCurrentRevision(client, userId, itemId)).revision
+          : null
+
+        const pendingRequests =
+          current === null
+            ? []
+            : (
+                await client.query<RecordedTrainingFrequencyPendingRequestRow>(
+                  `
+                    SELECT
+                      request.evidence_kind,
+                      request.source_aggregate_id,
+                      request.withdrawn_source_revision,
+                      request.observed_source_revision,
+                      request.reason
+                    FROM personal_model_source_refresh_requests AS request
+                    LEFT JOIN personal_model_source_refresh_resolutions AS resolution
+                      ON resolution.request_id = request.id
+                    WHERE request.user_id = $1
+                      AND request.item_id = $2
+                      AND resolution.request_id IS NULL
+                    ORDER BY request.created_at, request.id
+                  `,
+                  [userId, itemId],
+                )
+              ).rows
+        if (pendingRequests.some((request) => request.evidence_kind !== 'workout_revision')) {
+          throw new PersonalModelRevisionConflictError(
+            'recorded training frequency has a non-workout refresh request',
+          )
+        }
+
+        const observationResult = await client.query<RecordedTrainingFrequencyObservationRow>(
+          `
+            WITH authority AS MATERIALIZED (
+              SELECT
+                account.created_at AS account_created_at,
+                profile.timezone,
+                GREATEST(
+                  clock_timestamp(),
+                  COALESCE(
+                    $2::timestamptz + INTERVAL '1 millisecond',
+                    '-infinity'::timestamptz
+                  )
+                ) AS evaluated_at
+              FROM users AS account
+              JOIN user_profiles AS profile ON profile.user_id = account.id
+              WHERE account.id = $1 AND account.status = 'active'
+            ), calendar AS (
+              SELECT
+                authority.*,
+                DATE_TRUNC('week', authority.evaluated_at AT TIME ZONE authority.timezone)::date
+                  AS current_week_start,
+                CASE
+                  WHEN authority.account_created_at =
+                    DATE_TRUNC(
+                      'week',
+                      authority.account_created_at AT TIME ZONE authority.timezone
+                    ) AT TIME ZONE authority.timezone
+                  THEN DATE_TRUNC(
+                    'week',
+                    authority.account_created_at AT TIME ZONE authority.timezone
+                  )::date
+                  ELSE (
+                    DATE_TRUNC(
+                      'week',
+                      authority.account_created_at AT TIME ZONE authority.timezone
+                    ) + INTERVAL '1 week'
+                  )::date
+                END AS first_full_week_start
+              FROM authority
+            ), coverage AS (
+              SELECT
+                calendar.*,
+                LEAST(
+                  8,
+                  GREATEST(0, (calendar.current_week_start - calendar.first_full_week_start) / 7)
+                )::integer AS complete_weeks
+              FROM calendar
+            ), bounds AS (
+              SELECT
+                coverage.*,
+                (coverage.current_week_start - coverage.complete_weeks * 7)::date AS start_date,
+                CASE
+                  WHEN coverage.complete_weeks = 0 THEN coverage.account_created_at
+                  ELSE (
+                    coverage.current_week_start - coverage.complete_weeks * 7
+                  )::timestamp AT TIME ZONE coverage.timezone
+                END AS start_at,
+                CASE
+                  WHEN coverage.complete_weeks = 0 THEN coverage.evaluated_at
+                  ELSE coverage.current_week_start::timestamp AT TIME ZONE coverage.timezone
+                END AS end_at
+              FROM coverage
+            )
+            SELECT
+              bounds.evaluated_at,
+              bounds.timezone,
+              bounds.start_date::text AS start_date,
+              bounds.current_week_start::text AS end_date_exclusive,
+              bounds.complete_weeks,
+              bounds.start_at,
+              bounds.end_at,
+              COALESCE((
+                SELECT JSONB_AGG(
+                  JSONB_BUILD_OBJECT(
+                    'snapshot', history.snapshot,
+                    'localDate', (workout.started_at AT TIME ZONE bounds.timezone)::date::text,
+                    'weekIndex', (
+                      (workout.started_at AT TIME ZONE bounds.timezone)::date - bounds.start_date
+                    ) / 7
+                  )
+                  ORDER BY workout.started_at, workout.created_at, workout.id
+                )
+                FROM workout_sessions AS workout
+                JOIN workout_revisions AS history
+                  ON history.user_id = workout.user_id
+                 AND history.workout_id = workout.id
+                 AND history.revision = workout.revision
+                WHERE workout.user_id = $1
+                  AND workout.deleted_at IS NULL
+                  AND history.action <> 'deleted'
+                  AND bounds.complete_weeks > 0
+                  AND workout.started_at >= bounds.start_at
+                  AND workout.started_at < bounds.end_at
+              ), '[]'::jsonb) AS workouts
+            FROM bounds
+          `,
+          [userId, current?.changedAt ?? null],
+        )
+        const observation = observationResult.rows[0]
+        if (!observation) throw new RecordedTrainingFrequencyAuthorityNotFoundError()
+        if (!Array.isArray(observation.workouts)) {
+          throw new Error('recorded training frequency workout snapshot is invalid')
+        }
+        const workouts = (observation.workouts as RecordedTrainingFrequencyWorkoutRow[]).map(
+          (row) => {
+            const snapshot = workoutSchema.parse(row.snapshot)
+            return {
+              referenceId: randomUUID(),
+              workoutId: snapshot.id,
+              revision: snapshot.revision,
+              sourceKind: snapshot.source.kind,
+              startedAt: snapshot.startedAt,
+              endedAt: snapshot.endedAt,
+              timezone: snapshot.timezone,
+              localDate: row.localDate,
+              weekIndex: row.weekIndex,
+            }
+          },
+        )
+
+        const result = deriveRecordedTrainingFrequency({
+          userId,
+          evaluatedAt: observation.evaluated_at.toISOString(),
+          window: {
+            startDate: observation.start_date,
+            endDateExclusive: observation.end_date_exclusive,
+            completeWeeks: observation.complete_weeks,
+            startAt: observation.start_at.toISOString(),
+            endAt: observation.end_at.toISOString(),
+            timezone: observation.timezone,
+          },
+          workouts,
+          pendingWithdrawals: pendingRequests.map((request) => ({
+            workoutId: request.source_aggregate_id,
+            withdrawnRevision: request.withdrawn_source_revision,
+            observedRevision: request.observed_source_revision,
+            reason: request.reason === 'source_deleted' ? 'source_deleted' : 'source_corrected',
+          })),
+          currentRevision: current,
+          ids: { itemId, revisionId: randomUUID() },
+          sha256Hex,
+        })
+
+        if (result.outcome === 'unknown') {
+          if (current !== null || pendingRequests.length > 0) {
+            throw new PersonalModelRevisionConflictError(
+              'existing recorded frequency item cannot transition to Unknown in this policy version',
+            )
+          }
+          return result
+        }
+        if (result.outcome === 'no_op') {
+          if (pendingRequests.length > 0) {
+            throw new PersonalModelRevisionConflictError(
+              'recorded training frequency has unresolved source refresh requests',
+            )
+          }
+          return result
+        }
+        if (result.outcome === 'created') {
+          if (current !== null || pendingRequests.length > 0) {
+            throw new PersonalModelRevisionConflictError(
+              'recorded training frequency creation target is no longer empty',
+            )
+          }
+          await client.query(
+            `
+              INSERT INTO personal_model_items (
+                id, user_id, subject_key, current_revision, created_at, updated_at
+              )
+              VALUES ($1, $2, 'training.recorded_frequency', 1, $3, $3)
+            `,
+            [itemId, userId, result.revision.changedAt],
+          )
+          const stored = await insertRevision(client, result.revision)
+          return { ...result, revision: stored }
+        }
+        if (current === null) {
+          throw new PersonalModelRevisionConflictError(
+            'recorded training frequency revision target is missing',
+          )
+        }
+        const stored = await insertRevision(client, result.revision)
+        const updated = await client.query(
+          `
+            UPDATE personal_model_items
+            SET current_revision = $1, updated_at = $2
+            WHERE user_id = $3 AND id = $4 AND current_revision = $5
+          `,
+          [stored.revision, stored.changedAt, userId, itemId, current.revision],
+        )
+        if (updated.rowCount !== 1) throw new PersonalModelRevisionConflictError()
+        return { ...result, revision: stored }
+      })
+    } catch (error) {
+      if (isPostgresError(error) && error.code === '23505') {
+        throw new PersonalModelRevisionConflictError(
+          'recorded training frequency item or revision already exists',
         )
       }
       throw error
