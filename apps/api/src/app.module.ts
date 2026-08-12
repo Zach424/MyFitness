@@ -48,6 +48,8 @@ import { RateLimitService } from './operations/rate-limit.service'
 import { RedisService } from './operations/redis.service'
 import { PlansController } from './plans/plans.controller'
 import { PlansService } from './plans/plans.service'
+import { PersonalModelCurrentSubjectViewService } from './personal-model/personal-model-current-subject-view'
+import { PersonalModelRepository } from './personal-model/personal-model.repository'
 import { ProgressPhotosController } from './progress-photos/progress-photos.controller'
 import { ProgressPhotosService } from './progress-photos/progress-photos.service'
 import { PrivacyController } from './privacy/privacy.controller'
@@ -101,6 +103,8 @@ import { WorkoutsService } from './workouts/workouts.service'
     PhotoCandidatesService,
     PhotoStorageService,
     OnboardingService,
+    PersonalModelCurrentSubjectViewService,
+    PersonalModelRepository,
     InternalOperationsGuard,
     OperationalMetricsService,
     ObjectStorageService,

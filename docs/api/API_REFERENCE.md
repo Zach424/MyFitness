@@ -413,7 +413,7 @@ Content-Type: application/json
 - 响应对象为严格 Schema；客户端应拒绝错误类型和不满足跨字段不变量的响应。
 - revision、source、timezone、occurredAt 和历史快照是健康数据可追责性的组成部分，不得在未来兼容层中静默丢弃。
 - OpenAPI 当前以内联 Schema 为主，没有复用 components；生成 SDK 前应以契约测试验证 nullable、联合类型和自定义跨字段约束。
-- 当前 OpenAPI 不包含 `/v1/mirror`、`/v1/personal-model` 或 Weekly Cognitive Review 路由。内部已有三个确定性 refresh 方法，以及 `getCurrent(userId,itemId)`、`history` 和第 193 轮的 `getCurrentSubject(userId,subjectKey)`。后者返回严格 `personal-model-current-subject-envelope-v1`：active owner 没有该主题时为 `current:null`，非空时携带唯一未退役 generation、直接前代、terminal、`retiredAt:null` 和完整精确 revision；owner 缺失/停用、非法 subject、数据库歧义或残缺连接失败关闭。该结构仍是内部共享契约，不是 HTTP 响应承诺；控制器、认证错误隐藏、公开字段最小化、缓存头、lineage/证据分页和客户端尚未定义。[个人认知模型](../architecture/PERSONAL_MODEL.md) 中的路径继续是候选设计，不能被客户端、文档或部署材料描述为已实现接口。
+- 当前 OpenAPI 不包含 `/v1/mirror`、`/v1/personal-model` 或 Weekly Cognitive Review 路由。内部已有三个确定性 refresh 方法，以及 `getCurrent(userId,itemId)`、`history` 和 `getCurrentSubject(userId,subjectKey)`。第 194 轮新增应用服务输出严格 `personal-model-current-subject-view-v1`：active owner 没有该主题时为 `current:null`；非空时只保留当前 item/revision 数字定位、generation、结构化 claim、状态/反馈、置信限制、证据计数/窗口和必要时间，明确排除 owner、前代、内部 revision/reference UUID、EvidenceReference 正文、指纹与策略字段。owner 缺失或非 active 统一映射为不可枚举 unavailable；数据库歧义、损坏和其他非 authority 错误不被隐藏。该服务已进入依赖注入，但仍不是 HTTP 响应承诺；控制器、认证 guard、状态码、`private, no-store`、OpenAPI 路径、lineage/证据分页和客户端尚未实现。[个人认知模型](../architecture/PERSONAL_MODEL.md) 中的路径继续是候选设计，不能被客户端、文档或部署材料描述为已实现接口。
 
 ## 19. 参考
 

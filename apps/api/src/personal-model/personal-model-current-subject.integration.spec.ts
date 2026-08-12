@@ -12,12 +12,17 @@ import {
   PersonalModelRepository,
   PersonalModelSubjectAuthorityNotFoundError,
 } from './personal-model.repository'
+import {
+  PersonalModelCurrentSubjectUnavailableError,
+  PersonalModelCurrentSubjectViewService,
+} from './personal-model-current-subject-view'
 
 describe('personal model current subject envelope with PostgreSQL', () => {
   const databaseUrl = getRuntimeConfig().databaseUrl
   const pool = new Pool({ connectionString: databaseUrl })
   const database = new DatabaseService()
   const repository = new PersonalModelRepository(database)
+  const viewService = new PersonalModelCurrentSubjectViewService(repository)
   const workoutsService = new WorkoutsService(database)
   const owners = new Set<string>()
 
@@ -123,6 +128,18 @@ describe('personal model current subject envelope with PostgreSQL', () => {
     })
   })
 
+  it('projects an explicit owner-free empty view for an active owner without that subject', async () => {
+    const userId = await createOwner()
+
+    const view = await viewService.read(userId, 'training.recorded_frequency')
+    expect(view).toEqual({
+      schemaVersion: 'personal-model-current-subject-view-v1',
+      subjectKey: 'training.recorded_frequency',
+      current: null,
+    })
+    expect(JSON.stringify(view)).not.toContain(userId)
+  })
+
   it('fails closed for missing or inactive owner authority and invalid subjects', async () => {
     await expect(
       repository.getCurrentSubject(randomUUID(), 'training.recorded_session_duration'),
@@ -136,6 +153,18 @@ describe('personal model current subject envelope with PostgreSQL', () => {
     await expect(
       repository.getCurrentSubject(userId, 'training.unknown' as never),
     ).rejects.toThrow()
+  })
+
+  it('hides missing and inactive owner authority behind one application error', async () => {
+    await expect(
+      viewService.read(randomUUID(), 'training.recorded_session_duration'),
+    ).rejects.toBeInstanceOf(PersonalModelCurrentSubjectUnavailableError)
+
+    const userId = await createOwner()
+    await pool.query("UPDATE users SET status = 'deletion_pending' WHERE id = $1", [userId])
+    await expect(
+      viewService.read(userId, 'training.recorded_session_duration'),
+    ).rejects.toBeInstanceOf(PersonalModelCurrentSubjectUnavailableError)
   })
 
   it('isolates the same subject by owner and never substitutes a different subject', async () => {
@@ -164,6 +193,20 @@ describe('personal model current subject envelope with PostgreSQL', () => {
     await expect(
       repository.getCurrentSubject(firstUserId, 'training.recorded_frequency'),
     ).resolves.toMatchObject({ current: null })
+
+    const visible = await viewService.read(firstUserId, 'training.recorded_session_duration')
+    expect(visible.current).toMatchObject({
+      itemId: firstCreated.revision.itemId,
+      generation: 1,
+      revision: firstCreated.revision.revision,
+      claim: { medianMinutes: 35 },
+      evidence: { qualifiedCount: 1, supportingCount: 1 },
+    })
+    const serialized = JSON.stringify(visible)
+    expect(serialized).not.toContain(firstUserId)
+    expect(serialized).not.toContain(firstCreated.revision.id)
+    expect(serialized).not.toContain('derivationFingerprint')
+    expect(serialized).not.toContain('references')
   })
 
   it('distinguishes a terminal current generation and then selects only its successor', async () => {
@@ -191,6 +234,16 @@ describe('personal model current subject envelope with PostgreSQL', () => {
         snapshot: { status: 'invalidated' },
       },
     })
+    const terminalView = await viewService.read(userId, 'training.recorded_session_duration')
+    expect(terminalView.current).toMatchObject({
+      itemId: initial.revision.itemId,
+      generation: 1,
+      revision: invalidated.revision.revision,
+      status: 'invalidated',
+      terminal: true,
+      validTo: invalidated.revision.snapshot.validTo,
+      evidence: { qualifiedCount: 0, supportingCount: 0, withdrawnCount: 1 },
+    })
 
     await createWorkout(userId, 3, 75)
     const successor = await repository.refreshRecordedSessionDuration(userId)
@@ -206,6 +259,16 @@ describe('personal model current subject envelope with PostgreSQL', () => {
         id: successor.revision.id,
         revision: successor.revision.revision,
         snapshot: { status: 'candidate' },
+      },
+    })
+    await expect(
+      viewService.read(userId, 'training.recorded_session_duration'),
+    ).resolves.toMatchObject({
+      current: {
+        itemId: successor.revision.itemId,
+        generation: 2,
+        status: 'candidate',
+        terminal: false,
       },
     })
   })

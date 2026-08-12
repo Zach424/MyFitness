@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   personalModelConfidenceReceiptSchema,
   personalModelCurrentSubjectEnvelopeSchema,
+  personalModelCurrentSubjectViewSchema,
   personalModelDecisionInputSchema,
   personalModelEvidenceSetSchema,
   personalModelFeedbackApplicationSchema,
@@ -751,6 +752,135 @@ describe('personal model contract', () => {
       subjectKey: 'training.availability',
       current: null,
     })
+  })
+
+  it('validates the minimized current subject view without accepting internal evidence fields', () => {
+    const item = behaviorItem()
+    const view = {
+      schemaVersion: 'personal-model-current-subject-view-v1',
+      subjectKey: item.subjectKey,
+      current: {
+        itemId: item.id,
+        generation: 1,
+        revision: item.revision,
+        kind: item.kind,
+        claimSchemaVersion: item.claimSchemaVersion,
+        claim: item.claim,
+        source: item.source,
+        status: item.status,
+        feedbackState: item.feedbackState,
+        terminal: false,
+        confidence: {
+          level: item.confidence.level,
+          limitations: item.confidence.limitations,
+        },
+        evidence: {
+          asOf: item.evidenceSet.asOf,
+          window: item.evidenceSet.window,
+          qualifiedCount: item.evidenceSet.includedCount,
+          supportingCount: item.evidenceSet.supportingCount,
+          contradictingCount: item.evidenceSet.contradictingCount,
+          withdrawnCount: item.evidenceSet.withdrawnCount,
+        },
+        validFrom: item.validFrom,
+        validTo: item.validTo,
+        observedFrom: item.observedFrom,
+        observedThrough: item.observedThrough,
+        derivedAt: item.derivedAt,
+        updatedAt: item.updatedAt,
+      },
+    }
+
+    expect(personalModelCurrentSubjectViewSchema.safeParse(view).success).toBe(true)
+    expect(
+      personalModelCurrentSubjectViewSchema.safeParse({
+        ...view,
+        subjectKey: 'training.recorded_session_duration',
+      }).success,
+    ).toBe(false)
+    expect(
+      personalModelCurrentSubjectViewSchema.safeParse({
+        ...view,
+        current: { ...view.current, terminal: true },
+      }).success,
+    ).toBe(false)
+    expect(
+      personalModelCurrentSubjectViewSchema.safeParse({
+        ...view,
+        ownerUserId: userId,
+      }).success,
+    ).toBe(false)
+    expect(
+      personalModelCurrentSubjectViewSchema.safeParse({
+        ...view,
+        current: {
+          ...view.current,
+          evidence: {
+            ...view.current.evidence,
+            references: item.evidenceSet.references,
+          },
+        },
+      }).success,
+    ).toBe(false)
+  })
+
+  it('requires visible evidence counts to remain internally consistent', () => {
+    const item = baselineItem()
+    const current = {
+      itemId: item.id,
+      generation: 1,
+      revision: item.revision,
+      kind: item.kind,
+      claimSchemaVersion: item.claimSchemaVersion,
+      claim: item.claim,
+      source: item.source,
+      status: item.status,
+      feedbackState: item.feedbackState,
+      terminal: false,
+      confidence: {
+        level: item.confidence.level,
+        limitations: item.confidence.limitations,
+      },
+      evidence: {
+        asOf: item.evidenceSet.asOf,
+        window: item.evidenceSet.window,
+        qualifiedCount: item.evidenceSet.includedCount,
+        supportingCount: item.evidenceSet.supportingCount,
+        contradictingCount: item.evidenceSet.contradictingCount,
+        withdrawnCount: item.evidenceSet.withdrawnCount,
+      },
+      validFrom: item.validFrom,
+      validTo: item.validTo,
+      observedFrom: item.observedFrom,
+      observedThrough: item.observedThrough,
+      derivedAt: item.derivedAt,
+      updatedAt: item.updatedAt,
+    }
+    const view = {
+      schemaVersion: 'personal-model-current-subject-view-v1',
+      subjectKey: item.subjectKey,
+      current,
+    }
+
+    expect(personalModelCurrentSubjectViewSchema.safeParse(view).success).toBe(true)
+    expect(
+      personalModelCurrentSubjectViewSchema.safeParse({
+        ...view,
+        current: {
+          ...current,
+          evidence: { ...current.evidence, qualifiedCount: 5 },
+        },
+      }).success,
+    ).toBe(false)
+    expect(
+      personalModelCurrentSubjectViewSchema.safeParse({
+        ...view,
+        current: {
+          ...current,
+          evidence: { ...current.evidence, contradictingCount: 7 },
+        },
+      }).success,
+    ).toBe(false)
   })
 
   it('requires feedback to target the exact current non-terminal revision', () => {

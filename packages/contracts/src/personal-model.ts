@@ -8,6 +8,7 @@ import {
   personalModelConfidencePolicyVersion,
   personalModelContractVersion,
   personalModelCurrentSubjectEnvelopeVersion,
+  personalModelCurrentSubjectViewVersion,
   personalModelEvidenceKinds,
   personalModelEvidenceQualificationStates,
   personalModelEvidenceRoles,
@@ -883,6 +884,149 @@ export const personalModelCurrentSubjectEnvelopeSchema = z
     }
   })
 
+const personalModelCurrentSubjectEvidenceSummarySchema = z
+  .object({
+    asOf: offsetDateTimeSchema,
+    window: z
+      .object({
+        startAt: offsetDateTimeSchema,
+        endAt: offsetDateTimeSchema,
+        timezone: ianaTimezoneSchema,
+      })
+      .strict(),
+    qualifiedCount: z.number().int().min(0).max(personalModelMaximumWorkoutEvidenceCount),
+    supportingCount: z.number().int().min(0).max(personalModelMaximumWorkoutEvidenceCount),
+    contradictingCount: z.number().int().min(0).max(personalModelMaximumWorkoutEvidenceCount),
+    withdrawnCount: z.number().int().min(0).max(personalModelMaximumWorkoutEvidenceCount),
+  })
+  .strict()
+  .superRefine((summary, ctx) => {
+    if (Date.parse(summary.window.endAt) <= Date.parse(summary.window.startAt)) {
+      addIssue(ctx, ['window', 'endAt'], 'visible evidence window must end after it starts')
+    }
+    if (Date.parse(summary.asOf) < Date.parse(summary.window.endAt)) {
+      addIssue(ctx, ['asOf'], 'visible evidence asOf must not precede its window')
+    }
+    if (summary.supportingCount + summary.contradictingCount > summary.qualifiedCount) {
+      addIssue(
+        ctx,
+        ['qualifiedCount'],
+        'visible qualified evidence must cover support and conflict',
+      )
+    }
+  })
+
+const personalModelCurrentSubjectViewCoreSchema = z
+  .object({
+    itemId: z.string().uuid(),
+    generation: z.number().int().positive(),
+    revision: z.number().int().positive(),
+    status: personalModelStatusSchema,
+    feedbackState: personalModelFeedbackStateSchema,
+    terminal: z.boolean(),
+    confidence: z
+      .object({
+        level: personalModelConfidenceLevelSchema,
+        limitations: confidenceLimitationsSchema,
+      })
+      .strict(),
+    evidence: personalModelCurrentSubjectEvidenceSummarySchema,
+    validFrom: offsetDateTimeSchema,
+    validTo: offsetDateTimeSchema.nullable(),
+    observedFrom: offsetDateTimeSchema,
+    observedThrough: offsetDateTimeSchema,
+    derivedAt: offsetDateTimeSchema,
+    updatedAt: offsetDateTimeSchema,
+  })
+  .strict()
+
+const trainingAvailabilityCurrentSubjectViewSchema =
+  personalModelCurrentSubjectViewCoreSchema.extend({
+    kind: z.literal('constraint'),
+    claimSchemaVersion: z.literal('training_availability_constraint_v1'),
+    source: z.literal('user_confirmed'),
+    claim: trainingAvailabilityConstraintClaimSchema,
+  })
+
+const recordedTrainingFrequencyCurrentSubjectViewSchema =
+  personalModelCurrentSubjectViewCoreSchema.extend({
+    kind: z.literal('behavior'),
+    claimSchemaVersion: z.literal('recorded_training_frequency_behavior_v1'),
+    source: z.literal('deterministic_rule'),
+    claim: recordedTrainingFrequencyBehaviorClaimSchema,
+  })
+
+const recordedSessionDurationCurrentSubjectViewSchema =
+  personalModelCurrentSubjectViewCoreSchema.extend({
+    kind: z.literal('baseline'),
+    claimSchemaVersion: z.literal('recorded_session_duration_baseline_v1'),
+    source: z.literal('deterministic_rule'),
+    claim: recordedSessionDurationBaselineClaimSchema,
+  })
+
+const personalModelCurrentSubjectViewItemSchema = z
+  .discriminatedUnion('claimSchemaVersion', [
+    trainingAvailabilityCurrentSubjectViewSchema,
+    recordedTrainingFrequencyCurrentSubjectViewSchema,
+    recordedSessionDurationCurrentSubjectViewSchema,
+  ])
+  .superRefine((item, ctx) => {
+    const terminal = item.status === 'superseded' || item.status === 'invalidated'
+    if (item.terminal !== terminal) {
+      addIssue(ctx, ['terminal'], 'visible terminal metadata must match status')
+    }
+    if (terminal && item.validTo === null) {
+      addIssue(ctx, ['validTo'], 'visible terminal items require a validity end')
+    }
+    if (Date.parse(item.observedThrough) < Date.parse(item.observedFrom)) {
+      addIssue(ctx, ['observedThrough'], 'visible observation end must not precede its start')
+    }
+    if (
+      item.observedFrom !== item.evidence.window.startAt ||
+      item.observedThrough !== item.evidence.window.endAt
+    ) {
+      addIssue(ctx, ['evidence', 'window'], 'visible observation and evidence windows must match')
+    }
+    if (item.derivedAt !== item.evidence.asOf) {
+      addIssue(ctx, ['derivedAt'], 'visible derivation time must match evidence asOf')
+    }
+    if (Date.parse(item.updatedAt) < Date.parse(item.derivedAt)) {
+      addIssue(ctx, ['updatedAt'], 'visible update time must not precede derivation')
+    }
+    if (item.status === 'active' && !['moderate', 'high'].includes(item.confidence.level)) {
+      addIssue(ctx, ['confidence', 'level'], 'visible active items require qualified confidence')
+    }
+    if (item.status === 'candidate' && !['insufficient', 'low'].includes(item.confidence.level)) {
+      addIssue(ctx, ['confidence', 'level'], 'visible candidates require limited confidence')
+    }
+    if (item.status === 'disputed' && !item.confidence.limitations.includes('user_disputed')) {
+      addIssue(
+        ctx,
+        ['confidence', 'limitations'],
+        'visible disputes must disclose user disagreement',
+      )
+    }
+  })
+
+export const personalModelCurrentSubjectViewSchema = z
+  .object({
+    schemaVersion: z.literal(personalModelCurrentSubjectViewVersion),
+    subjectKey: personalModelSubjectKeySchema,
+    current: personalModelCurrentSubjectViewItemSchema.nullable(),
+  })
+  .strict()
+  .superRefine((view, ctx) => {
+    if (view.current === null) return
+    const expectedSubject = {
+      training_availability_constraint_v1: 'training.availability',
+      recorded_training_frequency_behavior_v1: 'training.recorded_frequency',
+      recorded_session_duration_baseline_v1: 'training.recorded_session_duration',
+    }[view.current.claimSchemaVersion]
+    if (view.subjectKey !== expectedSubject) {
+      addIssue(ctx, ['subjectKey'], 'visible subject must match its claim')
+    }
+  })
+
 export const personalModelFeedbackApplicationSchema = z
   .object({
     item: personalModelItemSchema,
@@ -1231,6 +1375,7 @@ export type PersonalModelItemRevision = z.infer<typeof personalModelItemRevision
 export type PersonalModelCurrentSubjectEnvelope = z.infer<
   typeof personalModelCurrentSubjectEnvelopeSchema
 >
+export type PersonalModelCurrentSubjectView = z.infer<typeof personalModelCurrentSubjectViewSchema>
 export type PersonalModelFeedbackApplication = z.infer<
   typeof personalModelFeedbackApplicationSchema
 >
