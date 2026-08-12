@@ -32,11 +32,11 @@
 - 原生 Apple Health、Health Connect 或穿戴设备自动同步。
 - 照片人体测量、姿态诊断、精确体脂率或“好坏体态”判断。
 - AI 自动修改计划、自动确认事实、自动写入餐食或自动提高训练量。
-- 完整可校准的 Personal Model、Pattern/Hypothesis 生命周期、Weekly Cognitive Review 和模型修订闭环；当前已有内部持久/代际内核、当前主题读取与精确反馈认证 HTTP、严格客户端读取/写入权限基础、中性展示、反馈事务、三个严格 claim 以及三主题逐项页面，但反馈界面与历史尚不可达。
+- 完整可校准的 Personal Model、Pattern/Hypothesis 生命周期、Weekly Cognitive Review 和模型修订闭环；当前已有内部持久/代际内核、三个严格 claim、三主题逐项页面、三种本人校准、同 event 恢复和成功后重读，但 temporary 截止时间、原因/备注、历史与回顾尚不可达。
 - 基于长期个人模型自动执行 Contextual Decision，或把相关性、短期状态和用户未确认推断当作稳定人格标签。
 - 用户端离线写入队列；网络结果不确定时不会在后台自动重放请求。
 
-仓库已实现 Personal Model 契约、PostgreSQL 内核、三个确定性 claim、同主题代际、认证当前主题读取和精确反馈 HTTP。反馈公开正文只携带 event UUID 与四选一内容，服务端在 active owner/item 行锁内绑定路径 revision、生成 revised/no-op，并用首次持久收据恢复同事件响应丢失；最小响应不暴露 owner、claim、证据、note/reason 或内部指纹。客户端读取与反馈传输分别严格校验最小 view/receipt；反馈发出前复核路径目标和请求，成功必须匹配同一 `itemId + revision + eventId + choice`，temporary 还核对绝对有效时刻。页面内存读取权限区分 unread、五阶段与 stale 快照；写权限区分 idle/submitting/succeeded/failed，并用 generation 撤销新提交、subject 切换和页面失效后的迟到结果。失败只保留产品分类，不保存后端正文，也没有持久队列、后台重放或自动刷新。纯展示模型与 props-only 卡片把安排、已记录频次和已记录时长转换为中性中文，并列状态、本人核对、资料覆盖/限制、精确证据计数和时域；空主题不冒充零，异议/终态不冒充计划依据，不生成表现评分或建议。独立页面从“我的衡迹”可达，以 pressed 索引逐项读取三个主题；切换先清除旧快照和焦点，一次只持有一个主题，不批量预取、不持久化、不轮询。自动触发、反馈界面、公开代际/证据 API、回顾和 Personal Model 便携导出仍未接入，因此它尚不构成完整可校准认知镜子或自动适应功能。
+仓库已实现 Personal Model 契约、PostgreSQL 内核、三个确定性 claim、同主题代际、认证当前主题读取和精确反馈 HTTP。反馈公开正文只携带 event UUID 与四选一内容，服务端在 active owner/item 行锁内绑定路径 revision、生成 revised/no-op，并用首次持久收据恢复同事件响应丢失；最小响应不暴露 owner、claim、证据、note/reason 或内部指纹。客户端读取与反馈传输分别严格校验最小 view/receipt；反馈发出前复核路径目标和请求，成功必须匹配同一 `itemId + revision + eventId + choice`。页面内存读取权限区分 unread、五阶段与 stale 快照；写权限用 generation 撤销新提交、subject 切换和页面失效后的迟到结果，失败只保存产品分类。独立页面从“我的衡迹”逐项读取三个主题，并只对非空、非终态 ready 快照开放“符合我”“不同意”“暂不确定”。提交期间冻结主题与目标；网络未知只允许本人用同 event 重试，冲突先重读，成功收据后再次取得完整 current view。`temporary_context` 因缺少本人指定的截止时间而明确后置，不发明默认期限；reason、note、公开代际/证据 API、回顾和 Personal Model 便携导出仍未接入。纯展示继续把本人安排与已记录频次/时长分开，不生成评分、因果、建议或自动计划变化，因此当前仍不是完整认知镜子或自动适应功能。
 
 ## 3. 用户、权限与信任边界
 

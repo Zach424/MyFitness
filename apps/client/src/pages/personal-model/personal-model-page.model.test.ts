@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 
 import {
   defaultPersonalModelPageSubject,
+  personalModelPageFeedbackFailureCopy,
+  personalModelPageFeedbackOptions,
   personalModelPageFailureCopy,
   personalModelPageSubjectContext,
   personalModelPageSubjectOption,
@@ -42,6 +44,31 @@ describe('personal model page model', () => {
       expect(copy.detail).not.toMatch(/^(零次训练|没有训练记录|没有资料)[。！]?$/)
     },
   )
+
+  it('offers three complete choices and does not invent a temporary deadline', () => {
+    expect(personalModelPageFeedbackOptions.map(({ choice }) => choice)).toEqual([
+      'matches_me',
+      'disagree',
+      'uncertain',
+    ])
+    expect(personalModelPageFeedbackOptions.map(({ choice }) => String(choice))).not.toContain(
+      'temporary_context',
+    )
+  })
+
+  it.each([
+    ['conflict', false],
+    ['offline', true],
+    ['unknown', true],
+    ['service', true],
+    ['refused', false],
+    ['invalid-contract', false],
+  ] as const)('keeps %s write guidance bounded and retry authority explicit', (kind, retryable) => {
+    const copy = personalModelPageFeedbackFailureCopy(kind)
+    expect(copy.retryable).toBe(retryable)
+    expect(copy.detail.length).toBeGreaterThan(0)
+    expect(JSON.stringify(copy)).not.toContain('raw backend')
+  })
 
   it.each(['offline', 'refused', 'service', 'unknown'] as const)(
     'explains retained evidence after a stale %s refresh',

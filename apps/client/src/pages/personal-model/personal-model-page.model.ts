@@ -1,5 +1,6 @@
-import type { PersonalModelSubjectKey } from '@myfitness/contracts'
+import type { PersonalModelFeedbackChoice, PersonalModelSubjectKey } from '@myfitness/contracts'
 
+import type { PersonalModelFeedbackWriteFailureKind } from '../../lib/personal-model-feedback-write'
 import type { ReadFailureKind } from '../../lib/read-authority'
 
 export type PersonalModelPageSubjectOption = {
@@ -39,6 +40,68 @@ export const personalModelPageSubjectContext = (subjectKey: PersonalModelSubject
     return '已确认记录 · 完整观察周内的课次，不判断现实训练是否达标。'
   }
   return '已确认记录 · 课次时长分布，不评价效果、能力或强度。'
+}
+
+export type PersonalModelPageFeedbackOption = {
+  choice: Exclude<PersonalModelFeedbackChoice, 'temporary_context'>
+  label: string
+  detail: string
+}
+
+export const personalModelPageFeedbackOptions: readonly PersonalModelPageFeedbackOption[] = [
+  { choice: 'matches_me', label: '符合我', detail: '保留为你已确认的当前认识。' },
+  { choice: 'disagree', label: '不同意', detail: '标记为有异议，不再用于后续建议。' },
+  { choice: 'uncertain', label: '暂不确定', detail: '保留待核对，不代表你已经认可。' },
+] as const
+
+export type PersonalModelPageFeedbackFailurePresentation = {
+  eyebrow: string
+  title: string
+  detail: string
+  retryable: boolean
+}
+
+export const personalModelPageFeedbackFailureCopy = (
+  kind: PersonalModelFeedbackWriteFailureKind,
+): PersonalModelPageFeedbackFailurePresentation => {
+  if (kind === 'conflict') {
+    return {
+      eyebrow: 'VIEW CHANGED / 认识已变化',
+      title: '这次反馈没有写入旧修订',
+      detail: '当前认识在提交前已经变化。先重新读取，再核对新的内容。',
+      retryable: false,
+    }
+  }
+  if (kind === 'offline' || kind === 'unknown') {
+    return {
+      eyebrow: 'RESULT UNKNOWN / 结果待确认',
+      title: '还不能确认这次反馈是否送达',
+      detail: '页面不会自动重放。你可以明确重试同一次反馈，服务会返回首次收据。',
+      retryable: true,
+    }
+  }
+  if (kind === 'service') {
+    return {
+      eyebrow: 'SERVICE PAUSED / 服务暂不可用',
+      title: '这次反馈暂未完成',
+      detail: '反馈内容仍留在当前页面；服务恢复后可明确重试同一次反馈。',
+      retryable: true,
+    }
+  }
+  if (kind === 'refused') {
+    return {
+      eyebrow: 'WRITE REFUSED / 写入被拒绝',
+      title: '服务没有接受这次反馈',
+      detail: '请先重新登录或重新读取当前认识，再决定是否提交。',
+      retryable: false,
+    }
+  }
+  return {
+    eyebrow: 'RECEIPT INVALID / 收据无效',
+    title: '无法安全确认这次反馈',
+    detail: '返回内容与本次认识不匹配；页面不会据此改变核对状态。',
+    retryable: false,
+  }
 }
 
 export type PersonalModelPageFailurePresentation = {

@@ -1,4 +1,5 @@
 import type {
+  PersonalModelFeedbackChoice,
   PersonalModelFeedbackWriteResponse,
   PersonalModelSubjectKey,
 } from '@myfitness/contracts'
@@ -24,6 +25,7 @@ export type PersonalModelFeedbackWriteState = {
   phase: PersonalModelFeedbackWritePhase
   target?: PersonalModelFeedbackWriteTarget
   eventId?: string
+  choice?: PersonalModelFeedbackChoice
   result?: PersonalModelFeedbackWriteResponse
   failure?: PersonalModelFeedbackWriteFailure
 }
@@ -34,6 +36,7 @@ export type PersonalModelFeedbackWriteReceipt = {
   itemId: string
   revision: number
   eventId: string
+  choice: PersonalModelFeedbackChoice
 }
 
 export const createPersonalModelFeedbackWriteState = (
@@ -44,6 +47,7 @@ export const beginPersonalModelFeedbackWrite = (
   state: PersonalModelFeedbackWriteState,
   target: PersonalModelFeedbackWriteTarget,
   eventId: string,
+  choice: PersonalModelFeedbackChoice,
 ): { state: PersonalModelFeedbackWriteState; receipt: PersonalModelFeedbackWriteReceipt } => {
   const generation = state.generation + 1
   return {
@@ -53,6 +57,7 @@ export const beginPersonalModelFeedbackWrite = (
       phase: 'submitting',
       target,
       eventId,
+      choice,
     },
     receipt: {
       subjectKey: state.subjectKey,
@@ -60,6 +65,7 @@ export const beginPersonalModelFeedbackWrite = (
       itemId: target.itemId,
       revision: target.revision,
       eventId,
+      choice,
     },
   }
 }
@@ -73,7 +79,8 @@ const isCurrentReceipt = (
   state.generation === receipt.generation &&
   state.target?.itemId === receipt.itemId &&
   state.target.revision === receipt.revision &&
-  state.eventId === receipt.eventId
+  state.eventId === receipt.eventId &&
+  state.choice === receipt.choice
 
 export const acceptPersonalModelFeedbackWrite = (
   state: PersonalModelFeedbackWriteState,
@@ -84,7 +91,8 @@ export const acceptPersonalModelFeedbackWrite = (
     !isCurrentReceipt(state, receipt) ||
     result.itemId !== receipt.itemId ||
     result.targetRevision !== receipt.revision ||
-    result.eventId !== receipt.eventId
+    result.eventId !== receipt.eventId ||
+    result.choice !== receipt.choice
   ) {
     return state
   }

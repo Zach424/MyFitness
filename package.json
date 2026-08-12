@@ -37,7 +37,7 @@
     "release:client": "node scripts/client-release.mjs",
     "client:verify": "node scripts/client-quality.mjs verify --budget apps/client/client-quality-budget.json --h5-root apps/client/dist-h5 --weapp-root apps/client/dist-weapp",
     "release:verify": "node scripts/release-manifest.mjs verify",
-    "test": "vitest run",
+    "test": "vitest run --maxWorkers=25%",
     "test:ai": "python -m pytest services/ai/tests -q",
     "eval:ai": "pnpm --filter @myfitness/contracts build && pnpm --filter @myfitness/domain build && node scripts/run-ai-evals.mjs",
     "eval:food-photo": "pnpm --filter @myfitness/contracts build && pnpm --filter @myfitness/domain build && node scripts/run-food-photo-evals.mjs",

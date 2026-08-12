@@ -1436,6 +1436,7 @@ export const weeklyCognitiveReviewHistoryPageSchema = z
 
 export type PersonalModelKind = z.infer<typeof personalModelKindSchema>
 export type PersonalModelSubjectKey = z.infer<typeof personalModelSubjectKeySchema>
+export type PersonalModelFeedbackChoice = z.infer<typeof personalModelFeedbackChoiceSchema>
 export type PersonalModelStatus = z.infer<typeof personalModelStatusSchema>
 export type PersonalModelEvidenceReference = z.infer<typeof personalModelEvidenceReferenceSchema>
 export type PersonalModelEvidenceSet = z.infer<typeof personalModelEvidenceSetSchema>

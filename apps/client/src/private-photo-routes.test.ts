@@ -9,6 +9,10 @@ const clientSourceRoot = resolve(fileURLToPath(new URL('.', import.meta.url)))
 const source = (path: string) => readFile(resolve(clientSourceRoot, path), 'utf8')
 
 describe('私有照片路由边界', () => {
+  it('让生产包直接保留 UTF-8 文本，避免小程序按字符展开中文文案', async () => {
+    expect(await source('../config/index.ts')).toContain('ascii_only: false')
+  })
+
   it('把食物照片与进度照注册为两个独立延迟页面', async () => {
     const [appConfig, nutritionPage, progressPage, buildConfig] = await Promise.all([
       source('app.config.ts'),

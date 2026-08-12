@@ -2,7 +2,7 @@
 
 路线图按受控迭代组织。一轮可以跨越多个工作会话，但只有在实现、验证、档案更新和提交全部完成后才结束。
 
-进度快照（2026-08-12）：第 0–201 轮已在本地完成。Personal Model P0/P1 契约、P2a–P2c 持久/来源内核、三个严格 claim、同主题新代际、三主题逐项读取、精确反馈认证 HTTP 与客户端写入权限基础已受门禁保护。写入适配器严格绑定 `itemId + revision + eventId + choice`，代次收据拒绝新请求、主题切换和页面失效后的迟到提交；没有后台重放或页面接线。运行时常量拆分使 WeApp 取得结构性余量。完整单元与集成数字以本轮项目状态为准，浏览器基线仍为 95 项。生产依赖为 0 个 critical/high、9 个 moderate。下一阶段设计并接入最小四选一反馈界面与成功后重读；除数据丢失、安全、隐私或认知闭环阻塞外，极端规模导出、部署与非必要运维强化暂停。
+进度快照（2026-08-12）：第 0–202 轮已在本地完成。Personal Model P0/P1 契约、P2a–P2c 持久/来源内核、三个严格 claim、同主题新代际、三主题逐项读取、精确反馈 HTTP 与三种本人校准已受门禁保护。页面严格绑定 `itemId + revision + eventId + choice`，同 event 只由本人明确重试，成功后重新读取完整 current view；temporary 不使用默认期限。UTF-8 生产输出使 WeApp 恢复结构性余量。完整单元与集成数字以本轮项目状态为准，浏览器基线仍为 95 项并新增校准成功路径证明。生产依赖为 0 个 critical/high、9 个 moderate。下一阶段优先修复新建档目标的来源资格缺陷，再设计 temporary 截止时间；除数据丢失、安全、隐私或认知闭环阻塞外，极端规模导出、部署与非必要运维强化暂停。
 
 ## 认知镜子主线
 
@@ -13,7 +13,7 @@
 | P2   | 持久化与所有者隔离                  | P2a/P2b、P2c 证据/来源资格/撤回协议及 goal 历史完成；执行器、回顾、普通删除/Personal Model 导出仍待实现                 |
 | P3   | Evidence → Personal Model Item      | 三个严格 claim 已实现：安排与记录频率并列、记录课次时长基线；均满足覆盖门槛且不推断依从性、动机、偏好或训练效果         |
 | P4   | Mirror 读取与周回顾                 | 当前主题认证 HTTP、严格读取、中性展示与三主题逐项页面已完成；后续少量精确修订与周回顾                                   |
-| P5   | User Feedback → Model Revision      | 精确反馈认证 HTTP 与客户端传输/写权限基础已完成；反馈界面与回顾待续，不自动提高置信                                     |
+| P5   | User Feedback → Model Revision      | 三种本人校准、精确写入、同 event 恢复与成功后重读已完成；temporary 与回顾待续，不自动提高置信                           |
 | P6   | Pattern → Hypothesis                | 只在多窗口复现、支持/反对证据和限制完整时生成候选假设；LLM 仅提供受检表达，不拥有事实或置信更新权                       |
 | P7   | Hypothesis → Outcome → Model Update | 行动与结果绑定精确假设修订，保持非因果说明，并以确定性规则决定支持、反对、争议或失效                                    |
 | P8   | Contextual Decision                 | 只对用户可见、可撤销的低风险建议使用当前有效模型；医疗、心理画像、黑箱自动适应和静默处方继续排除                        |
@@ -224,6 +224,7 @@ P0–P5 是首个最小闭环：Evidence → Personal Model Item → Weekly Revi
 | 199  | Personal Model 显式主题单选           | 三主题逐项读取、切换失权、唯一 pressed、来源边界、触达尺寸与原预算，通过           |
 | 200  | Personal Model 精确反馈认证 HTTP      | 最小 command/收据、锁内转换、并发重放、过期/终态/owner 权限与 OpenAPI，通过        |
 | 201  | Personal Model 客户端反馈写入基础     | 专用运行时常量、严格 request/receipt、精确目标/事件代次权限与结构性包体降幅，通过  |
+| 202  | Personal Model 本人校准界面           | 三种选择、同 event 显式恢复、冲突重读、成功后完整视图复核及 UTF-8 包体治理，通过   |
 
 托管共享环境部署、封闭测试强化与发布继续作为正式发布门禁，但在真实身份、数据保管、遥测、域名、预算、责任人与备案材料就绪前不占用本地迭代编号。原生 App 与 HealthKit/Health Connect/华为设备同步继续等待 MVP 留存门禁。
 

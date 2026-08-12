@@ -143,6 +143,13 @@ const config: UserConfigExport = {
   outputRoot: `dist-${platform}`,
   framework: 'react',
   compiler: 'webpack5',
+  terser: {
+    config: {
+      output: {
+        ascii_only: false,
+      },
+    },
+  },
   cache: {
     enable: true,
   },

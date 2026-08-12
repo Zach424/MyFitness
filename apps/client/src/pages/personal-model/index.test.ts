@@ -36,10 +36,24 @@ describe('personal model page structure', () => {
     expect(content).toContain('role="status"')
   })
 
-  it('does not add feedback, history, polling or persistence controls', async () => {
+  it('binds feedback to the exact write authority and explicitly rereads after success', async () => {
     const content = await source()
 
-    expect(content).not.toMatch(/setInterval|setTimeout|storage|Storage|feedback|lineage|history/)
-    expect(content).not.toMatch(/符合我|暂时情况|不同意|不确定/)
+    expect(content).toContain('beginPersonalModelFeedbackWrite')
+    expect(content).toContain('submitPersonalModelFeedback')
+    expect(content).toContain('acceptPersonalModelFeedbackWrite')
+    expect(content).toContain('await readCurrentSubject()')
+    expect(content).toContain('replacePersonalModelFeedbackSubject')
+    expect(content).toContain('invalidatePersonalModelFeedbackWrite')
+    expect(content).toContain('重试同一次反馈')
+  })
+
+  it('keeps temporary, notes, history, polling and persistence outside this surface', async () => {
+    const content = await source()
+
+    expect(content).not.toMatch(/setInterval|setTimeout|storage|Storage|lineage|history/)
+    expect(content).toContain('contextValidUntil: null')
+    expect(content).toContain('note: null')
+    expect(content).toContain('“只是暂时情况”需要你指定截止时间，将在下一步开放')
   })
 })
