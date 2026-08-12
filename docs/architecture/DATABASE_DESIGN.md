@@ -363,7 +363,7 @@ revision 的 UPDATE 和直接 DELETE 由触发器拒绝；延迟 constraint trig
 
 数据库重复保存所有者、主题、修订号和动作，是为了让关系约束在不解析全部业务对象时也能拒绝跨用户、错主题、断链和跳级发布。它不负责判断观察是否充分、置信是否合理或文字是否容易理解；这些规则仍由共享契约、确定性领域服务和后续用户研究负责。持久成功只证明结构与历史边界成立，不能被解释为个人认知结论已经真实或完整。
 
-本轮历史读取只服务内部仓储，按修订号从新到旧返回有限数量。公开分页需要单独设计不可伪造游标、认证所有者错误隐藏、删除和导出行为；在这些边界完成前，Personal Model 表不得直接暴露给客户端，也不得成为自由查询的用户画像数据源。
+历史读取只服务内部仓储，按修订号从新到旧返回有限数量。第 193 轮另增加按 owner/subject 的当前代内部读取：单条语句从 active `users` 左连接唯一 `retired_at IS NULL` item 和精确 current revision，空主题、无 authority、歧义与残缺连接保持可区分且失败关闭。公开分页仍需单独设计不可伪造游标、认证所有者错误隐藏、删除和导出行为；在这些边界完成前，Personal Model 表不得直接暴露给客户端，也不得成为自由查询的用户画像数据源。
 
 ### 14.5.3 `personal_model_feedback_events`
 
@@ -427,7 +427,7 @@ resolution 保存 `request_id,user_id,item_id,resolved_item_revision,withdrawn_r
 
 恢复和备份也必须保留代际整体关系。恢复校验不能只比较每个 item 的最新修订数量，还要证明每个主题的代次从一开始连续、直接前代唯一、只有最高未退役代是当前、每个退役时刻与直接后继创建时刻相等，并且旧代没有未解决来源义务。任一条件失败都应阻止该主题进入派生或展示，而不是自动选择编号最大的行掩盖关系损坏。
 
-查询层未来至少要区分三种意图：按明确 item 读取某一代当前修订，读取该代内部修订历史，以及按主题读取当前代和已退役代摘要。前两种已有内部能力，第三种尚未设计。公开接口不能把 item revision 游标复用为代际游标，也不能把 retired 当成删除或隐藏用户曾经反馈的旧认识；分页顺序、来源摘要、失效原因和数据导出都需要单独契约。
+查询层区分三种意图：按明确 item 读取某一代当前修订，读取该代内部修订历史，以及按主题读取当前代或已退役代摘要。前两种已有内部能力；第三种现只完成唯一当前代信封，不返回全部 lineage。公开接口不能把 item revision 游标复用为代际游标，也不能把 retired 当成删除或隐藏用户曾经反馈的旧认识；分页顺序、来源摘要、失效原因和数据导出都需要单独契约。
 
 ## 15. 管理员身份与审计
 
@@ -585,7 +585,7 @@ intent 创建 → 验证一次性 token 与确认短语 → users 状态关闭 �
 - 当前本地数据操作表有 179 个 job/attempt，来自测试和演示；应通过状态分布、失败码和死信而不是总行数判断健康。
 - 归档表与状态机已存在，但请求仓储、执行任务、加密对象、下载授权和到期扫描尚未实现；表结构不能被描述为用户可用的异步导出。
 - 没有设备原生同步表、社交表、支付表或医疗病历表；这些不属于当前实现。
-- `personal_model_items`、revision、feedback、evidence、source refresh 与 `user_goal_revisions` 已建立 owner 复合键、不可变历史、原子当前指针、精确来源和撤回解决；training availability、recorded training frequency 与 recorded session duration 都有内部确定性事务，同主题终态也能以唯一当前 generation 原子接续。Weekly Cognitive Review、公开当前代/lineage 读取、导出和 API 仍未完成；在这些语义通过验证前，不得把内核描述为用户可用的“认知镜子”，也不得建立任意 JSON“用户画像”旁路。
+- `personal_model_items`、revision、feedback、evidence、source refresh 与 `user_goal_revisions` 已建立 owner 复合键、不可变历史、原子当前指针、精确来源和撤回解决；training availability、recorded training frequency 与 recorded session duration 都有内部确定性事务，同主题终态也能以唯一当前 generation 原子接续。内部 current-subject 信封已能严格选择唯一当前代，但 Weekly Cognitive Review、公开授权/lineage 读取、导出和 API 仍未完成；在这些语义通过验证前，不得把内核描述为用户可用的“认知镜子”，也不得建立任意 JSON“用户画像”旁路。
 - 备份物理删除时限属于生产保留政策和演练证据，不能只由主数据库 receipt 状态推断。
 
 ## 22. 运行核对查询

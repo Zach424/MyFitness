@@ -4,6 +4,8 @@ import { isDeepStrictEqual } from 'node:util'
 import { Injectable } from '@nestjs/common'
 import {
   onboardingGoalRevisionSnapshotSchema,
+  personalModelCurrentSubjectEnvelopeSchema,
+  personalModelCurrentSubjectEnvelopeVersion,
   personalModelFeedbackEventSchema,
   personalModelFeedbackTransitionResultSchema,
   personalModelFeedbackTransitionVersion,
@@ -12,8 +14,10 @@ import {
   workoutSchema,
   type PersonalModelFeedbackEvent,
   type PersonalModelFeedbackTransitionResult,
+  type PersonalModelCurrentSubjectEnvelope,
   type PersonalModelItem,
   type PersonalModelItemRevision,
+  type PersonalModelSubjectKey,
 } from '@myfitness/contracts'
 import type { PoolClient } from 'pg'
 
@@ -47,6 +51,25 @@ type PersonalModelRevisionRow = {
 
 type PersonalModelItemPointerRow = {
   current_revision: number
+}
+
+type PersonalModelCurrentSubjectRow = {
+  authority_user_id: string
+  current_item_id: string | null
+  generation: number | null
+  predecessor_item_id: string | null
+  retired_at: Date | null
+  revision_id: string | null
+  revision_user_id: string | null
+  revision_item_id: string | null
+  revision_schema_version: string | null
+  revision: number | null
+  previous_revision: number | null
+  action: string | null
+  snapshot: unknown | null
+  derivation_fingerprint: string | null
+  feedback_event_id: string | null
+  changed_at: Date | null
 }
 
 type PersonalModelFeedbackEventRow = {
@@ -543,6 +566,13 @@ export class PersonalModelRevisionConflictError extends Error {
   constructor(message = 'personal model revision conflict') {
     super(message)
     this.name = 'PersonalModelRevisionConflictError'
+  }
+}
+
+export class PersonalModelSubjectAuthorityNotFoundError extends Error {
+  constructor() {
+    super('active personal model subject owner not found')
+    this.name = 'PersonalModelSubjectAuthorityNotFoundError'
   }
 }
 
@@ -1568,6 +1598,123 @@ export class PersonalModelRepository {
     const row = result.rows[0]
     if (!row) throw new PersonalModelItemNotFoundError()
     return mapRevisionRow(row)
+  }
+
+  async getCurrentSubject(
+    userId: string,
+    subjectKey: PersonalModelSubjectKey,
+  ): Promise<PersonalModelCurrentSubjectEnvelope> {
+    const emptyEnvelope = personalModelCurrentSubjectEnvelopeSchema.parse({
+      schemaVersion: personalModelCurrentSubjectEnvelopeVersion,
+      ownerUserId: userId,
+      subjectKey,
+      current: null,
+    })
+    const result = await this.database.query<PersonalModelCurrentSubjectRow>(
+      `
+        SELECT
+          account.id AS authority_user_id,
+          item.id AS current_item_id,
+          item.generation,
+          item.predecessor_item_id,
+          item.retired_at,
+          revision.id AS revision_id,
+          revision.user_id AS revision_user_id,
+          revision.item_id AS revision_item_id,
+          revision.schema_version AS revision_schema_version,
+          revision.revision,
+          revision.previous_revision,
+          revision.action,
+          revision.snapshot,
+          revision.derivation_fingerprint,
+          revision.feedback_event_id,
+          revision.changed_at
+        FROM users AS account
+        LEFT JOIN personal_model_items AS item
+          ON item.user_id = account.id
+         AND item.subject_key = $2
+         AND item.retired_at IS NULL
+        LEFT JOIN personal_model_item_revisions AS revision
+          ON revision.user_id = item.user_id
+         AND revision.item_id = item.id
+         AND revision.revision = item.current_revision
+        WHERE account.id = $1
+          AND account.status = 'active'
+      `,
+      [userId, subjectKey],
+    )
+
+    if (result.rows.length === 0) throw new PersonalModelSubjectAuthorityNotFoundError()
+    if (result.rows.length !== 1) {
+      throw new PersonalModelRevisionConflictError(
+        'personal model current subject generation is ambiguous',
+      )
+    }
+
+    const row = result.rows[0]!
+    if (row.authority_user_id !== userId) {
+      throw new PersonalModelRevisionConflictError('personal model subject owner mismatch')
+    }
+    if (row.current_item_id === null) {
+      if (
+        row.generation !== null ||
+        row.predecessor_item_id !== null ||
+        row.retired_at !== null ||
+        row.revision_id !== null
+      ) {
+        throw new PersonalModelRevisionConflictError(
+          'personal model empty subject contains generation metadata',
+        )
+      }
+      return emptyEnvelope
+    }
+    if (
+      row.generation === null ||
+      row.retired_at !== null ||
+      row.revision_id === null ||
+      row.revision_user_id === null ||
+      row.revision_item_id === null ||
+      row.revision_schema_version === null ||
+      row.revision === null ||
+      row.action === null ||
+      row.snapshot === null ||
+      row.derivation_fingerprint === null ||
+      row.changed_at === null
+    ) {
+      throw new PersonalModelRevisionConflictError(
+        'personal model current subject generation is incomplete',
+      )
+    }
+
+    const currentRevision = mapRevisionRow({
+      id: row.revision_id,
+      user_id: row.revision_user_id,
+      item_id: row.revision_item_id,
+      schema_version: row.revision_schema_version,
+      revision: row.revision,
+      previous_revision: row.previous_revision,
+      action: row.action,
+      snapshot: row.snapshot,
+      derivation_fingerprint: row.derivation_fingerprint,
+      feedback_event_id: row.feedback_event_id,
+      changed_at: row.changed_at,
+    })
+
+    return personalModelCurrentSubjectEnvelopeSchema.parse({
+      schemaVersion: personalModelCurrentSubjectEnvelopeVersion,
+      ownerUserId: userId,
+      subjectKey,
+      current: {
+        itemId: row.current_item_id,
+        generation: row.generation,
+        predecessorItemId: row.predecessor_item_id,
+        terminal:
+          currentRevision.snapshot.status === 'superseded' ||
+          currentRevision.snapshot.status === 'invalidated',
+        retiredAt: null,
+        currentRevision,
+      },
+    })
   }
 
   async history(userId: string, itemId: string, limit = 20): Promise<PersonalModelItemRevision[]> {

@@ -413,7 +413,7 @@ Content-Type: application/json
 - 响应对象为严格 Schema；客户端应拒绝错误类型和不满足跨字段不变量的响应。
 - revision、source、timezone、occurredAt 和历史快照是健康数据可追责性的组成部分，不得在未来兼容层中静默丢弃。
 - OpenAPI 当前以内联 Schema 为主，没有复用 components；生成 SDK 前应以契约测试验证 nullable、联合类型和自定义跨字段约束。
-- 当前 OpenAPI 不包含 `/v1/mirror`、`/v1/personal-model` 或 Weekly Cognitive Review 路由。内部已有 `refreshTrainingAvailability(userId)`、`refreshRecordedTrainingFrequency(userId)` 与 `refreshRecordedSessionDuration(userId)`，分别派生 Constraint、recorded-frequency Behavior 和 recorded-duration Baseline。第 191 轮使派生器只选择同 owner/subject 的未退役当前 generation：终态待办先在旧代解决；待办清空且出现前代未使用的新精确来源后，旧代与 generation+1 在同一事务原子切换，并发调用只有一个后继。第 192 轮的时长执行器只统计最近至多八个完整本地周内起止完整、正数且不超过 1,440 分钟的当前 workout revisions，并固定中位数与 nearest-rank 四分位算法。旧代仍可通过内部 `getCurrent(userId,itemId)`/`history` 按明确 item ID 读取，但不存在公开的“按主题当前代”或 lineage 列表。代际字段没有加入现有 item revision 传输 Schema；控制器、后台触发、HTTP 授权、认证错误隐藏、幂等键、分页和公开代际信封仍未定义。[个人认知模型](../architecture/PERSONAL_MODEL.md) 中的路径继续是候选设计，不能被客户端、文档或部署材料描述为已实现接口。
+- 当前 OpenAPI 不包含 `/v1/mirror`、`/v1/personal-model` 或 Weekly Cognitive Review 路由。内部已有三个确定性 refresh 方法，以及 `getCurrent(userId,itemId)`、`history` 和第 193 轮的 `getCurrentSubject(userId,subjectKey)`。后者返回严格 `personal-model-current-subject-envelope-v1`：active owner 没有该主题时为 `current:null`，非空时携带唯一未退役 generation、直接前代、terminal、`retiredAt:null` 和完整精确 revision；owner 缺失/停用、非法 subject、数据库歧义或残缺连接失败关闭。该结构仍是内部共享契约，不是 HTTP 响应承诺；控制器、认证错误隐藏、公开字段最小化、缓存头、lineage/证据分页和客户端尚未定义。[个人认知模型](../architecture/PERSONAL_MODEL.md) 中的路径继续是候选设计，不能被客户端、文档或部署材料描述为已实现接口。
 
 ## 19. 参考
 

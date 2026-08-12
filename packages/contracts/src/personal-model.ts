@@ -7,6 +7,7 @@ import {
   personalModelConfidenceLimitations,
   personalModelConfidencePolicyVersion,
   personalModelContractVersion,
+  personalModelCurrentSubjectEnvelopeVersion,
   personalModelEvidenceKinds,
   personalModelEvidenceQualificationStates,
   personalModelEvidenceRoles,
@@ -823,6 +824,65 @@ export const personalModelItemRevisionSchema = z
     }
   })
 
+const personalModelCurrentGenerationSchema = z
+  .object({
+    itemId: z.string().uuid(),
+    generation: z.number().int().positive(),
+    predecessorItemId: z.string().uuid().nullable(),
+    terminal: z.boolean(),
+    retiredAt: z.null(),
+    currentRevision: personalModelItemRevisionSchema,
+  })
+  .strict()
+  .superRefine((generation, ctx) => {
+    if ((generation.generation === 1) !== (generation.predecessorItemId === null)) {
+      addIssue(
+        ctx,
+        ['predecessorItemId'],
+        'only the first personal model generation may omit its predecessor',
+      )
+    }
+    if (generation.itemId !== generation.currentRevision.itemId) {
+      addIssue(
+        ctx,
+        ['currentRevision', 'itemId'],
+        'current revision must belong to this generation',
+      )
+    }
+    if (generation.predecessorItemId === generation.itemId) {
+      addIssue(ctx, ['predecessorItemId'], 'a personal model generation cannot precede itself')
+    }
+    const terminal =
+      generation.currentRevision.snapshot.status === 'superseded' ||
+      generation.currentRevision.snapshot.status === 'invalidated'
+    if (generation.terminal !== terminal) {
+      addIssue(ctx, ['terminal'], 'terminal metadata must match the current revision status')
+    }
+  })
+
+export const personalModelCurrentSubjectEnvelopeSchema = z
+  .object({
+    schemaVersion: z.literal(personalModelCurrentSubjectEnvelopeVersion),
+    ownerUserId: z.string().uuid(),
+    subjectKey: personalModelSubjectKeySchema,
+    current: personalModelCurrentGenerationSchema.nullable(),
+  })
+  .strict()
+  .superRefine((envelope, ctx) => {
+    if (envelope.current === null) return
+    const revision = envelope.current.currentRevision
+    if (revision.userId !== envelope.ownerUserId) {
+      addIssue(ctx, ['current', 'currentRevision', 'userId'], 'current revision owner must match')
+    }
+    if (revision.snapshot.subjectKey !== envelope.subjectKey) {
+      addIssue(
+        ctx,
+        ['current', 'currentRevision', 'snapshot', 'subjectKey'],
+        'current revision subject must match',
+      )
+    }
+  })
+
 export const personalModelFeedbackApplicationSchema = z
   .object({
     item: personalModelItemSchema,
@@ -1159,6 +1219,7 @@ export const weeklyCognitiveReviewHistoryPageSchema = z
   })
 
 export type PersonalModelKind = z.infer<typeof personalModelKindSchema>
+export type PersonalModelSubjectKey = z.infer<typeof personalModelSubjectKeySchema>
 export type PersonalModelStatus = z.infer<typeof personalModelStatusSchema>
 export type PersonalModelEvidenceReference = z.infer<typeof personalModelEvidenceReferenceSchema>
 export type PersonalModelEvidenceSet = z.infer<typeof personalModelEvidenceSetSchema>
@@ -1167,6 +1228,9 @@ export type PersonalModelItem = z.infer<typeof personalModelItemSchema>
 export type PersonalModelUnknownReceipt = z.infer<typeof personalModelUnknownReceiptSchema>
 export type PersonalModelFeedbackEvent = z.infer<typeof personalModelFeedbackEventSchema>
 export type PersonalModelItemRevision = z.infer<typeof personalModelItemRevisionSchema>
+export type PersonalModelCurrentSubjectEnvelope = z.infer<
+  typeof personalModelCurrentSubjectEnvelopeSchema
+>
 export type PersonalModelFeedbackApplication = z.infer<
   typeof personalModelFeedbackApplicationSchema
 >

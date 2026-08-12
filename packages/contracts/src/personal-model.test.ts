@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   personalModelConfidenceReceiptSchema,
+  personalModelCurrentSubjectEnvelopeSchema,
   personalModelDecisionInputSchema,
   personalModelEvidenceSetSchema,
   personalModelFeedbackApplicationSchema,
@@ -609,6 +610,147 @@ describe('personal model contract', () => {
         action: 'evidence_accumulated',
       }).success,
     ).toBe(false)
+  })
+
+  it('binds the current subject envelope to one owner, subject and exact generation revision', () => {
+    const snapshot = behaviorItem()
+    const currentRevision = {
+      schemaVersion: 'personal-model-item-revision-v1',
+      id: uuidFor(605),
+      userId,
+      itemId,
+      revision: 1,
+      previousRevision: null,
+      action: 'created',
+      snapshot,
+      derivationFingerprint: 'c'.repeat(64),
+      feedbackEventId: null,
+      changedAt: observedThrough,
+    }
+    const envelope = {
+      schemaVersion: 'personal-model-current-subject-envelope-v1',
+      ownerUserId: userId,
+      subjectKey: 'training.recorded_frequency',
+      current: {
+        itemId,
+        generation: 1,
+        predecessorItemId: null,
+        terminal: false,
+        retiredAt: null,
+        currentRevision,
+      },
+    }
+
+    expect(personalModelCurrentSubjectEnvelopeSchema.safeParse(envelope).success).toBe(true)
+    expect(
+      personalModelCurrentSubjectEnvelopeSchema.safeParse({
+        ...envelope,
+        ownerUserId: uuidFor(606),
+      }).success,
+    ).toBe(false)
+    expect(
+      personalModelCurrentSubjectEnvelopeSchema.safeParse({
+        ...envelope,
+        subjectKey: 'training.recorded_session_duration',
+      }).success,
+    ).toBe(false)
+    expect(
+      personalModelCurrentSubjectEnvelopeSchema.safeParse({
+        ...envelope,
+        current: { ...envelope.current, itemId: uuidFor(607) },
+      }).success,
+    ).toBe(false)
+  })
+
+  it('distinguishes a terminal current generation from a retired generation', () => {
+    const invalidatedAt = '2026-08-10T01:00:00.000Z'
+    const invalidatedSnapshot = {
+      ...behaviorItem(),
+      status: 'invalidated' as const,
+      validTo: invalidatedAt,
+      revision: 2,
+      evidenceSet: {
+        ...behaviorItem().evidenceSet,
+        includedCount: 0,
+        supportingCount: 0,
+        withdrawnCount: 6,
+        references: behaviorItem().evidenceSet.references.map((reference) => ({
+          ...reference,
+          role: 'context' as const,
+          qualification: 'withdrawn' as const,
+          withdrawnReason: 'source_deleted' as const,
+        })),
+      },
+      updatedAt: invalidatedAt,
+    }
+    const currentRevision = {
+      schemaVersion: 'personal-model-item-revision-v1',
+      id: uuidFor(608),
+      userId,
+      itemId,
+      revision: 2,
+      previousRevision: 1,
+      action: 'invalidated',
+      snapshot: invalidatedSnapshot,
+      derivationFingerprint: 'd'.repeat(64),
+      feedbackEventId: null,
+      changedAt: invalidatedAt,
+    }
+    const envelope = {
+      schemaVersion: 'personal-model-current-subject-envelope-v1',
+      ownerUserId: userId,
+      subjectKey: 'training.recorded_frequency',
+      current: {
+        itemId,
+        generation: 2,
+        predecessorItemId: uuidFor(604),
+        terminal: true,
+        retiredAt: null,
+        currentRevision,
+      },
+    }
+
+    expect(personalModelCurrentSubjectEnvelopeSchema.safeParse(envelope).success).toBe(true)
+    expect(
+      personalModelCurrentSubjectEnvelopeSchema.safeParse({
+        ...envelope,
+        current: { ...envelope.current, terminal: false },
+      }).success,
+    ).toBe(false)
+    expect(
+      personalModelCurrentSubjectEnvelopeSchema.safeParse({
+        ...envelope,
+        current: { ...envelope.current, retiredAt: invalidatedAt },
+      }).success,
+    ).toBe(false)
+    expect(
+      personalModelCurrentSubjectEnvelopeSchema.safeParse({
+        ...envelope,
+        current: { ...envelope.current, generation: 1 },
+      }).success,
+    ).toBe(false)
+    expect(
+      personalModelCurrentSubjectEnvelopeSchema.safeParse({
+        ...envelope,
+        current: { ...envelope.current, predecessorItemId: itemId },
+      }).success,
+    ).toBe(false)
+  })
+
+  it('represents an absent current subject without inventing an item identity', () => {
+    expect(
+      personalModelCurrentSubjectEnvelopeSchema.parse({
+        schemaVersion: 'personal-model-current-subject-envelope-v1',
+        ownerUserId: userId,
+        subjectKey: 'training.availability',
+        current: null,
+      }),
+    ).toEqual({
+      schemaVersion: 'personal-model-current-subject-envelope-v1',
+      ownerUserId: userId,
+      subjectKey: 'training.availability',
+      current: null,
+    })
   })
 
   it('requires feedback to target the exact current non-terminal revision', () => {

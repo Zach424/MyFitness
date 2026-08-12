@@ -2,6 +2,8 @@ export const personalModelContractVersion = 'personal-model-contract-v1' as cons
 export const personalModelConfidencePolicyVersion = 'personal-model-confidence-v1' as const
 export const personalModelUnknownReceiptVersion = 'personal-model-unknown-v1' as const
 export const personalModelItemRevisionVersion = 'personal-model-item-revision-v1' as const
+export const personalModelCurrentSubjectEnvelopeVersion =
+  'personal-model-current-subject-envelope-v1' as const
 export const personalModelFeedbackTransitionVersion =
   'personal-model-feedback-transition-v1' as const
 export const weeklyCognitiveReviewVersion = 'weekly-cognitive-review-v1' as const
