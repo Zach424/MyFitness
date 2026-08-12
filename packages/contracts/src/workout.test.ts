@@ -98,4 +98,27 @@ describe('workout contracts', () => {
     duplicate.exercises[0]!.equipment = ['dumbbells', 'dumbbells'] as never
     expect(createWorkoutSchema.safeParse(duplicate).success).toBe(false)
   })
+
+  it('accepts an exact selection-time muscle snapshot and rejects aggregate drift', () => {
+    const mapped = structuredClone(workout)
+    Object.assign(mapped.exercises[0]!, {
+      muscleMapping: {
+        status: 'mapped',
+        modelVersion: 'ilens-muscle-model-v1',
+        source: 'starter_catalog',
+        primaryMuscles: ['gluteus_maximus', 'quadriceps'],
+        secondaryMuscles: ['hamstrings'],
+      },
+    })
+    expect(createWorkoutSchema.parse(mapped).exercises[0]?.muscleMapping).toMatchObject({
+      status: 'mapped',
+      primaryMuscles: ['gluteus_maximus', 'quadriceps'],
+    })
+
+    const aggregate = structuredClone(mapped)
+    ;(
+      aggregate.exercises[0] as unknown as { muscleMapping: { primaryMuscles: string[] } }
+    ).muscleMapping.primaryMuscles = ['core_global']
+    expect(createWorkoutSchema.safeParse(aggregate).success).toBe(false)
+  })
 })

@@ -79,6 +79,7 @@ import {
   personalModelStatuses,
   personalModelSubjectKeys,
 } from '@myfitness/contracts'
+import { mappableMuscleIds, muscleModelVersion } from '@myfitness/contracts/muscle-model.constants'
 import { describe, expect, it } from 'vitest'
 
 const migrationPath = path.resolve(
@@ -213,6 +214,14 @@ const personalModelGenerationStrictTimesMigrationPath = path.resolve(
   __dirname,
   '../../../../infra/postgres/migrations/0044_personal_model_generation_strict_times.sql',
 )
+const exerciseMuscleMappingMigrationPath = path.resolve(
+  __dirname,
+  '../../../../infra/postgres/migrations/0045_exercise_muscle_mapping.sql',
+)
+const workoutExerciseMuscleMappingMigrationPath = path.resolve(
+  __dirname,
+  '../../../../infra/postgres/migrations/0046_workout_exercise_muscle_mapping_snapshot.sql',
+)
 
 describe('health-record migration drift', () => {
   it('contains every contract metric, unit and source kind', async () => {
@@ -304,6 +313,22 @@ describe('health-record migration drift', () => {
     expect(migration).toContain('user_exercise_catalog_active_name_unique')
     expect(migration).toContain('user_exercise_catalog_revision_owner_fk')
     expect(migration).toContain('workout_exercises_other_equipment_notes_check')
+  })
+
+  it('keeps persisted exercise relations aligned with the mappable muscle model', async () => {
+    const migration = await readFile(exerciseMuscleMappingMigrationPath, 'utf8')
+    expect(migration).toContain(`'${muscleModelVersion}'`)
+    expect(migration).toContain("'user_confirmed'")
+    expect(migration).toContain('NOT (primary_muscles && secondary_muscles)')
+    for (const muscleId of mappableMuscleIds) {
+      expect(migration, `${muscleId} is missing from the muscle mapping migration`).toContain(
+        `'${muscleId}'`,
+      )
+    }
+    expect(migration).not.toContain("'core_global'")
+    await expect(readFile(workoutExerciseMuscleMappingMigrationPath, 'utf8')).resolves.toContain(
+      'ADD COLUMN muscle_mapping JSONB',
+    )
   })
 
   it('indexes the complete owner exercise catalog export order', async () => {

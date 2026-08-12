@@ -4,6 +4,7 @@ import {
   createExerciseCatalogEntrySchema,
   exerciseCatalogItemSchema,
   exerciseCatalogVersion,
+  exerciseMuscleMappingInputSchema,
   starterExerciseCatalog,
 } from './exercise-catalog'
 
@@ -58,5 +59,47 @@ describe('exercise catalog contracts', () => {
         }),
       ).toBeTruthy()
     }
+  })
+
+  it('accepts user-confirmed primary and secondary muscles under the current model', () => {
+    expect(
+      createExerciseCatalogEntrySchema.parse({
+        ...customInput,
+        muscleMapping: {
+          modelVersion: 'ilens-muscle-model-v1',
+          primaryMuscles: ['gluteus_maximus'],
+          secondaryMuscles: ['hamstrings'],
+        },
+      }).muscleMapping,
+    ).toEqual({
+      modelVersion: 'ilens-muscle-model-v1',
+      primaryMuscles: ['gluteus_maximus'],
+      secondaryMuscles: ['hamstrings'],
+    })
+  })
+
+  it('keeps absent mapping explicitly unknown and rejects unsafe relation sets', () => {
+    expect(createExerciseCatalogEntrySchema.parse(customInput).muscleMapping).toBeUndefined()
+    expect(
+      exerciseMuscleMappingInputSchema.safeParse({
+        modelVersion: 'ilens-muscle-model-v1',
+        primaryMuscles: ['core_global'],
+        secondaryMuscles: [],
+      }).success,
+    ).toBe(false)
+    expect(
+      exerciseMuscleMappingInputSchema.safeParse({
+        modelVersion: 'ilens-muscle-model-v1',
+        primaryMuscles: ['quadriceps'],
+        secondaryMuscles: ['quadriceps'],
+      }).success,
+    ).toBe(false)
+    expect(
+      exerciseMuscleMappingInputSchema.safeParse({
+        modelVersion: 'ilens-muscle-model-v0',
+        primaryMuscles: ['quadriceps'],
+        secondaryMuscles: [],
+      }).success,
+    ).toBe(false)
   })
 })

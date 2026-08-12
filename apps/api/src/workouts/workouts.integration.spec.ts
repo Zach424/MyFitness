@@ -27,6 +27,13 @@ describe('workout API with PostgreSQL', () => {
         exerciseKey: 'goblet_squat',
         name: '高脚杯深蹲',
         category: 'strength',
+        muscleMapping: {
+          status: 'mapped',
+          modelVersion: 'ilens-muscle-model-v1',
+          source: 'starter_catalog',
+          primaryMuscles: ['gluteus_maximus', 'quadriceps'],
+          secondaryMuscles: ['hamstrings', 'adductors'],
+        },
         sets: [
           {
             position: 1,
@@ -90,9 +97,12 @@ describe('workout API with PostgreSQL', () => {
   })
 
   afterAll(async () => {
-    await pool.query('DELETE FROM users WHERE id = ANY($1::uuid[])', [[userId, otherUserId]])
+    const createdUserIds = [userId, otherUserId].filter(Boolean)
+    if (createdUserIds.length) {
+      await pool.query('DELETE FROM users WHERE id = ANY($1::uuid[])', [createdUserIds])
+    }
     await pool.end()
-    await app.close()
+    if (app) await app.close()
   })
 
   it('creates, calculates, revises, audits and deletes a workout', async () => {
@@ -121,6 +131,7 @@ describe('workout API with PostgreSQL', () => {
       loadUnit: 'lb',
       canonicalLoadKg: 19.9581,
     })
+    expect(created.body.exercises[0].muscleMapping).toEqual(workout.exercises[0].muscleMapping)
     const storedPartial = await pool.query<{ status: string }>(
       'SELECT status FROM workout_sessions WHERE id = $1',
       [created.body.id],
@@ -190,6 +201,9 @@ describe('workout API with PostgreSQL', () => {
       'completed',
       'partial',
     ])
+    expect(history.body.items[1].exercises[0].muscleMapping).toEqual(
+      workout.exercises[0].muscleMapping,
+    )
 
     await request(app.getHttpServer())
       .delete(`/v1/workouts/${String(created.body.id)}`)

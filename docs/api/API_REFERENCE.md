@@ -8,9 +8,9 @@
 
 ## 1. 范围与契约来源
 
-本文覆盖当前 OpenAPI 中全部 69 个路径、89 个 HTTP 操作，并补充共享 Zod 契约、控制器和客户端恢复语义。机器可读的精确 Schema 以同目录的 `openapi.json` 为准；本文用于产品、前端、后端、测试和运维共同阅读。iLens 的 Muscle Model、Body Assessment、Performance 和 Plan v2 仍是路线图目标，不计入当前接口。
+本文覆盖当前 OpenAPI 中全部 69 个路径、89 个 HTTP 操作，并补充共享 Zod 契约、控制器和客户端恢复语义。机器可读的精确 Schema 以同目录的 `openapi.json` 为准；本文用于产品、前端、后端、测试和运维共同阅读。iLens 的 Muscle Model v1 契约及动作关系已经进入当前动作/训练接口；Body Assessment、Performance 和 Plan v2 仍是路线图目标，不计入当前接口。
 
-第 204 轮已经提供 `ilens-muscle-model-v1` 共享契约与版本化词表，但未新增 HTTP 操作，也没有修改动作目录响应。调用方不得假设当前 `/v1/exercise-catalog` 返回肌群关联；该 API 留待独立持久化切片。
+第 205 轮没有新增 HTTP 操作，但扩展了动作目录与训练 Schema。目录响应的 `muscleMapping` 必须是严格 `mapped|unmapped` 判别联合；自定义写入可省略、提供映射或显式 `null`。训练动作可携带选择时完整关系快照，历史读取和便携导出保留该版本，不实时连接可变目录。
 
 当前接口分为普通用户 API、管理员 API、内部运维 API 和公开系统/签名媒体 API。除明确标为公开或内部令牌的接口外，均要求普通用户 Bearer 会话。
 
@@ -103,13 +103,13 @@
 
 `WorkoutWrite`：`title(1..100)`、`source{kind:manual|imported,metadata?}`、`exercises(1..30)`、`startedAt`、`endedAt`、`timezone`、`painLevel(0..10)`、`fatigue(1..5)`、可选 `note(<=500)`。
 
-每个动作：`position(1..50)`、`exerciseKey`、`name(1..80)`、`category(strength|cardio|mobility)`、可选 `trackingMode(reps_load|duration|duration_distance)`、最多 6 项 `equipment`、可选器械说明/备注、`sets(1..50)`。
+每个动作：`position(1..50)`、`exerciseKey`、`name(1..80)`、`category(strength|cardio|mobility)`、可选 `trackingMode(reps_load|duration|duration_distance)`、最多 6 项 `equipment`、可选器械说明/备注、可选 `muscleMapping` 选择时快照、`sets(1..50)`。
 
 每组：`position(1..100)`、`kind(warmup|working|cooldown)`、按记录方式提供 `reps(1..1000)`、`load(0..1000)`、`loadUnit(kg|lb)`、`durationSeconds(1..86400)`、`distanceMeters(1..500000)`、`rpe(1..10)`，并显式 `completed:boolean`。服务端派生 completed/partial 与汇总，不信任废弃的客户端 status。
 
 ### 3.5 动作目录模型
 
-`ExerciseCatalogWrite`：`name(1..80)`、`aliases(<=8)`、`category`、`trackingMode`、`equipment(1..6)`、可选 `equipmentNotes(1..120)`；更新增加 `expectedRevision`。响应包含稳定 key、revision、创建/更新时间；归档后离开当前列表，历史仍保留。
+`ExerciseCatalogWrite`：`name(1..80)`、`aliases(<=8)`、`category`、`trackingMode`、`equipment(1..6)`、可选 `equipmentNotes(1..120)`，以及可选/可空 `muscleMapping{modelVersion:'ilens-muscle-model-v1',primaryMuscles(1..8),secondaryMuscles(0..12)}`；更新增加 `expectedRevision`。映射 ID 只能来自 25 个具体 muscle group，数组内部不能重复，主次不能交叉，`core_global` 不合法。更新省略 mapping 会保留现值，`null` 才清除。响应始终返回 `mapped|unmapped`、稳定 key、revision 和审计时间；starter 来源为 `starter_catalog`，自定义关系来源为 `user_confirmed`，归档后离开当前列表但历史仍保留。
 
 ### 3.6 食物、餐食与收藏模型
 
@@ -191,13 +191,13 @@
 
 ### 6.2 自定义动作目录
 
-| 方法与路径                                   | 参数                                     | 功能与成功响应         | 失败               |
-| -------------------------------------------- | ---------------------------------------- | ---------------------- | ------------------ |
-| `POST /v1/exercise-catalog`                  | idempotency header; ExerciseCatalogWrite | 201 新定义             | 400、401、409      |
-| `GET /v1/exercise-catalog`                   | `limit,cursor?`                          | 200 当前活动定义页     | 400、401           |
-| `PUT /v1/exercise-catalog/{entryId}`         | UUID; write + expectedRevision           | 200 纠正定义           | 400、401、404、409 |
-| `DELETE /v1/exercise-catalog/{entryId}`      | UUID; `x-expected-revision`              | 204 归档，历史快照不变 | 401、404、409      |
-| `GET /v1/exercise-catalog/{entryId}/history` | UUID; `limit,cursor?`                    | 200 修订页             | 400、401、404      |
+| 方法与路径                                   | 参数                                     | 功能与成功响应                    | 失败               |
+| -------------------------------------------- | ---------------------------------------- | --------------------------------- | ------------------ |
+| `POST /v1/exercise-catalog`                  | idempotency header; ExerciseCatalogWrite | 201 新定义                        | 400、401、409      |
+| `GET /v1/exercise-catalog`                   | 无                                       | 200 starter + 当前 owner 活动定义 | 401                |
+| `PUT /v1/exercise-catalog/{entryId}`         | UUID; write + expectedRevision           | 200 纠正定义                      | 400、401、404、409 |
+| `DELETE /v1/exercise-catalog/{entryId}`      | UUID; `x-expected-revision`              | 200 归档，历史快照不变            | 401、404、409      |
+| `GET /v1/exercise-catalog/{entryId}/history` | UUID; `limit,cursor?`                    | 200 修订页                        | 400、401、404      |
 
 ## 7. 餐食、收藏与食物目录接口
 

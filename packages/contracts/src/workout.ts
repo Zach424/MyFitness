@@ -2,7 +2,11 @@ import * as z from 'zod'
 
 import { recordListQuerySchema, recordPageCursorSchema } from './pagination'
 
-import { exerciseEquipmentSchema, exerciseTrackingModeSchema } from './exercise-catalog'
+import {
+  exerciseEquipmentSchema,
+  exerciseMuscleMappingSchema,
+  exerciseTrackingModeSchema,
+} from './exercise-catalog'
 import {
   exerciseCategories,
   loadUnits,
@@ -88,6 +92,7 @@ export const workoutExerciseInputSchema = z
     trackingMode: exerciseTrackingModeSchema.optional(),
     equipment: z.array(exerciseEquipmentSchema).max(6).optional(),
     equipmentNotes: z.string().trim().min(1).max(120).optional(),
+    muscleMapping: exerciseMuscleMappingSchema.optional(),
     notes: z.string().trim().max(300).optional(),
     sets: z.array(workoutSetInputSchema).min(1).max(50),
   })

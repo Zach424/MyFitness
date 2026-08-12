@@ -1,7 +1,10 @@
-export const exerciseCatalogVersion = 'starter-2026-08-05-v1' as const
+import { muscleModelVersion } from './muscle-model.constants'
+
+export const exerciseCatalogVersion = 'starter-2026-08-12-v2' as const
 
 export const exerciseCatalogSources = ['starter', 'custom'] as const
 export const exerciseCatalogRevisionActions = ['created', 'updated', 'archived'] as const
+export const exerciseMuscleMappingSources = ['starter_catalog', 'user_confirmed'] as const
 export const exerciseTrackingModes = ['reps_load', 'duration', 'duration_distance'] as const
 export const exerciseEquipmentOptions = [
   'bodyweight',
@@ -26,6 +29,13 @@ export const starterExerciseCatalog = [
     category: 'strength',
     trackingMode: 'reps_load',
     equipment: ['dumbbells'],
+    muscleMapping: {
+      status: 'mapped',
+      modelVersion: muscleModelVersion,
+      source: 'starter_catalog',
+      primaryMuscles: ['gluteus_maximus', 'quadriceps'],
+      secondaryMuscles: ['hamstrings', 'adductors'],
+    },
   },
   {
     key: 'romanian_deadlift',
@@ -34,6 +44,13 @@ export const starterExerciseCatalog = [
     category: 'strength',
     trackingMode: 'reps_load',
     equipment: ['dumbbells'],
+    muscleMapping: {
+      status: 'mapped',
+      modelVersion: muscleModelVersion,
+      source: 'starter_catalog',
+      primaryMuscles: ['gluteus_maximus', 'hamstrings'],
+      secondaryMuscles: ['erector_spinae', 'adductors'],
+    },
   },
   {
     key: 'push_up',
@@ -42,6 +59,13 @@ export const starterExerciseCatalog = [
     category: 'strength',
     trackingMode: 'reps_load',
     equipment: ['bodyweight'],
+    muscleMapping: {
+      status: 'mapped',
+      modelVersion: muscleModelVersion,
+      source: 'starter_catalog',
+      primaryMuscles: ['chest_middle', 'triceps_brachii'],
+      secondaryMuscles: ['chest_upper', 'deltoid_anterior'],
+    },
   },
   {
     key: 'dumbbell_row',
@@ -50,6 +74,13 @@ export const starterExerciseCatalog = [
     category: 'strength',
     trackingMode: 'reps_load',
     equipment: ['dumbbells'],
+    muscleMapping: {
+      status: 'mapped',
+      modelVersion: muscleModelVersion,
+      source: 'starter_catalog',
+      primaryMuscles: ['latissimus_dorsi', 'rhomboids'],
+      secondaryMuscles: ['teres_major', 'deltoid_posterior', 'biceps_brachii'],
+    },
   },
   {
     key: 'overhead_press',
@@ -58,6 +89,13 @@ export const starterExerciseCatalog = [
     category: 'strength',
     trackingMode: 'reps_load',
     equipment: ['dumbbells'],
+    muscleMapping: {
+      status: 'mapped',
+      modelVersion: muscleModelVersion,
+      source: 'starter_catalog',
+      primaryMuscles: ['deltoid_anterior', 'deltoid_lateral'],
+      secondaryMuscles: ['triceps_brachii', 'trapezius'],
+    },
   },
   {
     key: 'plank',
@@ -66,6 +104,13 @@ export const starterExerciseCatalog = [
     category: 'strength',
     trackingMode: 'duration',
     equipment: ['bodyweight'],
+    muscleMapping: {
+      status: 'mapped',
+      modelVersion: muscleModelVersion,
+      source: 'starter_catalog',
+      primaryMuscles: ['rectus_abdominis'],
+      secondaryMuscles: ['obliques'],
+    },
   },
   {
     key: 'running',
@@ -74,6 +119,13 @@ export const starterExerciseCatalog = [
     category: 'cardio',
     trackingMode: 'duration_distance',
     equipment: ['open_space'],
+    muscleMapping: {
+      status: 'mapped',
+      modelVersion: muscleModelVersion,
+      source: 'starter_catalog',
+      primaryMuscles: ['gluteus_maximus', 'quadriceps', 'hamstrings'],
+      secondaryMuscles: ['gastrocnemius', 'soleus'],
+    },
   },
   {
     key: 'cycling',
@@ -82,6 +134,13 @@ export const starterExerciseCatalog = [
     category: 'cardio',
     trackingMode: 'duration_distance',
     equipment: ['bicycle'],
+    muscleMapping: {
+      status: 'mapped',
+      modelVersion: muscleModelVersion,
+      source: 'starter_catalog',
+      primaryMuscles: ['gluteus_maximus', 'quadriceps'],
+      secondaryMuscles: ['hamstrings', 'gastrocnemius'],
+    },
   },
   {
     key: 'mobility_flow',
@@ -90,6 +149,13 @@ export const starterExerciseCatalog = [
     category: 'mobility',
     trackingMode: 'duration',
     equipment: ['bodyweight'],
+    muscleMapping: {
+      status: 'unmapped',
+      modelVersion: null,
+      source: null,
+      primaryMuscles: [],
+      secondaryMuscles: [],
+    },
   },
 ] as const
 

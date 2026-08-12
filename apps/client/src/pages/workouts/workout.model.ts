@@ -2,6 +2,7 @@ import type {
   CreateWorkout,
   ExerciseCatalogItem,
   ExerciseEquipment,
+  ExerciseMuscleMapping,
   ExerciseTrackingMode,
   UpdateWorkout,
   Workout,
@@ -9,8 +10,10 @@ import type {
 } from '@myfitness/contracts'
 import {
   exerciseEquipmentOptions,
+  exerciseMuscleMappingSources,
   starterExerciseCatalog,
 } from '@myfitness/contracts/exercise-catalog.constants'
+import { mappableMuscleIds, muscleModelVersion } from '@myfitness/contracts/muscle-model.constants'
 
 import {
   correctionDraftTarget,
@@ -42,6 +45,8 @@ export type DraftCatalogItem = Pick<
 > & {
   equipment: readonly ExerciseEquipment[]
   equipmentNotes?: string | null
+  muscleMapping:
+    ExerciseCatalogItem['muscleMapping'] | (typeof starterExerciseCatalog)[number]['muscleMapping']
 }
 
 export type WorkoutSetDraft = {
@@ -60,6 +65,7 @@ export type WorkoutExerciseDraft = {
   trackingMode: ExerciseTrackingMode
   equipment: ExerciseEquipment[]
   equipmentNotes: string
+  muscleMapping?: ExerciseCatalogItem['muscleMapping']
   sets: WorkoutSetDraft[]
 }
 
@@ -112,6 +118,22 @@ const createSetDraft = (
 }
 
 export const createExerciseDraft = (item: DraftCatalogItem): WorkoutExerciseDraft => {
+  const muscleMapping: ExerciseMuscleMapping =
+    item.muscleMapping.status === 'mapped'
+      ? {
+          status: 'mapped',
+          modelVersion: item.muscleMapping.modelVersion,
+          source: item.muscleMapping.source,
+          primaryMuscles: [...item.muscleMapping.primaryMuscles],
+          secondaryMuscles: [...item.muscleMapping.secondaryMuscles],
+        }
+      : {
+          status: 'unmapped',
+          modelVersion: null,
+          source: null,
+          primaryMuscles: [],
+          secondaryMuscles: [],
+        }
   const base = {
     exerciseKey: item.key,
     name: item.name,
@@ -119,6 +141,7 @@ export const createExerciseDraft = (item: DraftCatalogItem): WorkoutExerciseDraf
     trackingMode: item.trackingMode,
     equipment: [...item.equipment],
     equipmentNotes: item.equipmentNotes ?? '',
+    muscleMapping,
   }
   const set = createSetDraft(base)
   return {
@@ -153,6 +176,51 @@ const draftNumber = (value: unknown, min: number, max: number) =>
 const workoutCategories = ['strength', 'cardio', 'mobility'] as const
 const workoutTrackingModes = ['reps_load', 'duration', 'duration_distance'] as const
 
+const isWorkoutMuscleIdArray = (value: unknown, maximum: number): value is string[] =>
+  Array.isArray(value) &&
+  value.length <= maximum &&
+  new Set(value).size === value.length &&
+  value.every((item) => mappableMuscleIds.includes(item as (typeof mappableMuscleIds)[number]))
+
+const isWorkoutMuscleMapping = (value: unknown) => {
+  if (!isDraftObject(value)) return false
+  if (
+    !hasOnlyDraftKeys(value, [
+      'status',
+      'modelVersion',
+      'source',
+      'primaryMuscles',
+      'secondaryMuscles',
+    ])
+  ) {
+    return false
+  }
+  if (value.status === 'unmapped') {
+    return (
+      value.modelVersion === null &&
+      value.source === null &&
+      Array.isArray(value.primaryMuscles) &&
+      value.primaryMuscles.length === 0 &&
+      Array.isArray(value.secondaryMuscles) &&
+      value.secondaryMuscles.length === 0
+    )
+  }
+  if (
+    value.status !== 'mapped' ||
+    value.modelVersion !== muscleModelVersion ||
+    !exerciseMuscleMappingSources.includes(
+      value.source as (typeof exerciseMuscleMappingSources)[number],
+    ) ||
+    !isWorkoutMuscleIdArray(value.primaryMuscles, 8) ||
+    value.primaryMuscles.length === 0 ||
+    !isWorkoutMuscleIdArray(value.secondaryMuscles, 12)
+  ) {
+    return false
+  }
+  const primary = new Set(value.primaryMuscles)
+  return !value.secondaryMuscles.some((muscleId) => primary.has(muscleId))
+}
+
 const isWorkoutSetDraft = (value: unknown) =>
   isDraftObject(value) &&
   hasOnlyDraftKeys(value, ['reps', 'load', 'durationMinutes', 'distanceKm', 'rpe', 'completed']) &&
@@ -172,6 +240,7 @@ const isWorkoutExerciseDraft = (value: unknown) =>
     'trackingMode',
     'equipment',
     'equipmentNotes',
+    'muscleMapping',
     'sets',
   ]) &&
   draftString(value.exerciseKey, 128) &&
@@ -184,6 +253,7 @@ const isWorkoutExerciseDraft = (value: unknown) =>
     exerciseEquipmentOptions.includes(item as (typeof exerciseEquipmentOptions)[number]),
   ) &&
   draftString(value.equipmentNotes, 300) &&
+  (value.muscleMapping === undefined || isWorkoutMuscleMapping(value.muscleMapping)) &&
   Array.isArray(value.sets) &&
   value.sets.length <= 50 &&
   value.sets.every(isWorkoutSetDraft)
@@ -314,6 +384,7 @@ const exerciseRequest = (
     trackingMode: exercise.trackingMode,
     equipment: exercise.equipment,
     ...(exercise.equipmentNotes ? { equipmentNotes: exercise.equipmentNotes } : {}),
+    ...(exercise.muscleMapping ? { muscleMapping: exercise.muscleMapping } : {}),
     sets: exercise.sets.map((set, setIndex) => ({
       position: setIndex + 1,
       kind: 'working',
@@ -399,6 +470,7 @@ export const draftFromWorkout = (workout: Workout, repeat = false): WorkoutDraft
       trackingMode: exercise.trackingMode ?? legacyTrackingMode(exercise),
       equipment: exercise.equipment ?? [],
       equipmentNotes: exercise.equipmentNotes ?? '',
+      ...(exercise.muscleMapping ? { muscleMapping: exercise.muscleMapping } : {}),
       sets: exercise.sets.map((set) => ({
         reps: set.reps === undefined ? '' : String(set.reps),
         load: set.load === undefined ? '' : String(set.load),

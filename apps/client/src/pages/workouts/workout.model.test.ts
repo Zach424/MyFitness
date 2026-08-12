@@ -48,6 +48,13 @@ describe('workout page model', () => {
     expect(request.exercises[0]).toMatchObject({
       trackingMode: 'reps_load',
       equipment: ['dumbbells'],
+      muscleMapping: {
+        status: 'mapped',
+        modelVersion: 'ilens-muscle-model-v1',
+        source: 'starter_catalog',
+        primaryMuscles: ['gluteus_maximus', 'quadriceps'],
+        secondaryMuscles: ['hamstrings', 'adductors'],
+      },
     })
     expect(request.exercises[0]?.sets[0]).toMatchObject({ reps: 10, load: 12, loadUnit: 'kg' })
   })
@@ -136,6 +143,13 @@ describe('workout page model', () => {
       trackingMode: 'reps_load' as const,
       equipment: ['kettlebell' as const],
       equipmentNotes: null,
+      muscleMapping: {
+        status: 'unmapped' as const,
+        modelVersion: null,
+        source: null,
+        primaryMuscles: [] as [],
+        secondaryMuscles: [] as [],
+      },
       catalogVersion: null,
       revision: 1,
       editable: true as const,

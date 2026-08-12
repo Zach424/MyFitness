@@ -946,6 +946,8 @@ describe('portable export bounded PostgreSQL snapshot', () => {
     try {
       await client.query('BEGIN')
       await client.query('SET LOCAL enable_seqscan = off')
+      await client.query('SET LOCAL enable_sort = off')
+      await client.query('SET LOCAL enable_incremental_sort = off')
       const plan = await client.query<{ 'QUERY PLAN': unknown }>(
         `EXPLAIN (FORMAT JSON, COSTS OFF)
          SELECT id, linked_at
@@ -1611,6 +1613,7 @@ describe('portable export bounded PostgreSQL snapshot', () => {
         'tracking_mode',
         'equipment',
         'equipment_notes',
+        'muscle_mapping',
       ].sort(),
     )
     expect(firstExerciseRows[0]).not.toHaveProperty('sets')
@@ -2013,6 +2016,13 @@ describe('portable export bounded PostgreSQL snapshot', () => {
         category: 'strength',
         trackingMode: 'reps_load',
         equipment: ['bodyweight'],
+        muscleMapping: {
+          status: 'mapped',
+          modelVersion: 'ilens-muscle-model-v1',
+          source: 'user_confirmed',
+          primaryMuscles: ['deltoid_anterior'],
+          secondaryMuscles: ['triceps_brachii'],
+        },
         sets: [
           {
             id: randomUUID(),

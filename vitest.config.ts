@@ -48,6 +48,12 @@ export default defineConfig({
         ),
       },
       {
+        find: '@myfitness/contracts/muscle-model.constants',
+        replacement: fileURLToPath(
+          new URL('./packages/contracts/src/muscle-model.constants.ts', import.meta.url),
+        ),
+      },
+      {
         find: '@myfitness/contracts/ai.constants',
         replacement: fileURLToPath(
           new URL('./packages/contracts/src/ai.constants.ts', import.meta.url),

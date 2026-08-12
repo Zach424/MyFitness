@@ -5,8 +5,10 @@ import {
   exerciseCatalogSources,
   exerciseCatalogVersion,
   exerciseEquipmentOptions,
+  exerciseMuscleMappingSources,
   exerciseTrackingModes,
 } from './exercise-catalog.constants'
+import { mappableMuscleIds, muscleModelVersion } from './muscle-model.constants'
 import { exerciseCategories } from './workout.constants'
 import { recordListQuerySchema, recordPageCursorSchema } from './pagination'
 
@@ -16,6 +18,68 @@ export const exerciseCatalogSourceSchema = z.enum(exerciseCatalogSources)
 export const exerciseCatalogRevisionActionSchema = z.enum(exerciseCatalogRevisionActions)
 export const exerciseTrackingModeSchema = z.enum(exerciseTrackingModes)
 export const exerciseEquipmentSchema = z.enum(exerciseEquipmentOptions)
+export const exerciseMuscleMappingSourceSchema = z.enum(exerciseMuscleMappingSources)
+export const mappableMuscleIdSchema = z.enum(mappableMuscleIds)
+
+const validateMuscleSets = (
+  value: {
+    primaryMuscles: Array<(typeof mappableMuscleIds)[number]>
+    secondaryMuscles: Array<(typeof mappableMuscleIds)[number]>
+  },
+  ctx: z.RefinementCtx,
+) => {
+  if (new Set(value.primaryMuscles).size !== value.primaryMuscles.length) {
+    ctx.addIssue({
+      code: 'custom',
+      message: 'primaryMuscles must not contain duplicates',
+      path: ['primaryMuscles'],
+    })
+  }
+  if (new Set(value.secondaryMuscles).size !== value.secondaryMuscles.length) {
+    ctx.addIssue({
+      code: 'custom',
+      message: 'secondaryMuscles must not contain duplicates',
+      path: ['secondaryMuscles'],
+    })
+  }
+  const primary = new Set(value.primaryMuscles)
+  if (value.secondaryMuscles.some((muscleId) => primary.has(muscleId))) {
+    ctx.addIssue({
+      code: 'custom',
+      message: 'primaryMuscles and secondaryMuscles must not overlap',
+      path: ['secondaryMuscles'],
+    })
+  }
+}
+
+export const exerciseMuscleMappingInputSchema = z
+  .object({
+    modelVersion: z.literal(muscleModelVersion),
+    primaryMuscles: z.array(mappableMuscleIdSchema).min(1).max(8),
+    secondaryMuscles: z.array(mappableMuscleIdSchema).max(12),
+  })
+  .strict()
+  .superRefine(validateMuscleSets)
+
+export const mappedExerciseMuscleMappingSchema = exerciseMuscleMappingInputSchema.safeExtend({
+  status: z.literal('mapped'),
+  source: exerciseMuscleMappingSourceSchema,
+})
+
+export const unmappedExerciseMuscleMappingSchema = z
+  .object({
+    status: z.literal('unmapped'),
+    modelVersion: z.null(),
+    source: z.null(),
+    primaryMuscles: z.tuple([]),
+    secondaryMuscles: z.tuple([]),
+  })
+  .strict()
+
+export const exerciseMuscleMappingSchema = z.discriminatedUnion('status', [
+  mappedExerciseMuscleMappingSchema,
+  unmappedExerciseMuscleMappingSchema,
+])
 
 const catalogNameSchema = z.string().trim().min(1).max(80)
 const aliasesSchema = z.array(z.string().trim().min(1).max(80)).max(8)
@@ -53,6 +117,7 @@ export const exerciseCatalogEntryInputBaseSchema = z
     trackingMode: exerciseTrackingModeSchema,
     equipment: equipmentSchema,
     equipmentNotes: z.string().trim().min(1).max(120).optional(),
+    muscleMapping: exerciseMuscleMappingInputSchema.nullable().optional(),
   })
   .strict()
 
@@ -73,6 +138,7 @@ const catalogDefinitionShape = {
   trackingMode: exerciseTrackingModeSchema,
   equipment: equipmentSchema,
   equipmentNotes: z.string().max(120).nullable(),
+  muscleMapping: exerciseMuscleMappingSchema,
 }
 
 export const starterExerciseCatalogItemSchema = z
@@ -136,6 +202,8 @@ export const exerciseCatalogEntryIdSchema = z.string().uuid()
 
 export type ExerciseEquipment = z.infer<typeof exerciseEquipmentSchema>
 export type ExerciseTrackingMode = z.infer<typeof exerciseTrackingModeSchema>
+export type ExerciseMuscleMappingInput = z.infer<typeof exerciseMuscleMappingInputSchema>
+export type ExerciseMuscleMapping = z.infer<typeof exerciseMuscleMappingSchema>
 export type CreateExerciseCatalogEntry = z.infer<typeof createExerciseCatalogEntrySchema>
 export type UpdateExerciseCatalogEntry = z.infer<typeof updateExerciseCatalogEntrySchema>
 export type StarterExerciseCatalogItem = z.infer<typeof starterExerciseCatalogItemSchema>

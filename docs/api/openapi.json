@@ -1395,7 +1395,7 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "starterVersion": { "type": "string", "enum": ["starter-2026-08-05-v1"] },
+                    "starterVersion": { "type": "string", "enum": ["starter-2026-08-12-v2"] },
                     "items": {
                       "type": "array",
                       "items": {
@@ -1447,9 +1447,140 @@
                                 "type": "string",
                                 "maxLength": 120
                               },
+                              "muscleMapping": {
+                                "oneOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "modelVersion": {
+                                        "type": "string",
+                                        "enum": ["ilens-muscle-model-v1"]
+                                      },
+                                      "primaryMuscles": {
+                                        "minItems": 1,
+                                        "maxItems": 8,
+                                        "type": "array",
+                                        "items": {
+                                          "type": "string",
+                                          "enum": [
+                                            "chest_upper",
+                                            "chest_middle",
+                                            "chest_lower",
+                                            "latissimus_dorsi",
+                                            "trapezius",
+                                            "rhomboids",
+                                            "teres_major",
+                                            "teres_minor",
+                                            "erector_spinae",
+                                            "deltoid_anterior",
+                                            "deltoid_lateral",
+                                            "deltoid_posterior",
+                                            "biceps_brachii",
+                                            "triceps_brachii",
+                                            "brachialis",
+                                            "forearms",
+                                            "gluteus_maximus",
+                                            "gluteus_medius",
+                                            "quadriceps",
+                                            "hamstrings",
+                                            "adductors",
+                                            "gastrocnemius",
+                                            "soleus",
+                                            "rectus_abdominis",
+                                            "obliques"
+                                          ]
+                                        }
+                                      },
+                                      "secondaryMuscles": {
+                                        "maxItems": 12,
+                                        "type": "array",
+                                        "items": {
+                                          "type": "string",
+                                          "enum": [
+                                            "chest_upper",
+                                            "chest_middle",
+                                            "chest_lower",
+                                            "latissimus_dorsi",
+                                            "trapezius",
+                                            "rhomboids",
+                                            "teres_major",
+                                            "teres_minor",
+                                            "erector_spinae",
+                                            "deltoid_anterior",
+                                            "deltoid_lateral",
+                                            "deltoid_posterior",
+                                            "biceps_brachii",
+                                            "triceps_brachii",
+                                            "brachialis",
+                                            "forearms",
+                                            "gluteus_maximus",
+                                            "gluteus_medius",
+                                            "quadriceps",
+                                            "hamstrings",
+                                            "adductors",
+                                            "gastrocnemius",
+                                            "soleus",
+                                            "rectus_abdominis",
+                                            "obliques"
+                                          ]
+                                        }
+                                      },
+                                      "status": { "type": "string", "enum": ["mapped"] },
+                                      "source": {
+                                        "type": "string",
+                                        "enum": ["starter_catalog", "user_confirmed"]
+                                      }
+                                    },
+                                    "required": [
+                                      "modelVersion",
+                                      "primaryMuscles",
+                                      "secondaryMuscles",
+                                      "status",
+                                      "source"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "status": { "type": "string", "enum": ["unmapped"] },
+                                      "modelVersion": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "enum": [null]
+                                      },
+                                      "source": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "enum": [null]
+                                      },
+                                      "primaryMuscles": {
+                                        "type": "array",
+                                        "items": { "anyOf": [] },
+                                        "minItems": 0,
+                                        "maxItems": 0
+                                      },
+                                      "secondaryMuscles": {
+                                        "type": "array",
+                                        "items": { "anyOf": [] },
+                                        "minItems": 0,
+                                        "maxItems": 0
+                                      }
+                                    },
+                                    "required": [
+                                      "status",
+                                      "modelVersion",
+                                      "source",
+                                      "primaryMuscles",
+                                      "secondaryMuscles"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                ]
+                              },
                               "catalogVersion": {
                                 "type": "string",
-                                "enum": ["starter-2026-08-05-v1"]
+                                "enum": ["starter-2026-08-12-v2"]
                               },
                               "revision": { "type": "number", "enum": [1] },
                               "editable": { "type": "boolean", "enum": [false] },
@@ -1467,6 +1598,7 @@
                               "trackingMode",
                               "equipment",
                               "equipmentNotes",
+                              "muscleMapping",
                               "catalogVersion",
                               "revision",
                               "editable",
@@ -1532,6 +1664,137 @@
                                 "type": "string",
                                 "maxLength": 120
                               },
+                              "muscleMapping": {
+                                "oneOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "modelVersion": {
+                                        "type": "string",
+                                        "enum": ["ilens-muscle-model-v1"]
+                                      },
+                                      "primaryMuscles": {
+                                        "minItems": 1,
+                                        "maxItems": 8,
+                                        "type": "array",
+                                        "items": {
+                                          "type": "string",
+                                          "enum": [
+                                            "chest_upper",
+                                            "chest_middle",
+                                            "chest_lower",
+                                            "latissimus_dorsi",
+                                            "trapezius",
+                                            "rhomboids",
+                                            "teres_major",
+                                            "teres_minor",
+                                            "erector_spinae",
+                                            "deltoid_anterior",
+                                            "deltoid_lateral",
+                                            "deltoid_posterior",
+                                            "biceps_brachii",
+                                            "triceps_brachii",
+                                            "brachialis",
+                                            "forearms",
+                                            "gluteus_maximus",
+                                            "gluteus_medius",
+                                            "quadriceps",
+                                            "hamstrings",
+                                            "adductors",
+                                            "gastrocnemius",
+                                            "soleus",
+                                            "rectus_abdominis",
+                                            "obliques"
+                                          ]
+                                        }
+                                      },
+                                      "secondaryMuscles": {
+                                        "maxItems": 12,
+                                        "type": "array",
+                                        "items": {
+                                          "type": "string",
+                                          "enum": [
+                                            "chest_upper",
+                                            "chest_middle",
+                                            "chest_lower",
+                                            "latissimus_dorsi",
+                                            "trapezius",
+                                            "rhomboids",
+                                            "teres_major",
+                                            "teres_minor",
+                                            "erector_spinae",
+                                            "deltoid_anterior",
+                                            "deltoid_lateral",
+                                            "deltoid_posterior",
+                                            "biceps_brachii",
+                                            "triceps_brachii",
+                                            "brachialis",
+                                            "forearms",
+                                            "gluteus_maximus",
+                                            "gluteus_medius",
+                                            "quadriceps",
+                                            "hamstrings",
+                                            "adductors",
+                                            "gastrocnemius",
+                                            "soleus",
+                                            "rectus_abdominis",
+                                            "obliques"
+                                          ]
+                                        }
+                                      },
+                                      "status": { "type": "string", "enum": ["mapped"] },
+                                      "source": {
+                                        "type": "string",
+                                        "enum": ["starter_catalog", "user_confirmed"]
+                                      }
+                                    },
+                                    "required": [
+                                      "modelVersion",
+                                      "primaryMuscles",
+                                      "secondaryMuscles",
+                                      "status",
+                                      "source"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "status": { "type": "string", "enum": ["unmapped"] },
+                                      "modelVersion": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "enum": [null]
+                                      },
+                                      "source": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "enum": [null]
+                                      },
+                                      "primaryMuscles": {
+                                        "type": "array",
+                                        "items": { "anyOf": [] },
+                                        "minItems": 0,
+                                        "maxItems": 0
+                                      },
+                                      "secondaryMuscles": {
+                                        "type": "array",
+                                        "items": { "anyOf": [] },
+                                        "minItems": 0,
+                                        "maxItems": 0
+                                      }
+                                    },
+                                    "required": [
+                                      "status",
+                                      "modelVersion",
+                                      "source",
+                                      "primaryMuscles",
+                                      "secondaryMuscles"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                ]
+                              },
                               "catalogVersion": {
                                 "type": "string",
                                 "nullable": true,
@@ -1572,6 +1835,7 @@
                               "trackingMode",
                               "equipment",
                               "equipmentNotes",
+                              "muscleMapping",
                               "catalogVersion",
                               "revision",
                               "editable",
@@ -1647,7 +1911,85 @@
                       ]
                     }
                   },
-                  "equipmentNotes": { "type": "string", "minLength": 1, "maxLength": 120 }
+                  "equipmentNotes": { "type": "string", "minLength": 1, "maxLength": 120 },
+                  "muscleMapping": {
+                    "nullable": true,
+                    "type": "object",
+                    "properties": {
+                      "modelVersion": { "type": "string", "enum": ["ilens-muscle-model-v1"] },
+                      "primaryMuscles": {
+                        "minItems": 1,
+                        "maxItems": 8,
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "chest_upper",
+                            "chest_middle",
+                            "chest_lower",
+                            "latissimus_dorsi",
+                            "trapezius",
+                            "rhomboids",
+                            "teres_major",
+                            "teres_minor",
+                            "erector_spinae",
+                            "deltoid_anterior",
+                            "deltoid_lateral",
+                            "deltoid_posterior",
+                            "biceps_brachii",
+                            "triceps_brachii",
+                            "brachialis",
+                            "forearms",
+                            "gluteus_maximus",
+                            "gluteus_medius",
+                            "quadriceps",
+                            "hamstrings",
+                            "adductors",
+                            "gastrocnemius",
+                            "soleus",
+                            "rectus_abdominis",
+                            "obliques"
+                          ]
+                        }
+                      },
+                      "secondaryMuscles": {
+                        "maxItems": 12,
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "chest_upper",
+                            "chest_middle",
+                            "chest_lower",
+                            "latissimus_dorsi",
+                            "trapezius",
+                            "rhomboids",
+                            "teres_major",
+                            "teres_minor",
+                            "erector_spinae",
+                            "deltoid_anterior",
+                            "deltoid_lateral",
+                            "deltoid_posterior",
+                            "biceps_brachii",
+                            "triceps_brachii",
+                            "brachialis",
+                            "forearms",
+                            "gluteus_maximus",
+                            "gluteus_medius",
+                            "quadriceps",
+                            "hamstrings",
+                            "adductors",
+                            "gastrocnemius",
+                            "soleus",
+                            "rectus_abdominis",
+                            "obliques"
+                          ]
+                        }
+                      }
+                    },
+                    "required": ["modelVersion", "primaryMuscles", "secondaryMuscles"],
+                    "additionalProperties": false
+                  }
                 },
                 "required": ["name", "category", "trackingMode", "equipment"],
                 "additionalProperties": false
@@ -1709,6 +2051,126 @@
                       }
                     },
                     "equipmentNotes": { "nullable": true, "type": "string", "maxLength": 120 },
+                    "muscleMapping": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "modelVersion": { "type": "string", "enum": ["ilens-muscle-model-v1"] },
+                            "primaryMuscles": {
+                              "minItems": 1,
+                              "maxItems": 8,
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "enum": [
+                                  "chest_upper",
+                                  "chest_middle",
+                                  "chest_lower",
+                                  "latissimus_dorsi",
+                                  "trapezius",
+                                  "rhomboids",
+                                  "teres_major",
+                                  "teres_minor",
+                                  "erector_spinae",
+                                  "deltoid_anterior",
+                                  "deltoid_lateral",
+                                  "deltoid_posterior",
+                                  "biceps_brachii",
+                                  "triceps_brachii",
+                                  "brachialis",
+                                  "forearms",
+                                  "gluteus_maximus",
+                                  "gluteus_medius",
+                                  "quadriceps",
+                                  "hamstrings",
+                                  "adductors",
+                                  "gastrocnemius",
+                                  "soleus",
+                                  "rectus_abdominis",
+                                  "obliques"
+                                ]
+                              }
+                            },
+                            "secondaryMuscles": {
+                              "maxItems": 12,
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "enum": [
+                                  "chest_upper",
+                                  "chest_middle",
+                                  "chest_lower",
+                                  "latissimus_dorsi",
+                                  "trapezius",
+                                  "rhomboids",
+                                  "teres_major",
+                                  "teres_minor",
+                                  "erector_spinae",
+                                  "deltoid_anterior",
+                                  "deltoid_lateral",
+                                  "deltoid_posterior",
+                                  "biceps_brachii",
+                                  "triceps_brachii",
+                                  "brachialis",
+                                  "forearms",
+                                  "gluteus_maximus",
+                                  "gluteus_medius",
+                                  "quadriceps",
+                                  "hamstrings",
+                                  "adductors",
+                                  "gastrocnemius",
+                                  "soleus",
+                                  "rectus_abdominis",
+                                  "obliques"
+                                ]
+                              }
+                            },
+                            "status": { "type": "string", "enum": ["mapped"] },
+                            "source": {
+                              "type": "string",
+                              "enum": ["starter_catalog", "user_confirmed"]
+                            }
+                          },
+                          "required": [
+                            "modelVersion",
+                            "primaryMuscles",
+                            "secondaryMuscles",
+                            "status",
+                            "source"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "status": { "type": "string", "enum": ["unmapped"] },
+                            "modelVersion": { "type": "string", "nullable": true, "enum": [null] },
+                            "source": { "type": "string", "nullable": true, "enum": [null] },
+                            "primaryMuscles": {
+                              "type": "array",
+                              "items": { "anyOf": [] },
+                              "minItems": 0,
+                              "maxItems": 0
+                            },
+                            "secondaryMuscles": {
+                              "type": "array",
+                              "items": { "anyOf": [] },
+                              "minItems": 0,
+                              "maxItems": 0
+                            }
+                          },
+                          "required": [
+                            "status",
+                            "modelVersion",
+                            "source",
+                            "primaryMuscles",
+                            "secondaryMuscles"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ]
+                    },
                     "catalogVersion": { "type": "string", "nullable": true, "enum": [null] },
                     "revision": {
                       "type": "integer",
@@ -1745,6 +2207,7 @@
                     "trackingMode",
                     "equipment",
                     "equipmentNotes",
+                    "muscleMapping",
                     "catalogVersion",
                     "revision",
                     "editable",
@@ -1818,6 +2281,84 @@
                     }
                   },
                   "equipmentNotes": { "type": "string", "minLength": 1, "maxLength": 120 },
+                  "muscleMapping": {
+                    "nullable": true,
+                    "type": "object",
+                    "properties": {
+                      "modelVersion": { "type": "string", "enum": ["ilens-muscle-model-v1"] },
+                      "primaryMuscles": {
+                        "minItems": 1,
+                        "maxItems": 8,
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "chest_upper",
+                            "chest_middle",
+                            "chest_lower",
+                            "latissimus_dorsi",
+                            "trapezius",
+                            "rhomboids",
+                            "teres_major",
+                            "teres_minor",
+                            "erector_spinae",
+                            "deltoid_anterior",
+                            "deltoid_lateral",
+                            "deltoid_posterior",
+                            "biceps_brachii",
+                            "triceps_brachii",
+                            "brachialis",
+                            "forearms",
+                            "gluteus_maximus",
+                            "gluteus_medius",
+                            "quadriceps",
+                            "hamstrings",
+                            "adductors",
+                            "gastrocnemius",
+                            "soleus",
+                            "rectus_abdominis",
+                            "obliques"
+                          ]
+                        }
+                      },
+                      "secondaryMuscles": {
+                        "maxItems": 12,
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "chest_upper",
+                            "chest_middle",
+                            "chest_lower",
+                            "latissimus_dorsi",
+                            "trapezius",
+                            "rhomboids",
+                            "teres_major",
+                            "teres_minor",
+                            "erector_spinae",
+                            "deltoid_anterior",
+                            "deltoid_lateral",
+                            "deltoid_posterior",
+                            "biceps_brachii",
+                            "triceps_brachii",
+                            "brachialis",
+                            "forearms",
+                            "gluteus_maximus",
+                            "gluteus_medius",
+                            "quadriceps",
+                            "hamstrings",
+                            "adductors",
+                            "gastrocnemius",
+                            "soleus",
+                            "rectus_abdominis",
+                            "obliques"
+                          ]
+                        }
+                      }
+                    },
+                    "required": ["modelVersion", "primaryMuscles", "secondaryMuscles"],
+                    "additionalProperties": false
+                  },
                   "expectedRevision": {
                     "type": "integer",
                     "minimum": 0,
@@ -1885,6 +2426,126 @@
                       }
                     },
                     "equipmentNotes": { "nullable": true, "type": "string", "maxLength": 120 },
+                    "muscleMapping": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "modelVersion": { "type": "string", "enum": ["ilens-muscle-model-v1"] },
+                            "primaryMuscles": {
+                              "minItems": 1,
+                              "maxItems": 8,
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "enum": [
+                                  "chest_upper",
+                                  "chest_middle",
+                                  "chest_lower",
+                                  "latissimus_dorsi",
+                                  "trapezius",
+                                  "rhomboids",
+                                  "teres_major",
+                                  "teres_minor",
+                                  "erector_spinae",
+                                  "deltoid_anterior",
+                                  "deltoid_lateral",
+                                  "deltoid_posterior",
+                                  "biceps_brachii",
+                                  "triceps_brachii",
+                                  "brachialis",
+                                  "forearms",
+                                  "gluteus_maximus",
+                                  "gluteus_medius",
+                                  "quadriceps",
+                                  "hamstrings",
+                                  "adductors",
+                                  "gastrocnemius",
+                                  "soleus",
+                                  "rectus_abdominis",
+                                  "obliques"
+                                ]
+                              }
+                            },
+                            "secondaryMuscles": {
+                              "maxItems": 12,
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "enum": [
+                                  "chest_upper",
+                                  "chest_middle",
+                                  "chest_lower",
+                                  "latissimus_dorsi",
+                                  "trapezius",
+                                  "rhomboids",
+                                  "teres_major",
+                                  "teres_minor",
+                                  "erector_spinae",
+                                  "deltoid_anterior",
+                                  "deltoid_lateral",
+                                  "deltoid_posterior",
+                                  "biceps_brachii",
+                                  "triceps_brachii",
+                                  "brachialis",
+                                  "forearms",
+                                  "gluteus_maximus",
+                                  "gluteus_medius",
+                                  "quadriceps",
+                                  "hamstrings",
+                                  "adductors",
+                                  "gastrocnemius",
+                                  "soleus",
+                                  "rectus_abdominis",
+                                  "obliques"
+                                ]
+                              }
+                            },
+                            "status": { "type": "string", "enum": ["mapped"] },
+                            "source": {
+                              "type": "string",
+                              "enum": ["starter_catalog", "user_confirmed"]
+                            }
+                          },
+                          "required": [
+                            "modelVersion",
+                            "primaryMuscles",
+                            "secondaryMuscles",
+                            "status",
+                            "source"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "status": { "type": "string", "enum": ["unmapped"] },
+                            "modelVersion": { "type": "string", "nullable": true, "enum": [null] },
+                            "source": { "type": "string", "nullable": true, "enum": [null] },
+                            "primaryMuscles": {
+                              "type": "array",
+                              "items": { "anyOf": [] },
+                              "minItems": 0,
+                              "maxItems": 0
+                            },
+                            "secondaryMuscles": {
+                              "type": "array",
+                              "items": { "anyOf": [] },
+                              "minItems": 0,
+                              "maxItems": 0
+                            }
+                          },
+                          "required": [
+                            "status",
+                            "modelVersion",
+                            "source",
+                            "primaryMuscles",
+                            "secondaryMuscles"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ]
+                    },
                     "catalogVersion": { "type": "string", "nullable": true, "enum": [null] },
                     "revision": {
                       "type": "integer",
@@ -1921,6 +2582,7 @@
                     "trackingMode",
                     "equipment",
                     "equipmentNotes",
+                    "muscleMapping",
                     "catalogVersion",
                     "revision",
                     "editable",
@@ -2011,6 +2673,126 @@
                       }
                     },
                     "equipmentNotes": { "nullable": true, "type": "string", "maxLength": 120 },
+                    "muscleMapping": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "modelVersion": { "type": "string", "enum": ["ilens-muscle-model-v1"] },
+                            "primaryMuscles": {
+                              "minItems": 1,
+                              "maxItems": 8,
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "enum": [
+                                  "chest_upper",
+                                  "chest_middle",
+                                  "chest_lower",
+                                  "latissimus_dorsi",
+                                  "trapezius",
+                                  "rhomboids",
+                                  "teres_major",
+                                  "teres_minor",
+                                  "erector_spinae",
+                                  "deltoid_anterior",
+                                  "deltoid_lateral",
+                                  "deltoid_posterior",
+                                  "biceps_brachii",
+                                  "triceps_brachii",
+                                  "brachialis",
+                                  "forearms",
+                                  "gluteus_maximus",
+                                  "gluteus_medius",
+                                  "quadriceps",
+                                  "hamstrings",
+                                  "adductors",
+                                  "gastrocnemius",
+                                  "soleus",
+                                  "rectus_abdominis",
+                                  "obliques"
+                                ]
+                              }
+                            },
+                            "secondaryMuscles": {
+                              "maxItems": 12,
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "enum": [
+                                  "chest_upper",
+                                  "chest_middle",
+                                  "chest_lower",
+                                  "latissimus_dorsi",
+                                  "trapezius",
+                                  "rhomboids",
+                                  "teres_major",
+                                  "teres_minor",
+                                  "erector_spinae",
+                                  "deltoid_anterior",
+                                  "deltoid_lateral",
+                                  "deltoid_posterior",
+                                  "biceps_brachii",
+                                  "triceps_brachii",
+                                  "brachialis",
+                                  "forearms",
+                                  "gluteus_maximus",
+                                  "gluteus_medius",
+                                  "quadriceps",
+                                  "hamstrings",
+                                  "adductors",
+                                  "gastrocnemius",
+                                  "soleus",
+                                  "rectus_abdominis",
+                                  "obliques"
+                                ]
+                              }
+                            },
+                            "status": { "type": "string", "enum": ["mapped"] },
+                            "source": {
+                              "type": "string",
+                              "enum": ["starter_catalog", "user_confirmed"]
+                            }
+                          },
+                          "required": [
+                            "modelVersion",
+                            "primaryMuscles",
+                            "secondaryMuscles",
+                            "status",
+                            "source"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "status": { "type": "string", "enum": ["unmapped"] },
+                            "modelVersion": { "type": "string", "nullable": true, "enum": [null] },
+                            "source": { "type": "string", "nullable": true, "enum": [null] },
+                            "primaryMuscles": {
+                              "type": "array",
+                              "items": { "anyOf": [] },
+                              "minItems": 0,
+                              "maxItems": 0
+                            },
+                            "secondaryMuscles": {
+                              "type": "array",
+                              "items": { "anyOf": [] },
+                              "minItems": 0,
+                              "maxItems": 0
+                            }
+                          },
+                          "required": [
+                            "status",
+                            "modelVersion",
+                            "source",
+                            "primaryMuscles",
+                            "secondaryMuscles"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ]
+                    },
                     "catalogVersion": { "type": "string", "nullable": true, "enum": [null] },
                     "revision": {
                       "type": "integer",
@@ -2047,6 +2829,7 @@
                     "trackingMode",
                     "equipment",
                     "equipmentNotes",
+                    "muscleMapping",
                     "catalogVersion",
                     "revision",
                     "editable",
@@ -2163,6 +2946,133 @@
                             "type": "string",
                             "maxLength": 120
                           },
+                          "muscleMapping": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "modelVersion": {
+                                    "type": "string",
+                                    "enum": ["ilens-muscle-model-v1"]
+                                  },
+                                  "primaryMuscles": {
+                                    "minItems": 1,
+                                    "maxItems": 8,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string",
+                                      "enum": [
+                                        "chest_upper",
+                                        "chest_middle",
+                                        "chest_lower",
+                                        "latissimus_dorsi",
+                                        "trapezius",
+                                        "rhomboids",
+                                        "teres_major",
+                                        "teres_minor",
+                                        "erector_spinae",
+                                        "deltoid_anterior",
+                                        "deltoid_lateral",
+                                        "deltoid_posterior",
+                                        "biceps_brachii",
+                                        "triceps_brachii",
+                                        "brachialis",
+                                        "forearms",
+                                        "gluteus_maximus",
+                                        "gluteus_medius",
+                                        "quadriceps",
+                                        "hamstrings",
+                                        "adductors",
+                                        "gastrocnemius",
+                                        "soleus",
+                                        "rectus_abdominis",
+                                        "obliques"
+                                      ]
+                                    }
+                                  },
+                                  "secondaryMuscles": {
+                                    "maxItems": 12,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string",
+                                      "enum": [
+                                        "chest_upper",
+                                        "chest_middle",
+                                        "chest_lower",
+                                        "latissimus_dorsi",
+                                        "trapezius",
+                                        "rhomboids",
+                                        "teres_major",
+                                        "teres_minor",
+                                        "erector_spinae",
+                                        "deltoid_anterior",
+                                        "deltoid_lateral",
+                                        "deltoid_posterior",
+                                        "biceps_brachii",
+                                        "triceps_brachii",
+                                        "brachialis",
+                                        "forearms",
+                                        "gluteus_maximus",
+                                        "gluteus_medius",
+                                        "quadriceps",
+                                        "hamstrings",
+                                        "adductors",
+                                        "gastrocnemius",
+                                        "soleus",
+                                        "rectus_abdominis",
+                                        "obliques"
+                                      ]
+                                    }
+                                  },
+                                  "status": { "type": "string", "enum": ["mapped"] },
+                                  "source": {
+                                    "type": "string",
+                                    "enum": ["starter_catalog", "user_confirmed"]
+                                  }
+                                },
+                                "required": [
+                                  "modelVersion",
+                                  "primaryMuscles",
+                                  "secondaryMuscles",
+                                  "status",
+                                  "source"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": { "type": "string", "enum": ["unmapped"] },
+                                  "modelVersion": {
+                                    "type": "string",
+                                    "nullable": true,
+                                    "enum": [null]
+                                  },
+                                  "source": { "type": "string", "nullable": true, "enum": [null] },
+                                  "primaryMuscles": {
+                                    "type": "array",
+                                    "items": { "anyOf": [] },
+                                    "minItems": 0,
+                                    "maxItems": 0
+                                  },
+                                  "secondaryMuscles": {
+                                    "type": "array",
+                                    "items": { "anyOf": [] },
+                                    "minItems": 0,
+                                    "maxItems": 0
+                                  }
+                                },
+                                "required": [
+                                  "status",
+                                  "modelVersion",
+                                  "source",
+                                  "primaryMuscles",
+                                  "secondaryMuscles"
+                                ],
+                                "additionalProperties": false
+                              }
+                            ]
+                          },
                           "catalogVersion": { "type": "string", "nullable": true, "enum": [null] },
                           "revision": {
                             "type": "integer",
@@ -2208,6 +3118,7 @@
                           "trackingMode",
                           "equipment",
                           "equipmentNotes",
+                          "muscleMapping",
                           "catalogVersion",
                           "revision",
                           "editable",
@@ -14856,6 +15767,133 @@
                           }
                         },
                         "equipmentNotes": { "type": "string", "minLength": 1, "maxLength": 120 },
+                        "muscleMapping": {
+                          "oneOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "modelVersion": {
+                                  "type": "string",
+                                  "enum": ["ilens-muscle-model-v1"]
+                                },
+                                "primaryMuscles": {
+                                  "minItems": 1,
+                                  "maxItems": 8,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "enum": [
+                                      "chest_upper",
+                                      "chest_middle",
+                                      "chest_lower",
+                                      "latissimus_dorsi",
+                                      "trapezius",
+                                      "rhomboids",
+                                      "teres_major",
+                                      "teres_minor",
+                                      "erector_spinae",
+                                      "deltoid_anterior",
+                                      "deltoid_lateral",
+                                      "deltoid_posterior",
+                                      "biceps_brachii",
+                                      "triceps_brachii",
+                                      "brachialis",
+                                      "forearms",
+                                      "gluteus_maximus",
+                                      "gluteus_medius",
+                                      "quadriceps",
+                                      "hamstrings",
+                                      "adductors",
+                                      "gastrocnemius",
+                                      "soleus",
+                                      "rectus_abdominis",
+                                      "obliques"
+                                    ]
+                                  }
+                                },
+                                "secondaryMuscles": {
+                                  "maxItems": 12,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "enum": [
+                                      "chest_upper",
+                                      "chest_middle",
+                                      "chest_lower",
+                                      "latissimus_dorsi",
+                                      "trapezius",
+                                      "rhomboids",
+                                      "teres_major",
+                                      "teres_minor",
+                                      "erector_spinae",
+                                      "deltoid_anterior",
+                                      "deltoid_lateral",
+                                      "deltoid_posterior",
+                                      "biceps_brachii",
+                                      "triceps_brachii",
+                                      "brachialis",
+                                      "forearms",
+                                      "gluteus_maximus",
+                                      "gluteus_medius",
+                                      "quadriceps",
+                                      "hamstrings",
+                                      "adductors",
+                                      "gastrocnemius",
+                                      "soleus",
+                                      "rectus_abdominis",
+                                      "obliques"
+                                    ]
+                                  }
+                                },
+                                "status": { "type": "string", "enum": ["mapped"] },
+                                "source": {
+                                  "type": "string",
+                                  "enum": ["starter_catalog", "user_confirmed"]
+                                }
+                              },
+                              "required": [
+                                "modelVersion",
+                                "primaryMuscles",
+                                "secondaryMuscles",
+                                "status",
+                                "source"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "status": { "type": "string", "enum": ["unmapped"] },
+                                "modelVersion": {
+                                  "type": "string",
+                                  "nullable": true,
+                                  "enum": [null]
+                                },
+                                "source": { "type": "string", "nullable": true, "enum": [null] },
+                                "primaryMuscles": {
+                                  "type": "array",
+                                  "items": { "anyOf": [] },
+                                  "minItems": 0,
+                                  "maxItems": 0
+                                },
+                                "secondaryMuscles": {
+                                  "type": "array",
+                                  "items": { "anyOf": [] },
+                                  "minItems": 0,
+                                  "maxItems": 0
+                                }
+                              },
+                              "required": [
+                                "status",
+                                "modelVersion",
+                                "source",
+                                "primaryMuscles",
+                                "secondaryMuscles"
+                              ],
+                              "additionalProperties": false
+                            }
+                          ]
+                        },
                         "notes": { "type": "string", "maxLength": 300 },
                         "sets": {
                           "minItems": 1,
@@ -14998,6 +16036,133 @@
                             }
                           },
                           "equipmentNotes": { "type": "string", "minLength": 1, "maxLength": 120 },
+                          "muscleMapping": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "modelVersion": {
+                                    "type": "string",
+                                    "enum": ["ilens-muscle-model-v1"]
+                                  },
+                                  "primaryMuscles": {
+                                    "minItems": 1,
+                                    "maxItems": 8,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string",
+                                      "enum": [
+                                        "chest_upper",
+                                        "chest_middle",
+                                        "chest_lower",
+                                        "latissimus_dorsi",
+                                        "trapezius",
+                                        "rhomboids",
+                                        "teres_major",
+                                        "teres_minor",
+                                        "erector_spinae",
+                                        "deltoid_anterior",
+                                        "deltoid_lateral",
+                                        "deltoid_posterior",
+                                        "biceps_brachii",
+                                        "triceps_brachii",
+                                        "brachialis",
+                                        "forearms",
+                                        "gluteus_maximus",
+                                        "gluteus_medius",
+                                        "quadriceps",
+                                        "hamstrings",
+                                        "adductors",
+                                        "gastrocnemius",
+                                        "soleus",
+                                        "rectus_abdominis",
+                                        "obliques"
+                                      ]
+                                    }
+                                  },
+                                  "secondaryMuscles": {
+                                    "maxItems": 12,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string",
+                                      "enum": [
+                                        "chest_upper",
+                                        "chest_middle",
+                                        "chest_lower",
+                                        "latissimus_dorsi",
+                                        "trapezius",
+                                        "rhomboids",
+                                        "teres_major",
+                                        "teres_minor",
+                                        "erector_spinae",
+                                        "deltoid_anterior",
+                                        "deltoid_lateral",
+                                        "deltoid_posterior",
+                                        "biceps_brachii",
+                                        "triceps_brachii",
+                                        "brachialis",
+                                        "forearms",
+                                        "gluteus_maximus",
+                                        "gluteus_medius",
+                                        "quadriceps",
+                                        "hamstrings",
+                                        "adductors",
+                                        "gastrocnemius",
+                                        "soleus",
+                                        "rectus_abdominis",
+                                        "obliques"
+                                      ]
+                                    }
+                                  },
+                                  "status": { "type": "string", "enum": ["mapped"] },
+                                  "source": {
+                                    "type": "string",
+                                    "enum": ["starter_catalog", "user_confirmed"]
+                                  }
+                                },
+                                "required": [
+                                  "modelVersion",
+                                  "primaryMuscles",
+                                  "secondaryMuscles",
+                                  "status",
+                                  "source"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": { "type": "string", "enum": ["unmapped"] },
+                                  "modelVersion": {
+                                    "type": "string",
+                                    "nullable": true,
+                                    "enum": [null]
+                                  },
+                                  "source": { "type": "string", "nullable": true, "enum": [null] },
+                                  "primaryMuscles": {
+                                    "type": "array",
+                                    "items": { "anyOf": [] },
+                                    "minItems": 0,
+                                    "maxItems": 0
+                                  },
+                                  "secondaryMuscles": {
+                                    "type": "array",
+                                    "items": { "anyOf": [] },
+                                    "minItems": 0,
+                                    "maxItems": 0
+                                  }
+                                },
+                                "required": [
+                                  "status",
+                                  "modelVersion",
+                                  "source",
+                                  "primaryMuscles",
+                                  "secondaryMuscles"
+                                ],
+                                "additionalProperties": false
+                              }
+                            ]
+                          },
                           "notes": { "type": "string", "maxLength": 300 },
                           "sets": {
                             "type": "array",
@@ -15251,6 +16416,137 @@
                                   "type": "string",
                                   "minLength": 1,
                                   "maxLength": 120
+                                },
+                                "muscleMapping": {
+                                  "oneOf": [
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "modelVersion": {
+                                          "type": "string",
+                                          "enum": ["ilens-muscle-model-v1"]
+                                        },
+                                        "primaryMuscles": {
+                                          "minItems": 1,
+                                          "maxItems": 8,
+                                          "type": "array",
+                                          "items": {
+                                            "type": "string",
+                                            "enum": [
+                                              "chest_upper",
+                                              "chest_middle",
+                                              "chest_lower",
+                                              "latissimus_dorsi",
+                                              "trapezius",
+                                              "rhomboids",
+                                              "teres_major",
+                                              "teres_minor",
+                                              "erector_spinae",
+                                              "deltoid_anterior",
+                                              "deltoid_lateral",
+                                              "deltoid_posterior",
+                                              "biceps_brachii",
+                                              "triceps_brachii",
+                                              "brachialis",
+                                              "forearms",
+                                              "gluteus_maximus",
+                                              "gluteus_medius",
+                                              "quadriceps",
+                                              "hamstrings",
+                                              "adductors",
+                                              "gastrocnemius",
+                                              "soleus",
+                                              "rectus_abdominis",
+                                              "obliques"
+                                            ]
+                                          }
+                                        },
+                                        "secondaryMuscles": {
+                                          "maxItems": 12,
+                                          "type": "array",
+                                          "items": {
+                                            "type": "string",
+                                            "enum": [
+                                              "chest_upper",
+                                              "chest_middle",
+                                              "chest_lower",
+                                              "latissimus_dorsi",
+                                              "trapezius",
+                                              "rhomboids",
+                                              "teres_major",
+                                              "teres_minor",
+                                              "erector_spinae",
+                                              "deltoid_anterior",
+                                              "deltoid_lateral",
+                                              "deltoid_posterior",
+                                              "biceps_brachii",
+                                              "triceps_brachii",
+                                              "brachialis",
+                                              "forearms",
+                                              "gluteus_maximus",
+                                              "gluteus_medius",
+                                              "quadriceps",
+                                              "hamstrings",
+                                              "adductors",
+                                              "gastrocnemius",
+                                              "soleus",
+                                              "rectus_abdominis",
+                                              "obliques"
+                                            ]
+                                          }
+                                        },
+                                        "status": { "type": "string", "enum": ["mapped"] },
+                                        "source": {
+                                          "type": "string",
+                                          "enum": ["starter_catalog", "user_confirmed"]
+                                        }
+                                      },
+                                      "required": [
+                                        "modelVersion",
+                                        "primaryMuscles",
+                                        "secondaryMuscles",
+                                        "status",
+                                        "source"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "status": { "type": "string", "enum": ["unmapped"] },
+                                        "modelVersion": {
+                                          "type": "string",
+                                          "nullable": true,
+                                          "enum": [null]
+                                        },
+                                        "source": {
+                                          "type": "string",
+                                          "nullable": true,
+                                          "enum": [null]
+                                        },
+                                        "primaryMuscles": {
+                                          "type": "array",
+                                          "items": { "anyOf": [] },
+                                          "minItems": 0,
+                                          "maxItems": 0
+                                        },
+                                        "secondaryMuscles": {
+                                          "type": "array",
+                                          "items": { "anyOf": [] },
+                                          "minItems": 0,
+                                          "maxItems": 0
+                                        }
+                                      },
+                                      "required": [
+                                        "status",
+                                        "modelVersion",
+                                        "source",
+                                        "primaryMuscles",
+                                        "secondaryMuscles"
+                                      ],
+                                      "additionalProperties": false
+                                    }
+                                  ]
                                 },
                                 "notes": { "type": "string", "maxLength": 300 },
                                 "sets": {
@@ -15510,6 +16806,133 @@
                             }
                           },
                           "equipmentNotes": { "type": "string", "minLength": 1, "maxLength": 120 },
+                          "muscleMapping": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "modelVersion": {
+                                    "type": "string",
+                                    "enum": ["ilens-muscle-model-v1"]
+                                  },
+                                  "primaryMuscles": {
+                                    "minItems": 1,
+                                    "maxItems": 8,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string",
+                                      "enum": [
+                                        "chest_upper",
+                                        "chest_middle",
+                                        "chest_lower",
+                                        "latissimus_dorsi",
+                                        "trapezius",
+                                        "rhomboids",
+                                        "teres_major",
+                                        "teres_minor",
+                                        "erector_spinae",
+                                        "deltoid_anterior",
+                                        "deltoid_lateral",
+                                        "deltoid_posterior",
+                                        "biceps_brachii",
+                                        "triceps_brachii",
+                                        "brachialis",
+                                        "forearms",
+                                        "gluteus_maximus",
+                                        "gluteus_medius",
+                                        "quadriceps",
+                                        "hamstrings",
+                                        "adductors",
+                                        "gastrocnemius",
+                                        "soleus",
+                                        "rectus_abdominis",
+                                        "obliques"
+                                      ]
+                                    }
+                                  },
+                                  "secondaryMuscles": {
+                                    "maxItems": 12,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string",
+                                      "enum": [
+                                        "chest_upper",
+                                        "chest_middle",
+                                        "chest_lower",
+                                        "latissimus_dorsi",
+                                        "trapezius",
+                                        "rhomboids",
+                                        "teres_major",
+                                        "teres_minor",
+                                        "erector_spinae",
+                                        "deltoid_anterior",
+                                        "deltoid_lateral",
+                                        "deltoid_posterior",
+                                        "biceps_brachii",
+                                        "triceps_brachii",
+                                        "brachialis",
+                                        "forearms",
+                                        "gluteus_maximus",
+                                        "gluteus_medius",
+                                        "quadriceps",
+                                        "hamstrings",
+                                        "adductors",
+                                        "gastrocnemius",
+                                        "soleus",
+                                        "rectus_abdominis",
+                                        "obliques"
+                                      ]
+                                    }
+                                  },
+                                  "status": { "type": "string", "enum": ["mapped"] },
+                                  "source": {
+                                    "type": "string",
+                                    "enum": ["starter_catalog", "user_confirmed"]
+                                  }
+                                },
+                                "required": [
+                                  "modelVersion",
+                                  "primaryMuscles",
+                                  "secondaryMuscles",
+                                  "status",
+                                  "source"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": { "type": "string", "enum": ["unmapped"] },
+                                  "modelVersion": {
+                                    "type": "string",
+                                    "nullable": true,
+                                    "enum": [null]
+                                  },
+                                  "source": { "type": "string", "nullable": true, "enum": [null] },
+                                  "primaryMuscles": {
+                                    "type": "array",
+                                    "items": { "anyOf": [] },
+                                    "minItems": 0,
+                                    "maxItems": 0
+                                  },
+                                  "secondaryMuscles": {
+                                    "type": "array",
+                                    "items": { "anyOf": [] },
+                                    "minItems": 0,
+                                    "maxItems": 0
+                                  }
+                                },
+                                "required": [
+                                  "status",
+                                  "modelVersion",
+                                  "source",
+                                  "primaryMuscles",
+                                  "secondaryMuscles"
+                                ],
+                                "additionalProperties": false
+                              }
+                            ]
+                          },
                           "notes": { "type": "string", "maxLength": 300 },
                           "sets": {
                             "type": "array",
@@ -15738,6 +17161,133 @@
                           }
                         },
                         "equipmentNotes": { "type": "string", "minLength": 1, "maxLength": 120 },
+                        "muscleMapping": {
+                          "oneOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "modelVersion": {
+                                  "type": "string",
+                                  "enum": ["ilens-muscle-model-v1"]
+                                },
+                                "primaryMuscles": {
+                                  "minItems": 1,
+                                  "maxItems": 8,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "enum": [
+                                      "chest_upper",
+                                      "chest_middle",
+                                      "chest_lower",
+                                      "latissimus_dorsi",
+                                      "trapezius",
+                                      "rhomboids",
+                                      "teres_major",
+                                      "teres_minor",
+                                      "erector_spinae",
+                                      "deltoid_anterior",
+                                      "deltoid_lateral",
+                                      "deltoid_posterior",
+                                      "biceps_brachii",
+                                      "triceps_brachii",
+                                      "brachialis",
+                                      "forearms",
+                                      "gluteus_maximus",
+                                      "gluteus_medius",
+                                      "quadriceps",
+                                      "hamstrings",
+                                      "adductors",
+                                      "gastrocnemius",
+                                      "soleus",
+                                      "rectus_abdominis",
+                                      "obliques"
+                                    ]
+                                  }
+                                },
+                                "secondaryMuscles": {
+                                  "maxItems": 12,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "enum": [
+                                      "chest_upper",
+                                      "chest_middle",
+                                      "chest_lower",
+                                      "latissimus_dorsi",
+                                      "trapezius",
+                                      "rhomboids",
+                                      "teres_major",
+                                      "teres_minor",
+                                      "erector_spinae",
+                                      "deltoid_anterior",
+                                      "deltoid_lateral",
+                                      "deltoid_posterior",
+                                      "biceps_brachii",
+                                      "triceps_brachii",
+                                      "brachialis",
+                                      "forearms",
+                                      "gluteus_maximus",
+                                      "gluteus_medius",
+                                      "quadriceps",
+                                      "hamstrings",
+                                      "adductors",
+                                      "gastrocnemius",
+                                      "soleus",
+                                      "rectus_abdominis",
+                                      "obliques"
+                                    ]
+                                  }
+                                },
+                                "status": { "type": "string", "enum": ["mapped"] },
+                                "source": {
+                                  "type": "string",
+                                  "enum": ["starter_catalog", "user_confirmed"]
+                                }
+                              },
+                              "required": [
+                                "modelVersion",
+                                "primaryMuscles",
+                                "secondaryMuscles",
+                                "status",
+                                "source"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "status": { "type": "string", "enum": ["unmapped"] },
+                                "modelVersion": {
+                                  "type": "string",
+                                  "nullable": true,
+                                  "enum": [null]
+                                },
+                                "source": { "type": "string", "nullable": true, "enum": [null] },
+                                "primaryMuscles": {
+                                  "type": "array",
+                                  "items": { "anyOf": [] },
+                                  "minItems": 0,
+                                  "maxItems": 0
+                                },
+                                "secondaryMuscles": {
+                                  "type": "array",
+                                  "items": { "anyOf": [] },
+                                  "minItems": 0,
+                                  "maxItems": 0
+                                }
+                              },
+                              "required": [
+                                "status",
+                                "modelVersion",
+                                "source",
+                                "primaryMuscles",
+                                "secondaryMuscles"
+                              ],
+                              "additionalProperties": false
+                            }
+                          ]
+                        },
                         "notes": { "type": "string", "maxLength": 300 },
                         "sets": {
                           "minItems": 1,
@@ -15887,6 +17437,133 @@
                             }
                           },
                           "equipmentNotes": { "type": "string", "minLength": 1, "maxLength": 120 },
+                          "muscleMapping": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "modelVersion": {
+                                    "type": "string",
+                                    "enum": ["ilens-muscle-model-v1"]
+                                  },
+                                  "primaryMuscles": {
+                                    "minItems": 1,
+                                    "maxItems": 8,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string",
+                                      "enum": [
+                                        "chest_upper",
+                                        "chest_middle",
+                                        "chest_lower",
+                                        "latissimus_dorsi",
+                                        "trapezius",
+                                        "rhomboids",
+                                        "teres_major",
+                                        "teres_minor",
+                                        "erector_spinae",
+                                        "deltoid_anterior",
+                                        "deltoid_lateral",
+                                        "deltoid_posterior",
+                                        "biceps_brachii",
+                                        "triceps_brachii",
+                                        "brachialis",
+                                        "forearms",
+                                        "gluteus_maximus",
+                                        "gluteus_medius",
+                                        "quadriceps",
+                                        "hamstrings",
+                                        "adductors",
+                                        "gastrocnemius",
+                                        "soleus",
+                                        "rectus_abdominis",
+                                        "obliques"
+                                      ]
+                                    }
+                                  },
+                                  "secondaryMuscles": {
+                                    "maxItems": 12,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string",
+                                      "enum": [
+                                        "chest_upper",
+                                        "chest_middle",
+                                        "chest_lower",
+                                        "latissimus_dorsi",
+                                        "trapezius",
+                                        "rhomboids",
+                                        "teres_major",
+                                        "teres_minor",
+                                        "erector_spinae",
+                                        "deltoid_anterior",
+                                        "deltoid_lateral",
+                                        "deltoid_posterior",
+                                        "biceps_brachii",
+                                        "triceps_brachii",
+                                        "brachialis",
+                                        "forearms",
+                                        "gluteus_maximus",
+                                        "gluteus_medius",
+                                        "quadriceps",
+                                        "hamstrings",
+                                        "adductors",
+                                        "gastrocnemius",
+                                        "soleus",
+                                        "rectus_abdominis",
+                                        "obliques"
+                                      ]
+                                    }
+                                  },
+                                  "status": { "type": "string", "enum": ["mapped"] },
+                                  "source": {
+                                    "type": "string",
+                                    "enum": ["starter_catalog", "user_confirmed"]
+                                  }
+                                },
+                                "required": [
+                                  "modelVersion",
+                                  "primaryMuscles",
+                                  "secondaryMuscles",
+                                  "status",
+                                  "source"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": { "type": "string", "enum": ["unmapped"] },
+                                  "modelVersion": {
+                                    "type": "string",
+                                    "nullable": true,
+                                    "enum": [null]
+                                  },
+                                  "source": { "type": "string", "nullable": true, "enum": [null] },
+                                  "primaryMuscles": {
+                                    "type": "array",
+                                    "items": { "anyOf": [] },
+                                    "minItems": 0,
+                                    "maxItems": 0
+                                  },
+                                  "secondaryMuscles": {
+                                    "type": "array",
+                                    "items": { "anyOf": [] },
+                                    "minItems": 0,
+                                    "maxItems": 0
+                                  }
+                                },
+                                "required": [
+                                  "status",
+                                  "modelVersion",
+                                  "source",
+                                  "primaryMuscles",
+                                  "secondaryMuscles"
+                                ],
+                                "additionalProperties": false
+                              }
+                            ]
+                          },
                           "notes": { "type": "string", "maxLength": 300 },
                           "sets": {
                             "type": "array",
@@ -16179,6 +17856,137 @@
                                   "type": "string",
                                   "minLength": 1,
                                   "maxLength": 120
+                                },
+                                "muscleMapping": {
+                                  "oneOf": [
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "modelVersion": {
+                                          "type": "string",
+                                          "enum": ["ilens-muscle-model-v1"]
+                                        },
+                                        "primaryMuscles": {
+                                          "minItems": 1,
+                                          "maxItems": 8,
+                                          "type": "array",
+                                          "items": {
+                                            "type": "string",
+                                            "enum": [
+                                              "chest_upper",
+                                              "chest_middle",
+                                              "chest_lower",
+                                              "latissimus_dorsi",
+                                              "trapezius",
+                                              "rhomboids",
+                                              "teres_major",
+                                              "teres_minor",
+                                              "erector_spinae",
+                                              "deltoid_anterior",
+                                              "deltoid_lateral",
+                                              "deltoid_posterior",
+                                              "biceps_brachii",
+                                              "triceps_brachii",
+                                              "brachialis",
+                                              "forearms",
+                                              "gluteus_maximus",
+                                              "gluteus_medius",
+                                              "quadriceps",
+                                              "hamstrings",
+                                              "adductors",
+                                              "gastrocnemius",
+                                              "soleus",
+                                              "rectus_abdominis",
+                                              "obliques"
+                                            ]
+                                          }
+                                        },
+                                        "secondaryMuscles": {
+                                          "maxItems": 12,
+                                          "type": "array",
+                                          "items": {
+                                            "type": "string",
+                                            "enum": [
+                                              "chest_upper",
+                                              "chest_middle",
+                                              "chest_lower",
+                                              "latissimus_dorsi",
+                                              "trapezius",
+                                              "rhomboids",
+                                              "teres_major",
+                                              "teres_minor",
+                                              "erector_spinae",
+                                              "deltoid_anterior",
+                                              "deltoid_lateral",
+                                              "deltoid_posterior",
+                                              "biceps_brachii",
+                                              "triceps_brachii",
+                                              "brachialis",
+                                              "forearms",
+                                              "gluteus_maximus",
+                                              "gluteus_medius",
+                                              "quadriceps",
+                                              "hamstrings",
+                                              "adductors",
+                                              "gastrocnemius",
+                                              "soleus",
+                                              "rectus_abdominis",
+                                              "obliques"
+                                            ]
+                                          }
+                                        },
+                                        "status": { "type": "string", "enum": ["mapped"] },
+                                        "source": {
+                                          "type": "string",
+                                          "enum": ["starter_catalog", "user_confirmed"]
+                                        }
+                                      },
+                                      "required": [
+                                        "modelVersion",
+                                        "primaryMuscles",
+                                        "secondaryMuscles",
+                                        "status",
+                                        "source"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "status": { "type": "string", "enum": ["unmapped"] },
+                                        "modelVersion": {
+                                          "type": "string",
+                                          "nullable": true,
+                                          "enum": [null]
+                                        },
+                                        "source": {
+                                          "type": "string",
+                                          "nullable": true,
+                                          "enum": [null]
+                                        },
+                                        "primaryMuscles": {
+                                          "type": "array",
+                                          "items": { "anyOf": [] },
+                                          "minItems": 0,
+                                          "maxItems": 0
+                                        },
+                                        "secondaryMuscles": {
+                                          "type": "array",
+                                          "items": { "anyOf": [] },
+                                          "minItems": 0,
+                                          "maxItems": 0
+                                        }
+                                      },
+                                      "required": [
+                                        "status",
+                                        "modelVersion",
+                                        "source",
+                                        "primaryMuscles",
+                                        "secondaryMuscles"
+                                      ],
+                                      "additionalProperties": false
+                                    }
+                                  ]
                                 },
                                 "notes": { "type": "string", "maxLength": 300 },
                                 "sets": {

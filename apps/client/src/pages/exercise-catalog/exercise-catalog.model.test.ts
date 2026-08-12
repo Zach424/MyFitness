@@ -46,6 +46,13 @@ describe('owned exercise catalog model', () => {
       trackingMode: 'reps_load' as const,
       equipment: ['kettlebell' as const],
       equipmentNotes: null,
+      muscleMapping: {
+        status: 'unmapped' as const,
+        modelVersion: null,
+        source: null,
+        primaryMuscles: [] as [],
+        secondaryMuscles: [] as [],
+      },
       catalogVersion: null,
       revision: 2,
       editable: true as const,

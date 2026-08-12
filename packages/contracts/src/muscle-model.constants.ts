@@ -2,7 +2,7 @@ export const muscleModelVersion = 'ilens-muscle-model-v1' as const
 
 export const muscleRegionIds = ['chest', 'back', 'shoulders_arms', 'legs_glutes', 'core'] as const
 
-export const muscleIds = [
+export const mappableMuscleIds = [
   'chest_upper',
   'chest_middle',
   'chest_lower',
@@ -28,8 +28,9 @@ export const muscleIds = [
   'soleus',
   'rectus_abdominis',
   'obliques',
-  'core_global',
 ] as const
+
+export const muscleIds = [...mappableMuscleIds, 'core_global'] as const
 
 export const muscleNodeTypes = ['muscle_group', 'aggregate'] as const
 export const muscleBodyViews = ['front', 'back'] as const

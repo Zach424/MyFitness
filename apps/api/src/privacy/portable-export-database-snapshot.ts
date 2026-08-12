@@ -1197,7 +1197,7 @@ async function* workoutHeaderPageRows(
 export const portableExportWorkoutExerciseHeaderPageQuery = `WITH page AS MATERIALIZED (
          SELECT exercise.id, exercise.position, exercise.exercise_key, exercise.name,
                 exercise.category, exercise.notes, exercise.tracking_mode,
-                exercise.equipment, exercise.equipment_notes
+                exercise.equipment, exercise.equipment_notes, exercise.muscle_mapping
          FROM workout_exercises AS exercise
          INNER JOIN workout_sessions AS workout ON workout.id = exercise.workout_id
          WHERE workout.user_id = $1
@@ -1232,7 +1232,7 @@ export const portableExportWorkoutExerciseHeaderPageQuery = `WITH page AS MATERI
 export const portableExportWorkoutJsonExerciseHeaderPageQuery = `WITH page AS MATERIALIZED (
          SELECT exercise.id, exercise.position, exercise.exercise_key, exercise.name,
                 exercise.category, exercise.notes, exercise.tracking_mode,
-                exercise.equipment, exercise.equipment_notes
+                exercise.equipment, exercise.equipment_notes, exercise.muscle_mapping
          FROM workout_exercises AS exercise
          INNER JOIN workout_sessions AS workout ON workout.id = exercise.workout_id
          WHERE workout.user_id = $1
@@ -2202,13 +2202,13 @@ export const portableExportWorkoutRevisionSnapshotShapeQuery = `WITH target AS M
                   WHERE exercise_order.exercise_json IS NOT NULL
                     AND NOT (
                       exercise_order.exercise_json
-                      ?| ARRAY['trackingMode', 'equipment', 'equipmentNotes']::text[]
+                      ?| ARRAY['trackingMode', 'equipment', 'equipmentNotes', 'muscleMapping']::text[]
                     )
                 )::integer AS legacy_exercise_count,
                 count(*) FILTER (
                   WHERE exercise_order.exercise_json IS NOT NULL
                     AND exercise_order.exercise_json
-                      ?| ARRAY['trackingMode', 'equipment', 'equipmentNotes']::text[]
+                      ?| ARRAY['trackingMode', 'equipment', 'equipmentNotes', 'muscleMapping']::text[]
                 )::integer AS extended_exercise_count,
                 COALESCE(
                   max(
@@ -2245,7 +2245,7 @@ export const portableExportWorkoutRevisionSnapshotShapeQuery = `WITH target AS M
                       WHERE exercise_key.key <> ALL (
                         ARRAY[
                           'id', 'position', 'exerciseKey', 'name', 'category', 'trackingMode',
-                          'equipment', 'equipmentNotes', 'notes', 'sets'
+                          'equipment', 'equipmentNotes', 'muscleMapping', 'notes', 'sets'
                         ]::text[]
                       )
                     )

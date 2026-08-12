@@ -8,7 +8,7 @@
 
 ## 1. 文档范围与实测基线
 
-本文根据 `infra/postgres/migrations`、服务端仓储 SQL 和当前结构测试交叉整理。仓库包含 `0001` 至 `0044` 共 44 个有序 SQL 迁移，迁移文件累计定义 46 张当前表；实际环境仍应通过 `schema_migrations` 与 `information_schema` 核对已应用版本，不能仅凭仓库文件推断部署完成。
+本文根据 `infra/postgres/migrations`、服务端仓储 SQL 和当前结构测试交叉整理。仓库包含 `0001` 至 `0046` 共 46 个有序 SQL 迁移，迁移文件累计定义 46 张当前表；实际环境仍应通过 `schema_migrations` 与 `information_schema` 核对已应用版本，不能仅凭仓库文件推断部署完成。
 
 本地实例中的行数只反映自动化与演示运行产生的临时数据，不是生产容量指标，也不能用于推断真实用户行为。结构、约束和关系才是本文的长期设计事实。
 
@@ -196,7 +196,7 @@ purpose：`terms,privacy,health_data,ai_plan_explanation,food_photo_analysis,pro
 
 ### 7.2 `workout_exercises`
 
-`id,workout_id,position,exercise_key,name,category,notes,tracking_mode,equipment[],equipment_notes`。FK → workout_sessions 级联删除；唯一 `(workout_id,position)`，并有 `(workout_id,exercise_key)` 洞察索引。字段是加入训练时的动作定义快照。
+`id,workout_id,position,exercise_key,name,category,notes,tracking_mode,equipment[],equipment_notes,muscle_mapping jsonb`。FK → workout_sessions 级联删除；唯一 `(workout_id,position)`，并有 `(workout_id,exercise_key)` 洞察索引。字段是加入训练时的动作定义快照；关系 JSON 已在共享输入/响应 Schema 严格受检，并随 workout revision 完整固化，但当前关系列不参与训练量聚合。
 
 ### 7.3 `workout_sets`
 
@@ -210,9 +210,11 @@ purpose：`terms,privacy,health_data,ai_plan_explanation,food_photo_analysis,pro
 
 ### 8.1 `user_exercise_catalog_entries`
 
-`id,user_id,name,aliases text[],category,tracking_mode,equipment text[],equipment_notes,revision,idempotency_key,request_hash,archived_at,created_at,updated_at`。
+`id,user_id,name,aliases text[],category,tracking_mode,equipment text[],equipment_notes,muscle_model_version,muscle_mapping_source,primary_muscles text[],secondary_muscles text[],revision,idempotency_key,request_hash,archived_at,created_at,updated_at`。
 
 活动名称唯一索引为 `(user_id,lower(btrim(name))) WHERE archived_at IS NULL`；允许归档旧定义后重新建立同名新定义。`(id,user_id)` 唯一供所有权复合引用；当前列表按 user/updated_at 部分索引。迁移 0033 另建 `(user_id,created_at,id)` 非部分索引，服务包含归档条目的稳定隐私导出。
+
+肌群关系只有两种合法数据库形状：全部元数据为空且两个数组为空，或版本精确为 `ilens-muscle-model-v1`、来源精确为 `user_confirmed`、主肌群 1–8、次肌群 0–12。两个数组只能包含 25 个具体 muscle group，各自唯一且互不交叉；aggregate `core_global` 不能进入动作关系。数据库约束保护旁路写入，API 另以相同共享 Schema 保护请求与响应。
 
 ### 8.2 `user_exercise_catalog_revisions`
 
@@ -461,7 +463,7 @@ resolution 保存 `request_id,user_id,item_id,resolved_item_revision,withdrawn_r
 
 ### 16.1 `schema_migrations`
 
-`name text` 主键、`checksum char`、`applied_at timestamptz`。当前 41 行，名称从 `0001` 连续至 `0041_personal_model_source_qualification.sql`。checksum 用于检测已应用迁移文件被改写。
+`name text` 主键、`checksum char`、`applied_at timestamptz`。当前本地验证环境为 46 行，名称从 `0001` 连续至 `0046_workout_exercise_muscle_mapping_snapshot.sql`。checksum 用于检测已应用迁移文件被改写。
 
 ### 16.2 当前迁移演进主题
 
@@ -477,6 +479,8 @@ resolution 保存 `request_id,user_id,item_id,resolved_item_revision,withdrawn_r
 | 0037–0039 | Personal Model item/revision、feedback 与 evidence projection 内核 |
 | 0040      | onboarding goal 稳定聚合、不可变修订与诚实迁移检查点               |
 | 0041      | Personal Model 精确来源资格、refresh request 与 resolution         |
+| 0042–0044 | Personal Model 代际、刷新竞态与精确发生时间约束                    |
+| 0045–0046 | owner 动作肌群关系与训练选择时关系快照                             |
 
 迁移只能前向追加；不得在共享历史中重写已应用 SQL。生产发布前应先在备份副本演练、核对 checksum、外键和索引，再滚动应用。
 
@@ -585,7 +589,7 @@ intent 创建 → 验证一次性 token 与确认短语 → users 状态关闭 �
 - 当前本地数据操作表有 179 个 job/attempt，来自测试和演示；应通过状态分布、失败码和死信而不是总行数判断健康。
 - 归档表与状态机已存在，但请求仓储、执行任务、加密对象、下载授权和到期扫描尚未实现；表结构不能被描述为用户可用的异步导出。
 - 没有设备原生同步表、社交表、支付表或医疗病历表；这些不属于当前实现。
-- iLens 目标中的统一肌群词表、动作主/次肌群关联、肌群状态、Body Assessment/报告资产和正式 Performance 投影均没有当前表；在相应迁移、owner 隔离、revision、导出和删除测试完成前，页面不得冒充这些事实已存在。
+- iLens 的统一肌群词表由版本化共享代码注册表承载，owner 动作主/次关系和训练选择时快照已进入当前表、revision 与导出；但没有肌群训练量、肌群状态、Body Assessment/报告资产和正式 Performance 投影。关系内容也未完成专家审阅或词表 v2 迁移演练，页面不得把它冒充训练效果、疼痛原因或计划依据。
 - 当前 `health_records` 只承载九个受契约约束的身体/恢复指标。身体组成、节段指标和报告提取应先扩展版本化指标注册表及候选确认流程，不应把提供方任意键直接写入 JSONB 当成已确认事实。
 - 当前 `weekly_plans` 是每用户每周一个聚合，不具备 iLens Plan v2 的长期计划、周期及 `draft/active/paused/replaced/completed/archived` 生命周期。后续采用新聚合与兼容读取，不能原地解释旧状态或覆盖既有修订历史。
 - Performance 必须从已完成训练的精确组事实确定性派生并固定公式版本；e1RM 属于估算投影，不是用户实测 1RM、训练处方或医疗结论。

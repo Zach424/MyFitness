@@ -64,7 +64,7 @@ Migration `0024_exercise_insight_index.sql` adds `(workout_id, exercise_key)` lo
 
 ## Exercise catalog and history boundary
 
-The active picker combines the versioned `starter-2026-08-05-v1` catalog with owner-created entries. A custom definition has a stable key, display name, aliases, category, tracking mode, equipment and optional equipment notes. Creation is idempotent, correction uses an expected revision, and archive removes the definition from active search while keeping immutable definition revisions.
+The active picker combines the current versioned `starter-2026-08-12-v2` catalog with owner-created entries. A custom definition has a stable key, display name, aliases, category, tracking mode, equipment, optional equipment notes and an explicit mapped/unmapped muscle relation. Creation is idempotent, correction uses an expected revision, and archive removes the definition from active search while keeping immutable definition revisions. Earlier starter versions remain historical design evidence rather than current API output.
 
 便携导出的所有权边界与活动选择器不同：`exerciseCatalog` 只导出 owner 自定义活动或已归档条目及其不可变修订，版本化 starter 属于产品代码，不复制到用户数据包。异步来源按 `(created_at,id)` 读取含 `history: []` 的条目骨架，再按 revision 读取 history 子流；迁移 0033 提供全历史 owner 索引。条目与修订分别执行 64 KiB 门禁，完整 history 是推进下一条目的前置条件。
 
@@ -97,6 +97,12 @@ Repeat also copies the recorded tracking mode and equipment snapshot. It does no
 Correction drafts are distinct from repeat drafts. A correction retains the workout UUID and base revision and can be restored only after an exact current owner read still reports that revision; stale/deleted targets are abandoned without a write even when the workout is outside the first list page. Saving a restored correction continues to send `expectedRevision`, while cancel/discard removes the local copy. Repeat drops all correction identity and creates a new session.
 
 The owner exercise-definition history endpoint accepts `limit` (default 20, maximum 50) and an opaque UUID/revision cursor. It validates the path entry, owner and exact anchor before returning the strictly older `revision DESC` suffix. Archived definitions remain readable, and the correction editor requests 10 versions at a time through the shared definition ledger. The audit view does not reinterpret saved workout snapshots or validate whether a user-authored exercise is appropriate or safe.
+
+## 第 205 轮：动作肌群关系快照
+
+`starter-2026-08-12-v2` 为 8 个具体动作提供 `starter_catalog` 主/次肌群关系，通用灵活性流程保持显式 `unmapped`。owner 自定义动作可保存 `user_confirmed` 关系；更新省略关系时保留当前值，显式 `null` 才清除，所有变化继续进入完整目录 revision。关系只引用 `ilens-muscle-model-v1` 的 25 个具体 muscle group，`core_global`、重复项、主次交叉、未知 ID 和错误版本均由契约与数据库约束拒绝。
+
+训练动作在被选择时复制完整 `muscleMapping`，并保存到 `workout_exercises.muscle_mapping` 及不可变 workout revision。同步与异步便携导出都包含该快照，目录后续更正或归档不能回写历史。该关系来源表达目录关系的形成方式，不是动作技术、安全性、刺激强度或医学适用性的证明；当前也没有据此计算肌群训练量。
 
 The workout page does not own mutable definition forms. `管理我的动作` opens an action-specific view in the lazy owner-register route; an entry ID can open exact correction history. Taro keeps the underlying workout page instance, so returning preserves its unsaved sets, title, occurrence and selected definition snapshots. `useDidShow` then reloads only the active catalog: new/corrected entries become selectable and archived entries disappear, while already selected draft exercises remain unchanged.
 

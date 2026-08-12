@@ -25,6 +25,11 @@ describe('user exercise catalog API with PostgreSQL', () => {
     trackingMode: 'reps_load',
     equipment: ['other'],
     equipmentNotes: '地雷管固定装置',
+    muscleMapping: {
+      modelVersion: 'ilens-muscle-model-v1',
+      primaryMuscles: ['deltoid_anterior'],
+      secondaryMuscles: ['chest_upper', 'triceps_brachii'],
+    },
   }
 
   beforeAll(async () => {
@@ -59,12 +64,17 @@ describe('user exercise catalog API with PostgreSQL', () => {
       .get('/v1/exercise-catalog')
       .set('Authorization', `Bearer ${token}`)
       .expect(200)
-    expect(initialList.body.starterVersion).toBe('starter-2026-08-05-v1')
+    expect(initialList.body.starterVersion).toBe('starter-2026-08-12-v2')
     expect(initialList.body.items).toHaveLength(9)
     expect(initialList.body.items[0]).toMatchObject({
       source: 'starter',
       trackingMode: 'reps_load',
       equipment: ['dumbbells'],
+      muscleMapping: {
+        status: 'mapped',
+        modelVersion: 'ilens-muscle-model-v1',
+        source: 'starter_catalog',
+      },
     })
 
     const idempotencyKey = `exercise-${randomUUID()}`
@@ -79,6 +89,12 @@ describe('user exercise catalog API with PostgreSQL', () => {
       revision: 1,
       name: definition.name,
       equipmentNotes: definition.equipmentNotes,
+      muscleMapping: {
+        status: 'mapped',
+        source: 'user_confirmed',
+        primaryMuscles: ['deltoid_anterior'],
+        secondaryMuscles: ['chest_upper', 'triceps_brachii'],
+      },
     })
     expect(created.body.key).toMatch(/^custom_[a-f0-9]{32}$/)
 
@@ -130,6 +146,7 @@ describe('user exercise catalog API with PostgreSQL', () => {
             trackingMode: created.body.trackingMode,
             equipment: created.body.equipment,
             equipmentNotes: created.body.equipmentNotes,
+            muscleMapping: created.body.muscleMapping,
             sets: [
               {
                 position: 1,
@@ -157,10 +174,24 @@ describe('user exercise catalog API with PostgreSQL', () => {
         ...definition,
         name: '单臂地雷管推举',
         aliases: ['Landmine Press', '地雷管肩推'],
+        muscleMapping: {
+          modelVersion: 'ilens-muscle-model-v1',
+          primaryMuscles: ['deltoid_anterior', 'deltoid_lateral'],
+          secondaryMuscles: ['triceps_brachii'],
+        },
         expectedRevision: 1,
       })
       .expect(200)
-    expect(corrected.body).toMatchObject({ revision: 2, name: '单臂地雷管推举' })
+    expect(corrected.body).toMatchObject({
+      revision: 2,
+      name: '单臂地雷管推举',
+      muscleMapping: {
+        status: 'mapped',
+        source: 'user_confirmed',
+        primaryMuscles: ['deltoid_anterior', 'deltoid_lateral'],
+        secondaryMuscles: ['triceps_brachii'],
+      },
+    })
     await request(app.getHttpServer())
       .put(`/v1/exercise-catalog/${String(created.body.id)}`)
       .set('Authorization', `Bearer ${token}`)
@@ -177,6 +208,13 @@ describe('user exercise catalog API with PostgreSQL', () => {
       trackingMode: 'reps_load',
       equipment: ['other'],
       equipmentNotes: '地雷管固定装置',
+      muscleMapping: {
+        status: 'mapped',
+        modelVersion: 'ilens-muscle-model-v1',
+        source: 'user_confirmed',
+        primaryMuscles: ['deltoid_anterior'],
+        secondaryMuscles: ['chest_upper', 'triceps_brachii'],
+      },
     })
     expect(workouts.body.items[0].id).toBe(workout.body.id)
 
@@ -237,7 +275,14 @@ describe('user exercise catalog API with PostgreSQL', () => {
       'updated',
       'created',
     ])
-    expect(history.body.items[2]).toMatchObject({ name: '地雷管推举', revision: 1 })
+    expect(history.body.items[2]).toMatchObject({
+      name: '地雷管推举',
+      revision: 1,
+      muscleMapping: {
+        primaryMuscles: ['deltoid_anterior'],
+        secondaryMuscles: ['chest_upper', 'triceps_brachii'],
+      },
+    })
     expect(history.body.nextCursor).toBeNull()
     await request(app.getHttpServer())
       .get(`/v1/exercise-catalog/${String(created.body.id)}/history?limit=0`)
@@ -260,11 +305,22 @@ describe('user exercise catalog API with PostgreSQL', () => {
     expect(portable.body.data.exerciseCatalog[0]).toMatchObject({
       id: created.body.id,
       name: '单臂地雷管推举',
+      muscle_model_version: 'ilens-muscle-model-v1',
+      muscle_mapping_source: 'user_confirmed',
+      primary_muscles: ['deltoid_anterior', 'deltoid_lateral'],
+      secondary_muscles: ['triceps_brachii'],
     })
     expect(portable.body.data.exerciseCatalog[0].history).toHaveLength(3)
     expect(portable.body.data.workouts[0].exercises[0]).toMatchObject({
       name: '地雷管推举',
       equipment: ['other'],
+      muscle_mapping: {
+        status: 'mapped',
+        modelVersion: 'ilens-muscle-model-v1',
+        source: 'user_confirmed',
+        primaryMuscles: ['deltoid_anterior'],
+        secondaryMuscles: ['chest_upper', 'triceps_brachii'],
+      },
     })
   })
 
@@ -274,6 +330,99 @@ describe('user exercise catalog API with PostgreSQL', () => {
       .set('Authorization', `Bearer ${token}`)
       .set('x-idempotency-key', `exercise-${randomUUID()}`)
       .send({ ...definition, name: '缺少说明', equipmentNotes: undefined })
+      .expect(400)
+  })
+
+  it('keeps a legacy-compatible custom exercise explicitly unmapped', async () => {
+    const created = await request(app.getHttpServer())
+      .post('/v1/exercise-catalog')
+      .set('Authorization', `Bearer ${token}`)
+      .set('x-idempotency-key', `exercise-${randomUUID()}`)
+      .send({
+        name: '自定义等长保持',
+        category: 'strength',
+        trackingMode: 'duration',
+        equipment: ['bodyweight'],
+      })
+      .expect(201)
+    expect(created.body.muscleMapping).toEqual({
+      status: 'unmapped',
+      modelVersion: null,
+      source: null,
+      primaryMuscles: [],
+      secondaryMuscles: [],
+    })
+    await expect(
+      pool.query(
+        `UPDATE user_exercise_catalog_entries
+         SET muscle_model_version = 'ilens-muscle-model-v1',
+             muscle_mapping_source = 'user_confirmed',
+             primary_muscles = ARRAY['core_global']::text[]
+         WHERE id = $1 AND user_id = $2`,
+        [created.body.id, userId],
+      ),
+    ).rejects.toMatchObject({ code: '23514' })
+
+    const updated = await request(app.getHttpServer())
+      .put(`/v1/exercise-catalog/${String(created.body.id)}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        name: '自定义等长保持（二版）',
+        category: 'strength',
+        trackingMode: 'duration',
+        equipment: ['bodyweight'],
+        expectedRevision: 1,
+      })
+      .expect(200)
+    expect(updated.body.muscleMapping.status).toBe('unmapped')
+
+    const mapped = await request(app.getHttpServer())
+      .put(`/v1/exercise-catalog/${String(created.body.id)}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        name: '自定义等长保持（三版）',
+        category: 'strength',
+        trackingMode: 'duration',
+        equipment: ['bodyweight'],
+        muscleMapping: {
+          modelVersion: 'ilens-muscle-model-v1',
+          primaryMuscles: ['rectus_abdominis'],
+          secondaryMuscles: ['obliques'],
+        },
+        expectedRevision: 2,
+      })
+      .expect(200)
+    expect(mapped.body.muscleMapping.status).toBe('mapped')
+
+    const cleared = await request(app.getHttpServer())
+      .put(`/v1/exercise-catalog/${String(created.body.id)}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        name: '自定义等长保持（四版）',
+        category: 'strength',
+        trackingMode: 'duration',
+        equipment: ['bodyweight'],
+        muscleMapping: null,
+        expectedRevision: 3,
+      })
+      .expect(200)
+    expect(cleared.body.muscleMapping.status).toBe('unmapped')
+
+    await request(app.getHttpServer())
+      .put(`/v1/exercise-catalog/${String(created.body.id)}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        name: '非法聚合映射',
+        category: 'strength',
+        trackingMode: 'duration',
+        equipment: ['bodyweight'],
+        muscleMapping: {
+          modelVersion: 'ilens-muscle-model-v1',
+          primaryMuscles: ['core_global'],
+          secondaryMuscles: [],
+        },
+        expectedRevision: 4,
+      })
       .expect(400)
   })
 })

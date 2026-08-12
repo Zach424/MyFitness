@@ -15,6 +15,7 @@ import {
   type ExerciseCatalogEntryHistoryQuery,
   type ExerciseCatalogItem,
   type ExerciseEquipment,
+  type ExerciseMuscleMapping,
   type ExerciseTrackingMode,
   type UpdateExerciseCatalogEntry,
 } from '@myfitness/contracts'
@@ -36,6 +37,10 @@ type CatalogRow = QueryResultRow & {
   tracking_mode: ExerciseTrackingMode
   equipment: ExerciseEquipment[]
   equipment_notes: string | null
+  muscle_model_version: 'ilens-muscle-model-v1' | null
+  muscle_mapping_source: 'user_confirmed' | null
+  primary_muscles: ExerciseMuscleMapping['primaryMuscles']
+  secondary_muscles: ExerciseMuscleMapping['secondaryMuscles']
   revision: number
   idempotency_key: string
   request_hash: string
@@ -45,6 +50,25 @@ type CatalogRow = QueryResultRow & {
 }
 
 const customKey = (id: string) => `custom_${id.replaceAll('-', '')}`
+
+const unmappedMuscles = (): ExerciseMuscleMapping => ({
+  status: 'unmapped',
+  modelVersion: null,
+  source: null,
+  primaryMuscles: [],
+  secondaryMuscles: [],
+})
+
+const mapMuscles = (row: CatalogRow): ExerciseMuscleMapping =>
+  row.muscle_model_version === null
+    ? unmappedMuscles()
+    : {
+        status: 'mapped',
+        modelVersion: row.muscle_model_version,
+        source: row.muscle_mapping_source!,
+        primaryMuscles: row.primary_muscles,
+        secondaryMuscles: row.secondary_muscles,
+      }
 
 const mapCustomEntry = (row: CatalogRow): CustomExerciseCatalogEntry => ({
   source: 'custom',
@@ -57,6 +81,7 @@ const mapCustomEntry = (row: CatalogRow): CustomExerciseCatalogEntry => ({
   trackingMode: row.tracking_mode,
   equipment: row.equipment,
   equipmentNotes: row.equipment_notes,
+  muscleMapping: mapMuscles(row),
   catalogVersion: null,
   revision: row.revision,
   editable: true,
@@ -75,6 +100,14 @@ const starterItems: ExerciseCatalogItem[] = starterExerciseCatalog.map((entry) =
   trackingMode: entry.trackingMode,
   equipment: [...entry.equipment],
   equipmentNotes: null,
+  muscleMapping:
+    entry.muscleMapping.status === 'mapped'
+      ? {
+          ...entry.muscleMapping,
+          primaryMuscles: [...entry.muscleMapping.primaryMuscles],
+          secondaryMuscles: [...entry.muscleMapping.secondaryMuscles],
+        }
+      : unmappedMuscles(),
   catalogVersion: exerciseCatalogVersion,
   revision: 1,
   editable: false,
@@ -83,13 +116,26 @@ const starterItems: ExerciseCatalogItem[] = starterExerciseCatalog.map((entry) =
   updatedAt: null,
 }))
 
-const normalizedInput = (input: CreateExerciseCatalogEntry | UpdateExerciseCatalogEntry) => ({
+const mappedInputFromRow = (row: CatalogRow) =>
+  row.muscle_model_version === null
+    ? null
+    : {
+        modelVersion: row.muscle_model_version,
+        primaryMuscles: row.primary_muscles,
+        secondaryMuscles: row.secondary_muscles,
+      }
+
+const normalizedInput = (
+  input: CreateExerciseCatalogEntry | UpdateExerciseCatalogEntry,
+  existingMuscleMapping: ReturnType<typeof mappedInputFromRow> = null,
+) => ({
   name: input.name,
   aliases: input.aliases ?? [],
   category: input.category,
   trackingMode: input.trackingMode,
   equipment: input.equipment,
   equipmentNotes: input.equipmentNotes ?? null,
+  muscleMapping: input.muscleMapping === undefined ? existingMuscleMapping : input.muscleMapping,
 })
 
 const requestHash = (input: CreateExerciseCatalogEntry) =>
@@ -148,8 +194,9 @@ export class ExerciseCatalogService {
       const created = await client.query<CatalogRow>(
         `INSERT INTO user_exercise_catalog_entries (
            id, user_id, name, aliases, category, tracking_mode, equipment,
-           equipment_notes, idempotency_key, request_hash
-         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+           equipment_notes, muscle_model_version, muscle_mapping_source,
+           primary_muscles, secondary_muscles, idempotency_key, request_hash
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
          RETURNING *`,
         [
           randomUUID(),
@@ -160,6 +207,10 @@ export class ExerciseCatalogService {
           value.trackingMode,
           value.equipment,
           value.equipmentNotes,
+          value.muscleMapping?.modelVersion ?? null,
+          value.muscleMapping ? 'user_confirmed' : null,
+          value.muscleMapping?.primaryMuscles ?? [],
+          value.muscleMapping?.secondaryMuscles ?? [],
           idempotencyKey,
           hash,
         ],
@@ -186,13 +237,15 @@ export class ExerciseCatalogService {
         )
       }
       await this.assertNameAvailable(client, userId, input.name, entryId)
-      const value = normalizedInput(input)
+      const value = normalizedInput(input, mappedInputFromRow(current))
       const updated = await client.query<CatalogRow>(
         `UPDATE user_exercise_catalog_entries
          SET name = $1, aliases = $2, category = $3, tracking_mode = $4,
              equipment = $5, equipment_notes = $6,
+             muscle_model_version = $7, muscle_mapping_source = $8,
+             primary_muscles = $9, secondary_muscles = $10,
              revision = revision + 1, updated_at = NOW()
-         WHERE id = $7 AND user_id = $8
+         WHERE id = $11 AND user_id = $12
          RETURNING *`,
         [
           value.name,
@@ -201,6 +254,10 @@ export class ExerciseCatalogService {
           value.trackingMode,
           value.equipment,
           value.equipmentNotes,
+          value.muscleMapping?.modelVersion ?? null,
+          value.muscleMapping ? 'user_confirmed' : null,
+          value.muscleMapping?.primaryMuscles ?? [],
+          value.muscleMapping?.secondaryMuscles ?? [],
           entryId,
           userId,
         ],
