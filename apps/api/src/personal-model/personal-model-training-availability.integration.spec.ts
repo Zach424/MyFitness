@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 
 import {
   personalModelFeedbackTransitionResultSchema,
+  personalModelItemRevisionSchema,
   type PersonalModelItemRevision,
 } from '@myfitness/contracts'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
@@ -376,5 +377,121 @@ describe('training availability Personal Model executor with PostgreSQL', () => 
       requests: '0',
       resolutions: '0',
     })
+  })
+
+  it('settles terminal source withdrawal before creating a successor generation', async () => {
+    const { userId } = await createOwner()
+    const initial = await repository.refreshTrainingAvailability(userId)
+    if (initial.outcome !== 'created') throw new Error('expected a created result')
+
+    const invalidatedAt = new Date(Date.parse(initial.revision.changedAt) + 1_000).toISOString()
+    const terminal = personalModelItemRevisionSchema.parse({
+      ...initial.revision,
+      id: randomUUID(),
+      revision: 2,
+      previousRevision: 1,
+      action: 'invalidated',
+      snapshot: {
+        ...initial.revision.snapshot,
+        status: 'invalidated',
+        validTo: invalidatedAt,
+        revision: 2,
+        updatedAt: invalidatedAt,
+      },
+      derivationFingerprint: 'e'.repeat(64),
+      changedAt: invalidatedAt,
+    })
+    await repository.append(userId, initial.revision.itemId, 1, terminal)
+
+    await updateGoal(userId, 1, '2026-08-12T10:00:00.000Z', ['tue', 'thu'], 45)
+    const settled = await repository.refreshTrainingAvailability(userId)
+    expect(settled.outcome).toBe('revised')
+    if (settled.outcome !== 'revised') throw new Error('expected settled terminal revision')
+    expect(settled.revision.snapshot.status).toBe('invalidated')
+
+    const successor = await repository.refreshTrainingAvailability(userId)
+    expect(successor.outcome).toBe('created')
+    if (successor.outcome !== 'created') throw new Error('expected successor generation')
+    expect(successor.revision.itemId).not.toBe(initial.revision.itemId)
+    expect(successor.revision.snapshot).toMatchObject({
+      status: 'active',
+      claim: { availableDays: ['tue', 'thu'], sessionMinutes: 45, sourceGoalRevision: 2 },
+    })
+
+    const lineage = await pool.query<{
+      id: string
+      generation: number
+      predecessor_item_id: string | null
+      retired: boolean
+      status: string
+    }>(
+      `
+        SELECT
+          item.id,
+          item.generation,
+          item.predecessor_item_id,
+          item.retired_at IS NOT NULL AS retired,
+          revision.snapshot ->> 'status' AS status
+        FROM personal_model_items AS item
+        JOIN personal_model_item_revisions AS revision
+          ON revision.user_id = item.user_id
+         AND revision.item_id = item.id
+         AND revision.revision = item.current_revision
+        WHERE item.user_id = $1 AND item.subject_key = 'training.availability'
+        ORDER BY item.generation
+      `,
+      [userId],
+    )
+    expect(lineage.rows).toEqual([
+      {
+        id: initial.revision.itemId,
+        generation: 1,
+        predecessor_item_id: null,
+        retired: true,
+        status: 'invalidated',
+      },
+      {
+        id: successor.revision.itemId,
+        generation: 2,
+        predecessor_item_id: initial.revision.itemId,
+        retired: false,
+        status: 'active',
+      },
+    ])
+
+    await expect(repository.getCurrent(userId, initial.revision.itemId)).resolves.toMatchObject({
+      itemId: initial.revision.itemId,
+      revision: 3,
+      snapshot: { status: 'invalidated' },
+    })
+    await expect(repository.getCurrent(userId, successor.revision.itemId)).resolves.toEqual(
+      successor.revision,
+    )
+    await expect(
+      pool.query(
+        `
+          INSERT INTO personal_model_feedback_events (
+            id, user_id, item_id, item_revision, choice,
+            reason_code, note, context_valid_until, created_at,
+            transition_schema_version, outcome, no_op_reason,
+            result_revision, result_fingerprint
+          )
+          VALUES (
+            $1, $2, $3, $4, 'uncertain',
+            NULL, NULL, NULL, $5,
+            'personal-model-feedback-transition-v1', 'no_op',
+            'feedback_already_current', NULL, $6
+          )
+        `,
+        [
+          randomUUID(),
+          userId,
+          settled.revision.itemId,
+          settled.revision.revision,
+          successor.revision.changedAt,
+          settled.revision.derivationFingerprint,
+        ],
+      ),
+    ).rejects.toThrow('retired personal model generations cannot accept feedback')
   })
 })

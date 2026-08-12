@@ -1,6 +1,6 @@
 # 个人认知模型
 
-状态：第 190 轮完成 training availability 与 recorded training frequency 两个确定性场景；同主题新代际、训练时长、回顾持久化、API、模型导出和客户端闭环仍未实现
+状态：第 191 轮完成同主题终态后的原子新代际；训练时长、回顾持久化、API、模型导出和客户端闭环仍未实现
 
 ## 1. 目标与边界
 
@@ -113,7 +113,7 @@ erDiagram
   weekly_cognitive_review_revisions }o--o{ personal_model_item_revisions : summarizes
 ```
 
-第 184–188 轮已落地 `personal_model_items`、`personal_model_item_revisions`、`personal_model_feedback_events`、`personal_model_evidence_refs`、来源 refresh request 与 resolution；第 189 轮开始运行确定性 goal 派生/refresh，第 190 轮让 workout 纵向频率派生进入同一内核。回顾表仍是候选结构，训练时长派生与同主题终态后的新代际尚未实现。
+第 184–188 轮已落地 item/revision/feedback/evidence、来源 refresh request 与 resolution；第 189–190 轮让 goal Constraint 与 workout 频率 Behavior 进入同一内核。第 191 轮新增 item generation/predecessor/retirement，解决终态不复活与未来同主题认识重新形成之间的矛盾。回顾表仍是候选结构，训练时长派生尚未实现。
 
 ### 4.4 P1a/P1b 共享契约
 
@@ -161,6 +161,14 @@ repository 在 READ COMMITTED 事务中先锁 active owner，再读取 item/curr
 时区变化也属于重新解释观察边界，而不是修改历史训练事实。训练自身保存的发生时刻和记录时区保持不可变；当前资料时区决定本次认知窗口怎样把绝对时刻分配到本地日期与自然周。用户修改资料时区后，下一次显式派生可能得到不同周分组和新修订，旧修订仍保留当时使用的窗口时区。当前还没有为资料时区变化登记专用待办，所以自动刷新和跨时区解释必须在开放后台调度或用户界面前补齐。
 
 失效也不等于删除。最后一条来源被删除时，旧结论结束适用并保留撤回原因，未知收据说明当前无法形成新结论；账户仍存在期间，审计链不能被普通业务路径抹除。只有账户级擦除能够从所有者根节点清除全部条目、修订、证据、反馈和刷新记录。这样既允许用户纠正来源，也避免系统在证据消失后继续用旧频率影响后续建议。
+
+第 191 轮把同一 owner/subject 从“永久只有一个 item”调整为“永久保留多代、同时只有一个当前代”。item 的 `generation` 从 1 单调递增，`predecessor_item_id` 指向同 owner/subject 的直接前代，`retired_at` 表示旧代退出当前集合；每个前代最多一个直接后继，代次和前代必须连续。代际是聚合元数据，不进入既有完整 revision JSON，因此旧契约仍能按 item ID 读取某一代的 current/history，未来公开 lineage 需要另行设计信封。
+
+退役不是普通更新。旧代当前 revision 必须已经是 `invalidated` 或 `superseded`，所有 refresh request 必须已有 resolution，退役时刻必须严格晚于旧代最后修订；旧代退役和 generation+1 首版创建必须在同一事务、同一时刻完成。部分唯一索引只允许每个 owner/subject 一个 `retired_at IS NULL` item；前代唯一约束禁止分叉。新代必须从 revision 1 开始且自身保持未退役，不能复制旧代 revision 编号、反馈状态或 item 身份。
+
+退役代完全只读：不能推进 current revision，不能再次退役，也不能接受 feedback。来源触发器只为未退役当前代生成待办；退役更新与 refresh request 插入还有双向延迟提交门禁，保证并发来源变化不会在旧代退役后留下永久悬空义务。若两者交错，至少一个事务失败并由调用方重新读取，而不是默许新证据绑定错误代。
+
+两个内部派生器都按 `retired_at IS NULL` 选择当前代。终态还有待办时只完成同终态撤回和 resolution，不在同一步创建后继；待办清空后，只有发现旧代从未使用的新精确来源才会启动后继。训练可用性以新的 goal revision 为新证据；训练频率以当前窗口内前代从未引用的 workout aggregate/revision 为新证据。owner 锁让两个并发调用只有一个能退役并创建后继，等待者会重读第二代并得到 no-op。
 
 来源变化不会静默抹掉用户校准：`disagreed` 保持 disputed，仍有效的 temporary 保留时限；旧 confirmed/uncertain 面对新 claim 回到 unreviewed，终态只撤回旧来源且不采用新 claim。该执行器没有控制器、模块装配、后台任务或客户端入口，也没有推断训练依从性、动机、偏好、效果或医疗含义；它只证明首个本人确认 Constraint 能沿来源变化可解释地修订。
 
@@ -378,25 +386,25 @@ R-032 继续覆盖“个人状态账本被误解为完整真相”。R-033 新�
 
 ## 14. 分阶段实施与验收
 
-| 阶段                   | 范围                                                                             | 退出证据                                                                            |
-| ---------------------- | -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| P0 领域基线            | 本文、ADR、路线图与风险重排                                                      | 八类边界、状态机、证据和首批场景完成受检；本轮完成                                  |
-| P1a 核心共享契约       | item/claim/evidence/confidence/feedback 严格 Schema                              | 三个 claim、Unknown、决策资格和边界测试通过；已完成                                 |
-| P1b 修订与回顾契约     | item revision、feedback transition、review 信封                                  | 不可变快照、动作、精确引用、状态转换和回顾数量门禁通过；已完成                      |
-| P2 持久内核            | item/revision/feedback/evidence、goal 历史及来源 refresh 协议已完成；review 待续 | P2a–P2c 已证明隔离、并发、反馈事务、精确投影、来源资格、撤回解决和账号删除          |
-| P3 首批派生            | 安排约束与 8 周记录频率已完成；训练时长基线待续                                  | 两场景 create/no-op/refresh、Unknown/失效、异议与删除通过；下一步补同主题安全新代际 |
-| P4 Mirror 读取         | “关于我”摘要、详情、历史、证据追溯                                               | 未读/空/失败分离，移动端无障碍与隐私路径通过                                        |
-| P5 周回顾与反馈        | 少量回顾、四选一反馈、模型修订                                                   | 精确 revision、过期反馈冲突、temporary/disputed 语义通过                            |
-| P6 Pattern/Hypothesis  | 睡眠-RPE 等描述性关系与不确定假设                                                | 支持/反对证据、非因果措辞、跨窗口稳定门禁通过                                       |
-| P7 Outcome 更新        | 计划采用、实际关联、恢复与反思增加一次证据                                       | 单次结果不升级、撤销可见、重复窗口更新可复算                                        |
-| P8 Contextual Decision | 个人历史驱动的结构化建议与解释                                                   | 引用、Unknown、置信、替代方案、安全 validator 全部通过                              |
+| 阶段                   | 范围                                                                             | 退出证据                                                                              |
+| ---------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| P0 领域基线            | 本文、ADR、路线图与风险重排                                                      | 八类边界、状态机、证据和首批场景完成受检；本轮完成                                    |
+| P1a 核心共享契约       | item/claim/evidence/confidence/feedback 严格 Schema                              | 三个 claim、Unknown、决策资格和边界测试通过；已完成                                   |
+| P1b 修订与回顾契约     | item revision、feedback transition、review 信封                                  | 不可变快照、动作、精确引用、状态转换和回顾数量门禁通过；已完成                        |
+| P2 持久内核            | item/revision/feedback/evidence、goal 历史及来源 refresh 协议已完成；review 待续 | P2a–P2c 已证明隔离、并发、反馈事务、精确投影、来源资格、撤回解决和账号删除            |
+| P3 首批派生            | 安排约束、8 周记录频率及终态新代际已完成；训练时长基线待续                       | 两场景与代际 create/no-op/refresh、Unknown/失效、异议、并发和删除通过；下一步时长基线 |
+| P4 Mirror 读取         | “关于我”摘要、详情、历史、证据追溯                                               | 未读/空/失败分离，移动端无障碍与隐私路径通过                                          |
+| P5 周回顾与反馈        | 少量回顾、四选一反馈、模型修订                                                   | 精确 revision、过期反馈冲突、temporary/disputed 语义通过                              |
+| P6 Pattern/Hypothesis  | 睡眠-RPE 等描述性关系与不确定假设                                                | 支持/反对证据、非因果措辞、跨窗口稳定门禁通过                                         |
+| P7 Outcome 更新        | 计划采用、实际关联、恢复与反思增加一次证据                                       | 单次结果不升级、撤销可见、重复窗口更新可复算                                          |
+| P8 Contextual Decision | 个人历史驱动的结构化建议与解释                                                   | 引用、Unknown、置信、替代方案、安全 validator 全部通过                                |
 
 每个阶段可拆成多轮小迭代。云服务、真实模型、设备接入、部署和极端导出优化不占用认知主线，除非它们阻塞数据安全、隐私或当前阶段验收。
 
 ## 15. 待决策与下一步
 
-下一轮先解决同主题终态后的新代际：旧 item/revision 必须保持不可变且不得复活，新出现的充分证据则需要能够形成新的当前 item，并让来源刷新、反馈、读取和删除明确绑定某一代。训练时长 Baseline、Weekly Cognitive Review、API、模型导出与客户端仍拆到后续轮次。
+下一轮实现 `recorded_session_duration_baseline_v1`：只从当前未删除 workout revisions 的真实开始/结束时刻计算完整窗口内已记录课次历时，并用固定中位数与 nearest-rank 四分位数算法形成 Unknown/candidate/active，不推断能力、强度或效果。Weekly Cognitive Review、API、模型导出与客户端仍拆到后续轮次。
 
 后续待真实数据或用户研究决定：材料变化阈值、长期 Pattern 的最低非重叠窗口、Hypothesis 的高置信上限、周回顾卡片数量理解度，以及 Contextual Decision 的安全升级阈值。缺少证据时保持保守默认，不臆造产品基准。
 
-本设计的领域取舍记录在 [ADR-0175](decisions/0175-evidence-backed-revisable-personal-model.md)，P1/P2 契约与持久边界记录在 ADR-0176–0182，training availability 确定性派生记录在 [ADR-0183](decisions/0183-training-availability-deterministic-deriver.md)，完整本地周训练频率派生记录在 [ADR-0184](decisions/0184-recorded-training-frequency-deterministic-deriver.md)；实施状态以[项目状态](../PROJECT_STATUS.md)和[已实现产品需求文档](../product/IMPLEMENTED_PRD.md)为准。
+本设计的领域取舍记录在 [ADR-0175](decisions/0175-evidence-backed-revisable-personal-model.md)，P1/P2 契约与持久边界记录在 ADR-0176–0182，training availability 与训练频率派生记录在 ADR-0183/0184，同主题终态后新代际记录在 [ADR-0185](decisions/0185-personal-model-item-generation-lifecycle.md)；实施状态以[项目状态](../PROJECT_STATUS.md)和[已实现产品需求文档](../product/IMPLEMENTED_PRD.md)为准。

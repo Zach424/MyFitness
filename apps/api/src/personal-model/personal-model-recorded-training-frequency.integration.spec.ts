@@ -263,4 +263,129 @@ describe('recorded training frequency executor with PostgreSQL', () => {
       resolutions: '0',
     })
   })
+
+  it('creates one successor generation after a terminal behavior gains new evidence', async () => {
+    const userId = await createOwner(10)
+    const first = await createWorkout(userId, 7)
+    const initial = await repository.refreshRecordedTrainingFrequency(userId)
+    if (initial.outcome !== 'created') throw new Error('expected created')
+
+    await workoutsService.remove(userId, first.created.id, first.created.revision)
+    const invalidated = await repository.refreshRecordedTrainingFrequency(userId)
+    if (invalidated.outcome !== 'revised') throw new Error('expected invalidated revision')
+    expect(invalidated.revision.snapshot.status).toBe('invalidated')
+
+    await expect(
+      pool.query(
+        `
+          UPDATE personal_model_items
+          SET retired_at = updated_at + INTERVAL '1 millisecond',
+              updated_at = updated_at + INTERVAL '1 millisecond'
+          WHERE user_id = $1 AND id = $2
+        `,
+        [userId, initial.revision.itemId],
+      ),
+    ).rejects.toThrow('requires an atomic successor')
+
+    await createWorkout(userId, 3)
+    const results = await Promise.all([
+      repository.refreshRecordedTrainingFrequency(userId),
+      repository.refreshRecordedTrainingFrequency(userId),
+    ])
+    expect(results.map((result) => result.outcome).sort()).toEqual(['created', 'no_op'])
+    const successor = results.find((result) => result.outcome === 'created')
+    if (!successor || successor.outcome !== 'created') throw new Error('expected successor')
+    expect(successor.revision.itemId).not.toBe(initial.revision.itemId)
+    expect(successor.revision.snapshot.status).toBe('candidate')
+
+    const lineage = await pool.query<{
+      id: string
+      generation: number
+      predecessor_item_id: string | null
+      retired: boolean
+      status: string
+    }>(
+      `
+        SELECT
+          item.id,
+          item.generation,
+          item.predecessor_item_id,
+          item.retired_at IS NOT NULL AS retired,
+          revision.snapshot ->> 'status' AS status
+        FROM personal_model_items AS item
+        JOIN personal_model_item_revisions AS revision
+          ON revision.user_id = item.user_id
+         AND revision.item_id = item.id
+         AND revision.revision = item.current_revision
+        WHERE item.user_id = $1 AND item.subject_key = 'training.recorded_frequency'
+        ORDER BY item.generation
+      `,
+      [userId],
+    )
+    expect(lineage.rows).toEqual([
+      {
+        id: initial.revision.itemId,
+        generation: 1,
+        predecessor_item_id: null,
+        retired: true,
+        status: 'invalidated',
+      },
+      {
+        id: successor.revision.itemId,
+        generation: 2,
+        predecessor_item_id: initial.revision.itemId,
+        retired: false,
+        status: 'candidate',
+      },
+    ])
+
+    await expect(
+      pool.query(
+        `
+          UPDATE personal_model_items
+          SET updated_at = updated_at + INTERVAL '1 millisecond'
+          WHERE user_id = $1 AND id = $2
+        `,
+        [userId, initial.revision.itemId],
+      ),
+    ).rejects.toThrow('retired personal model generations are immutable')
+    await expect(
+      pool.query(
+        `
+          UPDATE personal_model_items
+          SET retired_at = updated_at + INTERVAL '1 millisecond',
+              updated_at = updated_at + INTERVAL '1 millisecond'
+          WHERE user_id = $1 AND id = $2
+        `,
+        [userId, successor.revision.itemId],
+      ),
+    ).rejects.toThrow('retirement requires a terminal settled item')
+
+    await pool.query('DELETE FROM users WHERE id = $1', [userId])
+    owners.delete(userId)
+    const remaining = await pool.query<{
+      items: string
+      revisions: string
+      evidence: string
+      requests: string
+      resolutions: string
+    }>(
+      `
+        SELECT
+          (SELECT COUNT(*) FROM personal_model_items WHERE user_id = $1)::text AS items,
+          (SELECT COUNT(*) FROM personal_model_item_revisions WHERE user_id = $1)::text AS revisions,
+          (SELECT COUNT(*) FROM personal_model_evidence_refs WHERE user_id = $1)::text AS evidence,
+          (SELECT COUNT(*) FROM personal_model_source_refresh_requests WHERE user_id = $1)::text AS requests,
+          (SELECT COUNT(*) FROM personal_model_source_refresh_resolutions WHERE user_id = $1)::text AS resolutions
+      `,
+      [userId],
+    )
+    expect(remaining.rows[0]).toEqual({
+      items: '0',
+      revisions: '0',
+      evidence: '0',
+      requests: '0',
+      resolutions: '0',
+    })
+  })
 })

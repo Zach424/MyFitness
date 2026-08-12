@@ -73,6 +73,7 @@ type TrainingAvailabilityGoalRow = {
 
 type TrainingAvailabilityItemRow = {
   id: string
+  generation: number
 }
 
 type TrainingAvailabilityPendingRequestRow = {
@@ -90,6 +91,7 @@ type TrainingAvailabilityEvaluationRow = {
 
 type RecordedTrainingFrequencyItemRow = {
   id: string
+  generation: number
 }
 
 type RecordedTrainingFrequencyPendingRequestRow = {
@@ -337,6 +339,60 @@ const insertRevision = async (
   if (!stored) throw new Error('personal model revision insert returned no row')
   await insertEvidenceReferences(client, revision)
   return mapRevisionRow(stored)
+}
+
+const retireGenerationAndInsertSuccessor = async (
+  client: PoolClient,
+  input: {
+    userId: string
+    subjectKey: PersonalModelItem['subjectKey']
+    predecessorItemId: string
+    predecessorGeneration: number
+    predecessorRevision: number
+    revision: PersonalModelItemRevision
+  },
+) => {
+  const retired = await client.query(
+    `
+      UPDATE personal_model_items
+      SET retired_at = $1, updated_at = $1
+      WHERE user_id = $2
+        AND id = $3
+        AND subject_key = $4
+        AND generation = $5
+        AND current_revision = $6
+        AND retired_at IS NULL
+    `,
+    [
+      input.revision.changedAt,
+      input.userId,
+      input.predecessorItemId,
+      input.subjectKey,
+      input.predecessorGeneration,
+      input.predecessorRevision,
+    ],
+  )
+  if (retired.rowCount !== 1) throw new PersonalModelRevisionConflictError()
+
+  await client.query(
+    `
+      INSERT INTO personal_model_items (
+        id, user_id, subject_key, current_revision,
+        generation, predecessor_item_id,
+        created_at, updated_at
+      )
+      VALUES ($1, $2, $3, 1, $4, $5, $6, $6)
+    `,
+    [
+      input.revision.itemId,
+      input.userId,
+      input.subjectKey,
+      input.predecessorGeneration + 1,
+      input.predecessorItemId,
+      input.revision.changedAt,
+    ],
+  )
+  return insertRevision(client, input.revision)
 }
 
 const mapFeedbackEventRow = (
@@ -716,9 +772,10 @@ export class PersonalModelRepository {
 
         const itemResult = await client.query<TrainingAvailabilityItemRow>(
           `
-            SELECT id
+            SELECT id, generation
             FROM personal_model_items
             WHERE user_id = $1 AND subject_key = 'training.availability'
+              AND retired_at IS NULL
           `,
           [userId],
         )
@@ -768,13 +825,26 @@ export class PersonalModelRepository {
         const evaluatedAt = evaluationResult.rows[0]?.evaluated_at.toISOString()
         if (!evaluatedAt) throw new Error('training availability evaluation time is missing')
 
+        const terminal =
+          current?.snapshot.status === 'invalidated' || current?.snapshot.status === 'superseded'
+        const currentGoalIsNovel =
+          terminal &&
+          !current.snapshot.evidenceSet.references.some(
+            (reference) =>
+              reference.evidenceKind === 'onboarding_goal_revision' &&
+              reference.aggregateId === goalRevision.goalId &&
+              reference.aggregateRevision === goalRevision.revision,
+          )
+        const startSuccessor = currentGoalIsNovel && pendingRequests.length === 0
+        const derivationItemId = startSuccessor ? randomUUID() : itemId
+
         const result = deriveTrainingAvailability({
           goalRevision,
           timezone: profile.timezone,
           evaluatedAt,
-          currentRevision: current,
+          currentRevision: startSuccessor ? null : current,
           ids: {
-            itemId,
+            itemId: derivationItemId,
             revisionId: randomUUID(),
             eligibleReferenceId: randomUUID(),
           },
@@ -791,6 +861,22 @@ export class PersonalModelRepository {
         }
 
         if (result.outcome === 'created') {
+          if (startSuccessor) {
+            if (!current || !itemResult.rows[0]) {
+              throw new PersonalModelRevisionConflictError(
+                'training availability successor predecessor is missing',
+              )
+            }
+            const stored = await retireGenerationAndInsertSuccessor(client, {
+              userId,
+              subjectKey: 'training.availability',
+              predecessorItemId: itemId,
+              predecessorGeneration: itemResult.rows[0].generation,
+              predecessorRevision: current.revision,
+              revision: result.revision,
+            })
+            return { ...result, revision: stored }
+          }
           if (current !== null || pendingRequests.length > 0) {
             throw new PersonalModelRevisionConflictError(
               'training availability creation target is no longer empty',
@@ -878,9 +964,10 @@ export class PersonalModelRepository {
 
         const itemResult = await client.query<RecordedTrainingFrequencyItemRow>(
           `
-            SELECT id
+            SELECT id, generation
             FROM personal_model_items
             WHERE user_id = $1 AND subject_key = 'training.recorded_frequency'
+              AND retired_at IS NULL
           `,
           [userId],
         )
@@ -1038,6 +1125,21 @@ export class PersonalModelRepository {
           },
         )
 
+        const terminal =
+          current?.snapshot.status === 'invalidated' || current?.snapshot.status === 'superseded'
+        const currentGenerationSources = new Set(
+          current?.snapshot.evidenceSet.references.map(
+            (reference) => `${reference.aggregateId}:${reference.aggregateRevision}`,
+          ) ?? [],
+        )
+        const currentWorkoutsAreNovel =
+          terminal &&
+          workouts.some(
+            (workout) => !currentGenerationSources.has(`${workout.workoutId}:${workout.revision}`),
+          )
+        const startSuccessor = currentWorkoutsAreNovel && pendingRequests.length === 0
+        const derivationItemId = startSuccessor ? randomUUID() : itemId
+
         const result = deriveRecordedTrainingFrequency({
           userId,
           evaluatedAt: observation.evaluated_at.toISOString(),
@@ -1056,8 +1158,8 @@ export class PersonalModelRepository {
             observedRevision: request.observed_source_revision,
             reason: request.reason === 'source_deleted' ? 'source_deleted' : 'source_corrected',
           })),
-          currentRevision: current,
-          ids: { itemId, revisionId: randomUUID() },
+          currentRevision: startSuccessor ? null : current,
+          ids: { itemId: derivationItemId, revisionId: randomUUID() },
           sha256Hex,
         })
 
@@ -1078,6 +1180,22 @@ export class PersonalModelRepository {
           return result
         }
         if (result.outcome === 'created') {
+          if (startSuccessor) {
+            if (!current || !itemResult.rows[0]) {
+              throw new PersonalModelRevisionConflictError(
+                'recorded training frequency successor predecessor is missing',
+              )
+            }
+            const stored = await retireGenerationAndInsertSuccessor(client, {
+              userId,
+              subjectKey: 'training.recorded_frequency',
+              predecessorItemId: itemId,
+              predecessorGeneration: itemResult.rows[0].generation,
+              predecessorRevision: current.revision,
+              revision: result.revision,
+            })
+            return { ...result, revision: stored }
+          }
           if (current !== null || pendingRequests.length > 0) {
             throw new PersonalModelRevisionConflictError(
               'recorded training frequency creation target is no longer empty',

@@ -201,6 +201,18 @@ const personalModelSourceQualificationMigrationPath = path.resolve(
   __dirname,
   '../../../../infra/postgres/migrations/0041_personal_model_source_qualification.sql',
 )
+const personalModelItemGenerationMigrationPath = path.resolve(
+  __dirname,
+  '../../../../infra/postgres/migrations/0042_personal_model_item_generation.sql',
+)
+const personalModelGenerationRefreshRaceMigrationPath = path.resolve(
+  __dirname,
+  '../../../../infra/postgres/migrations/0043_personal_model_generation_refresh_race.sql',
+)
+const personalModelGenerationStrictTimesMigrationPath = path.resolve(
+  __dirname,
+  '../../../../infra/postgres/migrations/0044_personal_model_generation_strict_times.sql',
+)
 
 describe('health-record migration drift', () => {
   it('contains every contract metric, unit and source kind', async () => {
@@ -642,6 +654,50 @@ describe('health-record migration drift', () => {
       'personal model revision omitted a pending source withdrawal',
       'personal_model_source_refresh_requests_immutable',
       'personal_model_source_refresh_resolutions_immutable',
+    ]) {
+      expect(migration).toContain(boundary)
+    }
+  })
+
+  it('keeps one current Personal Model generation and requires an atomic terminal successor', async () => {
+    const migration = await readFile(personalModelItemGenerationMigrationPath, 'utf8')
+    for (const boundary of [
+      'personal_model_items_owner_subject_generation_unique',
+      'personal_model_items_owner_current_subject_unique',
+      'personal_model_items_owner_predecessor_unique',
+      'personal_model_items_predecessor_subject_fk',
+      'personal_model_items_generation_insert_guard',
+      'retired personal model generations are immutable',
+      'personal model generation retirement requires a terminal settled item',
+      'personal_model_items_retirement_successor_guard',
+      'retired personal model generation requires an atomic successor',
+      'retired personal model generations cannot accept feedback',
+      'AND item.retired_at IS NULL',
+    ]) {
+      expect(migration).toContain(boundary)
+    }
+  })
+
+  it('closes the race between generation retirement and source refresh insertion', async () => {
+    const migration = await readFile(personalModelGenerationRefreshRaceMigrationPath, 'utf8')
+    for (const boundary of [
+      'personal_model_items_retirement_settled_guard',
+      'retired personal model generation gained a pending source refresh',
+      'personal_model_source_refresh_requests_generation_guard',
+      'source refresh request must target the current personal model generation',
+      'DEFERRABLE INITIALLY DEFERRED',
+    ]) {
+      expect(migration).toContain(boundary)
+    }
+  })
+
+  it('requires successor creation and retirement times to advance strictly', async () => {
+    const migration = await readFile(personalModelGenerationStrictTimesMigrationPath, 'utf8')
+    for (const boundary of [
+      'personal model generation must start at revision one and remain current',
+      'NEW.retired_at <= OLD.updated_at',
+      'predecessor_retired_at <> NEW.created_at',
+      'CREATE OR REPLACE FUNCTION guard_personal_model_item_mutation()',
     ]) {
       expect(migration).toContain(boundary)
     }

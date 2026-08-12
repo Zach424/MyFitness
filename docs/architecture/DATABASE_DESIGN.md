@@ -417,7 +417,17 @@ resolution 保存 `request_id,user_id,item_id,resolved_item_revision,withdrawn_r
 
 频率观察使用 READ COMMITTED，但 owner 锁后来源边界由同一条数据库语句计算和聚合，避免分段查询自行混合时区、窗口与训练快照。若训练在该语句之后、模型提交之前改变，精确来源资格的延迟门禁会拒绝旧引用；若训练在模型提交之后改变，来源 revision 触发器会生成新 refresh request。这样无需把整个事务提升为等待锁时容易保留旧快照的隔离级别，也没有通过应用时钟猜测数据库并发顺序。
 
-`personal_model_items` 当前仍以 `(user_id,subject_key)` 唯一，只允许一个主题拥有一个 item；契约又把 `invalidated`/`superseded` 设为不可复活终态。因此现有结构可以安全保持旧历史，却不能在之后出现充分新证据时创建同主题的新一代 item。下一轮必须先定义代际身份、唯一当前代、旧代读取与来源请求归属，再调整约束；在此之前执行器对终态坚持 no-op 或同终态撤回，不能通过重写状态绕过生命周期。
+第 191 轮把原 `(user_id,subject_key)` 永久唯一约束替换为 `(user_id,subject_key,generation)` 全历史唯一与 `retired_at IS NULL` 部分唯一。item 的正整数 `generation` 从 1 开始，generation>1 必须通过同 owner/subject 的 `predecessor_item_id` 连接直接前代；owner/predecessor 唯一禁止分叉，复合延迟外键保证前代真实存在。`retired_at` 为空表示当前代，非空表示历史代，且必须等于 item 最后 `updated_at`。
+
+退役更新只能发生一次：旧代 current revision 必须终态、来源待办全部解决、退役时刻严格晚于最后修订，并且同一事务必须创建 generation+1 后继。后继从 revision 1 开始，created/updated/前代 retired 使用同一时刻，自身不能预先退役。退役代的身份、指针和退役时刻全部不可再改，feedback 原始 SQL 也失败关闭；普通 append 最终会在 item 更新门禁回滚。按 item ID 的 current/history 继续可读旧代，公开“按主题当前代/全部代”查询尚未开放。
+
+来源触发器只扫描 `retired_at IS NULL` 当前代。另有两个延迟门禁处理来源事务与退役事务的交错：新 request 在提交时必须仍指向未退役 current revision；旧代退役在提交时必须仍无 unresolved request。无论哪方先写，冲突不会被静默提交，调用方需要重新读取并按当前代处理。账户删除沿 users 级联移除整个 predecessor 链、全部 revisions/evidence/feedback/request/resolution。
+
+这类提交冲突表示观察到的代际或来源已经过期，不表示可以忽略。内部调用方必须回滚整个事务，重新取得账户锁，再读取当时唯一的当前代、当前来源和仍未解决义务；若旧代仍当前，就先完成撤回或重新评估后继资格；若新代已经存在，就只能针对新代重新派生或返回无变化。不得单独补写后继、伪造解决记录、把旧待办搬到新代，也不得把唯一冲突一律当作成功，因为这些做法都会切断审计链。
+
+恢复和备份也必须保留代际整体关系。恢复校验不能只比较每个 item 的最新修订数量，还要证明每个主题的代次从一开始连续、直接前代唯一、只有最高未退役代是当前、每个退役时刻与直接后继创建时刻相等，并且旧代没有未解决来源义务。任一条件失败都应阻止该主题进入派生或展示，而不是自动选择编号最大的行掩盖关系损坏。
+
+查询层未来至少要区分三种意图：按明确 item 读取某一代当前修订，读取该代内部修订历史，以及按主题读取当前代和已退役代摘要。前两种已有内部能力，第三种尚未设计。公开接口不能把 item revision 游标复用为代际游标，也不能把 retired 当成删除或隐藏用户曾经反馈的旧认识；分页顺序、来源摘要、失效原因和数据导出都需要单独契约。
 
 ## 15. 管理员身份与审计
 
@@ -575,7 +585,7 @@ intent 创建 → 验证一次性 token 与确认短语 → users 状态关闭 �
 - 当前本地数据操作表有 179 个 job/attempt，来自测试和演示；应通过状态分布、失败码和死信而不是总行数判断健康。
 - 归档表与状态机已存在，但请求仓储、执行任务、加密对象、下载授权和到期扫描尚未实现；表结构不能被描述为用户可用的异步导出。
 - 没有设备原生同步表、社交表、支付表或医疗病历表；这些不属于当前实现。
-- `personal_model_items`、revision、feedback、evidence、source refresh 与 `user_goal_revisions` 已建立 owner 复合键、不可变历史、原子当前指针、精确来源和撤回解决；training availability 与 recorded training frequency 都已有内部确定性消费事务。当前单主题单 item 约束尚不能表达终态后的新代际，训练时长、Weekly Cognitive Review、Personal Model 列表/导出和公开 API 也未完成；在这些语义通过验证前，不得把内核描述为用户可用的“认知镜子”，也不得建立任意 JSON“用户画像”旁路。
+- `personal_model_items`、revision、feedback、evidence、source refresh 与 `user_goal_revisions` 已建立 owner 复合键、不可变历史、原子当前指针、精确来源和撤回解决；training availability 与 recorded training frequency 都有内部确定性事务，同主题终态也能以唯一当前 generation 原子接续。训练时长、Weekly Cognitive Review、公开代际列表/导出和 API 仍未完成；在这些语义通过验证前，不得把内核描述为用户可用的“认知镜子”，也不得建立任意 JSON“用户画像”旁路。
 - 备份物理删除时限属于生产保留政策和演练证据，不能只由主数据库 receipt 状态推断。
 
 ## 22. 运行核对查询
