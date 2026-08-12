@@ -1,6 +1,6 @@
 # 架构基线
 
-状态：当前实现已包含三个严格 Personal Model claim、同主题新代际、三主题逐项读取与三种本人校准；第 203 轮新增 iLens 目标领域迁移决策，但 Muscle Model、Body Assessment、Performance 与 Plan v2 尚未实现。架构变更必须新增 ADR。
+状态：当前实现已包含三个严格 Personal Model claim、同主题新代际、三主题逐项读取与三种本人校准；第 204 轮新增 Muscle Model v1 共享契约，但动作关联、持久化/API、Body Assessment、Performance 与 Plan v2 尚未实现。架构变更必须新增 ADR。
 
 ## 系统形态
 
@@ -125,6 +125,10 @@ iLens 迁移继续使用同一模块化单体与共享 PostgreSQL，不因新产
 - 父级限定的 pnpm 覆盖只在受影响依赖边上设置已审计最低版本或移除未使用的可选解析器：客户端 Vite 6.4.3、webpack 5.104.1、Swiper 12.1.2、lodash-es 4.18.1 和 nanoid 3.3.17；未使用的 Less `image-size` 可选依赖被移除。根 Vite 8.1.5 继续与 Vitest 隔离；冻结安装、对等依赖检查、双端构建、E2E 和 critical/high 零值审计门禁控制每次依赖图变更。
 
 ## 数据规则
+
+Muscle Model v1 以 `ilens-muscle-model-v1` 固定 5 个一级区域和 26 个稳定肌群 ID。定义内包含唯一 region、中文名、节点类型、前/后身体视图和区域内展示顺序；`core_global` 是唯一 aggregate，不得被动作映射或 UI 冒充为可解剖测量的单一肌肉。同版本任何身份、层级、名称、顺序或视图变化都必须失败关闭；语义变化需发布新版本及显式兼容策略。
+
+当前契约不包含动作 primary/secondary 关系、训练量权重、肌群状态、人体 SVG path 或医学解剖声明。这些下游能力必须单独建模和验证，不能向 v1 常量对象追加临时字段形成无版本漂移。
 
 所有健康领域事件都存储：
 

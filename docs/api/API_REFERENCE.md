@@ -10,6 +10,8 @@
 
 本文覆盖当前 OpenAPI 中全部 69 个路径、89 个 HTTP 操作，并补充共享 Zod 契约、控制器和客户端恢复语义。机器可读的精确 Schema 以同目录的 `openapi.json` 为准；本文用于产品、前端、后端、测试和运维共同阅读。iLens 的 Muscle Model、Body Assessment、Performance 和 Plan v2 仍是路线图目标，不计入当前接口。
 
+第 204 轮已经提供 `ilens-muscle-model-v1` 共享契约与版本化词表，但未新增 HTTP 操作，也没有修改动作目录响应。调用方不得假设当前 `/v1/exercise-catalog` 返回肌群关联；该 API 留待独立持久化切片。
+
 当前接口分为普通用户 API、管理员 API、内部运维 API 和公开系统/签名媒体 API。除明确标为公开或内部令牌的接口外，均要求普通用户 Bearer 会话。
 
 ## 2. 通用约定

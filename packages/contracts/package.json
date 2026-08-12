@@ -17,6 +17,14 @@
       "types": "./dist/health-record.constants.d.ts",
       "default": "./dist/health-record.constants.js"
     },
+    "./muscle-model": {
+      "types": "./dist/muscle-model.d.ts",
+      "default": "./dist/muscle-model.js"
+    },
+    "./muscle-model.constants": {
+      "types": "./dist/muscle-model.constants.d.ts",
+      "default": "./dist/muscle-model.constants.js"
+    },
     "./exercise-catalog.constants": {
       "types": "./dist/exercise-catalog.constants.d.ts",
       "default": "./dist/exercise-catalog.constants.js"

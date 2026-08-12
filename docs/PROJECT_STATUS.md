@@ -2,7 +2,7 @@
 
 最后审阅：2026-08-12
 
-阶段：内部 Alpha，可在本地完整运行。第 203 轮被归类为 A（Architecture）：依据用户提供的 `dataModel.md` 与仓库实际代码，把产品方向重构为 iLens——AI 驱动的长期个人健身数据库与行动闭环，当前垂直聚焦健身房力量训练。`funcTable.md` 已从空文件形成十一类领域迁移矩阵；现有 Profile/Goal、Training、Nutrition、隐私、Evidence 模式和 Personal Model 内核明确复用，Muscle Model、Body Assessment、Performance 与 Plan v2 明确为未实现新领域。Roadmap 按领域基础、核心交互、Body Profile/报告、Plan v2、Personal Model 和 AI 闭环六阶段重排，第 204 轮先做 Muscle Model v1 共享契约。本轮不修改业务代码、Schema 或运行时，不把目标文档冒充完成功能。第 202 轮完整单元仍为 120 个文件、775 项，集成为 29 个文件、176 项；双端预算与生产依赖基线不变。`docs/` 当前为 430 份 Markdown，11 份活跃权威文档、待迁移总量 191；第 090–203 轮与 ADR-0085–0197 连续受保护。Personal Model goal 的微秒来源资格缺陷仍以 R-034 登记，未提交修复被隔离保存，不混入本轮。
+阶段：内部 Alpha，可在本地完整运行。第 204 轮被归类为 F（Feature）：新增 `ilens-muscle-model-v1` 共享契约，以 5 个一级区域、26 个稳定 muscle ID、唯一层级、中文名、前/后身体视图、区域内连续顺序和唯一 `core_global` aggregate 形成全产品肌群语言；严格 Schema 拒绝别名式 ID、大小写漂移、重复视图、错误层级、同版本字段变化和未知字段。常量与 Zod 运行时使用明确子路径，包根不装载尚未接 UI 的词表。本轮没有数据库、HTTP、动作 primary/secondary 关联、肌群状态、SVG 或页面，不能描述为完整 Muscle Model 功能。完整单元实测为 121 个文件、782 项，全工作区 strict typecheck 与 contracts build 通过；既有 PostgreSQL 集成 176 项和双端产物仅作为上一轮基线，没有冒充本轮重跑。`docs/` 当前为 432 份 Markdown，11 份活跃权威文档、待迁移总量 191；第 090–204 轮与 ADR-0085–0198 连续受保护。下一轮只建立动作肌群关联持久化/API。
 
 主要交付目标：微信小程序 + 响应式 H5
 
@@ -16,7 +16,7 @@ iLens 以健身房力量训练为当前垂直，把个人资料、身体指标�
 | ----------------- | -------------------------- | ---------------------------------------------------------- | ---------------------------------- |
 | 产品范围          | iLens 目标与现状边界已分离 | 目标数据模型、迁移矩阵、已实现 PRD、数据库设计与 35 项风险 | Muscle Model 契约与真实用户研究    |
 | 交付路线图        | Phase 0–6 已重排           | 第 203 轮审计、ADR-0197、204–224 独立切片                  | 第 204 轮 Muscle Model v1          |
-| Muscle Model      | 待实现                     | 当前无统一肌群 ID 或动作肌群关系                           | 版本化共享契约与词表测试           |
+| Muscle Model      | v1 契约完成，产品能力待续  | 5 区域、26 个稳定 ID、层级/视图/版本与同版本漂移门禁       | 动作主/次肌群持久化与 API          |
 | Body Assessment   | 待实现                     | 仅有可借鉴的私有照片候选流程                               | 检测事件、报告、候选与确认模型     |
 | Performance       | 待实现                     | 当前只有动作次数、训练量和窗口点序列                       | 最佳组、e1RM、PR 与算法版本        |
 | Plan v2           | 待实现                     | 当前只有单周 weekly plan 聚合                              | 长期生命周期与旧历史兼容           |
@@ -37,6 +37,7 @@ iLens 以健身房力量训练为当前垂直，把个人资料、身体指标�
 ## 当前架构
 
 - iLens 继续采用当前 Taro 多端客户端、NestJS 模块化单体、PostgreSQL、共享契约与独立 AI worker 边界；产品迁移不触发微服务拆分或整仓重命名。目标模型以 `dataModel.md` 为输入，`funcTable.md` 记录当前/目标/差距，已实现 PRD 仍是实际能力权威。Muscle Model → 动作关联 → 肌群状态/训练分析/人体图，Body Metric Registry → Body Assessment → Body Profile，Training → Performance → Plan v2 构成三条主依赖链；全部确认事实最终再进入 Personal Model 与 AI 闭环。
+- Muscle Model v1 通过 `@myfitness/contracts/muscle-model.constants` 暴露无 Zod 的规范常量，通过 `@myfitness/contracts/muscle-model` 暴露严格运行时。5 个 region 与 26 个 muscle 的身份、中文名、层级、节点类型、前/后视图和顺序同版本不可变；`core_global` 只作为 aggregate。当前不包含动作关系、权重、状态或 SVG path，任何下游新增都必须独立验收。
 - 客户端采用 Taro 4、React 与 TypeScript，同时面向小程序和 H5。
 - 仓库采用 pnpm 工作区，锁文件入库，并共享 CSS/TypeScript 设计令牌包。
 - 无第三方依赖的项目状态镜像会选择最近打开的 Obsidian vault（或显式覆盖路径），把 `docs/PROJECT_STATUS.md` 逐字节复制到 vault 内，并独立拒绝过期或逃逸路径的目标；仓库副本始终是权威来源。
@@ -205,4 +206,4 @@ iLens 以健身房力量训练为当前垂直，把个人资料、身体指标�
 
 ## 首要下一步
 
-下一轮执行第 204 轮 Muscle Model v1 共享契约与版本化词表：固定稳定肌群 ID、层级、身体区域、前后视图、中文名和词表版本，并通过共享契约/领域测试；本轮不加入数据库、动作映射或 UI。随后第 205 轮再建立动作 primary/secondary 肌群关系。R-034 的 Personal Model 精确时间资格修复继续隔离保存，将在不混入新领域切片的独立修复轮恢复；云资源、真实 AI 提供方和批量品牌重命名继续暂停。
+下一轮执行第 205 轮动作与肌群关联持久化/API：为 starter 与 custom 动作定义 primary/secondary muscle ID、关联来源和 `ilens-muscle-model-v1` 版本，保留 owner 隔离与修订历史，并让动作目录 API 返回严格关系。本轮不加入肌群训练量、人体 SVG、肌群状态或计划算法。R-034 的 Personal Model 精确时间资格修复继续隔离保存；云资源、真实 AI 提供方和批量品牌重命名继续暂停。
