@@ -524,7 +524,7 @@ resolution 保存 `request_id,user_id,item_id,resolved_item_revision,withdrawn_r
 
 Personal Model item 创建时在同一事务写入 revision 1、全部有序 evidence projection 并发布当前指针；后续普通更新与反馈 revised 都只追加完整快照和对应证据行，再把指针精确推进一位。反馈 no-op 只追加结果收据，不复制 revision 或证据。goal/workout 来源更新会为当前 eligible evidence 追加 refresh request；下一 revision 必须包含匹配 withdrawn context 并形成 resolution。当前阶段不支持普通物理删除，只有账户级 owner 级联可清理 item、revision、feedback、evidence、request 与 resolution；个人模型便携导出生命周期仍待后续迁移。
 
-首个训练可用性刷新执行器把账户行作为稳定串行点：锁定后才重新读取资料、当前目标、当前模型修订与未解决义务，因此两个并发执行者不会同时观察到“尚未创建”，也不会沿等待前的旧快照重复发布。第一位执行者完成后，第二位只能得到语义无变化结果；若仍存在未解决义务，则无变化路径必须失败关闭，不能把待处理来源悄悄遗留。来源刷新只允许命中当前合格目标和唯一待办，解决记录与新模型修订在同一事务提交。账户删除也沿同一账户行取得顺序，从而不会在删除过程中留下半条派生历史。
+三个确定性刷新执行器都把账户行作为稳定串行点：锁定后才重新读取权威来源、当前模型修订与未解决义务，因此两个并发执行者不会同时观察到“尚未创建”，也不会沿等待前的旧快照重复发布。第一位执行者完成后，第二位只能得到语义无变化结果；若仍存在未解决义务，则无变化路径必须失败关闭，不能把待处理来源悄悄遗留。来源刷新只允许命中当前合格来源，解决记录与新模型修订在同一事务提交。训练频率和时长 Baseline 共享至多八个完整本地周及当前 workout revision 权威；时长只纳入开始与结束均位于窗口内、正数且不超过一天的历时，避免跨窗口课次和异常记录污染分位数。账户删除也沿同一账户行取得顺序，从而不会在删除过程中留下半条派生历史。
 
 建档目标创建时写稳定聚合和完整 revision 1；以后每次资料/目标共同 revision 都追加一条目标快照，即使目标字段未改变也保存本次本人重新提交的精确来源版本。旧账号在 0040 只获得当前检查点，覆盖范围继续随新修订继承。同步便携导出的当前 goal 对象内含有序 `revision_history`；普通读取仍只返回当前建档，账户删除清除当前与全部历史。
 
@@ -585,7 +585,7 @@ intent 创建 → 验证一次性 token 与确认短语 → users 状态关闭 �
 - 当前本地数据操作表有 179 个 job/attempt，来自测试和演示；应通过状态分布、失败码和死信而不是总行数判断健康。
 - 归档表与状态机已存在，但请求仓储、执行任务、加密对象、下载授权和到期扫描尚未实现；表结构不能被描述为用户可用的异步导出。
 - 没有设备原生同步表、社交表、支付表或医疗病历表；这些不属于当前实现。
-- `personal_model_items`、revision、feedback、evidence、source refresh 与 `user_goal_revisions` 已建立 owner 复合键、不可变历史、原子当前指针、精确来源和撤回解决；training availability 与 recorded training frequency 都有内部确定性事务，同主题终态也能以唯一当前 generation 原子接续。训练时长、Weekly Cognitive Review、公开代际列表/导出和 API 仍未完成；在这些语义通过验证前，不得把内核描述为用户可用的“认知镜子”，也不得建立任意 JSON“用户画像”旁路。
+- `personal_model_items`、revision、feedback、evidence、source refresh 与 `user_goal_revisions` 已建立 owner 复合键、不可变历史、原子当前指针、精确来源和撤回解决；training availability、recorded training frequency 与 recorded session duration 都有内部确定性事务，同主题终态也能以唯一当前 generation 原子接续。Weekly Cognitive Review、公开当前代/lineage 读取、导出和 API 仍未完成；在这些语义通过验证前，不得把内核描述为用户可用的“认知镜子”，也不得建立任意 JSON“用户画像”旁路。
 - 备份物理删除时限属于生产保留政策和演练证据，不能只由主数据库 receipt 状态推断。
 
 ## 22. 运行核对查询

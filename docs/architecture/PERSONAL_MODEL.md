@@ -36,7 +36,7 @@ Record → Evidence → Personal Model → Pattern / Hypothesis
 
 - `personal-state-ledger-v1` 每次读取即重算，不能表达某项认识何时形成、如何变化或为何失效。
 - 没有 Goal、Constraint、Preference、Baseline、Behavior、State、Pattern、Hypothesis 的稳定概念边界。
-- 共享契约中的证据已按完整条目修订投影为不可变关系，反馈也已持久化；goal/workout 引用具备来源级外键、当前资格和撤回事务证明，training availability 已有首个确定性执行器，但 workout 纵向派生与 Weekly Cognitive Review 仍未实现。
+- 共享契约中的证据已按完整条目修订投影为不可变关系，反馈也已持久化；goal/workout 引用具备来源级外键、当前资格和撤回事务证明。training availability、recorded training frequency 和 recorded session duration 已有确定性执行器，但 Weekly Cognitive Review 仍未实现。
 - candidate、active、disputed、superseded、invalidated 生命周期已有机器不变量，但尚无派生器或 repository 执行状态转换。
 - 用户确认、暂时情况、不同意、不确定已有追加事件及 revised/no-op 结果契约，但尚无受权 API 和用户界面。
 - Weekly Cognitive Review 已有少量、结构化、可复核的 revision/current/history 契约，但尚未生成、存储或展示。
@@ -313,7 +313,7 @@ stateDiagram-v2
   → 新模型修订
 ```
 
-首批只实现两个低歧义场景：
+首批实现三个低歧义 claim，并把安排约束与实际记录频率作为一组并列场景：
 
 ### 10.1 可训练安排与实际记录频率
 
@@ -324,8 +324,8 @@ stateDiagram-v2
 
 ### 10.2 单次训练记录时长基线
 
-- Baseline：对最近 8 个完整周、当前未删除且结束不早于开始的训练，计算 elapsed minutes 的中位数与四分位范围。
-- P1a 固定 `elapsed-duration-minutes-v1` 历时分钟语义和 `nearest-rank-quartiles-v1` 四分位算法版本；P3 推导实现仍须用原始样本夹具证明该算法与边界。
+- Baseline：对最近 8 个完整周、当前未删除且开始/结束都落在窗口内的训练，计算正数且不超过 1,440 分钟的 elapsed minutes 中位数与四分位范围；零历时、超长或跨窗口课次不进入统计。
+- P1a 固定 `elapsed-duration-minutes-v1` 历时分钟语义和 `nearest-rank-quartiles-v1` 四分位算法版本；P3 已用原始样本夹具、DST 窗口和真实 PostgreSQL 证明算法与边界。
 - 至少 6 条、覆盖至少 4 个不同周才可 active；单条极端值不直接改变典型范围。
 - 名称固定为“已记录训练的历时时长基线”，不等于有效训练时长、最佳时长或建议时长。
 
@@ -386,25 +386,25 @@ R-032 继续覆盖“个人状态账本被误解为完整真相”。R-033 新�
 
 ## 14. 分阶段实施与验收
 
-| 阶段                   | 范围                                                                             | 退出证据                                                                              |
-| ---------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| P0 领域基线            | 本文、ADR、路线图与风险重排                                                      | 八类边界、状态机、证据和首批场景完成受检；本轮完成                                    |
-| P1a 核心共享契约       | item/claim/evidence/confidence/feedback 严格 Schema                              | 三个 claim、Unknown、决策资格和边界测试通过；已完成                                   |
-| P1b 修订与回顾契约     | item revision、feedback transition、review 信封                                  | 不可变快照、动作、精确引用、状态转换和回顾数量门禁通过；已完成                        |
-| P2 持久内核            | item/revision/feedback/evidence、goal 历史及来源 refresh 协议已完成；review 待续 | P2a–P2c 已证明隔离、并发、反馈事务、精确投影、来源资格、撤回解决和账号删除            |
-| P3 首批派生            | 安排约束、8 周记录频率及终态新代际已完成；训练时长基线待续                       | 两场景与代际 create/no-op/refresh、Unknown/失效、异议、并发和删除通过；下一步时长基线 |
-| P4 Mirror 读取         | “关于我”摘要、详情、历史、证据追溯                                               | 未读/空/失败分离，移动端无障碍与隐私路径通过                                          |
-| P5 周回顾与反馈        | 少量回顾、四选一反馈、模型修订                                                   | 精确 revision、过期反馈冲突、temporary/disputed 语义通过                              |
-| P6 Pattern/Hypothesis  | 睡眠-RPE 等描述性关系与不确定假设                                                | 支持/反对证据、非因果措辞、跨窗口稳定门禁通过                                         |
-| P7 Outcome 更新        | 计划采用、实际关联、恢复与反思增加一次证据                                       | 单次结果不升级、撤销可见、重复窗口更新可复算                                          |
-| P8 Contextual Decision | 个人历史驱动的结构化建议与解释                                                   | 引用、Unknown、置信、替代方案、安全 validator 全部通过                                |
+| 阶段                   | 范围                                                                             | 退出证据                                                                   |
+| ---------------------- | -------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| P0 领域基线            | 本文、ADR、路线图与风险重排                                                      | 八类边界、状态机、证据和首批场景完成受检；本轮完成                         |
+| P1a 核心共享契约       | item/claim/evidence/confidence/feedback 严格 Schema                              | 三个 claim、Unknown、决策资格和边界测试通过；已完成                        |
+| P1b 修订与回顾契约     | item revision、feedback transition、review 信封                                  | 不可变快照、动作、精确引用、状态转换和回顾数量门禁通过；已完成             |
+| P2 持久内核            | item/revision/feedback/evidence、goal 历史及来源 refresh 协议已完成；review 待续 | P2a–P2c 已证明隔离、并发、反馈事务、精确投影、来源资格、撤回解决和账号删除 |
+| P3 首批派生            | 安排约束、8 周记录频率、训练时长基线及终态新代际均已完成                         | 三 claim 的 create/no-op/refresh、Unknown/失效、异议、并发、换代和删除通过 |
+| P4 Mirror 读取         | “关于我”摘要、详情、历史、证据追溯                                               | 未读/空/失败分离，移动端无障碍与隐私路径通过                               |
+| P5 周回顾与反馈        | 少量回顾、四选一反馈、模型修订                                                   | 精确 revision、过期反馈冲突、temporary/disputed 语义通过                   |
+| P6 Pattern/Hypothesis  | 睡眠-RPE 等描述性关系与不确定假设                                                | 支持/反对证据、非因果措辞、跨窗口稳定门禁通过                              |
+| P7 Outcome 更新        | 计划采用、实际关联、恢复与反思增加一次证据                                       | 单次结果不升级、撤销可见、重复窗口更新可复算                               |
+| P8 Contextual Decision | 个人历史驱动的结构化建议与解释                                                   | 引用、Unknown、置信、替代方案、安全 validator 全部通过                     |
 
 每个阶段可拆成多轮小迭代。云服务、真实模型、设备接入、部署和极端导出优化不占用认知主线，除非它们阻塞数据安全、隐私或当前阶段验收。
 
 ## 15. 待决策与下一步
 
-下一轮实现 `recorded_session_duration_baseline_v1`：只从当前未删除 workout revisions 的真实开始/结束时刻计算完整窗口内已记录课次历时，并用固定中位数与 nearest-rank 四分位数算法形成 Unknown/candidate/active，不推断能力、强度或效果。Weekly Cognitive Review、API、模型导出与客户端仍拆到后续轮次。
+下一轮进入 P4 的最小内部读取信封：设计并实现按 owner/subject 选择唯一未退役当前代的严格 repository 读取，返回 generation、直接前代、当前精确 revision 与终态/退役元数据；先不开放 HTTP、分页、客户端或完整 lineage 列表。Weekly Cognitive Review、模型导出与客户端仍拆到后续轮次。
 
 后续待真实数据或用户研究决定：材料变化阈值、长期 Pattern 的最低非重叠窗口、Hypothesis 的高置信上限、周回顾卡片数量理解度，以及 Contextual Decision 的安全升级阈值。缺少证据时保持保守默认，不臆造产品基准。
 
-本设计的领域取舍记录在 [ADR-0175](decisions/0175-evidence-backed-revisable-personal-model.md)，P1/P2 契约与持久边界记录在 ADR-0176–0182，training availability 与训练频率派生记录在 ADR-0183/0184，同主题终态后新代际记录在 [ADR-0185](decisions/0185-personal-model-item-generation-lifecycle.md)；实施状态以[项目状态](../PROJECT_STATUS.md)和[已实现产品需求文档](../product/IMPLEMENTED_PRD.md)为准。
+本设计的领域取舍记录在 [ADR-0175](decisions/0175-evidence-backed-revisable-personal-model.md)，P1/P2 契约与持久边界记录在 ADR-0176–0182，training availability 与训练频率派生记录在 ADR-0183/0184，同主题终态后新代际记录在 ADR-0185，训练时长基线记录在 [ADR-0186](decisions/0186-recorded-session-duration-deterministic-deriver.md)；实施状态以[项目状态](../PROJECT_STATUS.md)和[已实现产品需求文档](../product/IMPLEMENTED_PRD.md)为准。

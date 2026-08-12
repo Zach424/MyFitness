@@ -32,11 +32,11 @@
 - 原生 Apple Health、Health Connect 或穿戴设备自动同步。
 - 照片人体测量、姿态诊断、精确体脂率或“好坏体态”判断。
 - AI 自动修改计划、自动确认事实、自动写入餐食或自动提高训练量。
-- 用户可见的 Personal Model、Pattern/Hypothesis 生命周期、Weekly Cognitive Review 和模型修订闭环；当前只有内部持久/代际内核、反馈事务以及 training availability/recorded training frequency 两个确定性派生场景，尚无产品入口。
+- 用户可见的 Personal Model、Pattern/Hypothesis 生命周期、Weekly Cognitive Review 和模型修订闭环；当前只有内部持久/代际内核、反馈事务以及 training availability、recorded training frequency、recorded session duration 三个严格 claim 的确定性派生，尚无产品入口。
 - 基于长期个人模型自动执行 Contextual Decision，或把相关性、短期状态和用户未确认推断当作稳定人格标签。
 - 用户端离线写入队列；网络结果不确定时不会在后台自动重放请求。
 
-仓库已实现 Personal Model P1a/P1b 契约和 P2a–P2c PostgreSQL 内核，完整修订、用户反馈、有序 EvidenceReference、goal/workout 精确来源及 refresh request/resolution 都受 owner、不可变和提交时门禁保护。`training_availability_constraint_v1` 从当前 goal 形成本人确认约束；`recorded_training_frequency_behavior_v1` 只统计最近至多 8 个完整本地周的当前未删除 workout revisions，并以 Unknown/candidate/active 保持缺失记录与正向观察的区别。第 191 轮又允许终态旧 item 在待办清空且出现新证据后原子退役，由 generation+1 新 item 接续；一个主题始终只有一个当前代，旧代不复活、不接收修订/反馈/新来源义务，但保留审计读取和账户删除。它们没有控制器、自动触发、公开代际 API 或客户端；训练时长 Baseline、回顾和 Personal Model 便携导出也未接入，因此不构成用户可见认知镜子或自动适应功能。
+仓库已实现 Personal Model P1a/P1b 契约和 P2a–P2c PostgreSQL 内核，完整修订、用户反馈、有序 EvidenceReference、goal/workout 精确来源及 refresh request/resolution 都受 owner、不可变和提交时门禁保护。`training_availability_constraint_v1` 从当前 goal 形成本人确认约束；`recorded_training_frequency_behavior_v1` 只统计最近至多 8 个完整本地周的当前未删除 workout revisions，并以 Unknown/candidate/active 保持缺失记录与正向观察的区别；`recorded_session_duration_baseline_v1` 在相同窗口中只使用起止完整、正数且不超过 1,440 分钟的记录，固定计算中位数与 nearest-rank 四分位数，不解释为能力、强度、有效时长或建议。终态旧 item 可在待办清空且出现新证据后原子退役，由 generation+1 新 item 接续；一个已有主题 lineage 始终只有一个当前代，旧代不复活、不接收修订/反馈/新来源义务，但保留审计读取和账户删除。它们没有控制器、自动触发、公开代际 API 或客户端；回顾和 Personal Model 便携导出也未接入，因此不构成用户可见认知镜子或自动适应功能。
 
 ## 3. 用户、权限与信任边界
 

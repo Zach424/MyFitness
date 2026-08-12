@@ -2,7 +2,7 @@
 
 路线图按受控迭代组织。一轮可以跨越多个工作会话，但只有在实现、验证、档案更新和提交全部完成后才结束。
 
-进度快照（2026-08-12）：第 0–191 轮已在本地完成。Personal Model P0/P1 契约、P2a–P2c 持久/来源内核、training availability Constraint、recorded training frequency Behavior 及同主题终态后新代际已经受门禁保护。旧终态在待办清空且出现新来源后可原子退役并创建 generation+1；唯一当前代、前代不分叉、退役代只读、来源/退役竞态、双派生器并发收敛和账户删除均已验证。完整单元实测为 626 项、集成为 156 项、浏览器基线为 95 项。生产依赖为 0 个 critical/high、9 个 moderate。下一阶段实现 recorded session duration Baseline；除数据丢失、安全、隐私或认知闭环阻塞外，极端规模导出、部署与非必要运维强化暂停。
+进度快照（2026-08-12）：第 0–192 轮已在本地完成。Personal Model P0/P1 契约、P2a–P2c 持久/来源内核、training availability Constraint、recorded training frequency Behavior、recorded session duration Baseline 及同主题终态后新代际已经受门禁保护。时长只来自完整本地周内起止完整、正数且不超过 1,440 分钟的当前 workout revision；固定中位数与 nearest-rank 四分位数不推断能力、强度或效果。三个 claim 均复用 Unknown/candidate/active、精确来源撤回、反馈保持、终态不复活、并发收敛与账户删除。完整单元实测为 635 项、集成为 162 项、浏览器基线为 95 项。生产依赖为 0 个 critical/high、9 个 moderate。下一阶段先实现 owner/subject 当前代最小内部读取信封；除数据丢失、安全、隐私或认知闭环阻塞外，极端规模导出、部署与非必要运维强化暂停。
 
 ## 认知镜子主线
 
@@ -11,7 +11,7 @@
 | P0   | Personal Model 领域与架构基线       | 八类认知、证据角色、不可变修订、状态机、置信收据、用户校准和每周回顾边界受文档门禁保护                                  |
 | P1   | 共享领域契约                        | P1a 核心 item/claim/evidence/confidence/feedback 与 P1b 不可变 revision、反馈转换、Weekly Cognitive Review 信封均已实现 |
 | P2   | 持久化与所有者隔离                  | P2a/P2b、P2c 证据/来源资格/撤回协议及 goal 历史完成；执行器、回顾、普通删除/Personal Model 导出仍待实现                 |
-| P3   | Evidence → Personal Model Item      | 先实现“可训练约束与已记录训练行为并列”和“已记录课次时长基线”，满足覆盖门槛且不推断依从性、动机或偏好                    |
+| P3   | Evidence → Personal Model Item      | 三个严格 claim 已实现：安排与记录频率并列、记录课次时长基线；均满足覆盖门槛且不推断依从性、动机、偏好或训练效果         |
 | P4   | Weekly Cognitive Review             | 服务端固定选择少量条目和精确修订，客户端区分首次失败、空状态、刷新旧快照并可回到证据来源                                |
 | P5   | User Feedback → Model Revision      | 用户可选择“符合我、暂时情况、不同意、不确定”，反馈绑定精确修订并形成不可变后续修订，不自动提高置信                      |
 | P6   | Pattern → Hypothesis                | 只在多窗口复现、支持/反对证据和限制完整时生成候选假设；LLM 仅提供受检表达，不拥有事实或置信更新权                       |
@@ -214,6 +214,7 @@ P0–P5 是首个最小闭环：Evidence → Personal Model Item → Weekly Revi
 | 189  | 训练可用性确定性派生与刷新            | 本人 goal create/no-op/refresh、语义指纹、异议/终态保持、并发与删除证明，通过      |
 | 190  | 已记录训练频率确定性派生              | 完整本地周、Unknown/candidate/active、语义 no-op、来源撤回与证据耗尽证明，通过     |
 | 191  | Personal Model 同主题代际生命周期     | 唯一当前代、终态原子后继、退役只读、来源竞态、双场景并发与账户删除证明，通过       |
+| 192  | 已记录训练课次时长确定性基线          | 完整周起止边界、固定中位数/四分位、Unknown/撤回/失效/换代与账户删除证明，通过      |
 
 托管共享环境部署、封闭测试强化与发布继续作为正式发布门禁，但在真实身份、数据保管、遥测、域名、预算、责任人与备案材料就绪前不占用本地迭代编号。原生 App 与 HealthKit/Health Connect/华为设备同步继续等待 MVP 留存门禁。
 
