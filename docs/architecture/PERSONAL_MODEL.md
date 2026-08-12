@@ -117,7 +117,7 @@ erDiagram
 
 ### 4.4 P1a/P1b 共享契约
 
-`packages/contracts/src/personal-model.ts` 已实现首批内部权威边界，P2 持久内核已复用这些边界，公开 API 尚未使用：
+`packages/contracts/src/personal-model.ts` 已实现首批权威边界，P2 持久内核与当前主题只读 API 已复用这些边界：
 
 - 三个严格 claim 通过 `claimSchemaVersion` 同时锁定认知类型、主题和来源：本人确认的训练安排 Constraint、确定性已记录训练频率 Behavior、确定性已记录课次时长 Baseline。Behavior 不能伪装成 Goal/Constraint，当前联合也不接受 Pattern/Hypothesis 或额外因果字段。
 - EvidenceReference 目前只开放真实可复用的 `onboarding_goal_revision` 与 `workout_revision`。每条引用绑定 owner、聚合 UUID、正 revision、时间、来源、作用角色和撤回原因；EvidenceSet 复核计数、所有者、唯一性、窗口及 SHA-256 指纹表示。
@@ -181,6 +181,8 @@ repository 在 READ COMMITTED 事务中先锁 active owner，再读取 item/curr
 来源绑定只有同时命中同一账户、稳定聚合、明确修订和可接受覆盖范围时才算合格；任何一项缺失都失败关闭，不能退回仅比较字符串引用。goal 的 `checkpoint_only` 当前修订仍是可引用的诚实本人确认检查点，但检查点之前没有历史行的编号绝不合格。来源当前资格是新模型 revision 的写入条件，不会反向改写旧模型 revision 在当时形成的历史陈述。
 
 这里的“当前”只代表某个条目已经发布的最新修订，不代表系统掌握了用户完整、永久或唯一的真实状态。第 193 轮的内部 `personal-model-current-subject-envelope-v1` 进一步把“当前主题”限定为 active owner 下唯一 `retired_at IS NULL` generation 的精确 current revision；空主题明确为 null。terminal 表示 revision 已 superseded/invalidated，retired 表示该代已被后继替换，两者不能互换。第 194 轮的 `personal-model-current-subject-view-v1` 只从该严格信封投影一项当前认识：保留 subject、item/revision 数字定位、generation、结构化 claim、状态/反馈、置信限制、证据计数/窗口和必要时间；不暴露 owner、前代、内部 revision/reference UUID、EvidenceReference 正文、证据/派生指纹或策略字段。owner 不存在、disabled 或 deletion_pending 在应用层统一为 unavailable，active owner 的空主题仍为 `current:null`；歧义和损坏继续失败关闭，不能伪装成授权失败或空结果。数据库可以证明一条历史属于谁、前后顺序是否连续、内容是否被直接改写，却不能证明观察是否充分、结论是否准确或用户是否认同。后续反馈、来源撤回和回顾流程必须继续保留这些不确定性，任何展示层都要让用户看见依据、时间、限制与更正入口。
+
+第 195 轮只把这一项最小视图开放到一个认证 HTTP 路径。Bearer guard 先建立当前 owner，路径 subject 再由共享枚举解析；控制器不会接受任意 subject、item ID 或 owner 参数。认证后 authority 在读取前发生变化时返回统一 404，不说明账号不存在、停用或正在删除；active owner 还没有该主题则返回 200 与明确空视图。数据库歧义、残缺或 Schema 损坏继续成为无内部正文 500，不退化为空卡片。该路径在 guard 之前设置禁止存储，因此未认证和失败响应也不能被共享缓存保存。
 
 换言之，读取成功只说明系统找到了当前保留的一代认识，读取为空只说明该主题尚无条目；两种结果都不能被解释为现实行为存在、缺失、达标或失败。
 
@@ -413,8 +415,8 @@ R-032 继续覆盖“个人状态账本被误解为完整真相”。R-033 新�
 
 ## 15. 待决策与下一步
 
-下一轮只开放一个已认证的当前主题只读 HTTP 路由：路径参数必须使用严格 subject 枚举，响应只允许 `personal-model-current-subject-view-v1`，固定 `private, no-store`；authority 不可枚举、active 空主题保持明确空结果，内部歧义或损坏保持服务失败。同步锁定 OpenAPI 与集成测试，先不完成 lineage/证据分页、客户端或完整代际列表。Weekly Cognitive Review、模型导出与客户端仍拆到后续轮次。
+下一轮只实现客户端当前主题读取适配器与五阶段页面内存权限：传输成功后再次严格解析共享视图，初始失败不能变成空主题，刷新失败保留整份旧快照并标注过期；仅允许显式重试，不持久缓存、不轮询。先不新增展示页面、lineage/证据分页或完整代际列表。Weekly Cognitive Review、模型导出与最终客户端界面仍拆到后续轮次。
 
 后续待真实数据或用户研究决定：材料变化阈值、长期 Pattern 的最低非重叠窗口、Hypothesis 的高置信上限、周回顾卡片数量理解度，以及 Contextual Decision 的安全升级阈值。缺少证据时保持保守默认，不臆造产品基准。
 
-本设计的领域取舍记录在 [ADR-0175](decisions/0175-evidence-backed-revisable-personal-model.md)，P1/P2 契约与持久边界记录在 ADR-0176–0182，training availability 与训练频率派生记录在 ADR-0183/0184，同主题终态后新代际记录在 ADR-0185，训练时长基线记录在 ADR-0186，当前主题内部信封与最小可见投影记录在 ADR-0187/0188；实施状态以[项目状态](../PROJECT_STATUS.md)和[已实现产品需求文档](../product/IMPLEMENTED_PRD.md)为准。
+本设计的领域取舍记录在 [ADR-0175](decisions/0175-evidence-backed-revisable-personal-model.md)，P1/P2 契约与持久边界记录在 ADR-0176–0182，training availability 与训练频率派生记录在 ADR-0183/0184，同主题终态后新代际记录在 ADR-0185，训练时长基线记录在 ADR-0186，当前主题内部信封、最小可见投影与认证 HTTP 记录在 ADR-0187–0189；实施状态以[项目状态](../PROJECT_STATUS.md)和[已实现产品需求文档](../product/IMPLEMENTED_PRD.md)为准。

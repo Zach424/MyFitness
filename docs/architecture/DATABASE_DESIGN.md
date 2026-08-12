@@ -363,7 +363,7 @@ revision 的 UPDATE 和直接 DELETE 由触发器拒绝；延迟 constraint trig
 
 数据库重复保存所有者、主题、修订号和动作，是为了让关系约束在不解析全部业务对象时也能拒绝跨用户、错主题、断链和跳级发布。它不负责判断观察是否充分、置信是否合理或文字是否容易理解；这些规则仍由共享契约、确定性领域服务和后续用户研究负责。持久成功只证明结构与历史边界成立，不能被解释为个人认知结论已经真实或完整。
 
-历史读取只服务内部仓储，按修订号从新到旧返回有限数量。第 193 轮另增加按 owner/subject 的当前代内部读取：单条语句从 active `users` 左连接唯一 `retired_at IS NULL` item 和精确 current revision，空主题、无 authority、歧义与残缺连接保持可区分且失败关闭。第 194 轮的应用投影不新增表、列或查询，只从已严格验证的同语句信封生成 owner-free 可见结构；不存在或非 active owner 统一为 unavailable，数据库歧义和损坏仍透传失败。公开分页仍需单独设计不可伪造游标、认证所有者错误隐藏、删除和导出行为；在这些边界完成前，Personal Model 表不得直接暴露给客户端，也不得成为自由查询的用户画像数据源。
+历史读取只服务内部仓储，按修订号从新到旧返回有限数量。第 193 轮另增加按 owner/subject 的当前代内部读取：单条语句从 active `users` 左连接唯一 `retired_at IS NULL` item 和精确 current revision，空主题、无 authority、歧义与残缺连接保持可区分且失败关闭。第 194 轮的应用投影不新增表、列或查询，只从已严格验证的同语句信封生成 owner-free 可见结构；第 195 轮的认证 HTTP 也不增加数据库查询，只把 Session principal 的 user ID 和严格 subject 交给同一读取原语。公开 lineage/证据分页仍需单独设计不可伪造游标、认证所有者错误隐藏、删除和导出行为；除当前主题最小视图外，Personal Model 表不得直接暴露给客户端，也不得成为自由查询的用户画像数据源。
 
 ### 14.5.3 `personal_model_feedback_events`
 
@@ -585,7 +585,7 @@ intent 创建 → 验证一次性 token 与确认短语 → users 状态关闭 �
 - 当前本地数据操作表有 179 个 job/attempt，来自测试和演示；应通过状态分布、失败码和死信而不是总行数判断健康。
 - 归档表与状态机已存在，但请求仓储、执行任务、加密对象、下载授权和到期扫描尚未实现；表结构不能被描述为用户可用的异步导出。
 - 没有设备原生同步表、社交表、支付表或医疗病历表；这些不属于当前实现。
-- `personal_model_items`、revision、feedback、evidence、source refresh 与 `user_goal_revisions` 已建立 owner 复合键、不可变历史、原子当前指针、精确来源和撤回解决；training availability、recorded training frequency 与 recorded session duration 都有内部确定性事务，同主题终态也能以唯一当前 generation 原子接续。内部 current-subject 信封已能严格选择唯一当前代，但 Weekly Cognitive Review、公开授权/lineage 读取、导出和 API 仍未完成；在这些语义通过验证前，不得把内核描述为用户可用的“认知镜子”，也不得建立任意 JSON“用户画像”旁路。
+- `personal_model_items`、revision、feedback、evidence、source refresh 与 `user_goal_revisions` 已建立 owner 复合键、不可变历史、原子当前指针、精确来源和撤回解决；training availability、recorded training frequency 与 recorded session duration 都有内部确定性事务，同主题终态也能以唯一当前 generation 原子接续。current-subject 信封与认证最小视图已能严格选择并返回唯一当前代，但 Weekly Cognitive Review、公开 lineage/证据读取、导出和客户端仍未完成；在这些语义通过验证前，不得把一个当前主题 API 描述为完整用户“认知镜子”，也不得建立任意 JSON“用户画像”旁路。
 - 备份物理删除时限属于生产保留政策和演练证据，不能只由主数据库 receipt 状态推断。
 
 ## 22. 运行核对查询

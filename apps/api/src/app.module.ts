@@ -1,4 +1,10 @@
-import { type DynamicModule, Module } from '@nestjs/common'
+import {
+  type DynamicModule,
+  type MiddlewareConsumer,
+  Module,
+  type NestModule,
+  RequestMethod,
+} from '@nestjs/common'
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core'
 
 import { AdminAuditController } from './admin/admin-audit.controller'
@@ -49,6 +55,8 @@ import { RedisService } from './operations/redis.service'
 import { PlansController } from './plans/plans.controller'
 import { PlansService } from './plans/plans.service'
 import { PersonalModelCurrentSubjectViewService } from './personal-model/personal-model-current-subject-view'
+import { personalModelCurrentSubjectNoStoreMiddleware } from './personal-model/personal-model-current-subject-no-store.middleware'
+import { PersonalModelController } from './personal-model/personal-model.controller'
 import { PersonalModelRepository } from './personal-model/personal-model.repository'
 import { ProgressPhotosController } from './progress-photos/progress-photos.controller'
 import { ProgressPhotosService } from './progress-photos/progress-photos.service'
@@ -78,6 +86,7 @@ import { WorkoutsService } from './workouts/workouts.service'
     PhotoCandidatesController,
     OnboardingController,
     OperationsController,
+    PersonalModelController,
     PlansController,
     ProgressPhotosController,
     PrivacyController,
@@ -127,7 +136,14 @@ import { WorkoutsService } from './workouts/workouts.service'
     WorkoutsService,
   ],
 })
-export class AppModule {
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(personalModelCurrentSubjectNoStoreMiddleware).forRoutes({
+      path: 'personal-model/subjects/:subjectKey/current',
+      method: RequestMethod.GET,
+    })
+  }
+
   static register(startupMode: ApplicationStartupMode = 'runtime'): DynamicModule {
     return {
       module: AppModule,

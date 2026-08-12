@@ -61,6 +61,29 @@ describe('OpenAPI document', () => {
     expect(document.paths['/v1/plans/weekly/{planId}/explanation']?.post).toBeDefined()
     expect(document.paths['/v1/plans/weekly/{planId}/explanation-request']?.get).toBeDefined()
     expect(document.paths['/v1/plans/weekly/{planId}/explanations']?.get).toBeDefined()
+    const currentSubject = document.paths['/v1/personal-model/subjects/{subjectKey}/current']?.get
+    expect(currentSubject).toBeDefined()
+    expect(currentSubject?.security).toContainEqual({ bearer: [] })
+    expect(currentSubject?.parameters).toContainEqual(
+      expect.objectContaining({
+        name: 'subjectKey',
+        in: 'path',
+        required: true,
+        schema: {
+          type: 'string',
+          enum: [
+            'training.availability',
+            'training.recorded_frequency',
+            'training.recorded_session_duration',
+          ],
+        },
+      }),
+    )
+    expect(currentSubject?.responses?.['200']).toBeDefined()
+    expect(currentSubject?.responses?.['400']).toBeDefined()
+    expect(currentSubject?.responses?.['401']).toBeDefined()
+    expect(currentSubject?.responses?.['404']).toBeDefined()
+    expect(currentSubject?.responses?.['500']).toBeDefined()
     expect(document.paths['/v1/auth/dev/session']?.post).toBeDefined()
     expect(document.paths['/v1/auth/wechat/session']?.post).toBeDefined()
     expect(document.paths['/v1/me/onboarding']?.put).toBeDefined()
