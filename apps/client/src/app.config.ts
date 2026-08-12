@@ -16,6 +16,7 @@ export default defineAppConfig({
     'pages/plans/index',
     'pages/plan-outcome/index',
     'pages/ai-explanations/index',
+    'pages/personal-model/index',
     'pages/privacy/index',
   ],
   window: {

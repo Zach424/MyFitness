@@ -22,10 +22,10 @@ export const MeHub = ({ onClose }: MeHubProps) => (
     </View>
 
     <View className="me-hero">
-      <Text className="me-eyebrow">ONE PLACE, TWO AUTHORITIES</Text>
+      <Text className="me-eyebrow">ONE PLACE, THREE AUTHORITIES</Text>
       <Text className="me-title">你提供什么，由你决定。</Text>
       <Text className="me-lead">
-        个人资料决定计划依据，数据台账决定保管权限。这里把两者放在一起，但不会复制它们的当前状态。
+        个人资料由你提供，系统观察由你核对，数据保管由你控制。这里把三种权威放在一起，但不会复制它们的当前状态。
       </Text>
     </View>
 
@@ -33,7 +33,7 @@ export const MeHub = ({ onClose }: MeHubProps) => (
       {meHubSections.map((section) => (
         <View className={`me-folio me-folio--${section.id}`} key={section.id}>
           <View className="me-folio__index" aria-hidden="true">
-            {section.id === 'profile' ? '我' : '权'}
+            {section.id === 'profile' ? '我' : section.id === 'mirror' ? '镜' : '权'}
           </View>
           <View className="me-folio__content">
             <Text className="me-folio__eyebrow">{section.eyebrow}</Text>
@@ -61,7 +61,7 @@ export const MeHub = ({ onClose }: MeHubProps) => (
     <View className="me-trust-note" role="note">
       <Text className="me-trust-note__label">入口边界</Text>
       <Text className="me-trust-note__body">
-        本页不读取健康数据、不判断资料是否完整，也不提供快捷删除。每项事实和敏感操作只由对应页面在取得当前服务凭据后显示。
+        本页不读取健康或认知数据、不判断资料是否完整，也不提供快捷删除。每项事实和敏感操作只由对应页面在取得当前服务凭据后显示。
       </Text>
     </View>
   </View>

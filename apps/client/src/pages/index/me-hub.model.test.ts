@@ -9,6 +9,8 @@ describe('me hub navigation model', () => {
       '训练目标',
       '单位与时区',
       '安全边界',
+      '已记录训练观察',
+      '证据范围与限制',
       '授权记录',
       '数据导出',
       '账户删除',
@@ -19,6 +21,7 @@ describe('me hub navigation model', () => {
   it('delegates facts and custody to their existing authoritative pages', () => {
     expect(meHubSections.map(({ id, path }) => ({ id, path }))).toEqual([
       { id: 'profile', path: '/pages/onboarding/index' },
+      { id: 'mirror', path: '/pages/personal-model/index' },
       { id: 'custody', path: '/pages/privacy/index' },
     ])
     expect(meHubSections.every((section) => section.boundary.length > 0)).toBe(true)
@@ -31,5 +34,14 @@ describe('me hub navigation model', () => {
     expect(profile?.capabilities).not.toContain('数据导出')
     expect(profile?.capabilities).not.toContain('账户删除')
     expect(custody?.capabilities).toEqual(['授权记录', '数据导出', '账户删除'])
+  })
+
+  it('keeps the mirror separate from profile editing and data custody', () => {
+    const mirror = meHubSections.find((section) => section.id === 'mirror')
+
+    expect(mirror?.capabilities).toEqual(['已记录训练观察', '证据范围与限制'])
+    expect(mirror?.capabilities).not.toContain('个人资料')
+    expect(mirror?.capabilities).not.toContain('数据导出')
+    expect(mirror?.boundary).toContain('不会自动调整计划')
   })
 })

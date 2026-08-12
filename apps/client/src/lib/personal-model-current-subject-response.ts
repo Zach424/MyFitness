@@ -1,8 +1,5 @@
-import {
-  personalModelCurrentSubjectViewSchema,
-  type PersonalModelCurrentSubjectView,
-  type PersonalModelSubjectKey,
-} from '@myfitness/contracts'
+import type { PersonalModelCurrentSubjectView, PersonalModelSubjectKey } from '@myfitness/contracts'
+import { isPersonalModelCurrentSubjectView } from '@myfitness/contracts/personal-model-current-subject.runtime'
 
 export class PersonalModelCurrentSubjectResponseError extends Error {
   constructor() {
@@ -15,11 +12,10 @@ export const parsePersonalModelCurrentSubjectResponse = (
   subjectKey: PersonalModelSubjectKey,
   value: unknown,
 ): PersonalModelCurrentSubjectView => {
-  const parsed = personalModelCurrentSubjectViewSchema.safeParse(value)
-  if (!parsed.success || parsed.data.subjectKey !== subjectKey) {
+  if (!isPersonalModelCurrentSubjectView(value) || value.subjectKey !== subjectKey) {
     throw new PersonalModelCurrentSubjectResponseError()
   }
-  return parsed.data
+  return value
 }
 
 export type PersonalModelCurrentSubjectTransport = (

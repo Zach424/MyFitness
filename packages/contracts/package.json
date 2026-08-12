@@ -48,6 +48,10 @@
     "./progress-photo.constants": {
       "types": "./dist/progress-photo.constants.d.ts",
       "default": "./dist/progress-photo.constants.js"
+    },
+    "./personal-model-current-subject.runtime": {
+      "types": "./dist/personal-model-current-subject.runtime.d.ts",
+      "default": "./dist/personal-model-current-subject.runtime.js"
     }
   },
   "files": [
