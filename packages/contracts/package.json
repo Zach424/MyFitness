@@ -52,6 +52,22 @@
     "./personal-model-current-subject.runtime": {
       "types": "./dist/personal-model-current-subject.runtime.d.ts",
       "default": "./dist/personal-model-current-subject.runtime.js"
+    },
+    "./personal-model-current-subject.constants": {
+      "types": "./dist/personal-model-current-subject.constants.d.ts",
+      "default": "./dist/personal-model-current-subject.constants.js"
+    },
+    "./personal-model-feedback.constants": {
+      "types": "./dist/personal-model-feedback.constants.d.ts",
+      "default": "./dist/personal-model-feedback.constants.js"
+    },
+    "./personal-model-feedback.runtime": {
+      "types": "./dist/personal-model-feedback.runtime.d.ts",
+      "default": "./dist/personal-model-feedback.runtime.js"
+    },
+    "./personal-model-time.runtime": {
+      "types": "./dist/personal-model-time.runtime.d.ts",
+      "default": "./dist/personal-model-time.runtime.js"
     }
   },
   "files": [

@@ -8,13 +8,13 @@ import {
   personalModelMaximumWorkoutEvidenceCount,
   personalModelStatuses,
   personalModelSubjectKeys,
-} from './personal-model.constants'
+} from './personal-model-current-subject.constants'
 import type { PersonalModelCurrentSubjectView } from './personal-model'
+import { isPersonalModelOffsetDateTime } from './personal-model-time.runtime'
 
 type JsonRecord = Record<string, unknown>
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
-const offsetDateTimePattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/
 const localDatePattern = /^\d{4}-\d{2}-\d{2}$/
 
 const isRecord = (value: unknown): value is JsonRecord =>
@@ -33,11 +33,6 @@ const isIntegerBetween = (value: unknown, minimum: number, maximum: number) =>
 
 const isFiniteBetween = (value: unknown, minimum: number, maximum: number) =>
   typeof value === 'number' && Number.isFinite(value) && value >= minimum && value <= maximum
-
-const isOffsetDateTime = (value: unknown): value is string =>
-  typeof value === 'string' &&
-  offsetDateTimePattern.test(value) &&
-  Number.isFinite(Date.parse(value))
 
 const isLocalDate = (value: unknown): value is string => {
   if (typeof value !== 'string' || !localDatePattern.test(value)) return false
@@ -202,11 +197,11 @@ const isEvidence = (value: unknown) => {
       'contradictingCount',
       'withdrawnCount',
     ]) ||
-    !isOffsetDateTime(value.asOf) ||
+    !isPersonalModelOffsetDateTime(value.asOf) ||
     !isRecord(value.window) ||
     !hasExactKeys(value.window, ['startAt', 'endAt', 'timezone']) ||
-    !isOffsetDateTime(value.window.startAt) ||
-    !isOffsetDateTime(value.window.endAt) ||
+    !isPersonalModelOffsetDateTime(value.window.startAt) ||
+    !isPersonalModelOffsetDateTime(value.window.endAt) ||
     !isIanaTimezone(value.window.timezone)
   )
     return false
@@ -259,12 +254,12 @@ const isCurrent = (subjectKey: string, value: unknown) => {
     typeof value.terminal !== 'boolean' ||
     !isConfidence(value.confidence) ||
     !isEvidence(value.evidence) ||
-    !isOffsetDateTime(value.validFrom) ||
-    !(value.validTo === null || isOffsetDateTime(value.validTo)) ||
-    !isOffsetDateTime(value.observedFrom) ||
-    !isOffsetDateTime(value.observedThrough) ||
-    !isOffsetDateTime(value.derivedAt) ||
-    !isOffsetDateTime(value.updatedAt) ||
+    !isPersonalModelOffsetDateTime(value.validFrom) ||
+    !(value.validTo === null || isPersonalModelOffsetDateTime(value.validTo)) ||
+    !isPersonalModelOffsetDateTime(value.observedFrom) ||
+    !isPersonalModelOffsetDateTime(value.observedThrough) ||
+    !isPersonalModelOffsetDateTime(value.derivedAt) ||
+    !isPersonalModelOffsetDateTime(value.updatedAt) ||
     !isRecord(value.confidence) ||
     !isRecord(value.evidence) ||
     !isRecord(value.evidence.window)

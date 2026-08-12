@@ -31,8 +31,6 @@ import {
   personalModelUnknownReasons,
   personalModelUnknownReceiptVersion,
   personalModelFeedbackTransitionVersion,
-  personalModelFeedbackWriteRequestVersion,
-  personalModelFeedbackWriteResponseVersion,
   personalModelRevisionActions,
   weeklyCognitiveReviewEnvelopeVersion,
   weeklyCognitiveReviewHistoryPageVersion,
@@ -40,9 +38,14 @@ import {
   weeklyCognitiveReviewQuestionKeys,
   weeklyCognitiveReviewVersion,
 } from './personal-model.constants'
+import {
+  personalModelFeedbackWriteRequestVersion,
+  personalModelFeedbackWriteResponseVersion,
+} from './personal-model-feedback.constants'
 import { workoutSourceKindSchema } from './workout'
 
 export * from './personal-model.constants'
+export * from './personal-model-feedback.constants'
 
 export const personalModelKindSchema = z.enum(personalModelKinds)
 export const personalModelStatusSchema = z.enum(personalModelStatuses)

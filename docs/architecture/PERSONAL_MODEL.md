@@ -1,6 +1,6 @@
 # 个人认知模型
 
-状态：第 200 轮完成精确修订反馈认证 HTTP；客户端反馈入口、回顾持久化、模型导出和完整客户端闭环仍未实现
+状态：第 201 轮完成客户端反馈传输与写入权限基础；反馈入口、回顾持久化、模型导出和完整客户端闭环仍未实现
 
 ## 1. 目标与边界
 
@@ -193,6 +193,10 @@ repository 在 READ COMMITTED 事务中先锁 active owner，再读取 item/curr
 第 199 轮让三个严格主题通过同一页面逐项可达。紧凑索引以唯一 `aria-pressed` 表达当前读取对象：本人安排显示本人提交权威，记录频次和记录时长显示已确认记录范围。主题切换先取消旧失败焦点，再提高 generation 并清除旧快照/错误，随后只用 begin 收据上的新 subject 读取；旧回调和旧焦点都不能跨主题提交。页面不批量预取、不并排展示，也不缓存每个主题，因此不会在内存中形成组合画像。
 
 第 200 轮新增 `POST /v1/personal-model/items/{itemId}/revisions/{revision}/feedback`。Bearer 身份、路径目标、服务端接受时刻与结果修订彼此分权；公开正文只携带 event UUID 和四选一内容。仓储在 active owner 与 item 行锁内重新读取 current，生成并原子提交 revised/no-op；同 event 响应丢失重放返回首次收据，换内容、过期/终态目标、跨 owner 或 authority 失效分别冲突或不可用。公开响应只返回结果定位和当前反馈状态，不回显 note/reason、claim、证据、owner 或内部指纹。客户端按钮仍未接入。
+
+第 201 轮新增无页面引用的客户端写入基础。适配器在调用认证 POST 前严格复核路径目标与公开请求，成功正文必须匹配共享最小响应不变量及同一 `itemId + targetRevision + eventId + choice`；temporary 还按绝对时刻核对有效期。页面内存写权限只保存 `idle/submitting/succeeded/failed`、精确目标、event 和产品自有失败分类，后端正文不进入状态；单调 generation 使更新请求、主题切换和页面失效后的迟到成功/失败均不能提交。网络未知不会后台重放，未来页面只能让用户使用原 event 明确重试。该基础尚未接入按钮，也不会自动刷新读取快照。
+
+同轮把当前主题与反馈写入所需运行时常量从 Personal Model 聚合 CommonJS 模块拆为专用入口。读取页面因此不再装载证据资格、回顾和写入专用枚举；轻量日期守卫还逐项验证公历日期、时间与偏移，拒绝 JavaScript 会自动归一化的非法日期。权威 Zod Schema 仍是服务端契约，轻量守卫继续用合法/非法夹具保持一致。
 
 换言之，读取成功只说明系统找到了当前保留的一代认识，读取为空只说明该主题尚无条目；两种结果都不能被解释为现实行为存在、缺失、达标或失败。
 
@@ -425,8 +429,8 @@ R-032 继续覆盖“个人状态账本被误解为完整真相”。R-033 新�
 
 ## 15. 待决策与下一步
 
-下一轮先取得 WeApp 结构性包体降幅，再实现无页面引用的客户端反馈传输与写入权限模型：最小请求/收据严格校验、当前 `itemId + revision + eventId` 绑定、提交代次、主题切换与卸载失权、响应未知后的同事件安全重试。先不接客户端按钮，也不开放 lineage 或证据分页。Weekly Cognitive Review、模型导出与其余页面接线仍拆到后续轮次。
+下一轮设计并接入 Personal Model 四选一反馈的最小用户界面：仅对当前非空、非终态快照开放，写入时冻结主题与目标，成功后显式重读当前主题；409、网络未知和无权限必须使用不同产品文案，且不得自动重放或把写收据当成完整新快照。temporary 有效期、可选原因与敏感备注应继续拆分，避免第一轮界面一次引入过多状态。lineage、证据分页、Weekly Cognitive Review 和模型导出继续后置。
 
 后续待真实数据或用户研究决定：材料变化阈值、长期 Pattern 的最低非重叠窗口、Hypothesis 的高置信上限、周回顾卡片数量理解度，以及 Contextual Decision 的安全升级阈值。缺少证据时保持保守默认，不臆造产品基准。
 
-本设计的领域取舍记录在 [ADR-0175](decisions/0175-evidence-backed-revisable-personal-model.md)，P1/P2 契约与持久边界记录在 ADR-0176–0182，training availability 与训练频率派生记录在 ADR-0183/0184，同主题终态后新代际记录在 ADR-0185，训练时长基线记录在 ADR-0186，当前主题信封、投影、认证 HTTP、客户端读取权限与中性展示记录在 ADR-0187–0191，页面与反馈 HTTP 记录在 ADR-0192–0194；实施状态以[项目状态](../PROJECT_STATUS.md)和[已实现产品需求文档](../product/IMPLEMENTED_PRD.md)为准。
+本设计的领域取舍记录在 [ADR-0175](decisions/0175-evidence-backed-revisable-personal-model.md)，P1/P2 契约与持久边界记录在 ADR-0176–0182，training availability 与训练频率派生记录在 ADR-0183/0184，同主题终态后新代际记录在 ADR-0185，训练时长基线记录在 ADR-0186，当前主题信封、投影、认证 HTTP、客户端读取权限与中性展示记录在 ADR-0187–0191，页面、反馈 HTTP 与客户端反馈写入基础记录在 ADR-0192–0195；实施状态以[项目状态](../PROJECT_STATUS.md)和[已实现产品需求文档](../product/IMPLEMENTED_PRD.md)为准。

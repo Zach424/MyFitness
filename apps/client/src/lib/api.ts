@@ -40,6 +40,7 @@ import type {
   PlanWorkoutLink,
   PlanWorkoutLinkClosure,
   PersonalModelSubjectKey,
+  PersonalModelFeedbackWriteRequest,
   PrivacyOverview,
   ConsentReceiptHistory,
   RevocableConsentPurpose,
@@ -599,6 +600,17 @@ export const requestCurrentPersonalModelSubject = (subjectKey: PersonalModelSubj
   authenticatedRequest<unknown>(
     `/personal-model/subjects/${encodeURIComponent(subjectKey)}/current`,
     'GET',
+  )
+
+export const requestPersonalModelFeedback = (
+  itemId: string,
+  revision: number,
+  payload: PersonalModelFeedbackWriteRequest,
+) =>
+  authenticatedRequest<unknown>(
+    `/personal-model/items/${encodeURIComponent(itemId)}/revisions/${revision}/feedback`,
+    'POST',
+    payload,
   )
 
 export const listWeeklyPlans = () =>

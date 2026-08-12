@@ -6,6 +6,33 @@ export default defineConfig({
   resolve: {
     alias: [
       {
+        find: '@myfitness/contracts/personal-model-time.runtime',
+        replacement: fileURLToPath(
+          new URL('./packages/contracts/src/personal-model-time.runtime.ts', import.meta.url),
+        ),
+      },
+      {
+        find: '@myfitness/contracts/personal-model-current-subject.constants',
+        replacement: fileURLToPath(
+          new URL(
+            './packages/contracts/src/personal-model-current-subject.constants.ts',
+            import.meta.url,
+          ),
+        ),
+      },
+      {
+        find: '@myfitness/contracts/personal-model-feedback.runtime',
+        replacement: fileURLToPath(
+          new URL('./packages/contracts/src/personal-model-feedback.runtime.ts', import.meta.url),
+        ),
+      },
+      {
+        find: '@myfitness/contracts/personal-model-feedback.constants',
+        replacement: fileURLToPath(
+          new URL('./packages/contracts/src/personal-model-feedback.constants.ts', import.meta.url),
+        ),
+      },
+      {
         find: '@myfitness/contracts/personal-model-current-subject.runtime',
         replacement: fileURLToPath(
           new URL(
